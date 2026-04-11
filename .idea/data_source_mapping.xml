@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourcePerFileMappings">
-    <file url="file://$PROJECT_DIR$/src/main/resources/schema.sql" value="be46e57e-3e17-442d-a681-0a925e9c15e0" />
-    <file url="file://$USER_HOME$/AppData/Local/Temp/f4312787-08df-412b-8bc8-db0ed8e52485_securecapita.zip.securecapita.zip/securecapita/src/main/resources/schema.sql" value="be46e57e-3e17-442d-a681-0a925e9c15e0" />
+    <file url="file://$PROJECT_DIR$/src/main/java/com/bob/angularspringbootfullstack/repo/UserRepoImpl.java" value="4c165225-60eb-472b-a2f7-414cb1f43cef" />
   </component>
 </project>
