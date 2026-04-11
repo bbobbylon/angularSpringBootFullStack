@@ -1,7 +1,8 @@
-package com.bob.angularspringbootfullstack.repo;
+package com.bob.angularspringbootfullstack.repo.repoimpl;
 
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Role;
+import com.bob.angularspringbootfullstack.repo.RoleRepo;
 import com.bob.angularspringbootfullstack.rowmapper.RoleRowMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,8 +13,8 @@ import org.springframework.stereotype.Repository;
 import java.util.Map;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
-import static com.bob.angularspringbootfullstack.query.UserQuery.INSERT_ROLE_TO_USER_QUERY;
-import static com.bob.angularspringbootfullstack.query.UserQuery.SELECT_ROLE_BY_NAME_QUERY;
+import static com.bob.angularspringbootfullstack.query.RoleQuery.INSERT_ROLE_TO_USER_QUERY;
+import static com.bob.angularspringbootfullstack.query.RoleQuery.SELECT_ROLE_BY_NAME_QUERY;
 import static java.util.Objects.requireNonNull;
 
 @Repository

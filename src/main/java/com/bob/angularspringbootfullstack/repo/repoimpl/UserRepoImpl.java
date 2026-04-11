@@ -1,8 +1,10 @@
-package com.bob.angularspringbootfullstack.repo;
+package com.bob.angularspringbootfullstack.repo.repoimpl;
 
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
+import com.bob.angularspringbootfullstack.repo.RoleRepo;
+import com.bob.angularspringbootfullstack.repo.UserRepo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
