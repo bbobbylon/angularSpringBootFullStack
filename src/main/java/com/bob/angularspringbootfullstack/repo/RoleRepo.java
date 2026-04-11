@@ -1,11 +1,10 @@
 package com.bob.angularspringbootfullstack.repo;
 
 import com.bob.angularspringbootfullstack.model.Role;
-import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 
-@Repository
+
 public interface RoleRepo<T extends Role> {
     /* here we will add some generic CRUD operations
 
@@ -25,5 +24,12 @@ public interface RoleRepo<T extends Role> {
 
      */
     void addRoleToUser(Long userId, String roleName);
+
+    Role getRoleByUserId(Long userId);
+
+    Role getRoleByUserEmail(String email);
+
+    void upateUserRole(Long userId, String roleName);
+
 
 }

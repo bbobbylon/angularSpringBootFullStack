@@ -5,7 +5,6 @@ import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
@@ -48,6 +47,7 @@ public class UserRepoImpl implements UserRepo<User> {
         if (getEmailCount(user.getEmail().trim().toLowerCase()) > 0)
             throw new ApiException("Email already exists, please use a different email address and try again");
         //we want to get the ID of the user to give them roles and such
+        log.info("Creating new user with email: {}", user.getEmail());
         try {
             // holder is for getting the generated ID of the new user we just created, and parameterSource is for mapping the user object to the SQL query parameters
             KeyHolder holder = new GeneratedKeyHolder();
@@ -60,16 +60,18 @@ public class UserRepoImpl implements UserRepo<User> {
             // we want to generate a random UUID since we are using this same method to generate the password verification email, password verification url, and new account verification url. This is so that we can leverage this and reuse it for other use-cases.
             String verificationURL = getVerificationURL(UUID.randomUUID().toString(), ACCOUNT.getType());
 
-            jdbcTemplate.update(INSERT_VERIFICATION_URL_QUERY, Map.of("userId", user.getId(), "url", verificationURL, "type", ACCOUNT.getType()));
+            // this is for saving the verification URL in the database. we will pass the keys we need to save the URL - userId, url, and url type (account verification or password reset)
+            jdbcTemplate.update(INSERT_ACCOUNT_VERIFICATION_URL_QUERY, Map.of("userId", user.getId(), "url", verificationURL, "type", ACCOUNT.getType()));
+            // now we must send the email to the user with the verification URL
+            // TODO: email service for sending the verifications
+            // emailService.sendVerificationURL(user.getFirstName(), user.getEmail(), verificationURL, ACCOUNT);
+            user.setEnabled(false);
+            user.setNotLocked(true);
+            return user;
+        } catch (Exception exception) {
+            throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
 
-        } catch {
-            (EmptyResultDataAccessException)
         }
-        catch(Exception exception){
-
-        }
-
-        return null;
     }
 
     // this class is of type Integer since we want to count the number of emails which match the query.

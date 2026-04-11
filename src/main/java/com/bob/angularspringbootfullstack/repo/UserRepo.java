@@ -1,11 +1,10 @@
 package com.bob.angularspringbootfullstack.repo;
 
 import com.bob.angularspringbootfullstack.model.User;
-import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 
-@Repository
+
 public interface UserRepo<T extends User> {
 
     /* here we will add some generic CRUD operations
