@@ -143,4 +143,4 @@ vite.config.ts.timestamp-*
 psqlschema.sql
 
 .claude
-target
+target/*
