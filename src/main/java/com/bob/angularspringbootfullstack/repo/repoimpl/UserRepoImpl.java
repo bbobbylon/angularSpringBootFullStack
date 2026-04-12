@@ -69,11 +69,15 @@ public class UserRepoImpl implements UserRepo<User> {
             // emailService.sendVerificationURL(user.getFirstName(), user.getEmail(), verificationURL, ACCOUNT);
             user.setEnabled(false);
             user.setNotLocked(true);
+<<<<<<< Updated upstream
             
+=======
+
+>>>>>>> Stashed changes
             return user;
         } catch (Exception exception) {
+            log.error("Error creating user: {}", exception.getMessage(), exception);
             throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
-
         }
     }
 

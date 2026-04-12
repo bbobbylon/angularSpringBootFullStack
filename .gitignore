@@ -141,3 +141,5 @@ vite.config.ts.timestamp-*
 # PSQL db creation .sql file
 
 psqlschema.sql
+
+.claude

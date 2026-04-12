@@ -55,13 +55,14 @@ public class RoleRepoImpl implements RoleRepo<Role> {
             /* Here we need to find the name of the role in the database, and then we will get the ID of the role, and then we will add the role to the user by
              inserting a new record in the user_role table with the user ID and the role ID. We will use a query to get the role by name, and then we will use another
               query to insert the role to the user.*/
-            Role role = jdbcTemplate.queryForObject(SELECT_ROLE_BY_NAME_QUERY, Map.of("roleName", roleName), new RoleRowMapper());
+            Role role = jdbcTemplate.queryForObject(SELECT_ROLE_BY_NAME_QUERY, Map.of("name", roleName), new RoleRowMapper());
             // here we will update the user in the UserRole MySQL table. We will inject the user by their ID into the role by the role's ID which we just fetched in the previous line.
             jdbcTemplate.update(INSERT_ROLE_TO_USER_QUERY, Map.of("userId", userId, "roleId", requireNonNull(role).getId()));
 
         } catch (EmptyResultDataAccessException e) {
             throw new ApiException("Can't find role via name" + ROLE_USER.name());
         } catch (Exception e) {
+            log.error(e.getMessage());
             throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
         }
 

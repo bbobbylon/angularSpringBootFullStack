@@ -15,9 +15,10 @@
 #    properties:
 #      hibernate:
 #        globally_quoted_identifiers: true
-#        # Tells Hibernate to use the PostgreSQL dialect
+#        # Tells Hibernate to use the PostgreSQL dialect - this is also deprecated so it is not needed
 #        dialect: org.hibernate.dialect.PostgreSQLDialect
 #        format_sql: true
+# Tells Hibernate to use the PostgreSQL dialect - this is also deprecated so it is not needed
 #    database-platform: org.hibernate.dialect.PostgreSQLDialect
 #    generate-ddl: true
 #  sql:
