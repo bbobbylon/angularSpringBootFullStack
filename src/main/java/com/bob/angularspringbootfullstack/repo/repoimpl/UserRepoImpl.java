@@ -71,8 +71,8 @@ public class UserRepoImpl implements UserRepo<User> {
             user.setNotLocked(true);
             return user;
         } catch (Exception exception) {
+            log.error("Error creating user: {}", exception.getMessage(), exception);
             throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
-
         }
     }
 

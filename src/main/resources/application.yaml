@@ -15,9 +15,10 @@
 #    properties:
 #      hibernate:
 #        globally_quoted_identifiers: true
-#        # Tells Hibernate to use the PostgreSQL dialect
+#        # Tells Hibernate to use the PostgreSQL dialect - this is also deprecated so it is not needed
 #        dialect: org.hibernate.dialect.PostgreSQLDialect
 #        format_sql: true
+# Tells Hibernate to use the PostgreSQL dialect - this is also deprecated so it is not needed
 #    database-platform: org.hibernate.dialect.PostgreSQLDialect
 #    generate-ddl: true
 #  sql:
@@ -26,10 +27,9 @@
 ##      continue-on-error: false
 
 # This is the MySQL config, following the tutorial.
-debug: true
 spring:
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/db1
+    url: jdbc:mysql://127.0.0.1:3306/db2
     username: root
     password: password
   jpa:
@@ -43,9 +43,10 @@ spring:
     generate-ddl: true
   sql:
     init:
-      mode: always
+      mode: never
       continue-on-error: false
 logging:
   level:
     org.springframework.boot: DEBUG
     org.hibernate: DEBUG
+debug: true
