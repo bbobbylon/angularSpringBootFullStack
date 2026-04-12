@@ -26,10 +26,10 @@
 ##      continue-on-error: false
 
 # This is the MySQL config, following the tutorial.
-debug: true
+
 spring:
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/db1
+    url: jdbc:mysql://127.0.0.1:3306/db2
     username: root
     password: password
   jpa:
@@ -43,9 +43,5 @@ spring:
     generate-ddl: true
   sql:
     init:
-      mode: always
+      mode: never
       continue-on-error: false
-logging:
-  level:
-    org.springframework.boot: DEBUG
-    org.hibernate: DEBUG
