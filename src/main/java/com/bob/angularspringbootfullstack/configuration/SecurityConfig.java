@@ -1,22 +1,24 @@
 package com.bob.angularspringbootfullstack.configuration;
 
-import jakarta.servlet.http.HttpServletResponse;
+import com.bob.angularspringbootfullstack.handler.CustomAccessDeniedHandler;
+import com.bob.angularspringbootfullstack.handler.CustomAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+
+import static org.springframework.http.HttpMethod.*;
+import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
 
 
 /*
@@ -28,7 +30,10 @@ import org.springframework.security.web.SecurityFilterChain;
 class SecurityConfig {
 
     private static final String[] PUBLIC_URLS = {};
+    //here we will inject some BEANS
     private final BCryptPasswordEncoder passwordEncoder;
+    private final CustomAccessDeniedHandler customAccessDeniedHandler;
+    private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
     //this method is using the version 4 Spring Security config style. This is slightly different than our tutorial due to this. This file is used for disabling CSRF protection. This file is also being used to This is securing our application.
     @Bean
@@ -42,29 +47,33 @@ class SecurityConfig {
                 // this is the non-lambda style but still works --------> .csrf(csrf -> csrf.disable())
                 // we won't be tracking sessions via cookies because we are dealing with just one token.
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        .sessionCreationPolicy(STATELESS))
                 // here, we are passing in the requests we want to allow without authentication. This has moved from antMatchers to requestMatchers in versions 5.7 and higher of Spring Security.
                 // hasAnyAuthority is going to be used here to check if user has proper auth.
                 .authorizeHttpRequests(auth -> auth
                         // anybody can come to our public multiple URLs to try and authenticate.
-                        .requestMatchers(HttpMethod.POST, "/user/register").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/user/login").permitAll()
+                        .requestMatchers(POST, "/user/register").permitAll()
+                        .requestMatchers(POST, "/user/login").permitAll()
                         // actuator is only for testing purposes to make sure endpoints are working
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers(PUBLIC_URLS).permitAll()
                         // these authorities, such as "DELETE:USER" etc. are being used in the UserServiceImpl class when we are creating the user and assigning them roles and authorities. We will be using these authorities to check if the user has the proper authority to access certain endpoints.
-                        .requestMatchers(HttpMethod.DELETE, "/user/delete/**").hasAnyAuthority("DELETE:USER")
-                        .requestMatchers(HttpMethod.DELETE, "/customer/delete/**").hasAnyAuthority("DELETE:CUSTOMER")
-                        .requestMatchers(HttpMethod.GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
-                        .requestMatchers(HttpMethod.POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
-                        .requestMatchers(HttpMethod.PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")
+                        .requestMatchers(DELETE, "/user/delete/**").hasAnyAuthority("DELETE:USER")
+                        .requestMatchers(DELETE, "/customer/delete/**").hasAnyAuthority("DELETE:CUSTOMER")
+                        .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
+                        .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
+                        .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")
                         .anyRequest().authenticated()
                 )
-                // we may need this later since we are using JWT TOKENS -- > .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(ex -> ex
+                        .accessDeniedHandler(customAccessDeniedHandler)
+                        .authenticationEntryPoint(customAuthenticationEntryPoint)
+                );
+/*                // we may need this later since we are using JWT TOKENS -- > .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 // this is for handling some exceptions when users are trying to access these endpoints/resources without the correct tokens or authentication. We are using Lambda for this entire method.
                 .exceptionHandling(ex -> ex
                         .accessDeniedHandler((request, response, exception2) -> response.sendError(HttpServletResponse.SC_FORBIDDEN, "Access is very much denied!"))
-                        .authenticationEntryPoint((request, response, exception3) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "You are not authorized to be accessing these endpoints! Check your tokens and come again!")));
+                        .authenticationEntryPoint((request, response, exception3) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "You are not authorized to be accessing these endpoints! Check your tokens and come again!")));*/
         return http.build();
     }
 
@@ -93,6 +102,5 @@ class SecurityConfig {
         DaoAuthenticationProvider daoAuthenticationProvider = new DaoAuthenticationProvider(userDetailsService);
         daoAuthenticationProvider.setPasswordEncoder(passwordEncoder);
         return new ProviderManager(daoAuthenticationProvider);
-
     }
 }
