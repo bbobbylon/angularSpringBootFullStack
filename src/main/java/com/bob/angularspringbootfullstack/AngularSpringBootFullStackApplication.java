@@ -3,9 +3,6 @@ package com.bob.angularspringbootfullstack;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 @SpringBootApplication
@@ -21,6 +18,7 @@ public class AngularSpringBootFullStackApplication {
         return new BCryptPasswordEncoder(STRENGTH);
     }
 
+/*   this has Bean initialization has been moved over to the SecurityConfig.java class!
     @Bean
     public AuthenticationManager authenticationManager() {
         return new AuthenticationManager() {
@@ -29,6 +27,6 @@ public class AngularSpringBootFullStackApplication {
                 return null;
             }
         };
-    }
+    }*/
 
 }

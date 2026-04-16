@@ -26,6 +26,7 @@ import static java.time.LocalTime.now;
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
+    // reminder: this is going to be doing our authentication, the first step AFTER the filter in our Spring Security Flow. We must also define the authenticationMangaer Bean to prevent this from failing
     private final AuthenticationManager authenticationManager;
 
     @PostMapping("/register")
@@ -55,6 +56,7 @@ public class UserController {
             This Object will get sent down the flow of the authentication process, which again is going from Filter > ProviderManager (AuthenticationManager) > AuthenticationProvider, etc.
             If we wanted to, we could even create our own implementation of the Authentication interface (highly recommended)
         */
+        // don't forget we must call the constructor along with the parameters we want to use.
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(email, password));
         return null;
     }

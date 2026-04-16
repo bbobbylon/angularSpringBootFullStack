@@ -31,6 +31,7 @@ import static java.util.Objects.requireNonNull;
 @RequiredArgsConstructor
 @Slf4j
 public class UserRepoImpl implements UserRepo<User> {
+    // here we are injecting some BEANS
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final RoleRepo<Role> roleRepository;
     private final BCryptPasswordEncoder passwordEncoder;
