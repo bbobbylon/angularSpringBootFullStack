@@ -3,17 +3,24 @@ package com.bob.angularspringbootfullstack.repo.repoimpl;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
+import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
 import com.bob.angularspringbootfullstack.repo.UserRepo;
+import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.Collection;
@@ -30,12 +37,14 @@ import static java.util.Objects.requireNonNull;
 @Repository
 @RequiredArgsConstructor
 @Slf4j
-public class UserRepoImpl implements UserRepo<User> {
+public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
+    // here we are injecting some BEANS
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final RoleRepo<Role> roleRepository;
     private final BCryptPasswordEncoder passwordEncoder;
 
     @Override
+    @Transactional
     public User create(User user) {
 /*      here is what we need to do in this method:
         check for unique email, if unique, Save new user
@@ -67,7 +76,7 @@ public class UserRepoImpl implements UserRepo<User> {
             // now we must send the email to the user with the verification URL
             // TODO: email service for sending the verifications
             // emailService.sendVerificationURL(user.getFirstName(), user.getEmail(), verificationURL, ACCOUNT);
-            user.setEnabled(false);
+            user.setEnabled(true);
             user.setNotLocked(true);
             return user;
         } catch (Exception exception) {
@@ -117,5 +126,44 @@ public class UserRepoImpl implements UserRepo<User> {
     @Override
     public void delete(Long id) {
 
+    }
+
+    @Override
+    public User getUserByEmail(String email) {
+        log.debug("Attempting to retrieve user from database by email: {}", email);
+        try {
+            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_EMAIL_QUERY, Map.of("email", email), new UserRowMapper());
+            log.debug("User successfully retrieved from database for email: {}", email);
+            return user;
+        } catch (EmptyResultDataAccessException exception) {
+            log.error("Error getting user by email: {}", exception.getMessage(), exception);
+            throw new ApiException("User not found in our database: " + email);
+        } catch (Exception exception) {
+            log.error("Unexpected error retrieving user by email '{}': {}", email, exception.getMessage(), exception);
+            throw new ApiException("An unexpected error occurred while retrieving user by email: " + email);
+        }
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        log.debug("Spring Security is attempting to load user by email: {}", email);
+        User user = null;
+        try {
+            user = getUserByEmail(email);
+        } catch (ApiException e) {
+            log.warn("User lookup failed for email '{}': {}", email, e.getMessage());
+            throw new UsernameNotFoundException("User not found in our database: " + email);
+        }
+        if (user == null) {
+            log.error("User not found in our database. Are you searching for the right person? Entered email: {}", email);
+            throw new UsernameNotFoundException("User not found in our database: " + email);
+        } else {
+            log.info("We have found this user in our database with the following address: {} ", email);
+            log.debug("Building UserPrincipal for user with email: {} and id: {}", email, user.getId());
+            // here, we are returning a UserPrincipal object with the user and their role permissions.
+            // This is because the UserPrincipal class implements the UserDetails interface, which is what Spring Security uses to authenticate and authorize users.
+            // By returning a UserPrincipal object, we are providing Spring Security with the necessary information about the user and their permissions to perform authentication and authorization checks.
+            return new UserPrincipal(user, roleRepository.getRoleByUserId(user.getId()).getPermission());
+        }
     }
 }

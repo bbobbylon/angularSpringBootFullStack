@@ -39,5 +39,4 @@ public class User {
     private boolean isNotLocked;
     private boolean isUsing2FA;
     private LocalDateTime createdAt;
-
 }

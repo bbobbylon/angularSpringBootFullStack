@@ -18,4 +18,15 @@ public class AngularSpringBootFullStackApplication {
         return new BCryptPasswordEncoder(STRENGTH);
     }
 
+/*   this has Bean initialization has been moved over to the SecurityConfig.java class!
+    @Bean
+    public AuthenticationManager authenticationManager() {
+        return new AuthenticationManager() {
+            @Override
+            public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+                return null;
+            }
+        };
+    }*/
+
 }

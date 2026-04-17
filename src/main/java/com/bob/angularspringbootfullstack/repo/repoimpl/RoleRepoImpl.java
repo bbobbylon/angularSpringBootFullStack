@@ -13,8 +13,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Map;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
-import static com.bob.angularspringbootfullstack.query.RoleQuery.INSERT_ROLE_TO_USER_QUERY;
-import static com.bob.angularspringbootfullstack.query.RoleQuery.SELECT_ROLE_BY_NAME_QUERY;
+import static com.bob.angularspringbootfullstack.query.RoleQuery.*;
 import static java.util.Objects.requireNonNull;
 
 @Repository
@@ -60,7 +59,7 @@ public class RoleRepoImpl implements RoleRepo<Role> {
             jdbcTemplate.update(INSERT_ROLE_TO_USER_QUERY, Map.of("userId", userId, "roleId", requireNonNull(role).getId()));
 
         } catch (EmptyResultDataAccessException e) {
-            throw new ApiException("Can't find role via name" + ROLE_USER.name());
+            throw new ApiException("Can't find role via name to add to the user" + ROLE_USER.name());
         } catch (Exception e) {
             log.error(e.getMessage());
             throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
@@ -70,7 +69,19 @@ public class RoleRepoImpl implements RoleRepo<Role> {
 
     @Override
     public Role getRoleByUserId(Long userId) {
-        return null;
+        log.info("Getting role to user with ID {}", userId);
+        try {
+            /* Here we need to find the name of the role in the database, and then we will get the ID of the role, and then we will add the role to the user by
+             inserting a new record in the user_role table with the user ID and the role ID. We will use a query to get the role by name, and then we will use another
+              query to insert the role to the user.*/
+            return jdbcTemplate.queryForObject(SELECT_ROLE_BY_ID_QUERY, Map.of("id", userId), new RoleRowMapper());
+
+        } catch (EmptyResultDataAccessException e) {
+            throw new ApiException("Can't find role via name" + ROLE_USER.name());
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
+        }
     }
 
     @Override
