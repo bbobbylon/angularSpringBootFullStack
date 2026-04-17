@@ -21,6 +21,7 @@ public interface UserRepo<T extends User> {
 
     void delete(Long id);
 
+    User getUserByEmail(String email);
 }
 /* TODO: complex operations
 

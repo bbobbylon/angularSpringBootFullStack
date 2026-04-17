@@ -69,7 +69,7 @@ public class RoleRepoImpl implements RoleRepo<Role> {
 
     @Override
     public Role getRoleByUserId(Long userId) {
-        log.info("Adding role to user with ID {}", userId);
+        log.info("Getting role to user with ID {}", userId);
         try {
             /* Here we need to find the name of the role in the database, and then we will get the ID of the role, and then we will add the role to the user by
              inserting a new record in the user_role table with the user ID and the role ID. We will use a query to get the role by name, and then we will use another
