@@ -14,7 +14,9 @@ import static java.util.stream.Collectors.toList;
 // whenever we return this object and give it to Spring Security, we can remove the information from our User/permissions object and give it to the GrantedAuthority method for the loadUserByUsername interface.
 @RequiredArgsConstructor
 public class UserPrincipal implements UserDetails {
+    //when we want to return the data for grantedAuthorities, we are going to need to return the user and the permissions. This is because if we look at the GrantedAuthority class, we see that it requires a string parameter for the authority, and we need to provide that string from our permissions field.
     private final User user;
+    // by defining these two variables, we can easily access the methods inside GrantedAuthority.
     private final String permissions;
 
     @Override
