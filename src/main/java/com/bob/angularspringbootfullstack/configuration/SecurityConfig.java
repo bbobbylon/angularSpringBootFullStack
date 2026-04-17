@@ -3,12 +3,13 @@ package com.bob.angularspringbootfullstack.configuration;
 import com.bob.angularspringbootfullstack.handler.CustomAccessDeniedHandler;
 import com.bob.angularspringbootfullstack.handler.CustomAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -31,6 +32,7 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 @EnableMethodSecurity()
 class SecurityConfig {
 
+    private static final Logger securityLogger = LoggerFactory.getLogger(SecurityConfig.class);
     private static final String[] PUBLIC_URLS = {"/user/login/**"};
     //here we will inject some BEANS
     private final BCryptPasswordEncoder passwordEncoder;
@@ -40,13 +42,13 @@ class SecurityConfig {
     //this method is using the version 4 Spring Security config style. This is slightly different than our tutorial due to this. This file is used for disabling CSRF protection. This file is also being used to This is securing our application.
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
-
+        securityLogger.debug("Configuring SecurityFilterChain: setting up CSRF, CORS, session management, and authorization rules.");
         http
                 //we want to disable this because we don't need cross-site request forgery protection for the app. This is also using Lambda syntax/style!
                 .csrf(AbstractHttpConfigurer::disable)
                 //CORS is also not needed because we will be using our own configuration later.
                 .cors(AbstractHttpConfigurer::disable)
-                .httpBasic(Customizer.withDefaults())
+                .httpBasic(AbstractHttpConfigurer::disable)
                 // this is the non-lambda style but still works --------> .csrf(csrf -> csrf.disable())
                 // we won't be tracking sessions via cookies because we are dealing with just one token.
                 .sessionManagement(session -> session

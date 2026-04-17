@@ -23,6 +23,6 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserDTO getUserByEmail(String email) {
-        return null;
+        return UserDTOMapper.fromUser(userRepo.getUserByEmail(email));
     }
 }

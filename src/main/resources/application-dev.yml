@@ -15,11 +15,9 @@ spring:
     generate-ddl: true
   sql:
     init:
-      mode: always
-      continue-on-error: false
-#some additional available logging:
-#logging:
-#  level:
-#    org.springframework.boot: DEBUG
-#    org.hibernate: DEBUG
-#debug: true
+      mode: never
+      continue-on-error: true
+logging:
+  level:
+    "[org.springframework.security, org.springframework.boot, org.hibernate]": DEBUG
+    

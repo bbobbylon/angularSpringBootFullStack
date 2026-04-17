@@ -23,7 +23,7 @@ public class UserPrincipal implements UserDetails {
     public Collection<? extends GrantedAuthority> getAuthorities() {
         // we are going to return the permissions as a list of granted authorities.
         // We are going to split the permissions string by comma, and then we are going to map each permission to a SimpleGrantedAuthority object, and then we are going to collect it into a list.
-        return stream(permissions.split(",".trim())).map(SimpleGrantedAuthority::new).collect(toList());
+        return stream(permissions.split(",")).map(p -> new SimpleGrantedAuthority(p.trim())).collect(toList());
     }
 
     @Override
