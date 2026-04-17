@@ -126,6 +126,19 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
 
     }
 
+    private User getUserByEmail(String email) {
+        try {
+            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_EMAIL_QUERY, Map.of("email", email), new UserRowMapper());
+            return user;
+        } catch (EmptyResultDataAccessException exception) {
+            log.error("Error getting user by email: {}", exception.getMessage(), exception);
+            throw new ApiException("User not found in our database: " + email);
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An unexpected error occurred while retrieving user by email: " + email);
+        }
+    }
+
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = getUserByEmail(email);
@@ -138,19 +151,6 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             // This is because the UserPrincipal class implements the UserDetails interface, which is what Spring Security uses to authenticate and authorize users.
             // By returning a UserPrincipal object, we are providing Spring Security with the necessary information about the user and their permissions to perform authentication and authorization checks.
             return new UserPrincipal(user, roleRepository.getRoleByUserId(user.getId()).getPermission());
-        }
-    }
-
-    private User getUserByEmail(String email) {
-        try {
-            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_EMAIL_QUERY, Map.of("email", email), new UserRowMapper());
-            return user;
-        } catch (EmptyResultDataAccessException exception) {
-            log.error("Error getting user by email: {}", exception.getMessage(), exception);
-            throw new ApiException("User not found in our database: " + email);
-        } catch (Exception exception) {
-            log.error(exception.getMessage());
-            throw new ApiException("An unexpected error occurred while retrieving user by email: " + email);
         }
     }
 }

@@ -8,14 +8,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 import static org.springframework.http.HttpMethod.*;
@@ -32,7 +31,7 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 @EnableMethodSecurity()
 class SecurityConfig {
 
-    private static final String[] PUBLIC_URLS = {};
+    private static final String[] PUBLIC_URLS = {"/user/login/**"};
     //here we will inject some BEANS
     private final BCryptPasswordEncoder passwordEncoder;
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
@@ -47,6 +46,7 @@ class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 //CORS is also not needed because we will be using our own configuration later.
                 .cors(AbstractHttpConfigurer::disable)
+                .httpBasic(Customizer.withDefaults())
                 // this is the non-lambda style but still works --------> .csrf(csrf -> csrf.disable())
                 // we won't be tracking sessions via cookies because we are dealing with just one token.
                 .sessionManagement(session -> session
@@ -78,17 +78,6 @@ class SecurityConfig {
                         .accessDeniedHandler((request, response, exception2) -> response.sendError(HttpServletResponse.SC_FORBIDDEN, "Access is very much denied!"))
                         .authenticationEntryPoint((request, response, exception3) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "You are not authorized to be accessing these endpoints! Check your tokens and come again!")));*/
         return http.build();
-    }
-
-    @Bean
-    public UserDetailsService userDetailsService() {
-        // Temporary in-memory user for Boot 4 wiring; replace with DB-backed UserDetailsService later.
-        return new InMemoryUserDetailsManager(
-                User.withUsername("user@example.com")
-                        .password(passwordEncoder.encode("password"))
-                        .authorities("READ:USER", "READ:CUSTOMER")
-                        .build()
-        );
     }
 
     // managing the authentication manager and provider below. This is needed to process the actual authentication request that users are making.

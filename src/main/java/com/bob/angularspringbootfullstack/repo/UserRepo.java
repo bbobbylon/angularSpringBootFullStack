@@ -20,6 +20,7 @@ public interface UserRepo<T extends User> {
     T update(Long id, T data);
 
     void delete(Long id);
+
 }
 /* TODO: complex operations
 
