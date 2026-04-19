@@ -77,7 +77,7 @@ public class RoleRepoImpl implements RoleRepo<Role> {
             return jdbcTemplate.queryForObject(SELECT_ROLE_BY_ID_QUERY, Map.of("id", userId), new RoleRowMapper());
 
         } catch (EmptyResultDataAccessException e) {
-            throw new ApiException("Can't find role via name" + ROLE_USER.name());
+            throw new ApiException("Can't find role via name " + ROLE_USER.name());
         } catch (Exception e) {
             log.error(e.getMessage());
             throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");

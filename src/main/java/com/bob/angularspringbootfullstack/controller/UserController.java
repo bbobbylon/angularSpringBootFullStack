@@ -61,6 +61,35 @@ public class UserController {
         // don't forget we must call the constructor along with the parameters we want to use.
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginForm.getEmail(), loginForm.getPassword()));
         UserDTO userDTO = userService.getUserByEmail(loginForm.getEmail());
+        return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
+
+/*      this was moved to our sendResponse() method.
+  return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(Map.of("user", userDTO))
+                        .message("Login successful!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());*/
+    }
+
+    //this method will be for users who have MFA enabled. We will have to send them a verification code to their email or phone number, and then they will have to enter that code to complete the login process. This is just a placeholder for now, we will implement the actual sending of the verification code later.
+    private ResponseEntity<HttpResponse> sendVerificationCode(UserDTO userDTO) {
+        userService.sendVerificationCode(userDTO);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(Map.of("user", userDTO))
+                        .message("2FA verification code was sent!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    // this method will be for users who do NOT have MFA enabled.
+    private ResponseEntity<HttpResponse> sendResponse(UserDTO userDTO) {
+        // here we will have to give the user a refresh and access token
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())

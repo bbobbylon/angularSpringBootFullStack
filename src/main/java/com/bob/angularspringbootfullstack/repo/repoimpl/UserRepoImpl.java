@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.repo.repoimpl;
 
+import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
@@ -9,6 +10,7 @@ import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.time.DateFormatUtils;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -23,21 +25,22 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.enumeration.VerificationType.ACCOUNT;
 import static com.bob.angularspringbootfullstack.query.UserQuery.*;
 import static java.util.Objects.requireNonNull;
+import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
+import static org.apache.commons.lang3.time.DateUtils.addDays;
 
 // here the actual logic/ db queries will be implemented.
 @Repository
 @RequiredArgsConstructor
 @Slf4j
 public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
+    //standard MySQL date format
+    private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
     // here we are injecting some BEANS
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final RoleRepo<Role> roleRepository;
@@ -141,6 +144,25 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         } catch (Exception exception) {
             log.error("Unexpected error retrieving user by email '{}': {}", email, exception.getMessage(), exception);
             throw new ApiException("An unexpected error occurred while retrieving user by email: " + email);
+        }
+    }
+
+    @Override
+    public void sendVerificationCode(UserDTO userDTO) {
+        // here we must implement the logic to send the SMS/Voice to the user.
+        String expirationDate = DateFormatUtils.format(addDays(new Date(), 1), DATE_FORMAT);
+        String verificationCode = randomAlphanumeric(7).toUpperCase();
+        // we must update the database to delete/replace the 2fa code ONLY if the user already has one
+        try {
+            jdbcTemplate.update(DELETE_2FA_CODE_BY_USER_ID, Map.of("id", userDTO.getId()));
+            jdbcTemplate.update(INSERT_2FA_CODE_BY_USER_ID_QUERY, Map.of("userId", userDTO.getId(), "code", verificationCode, "expirationDate", expirationDate));
+            // TODO READ BELOW!!!!!!!!!!
+            // this costs real money per SMS sent! keep commented out unless showcasing the application to someone!
+            // sendSMS(userDTO.getPhoneNumber(), "From: AngularSpringBootFullStack App, To: " + userDTO.getPhoneNumber() + ", Message: Your 2FA verification code is: " + verificationCode + ". It will expire in 24 hours.");
+            log.debug("2FA code successfully delete/replaced on user with email: {}", userDTO.getEmail());
+        } catch (Exception exception) {
+            log.error("Unexpected error retrieving user by email '{}': {}", userDTO.getEmail(), exception.getMessage(), exception);
+            throw new ApiException("An unexpected error occurred while retrieving user by email: " + userDTO.getEmail());
         }
     }
 

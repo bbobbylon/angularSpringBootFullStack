@@ -9,4 +9,6 @@ public interface UserService {
     UserDTO createUser(User user);
 
     UserDTO getUserByEmail(@NotEmpty String email);
+
+    void sendVerificationCode(UserDTO userDTO);
 }
