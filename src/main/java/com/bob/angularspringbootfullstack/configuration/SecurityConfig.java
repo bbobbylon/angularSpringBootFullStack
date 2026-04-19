@@ -46,7 +46,7 @@ class SecurityConfig {
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
     //private final JwtAuthFilter jwtAuthFilter;
 
-    //this method is using the version 4 Spring Security config style. This is slightly different than our tutorial due to this. This file is used for disabling CSRF protection. This file is also being used to This is securing our application.
+    //this method is using the version 4 Spring Security config style. This is slightly different from our tutorial due to this. This file is used for disabling CSRF protection. This file is also being used to This is securing our application.
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
         securityLogger.debug("Configuring SecurityFilterChain: setting up CSRF, CORS, session management, and authorization rules.");
@@ -62,7 +62,7 @@ class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(STATELESS))
                 // here, we are passing in the requests we want to allow without authentication. This has moved from antMatchers to requestMatchers in versions 5.7 and higher of Spring Security.
-                // hasAnyAuthority is going to be used here to check if user has proper auth.
+                // hasAnyAuthority is going to be used here to check if a user has proper auth.
                 .authorizeHttpRequests(auth -> auth
                         // anybody can come to our public multiple URLs to try and authenticate.
                         .requestMatchers(POST, "/user/register").permitAll()
@@ -110,7 +110,7 @@ class SecurityConfig {
      * - DaoAuthenticationProvider requires a real UserDetailsService to load users from the database.
     * - setUserDetailsService(null) is only a placeholder and will not support real authentication.
      */
-    // We need to return an authentication manager. At the same time we create the authprovider, we will give it our userdetails service and pwd encoder, and we return a new provider manager. Now the authprovider knows about our userdetails and the password encoder! Powerful stuff hapening in just a few lines of code.
+    // We need to return an authentication manager. At the same time we create the authprovider, we will give it our userdetails service and pwd encoder, and we return a new provider manager. Now the authprovider knows about our userdetails and the password encoder! Powerful stuff happens in just a few lines of code.
     @Bean
     public AuthenticationManager authenticationManager(UserDetailsService userDetailsService) {
         // we are going to call this constructor and then pass in our authentication provider, which is the DaoAuthenticationProvider, and the parameters we will give it are: encoder - what we use to encode our password, and userDetailsService which is the users we have in our database. Spring Security 7 now requires that the DaoAuthenticatoinProvider gives one of the parameters which is our user details service.

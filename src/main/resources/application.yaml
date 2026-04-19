@@ -1,4 +1,4 @@
-# psql config - wasn't working unless I ran the psqlschema.sql file inside of pgadmin4 within the database noted on line 5. We will use the tutorial's mysql config instead, and possibly route back to this
+# psql config - wasn't working unless I ran the psqlschema.sql file inside pgadmin4 within the database noted on line 5. We will use the tutorial's mysql config instead, and possibly route back to this
 #spring:
 #  datasource:
 #    # Replace 'serverdb' with the name of your actual PostgreSQL database
@@ -52,7 +52,7 @@
 #debug: true
 
 
-# here we can just define what profile we want to use - either application-dev, prod, etc and Spring Boot will know which profile to use!
+# here we can just define what profile we want to use - either application-dev, prod, etc. and Spring Boot will know which profile to use!
 spring:
   profiles:
     active: @spring.profiles.active@

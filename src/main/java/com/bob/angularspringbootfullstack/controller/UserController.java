@@ -28,9 +28,16 @@ import static org.springframework.http.HttpStatus.OK;
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
-    // reminder: this is going to be doing our authentication, the first step AFTER the filter in our Spring Security Flow. We must also define the authenticationMangaer Bean to prevent this from failing
     private final AuthenticationManager authenticationManager;
 
+    /**
+     * Registers a new user in the system.
+     * Validates the incoming user data, creates the user via the UserService,
+     * and returns a 201 CREATED response with the newly created UserDTO.
+     *
+     * @param user the user registration data (validated with @Valid)
+     * @return ResponseEntity with HttpResponse containing the created user data and CREATED status
+     */
     @PostMapping("/register")
     public ResponseEntity<HttpResponse> saveUser(@RequestBody @Valid User user) {
         UserDTO userDTO = userService.createUser(user);
@@ -44,37 +51,46 @@ public class UserController {
                         .build());
     }
 
-    // we have to inject our authenticationManager here, since it will be called after our securityFilter. This would be our first step after the filters.
+    /**
+     * Constructs a URI for the registered user resource.
+     * This URI is used in the Location header of the 201 CREATED response.
+     *
+     * @return a URI pointing to the user resource (e.g., /user/get/<userId>)
+     */
     private URI getUri() {
-        // if you go to this endpoint, we have to look at the ID of the specific resource/controller and give it the id, in this case userId
         return URI.create(ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/get/<userId>").toUriString());
     }
 
+    /**
+     * Authenticates a user and initiates the login process.
+     * Validates the login credentials using AuthenticationManager. If 2FA is enabled,
+     * sends a verification code. Otherwise, returns a successful login response.
+     *
+     * The authentication flow:
+     * 1. AuthenticationManager.authenticate() receives a UsernamePasswordAuthenticationToken
+     * 2. It passes through the authentication provider chain (DaoAuthenticationProvider, etc.)
+     * 3. If successful, the user is authenticated
+     * 4. UserDTO is retrieved and checked for 2FA status
+     * 5. Either a verification code is sent (2FA enabled) or a direct login response (2FA disabled)
+     *
+     * @param loginForm the login credentials containing email and password
+     * @return ResponseEntity with HttpResponse indicating either 2FA code sent or successful login
+     */
     @PostMapping("/login")
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
-        /*  To explain what is happening here, we can take a look at the AuthenticationManager interface and its .authenticate() method.
-            Within it, it uses a parameter of type Authentication which is another interface, and When we click on the button next to the Authentication interface, we see an implementation UsernamePasswordAuthenticationToken.
-            It has a constructor that takes two @Nullable Objects as parameters (principle, and password), so we will use email and password in our use-case/scenario.
-            This Object will get sent down the flow of the authentication process, which again is going from Filter > ProviderManager (AuthenticationManager) > AuthenticationProvider, etc.
-            If we wanted to, we could even create our own implementation of the Authentication interface (highly recommended)
-        */
-        // don't forget we must call the constructor along with the parameters we want to use.
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginForm.getEmail(), loginForm.getPassword()));
         UserDTO userDTO = userService.getUserByEmail(loginForm.getEmail());
         return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
-
-/*      this was moved to our sendResponse() method.
-  return ResponseEntity.ok(
-                HttpResponse.builder()
-                        .timeStamp(now().toString())
-                        .data(Map.of("user", userDTO))
-                        .message("Login successful!")
-                        .status(OK)
-                        .statusCode(OK.value())
-                        .build());*/
     }
 
-    //this method will be for users who have MFA enabled. We will have to send them a verification code to their email or phone number, and then they will have to enter that code to complete the login process. This is just a placeholder for now, we will implement the actual sending of the verification code later.
+    /**
+     * Sends a 2FA verification code to the user via their registered phone number or email.
+     * This method is called when a user with 2FA enabled attempts to log in.
+     * The verification code must be validated before completing the authentication.
+     *
+     * @param userDTO the authenticated user (with 2FA enabled)
+     * @return ResponseEntity with HttpResponse indicating the 2FA code has been sent
+     */
     private ResponseEntity<HttpResponse> sendVerificationCode(UserDTO userDTO) {
         userService.sendVerificationCode(userDTO);
         return ResponseEntity.ok(
@@ -87,9 +103,15 @@ public class UserController {
                         .build());
     }
 
-    // this method will be for users who do NOT have MFA enabled.
+    /**
+     * Sends a successful login response to users without 2FA enabled.
+     * This method completes the authentication for users who don't have
+     * two-factor authentication enabled.
+     *
+     * @param userDTO the successfully authenticated user
+     * @return ResponseEntity with HttpResponse indicating successful login
+     */
     private ResponseEntity<HttpResponse> sendResponse(UserDTO userDTO) {
-        // here we will have to give the user a refresh and access token
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())

@@ -6,11 +6,40 @@ import org.springframework.jdbc.core.RowMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+/**
+ * RoleRowMapper converts database ResultSet rows into Role objects.
+ *
+ * This mapper implements Spring's RowMapper interface and is used by
+ * NamedParameterJdbcTemplate to automatically convert query result rows
+ * into strongly-typed Role objects.
+ *
+ * How it works:
+ * 1. Spring JDBC calls mapRow() for each row in the ResultSet
+ * 2. We extract each column and map it to the corresponding Role field
+ * 3. We use Lombok's Builder pattern to create the Role
+ * 4. The fully constructed Role object is returned
+ */
 public class RoleRowMapper implements RowMapper<Role> {
-    // we will map all the roles into a Java Object with this class
+    /**
+     * Maps a single database row to a Role object.
+     *
+     * This method is called by Spring JDBC for each row in the query result.
+     * It extracts values from the ResultSet and builds a Role object using
+     * the builder pattern provided by Lombok's @SuperBuilder annotation.
+     *
+     * Column mappings:
+     * - Database: Java field
+     * - id → id
+     * - name → name
+     * - permission → permission
+     *
+     * @param resultSet the SQL result set positioned at the current row
+     * @param rowNum the row number (0-indexed)
+     * @return a fully initialized Role object
+     * @throws SQLException if database access error occurs
+     */
     @Override
     public Role mapRow(ResultSet resultSet, int rowNum) throws SQLException {
-        // we are using .builder() because the type of this class<Role> Role.java file has a SuperBuilder annotation which allows us to bypass the getters/setters and constructor setup. It will create a constructor, pass in the values via our setters below, and then set those values and return it back to us
         return Role.builder()
                 .id(resultSet.getLong("id"))
                 .name(resultSet.getString("name"))

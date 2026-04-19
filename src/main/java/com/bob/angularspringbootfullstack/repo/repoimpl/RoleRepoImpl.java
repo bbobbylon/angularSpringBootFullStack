@@ -22,40 +22,84 @@ import static java.util.Objects.requireNonNull;
 public class RoleRepoImpl implements RoleRepo<Role> {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
+    /**
+     * Creates an unimplemented role.
+     * This method is a placeholder for future implementation.
+     *
+     * @param data the role data to create
+     * @return null (not yet implemented)
+     */
     @Override
     public Role create(Role data) {
         return null;
     }
 
+    /**
+     * Retrieves an unimplemented paginated list of roles.
+     * This method is a placeholder for future implementation.
+     *
+     * @param page the page number to retrieve
+     * @param pageSize the number of roles per page
+     * @return null (not yet implemented)
+     */
     @Override
     public java.util.Collection<Role> list(int page, int pageSize) {
         return null;
     }
 
+    /**
+     * Retrieves an unimplemented role by ID.
+     * This method is a placeholder for future implementation.
+     *
+     * @param id the role ID to retrieve
+     * @return null (not yet implemented)
+     */
     @Override
     public Role get(Long id) {
         return null;
     }
 
+    /**
+     * Updates an unimplemented role record.
+     * This method is a placeholder for future implementation.
+     *
+     * @param id the ID of the role to update
+     * @param data the updated role data
+     * @return null (not yet implemented)
+     */
     @Override
     public Role update(Long id, Role data) {
         return null;
     }
 
+    /**
+     * Deletes an unimplemented role record.
+     * This method is a placeholder for future implementation.
+     *
+     * @param id the ID of the role to delete
+     */
     @Override
     public void delete(Long id) {
 
     }
 
+    /**
+     * Assigns a role to a user by role name.
+     *
+     * This method:
+     * 1. Queries the database to find the role by its name
+     * 2. Retrieves the role ID from the result
+     * 3. Inserts a record into the user_roles junction table linking the user and role
+     *
+     * @param userId the ID of the user to assign the role to
+     * @param roleName the name of the role (e.g., "ROLE_USER", "ROLE_ADMIN")
+     * @throws ApiException if the role name is not found or any database operation fails
+     */
     @Override
     public void addRoleToUser(Long userId, String roleName) {
         log.info("Adding role {} to user with ID {}", roleName, userId);
         try {
-            /* Here we need to find the name of the role in the database, and then we will get the ID of the role, and then we will add the role to the user by
-             inserting a new record in the user_role table with the user ID and the role ID. We will use a query to get the role by name, and then we will use another
-              query to insert the role to the user.*/
             Role role = jdbcTemplate.queryForObject(SELECT_ROLE_BY_NAME_QUERY, Map.of("name", roleName), new RoleRowMapper());
-            // here we will update the user in the UserRole MySQL table. We will inject the user by their ID into the role by the role's ID which we just fetched in the previous line.
             jdbcTemplate.update(INSERT_ROLE_TO_USER_QUERY, Map.of("userId", userId, "roleId", requireNonNull(role).getId()));
 
         } catch (EmptyResultDataAccessException e) {
@@ -64,16 +108,21 @@ public class RoleRepoImpl implements RoleRepo<Role> {
             log.error(e.getMessage());
             throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
         }
-
     }
 
+    /**
+     * Retrieves the role assigned to a user by their user ID.
+     * Queries the database using a join between users, user_roles, and roles tables
+     * to fetch the role information for a specific user.
+     *
+     * @param userId the ID of the user whose role should be retrieved
+     * @return the Role object containing id, name, and permissions
+     * @throws ApiException if the user has no role assigned or any database operation fails
+     */
     @Override
     public Role getRoleByUserId(Long userId) {
         log.info("Getting role to user with ID {}", userId);
         try {
-            /* Here we need to find the name of the role in the database, and then we will get the ID of the role, and then we will add the role to the user by
-             inserting a new record in the user_role table with the user ID and the role ID. We will use a query to get the role by name, and then we will use another
-              query to insert the role to the user.*/
             return jdbcTemplate.queryForObject(SELECT_ROLE_BY_ID_QUERY, Map.of("id", userId), new RoleRowMapper());
 
         } catch (EmptyResultDataAccessException e) {
@@ -84,13 +133,27 @@ public class RoleRepoImpl implements RoleRepo<Role> {
         }
     }
 
+    /**
+     * Retrieves an unimplemented role by user email.
+     * This method is a placeholder for future implementation.
+     *
+     * @param email the user's email address
+     * @return null (not yet implemented)
+     */
     @Override
     public Role getRoleByUserEmail(String email) {
         return null;
     }
 
+    /**
+     * Updates an unimplemented user role assignment.
+     * This method is a placeholder for future implementation.
+     *
+     * @param userId the ID of the user whose role should be updated
+     * @param roleName the new role name to assign
+     */
     @Override
-    public void upateUserRole(Long userId, String roleName) {
+    public void updateUserRole(Long userId, String roleName) {
 
     }
 }

@@ -13,19 +13,41 @@ import org.springframework.stereotype.Service;
 public class UserServiceImpl implements UserService {
     private final UserRepo<User> userRepo;
 
-
+    /**
+     * Creates a new user in the system through the repository layer.
+     * Delegates user creation to the UserRepo, then converts the resulting User
+     * entity to a UserDTO for exposure to the presentation layer.
+     *
+     * This method bridges the service layer and repository layer, ensuring
+     * that domain models (User) are not exposed to the controller layer.
+     *
+     * @param user the user entity containing registration information
+     * @return a UserDTO representing the newly created user
+     */
     @Override
     public UserDTO createUser(User user) {
-        // here is where we start connecting the layers - We are going to use the fromUser to be able to map the user to the userDTO. Call the repository > Take the user > runs the .create() method, and we pass it to fromUser, which creates a UserDTO, and returns that back to the controller
         return UserDTOMapper.fromUser(userRepo.create(user));
-
     }
 
+    /**
+     * Retrieves a user by their email address from the repository.
+     * Converts the User entity to a UserDTO for the presentation layer.
+     *
+     * @param email the email address to search for
+     * @return a UserDTO if user is found, otherwise throws an exception
+     * @throws ApiException if user is not found in the database
+     */
     @Override
     public UserDTO getUserByEmail(String email) {
         return UserDTOMapper.fromUser(userRepo.getUserByEmail(email));
     }
 
+    /**
+     * Sends a 2FA verification code to the user via their registered contact method.
+     * Delegates to the repository layer which handles SMS/Email sending logic.
+     *
+     * @param userDTO the user who will receive the verification code
+     */
     @Override
     public void sendVerificationCode(UserDTO userDTO) {
         userRepo.sendVerificationCode(userDTO);

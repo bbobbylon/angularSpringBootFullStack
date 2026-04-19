@@ -46,39 +46,40 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     private final RoleRepo<Role> roleRepository;
     private final BCryptPasswordEncoder passwordEncoder;
 
+    /**
+     * Creates a new user in the database with a transactional context.
+     *
+     * This method performs the following steps:
+     * 1. Validates that the email is unique; throws an exception if duplicate
+     * 2. Inserts the user into the database and retrieves the generated user ID
+     * 3. Assigns the default ROLE_USER role to the new user
+     * 4. Generates a unique account verification URL using a UUID
+     * 5. Stores the verification URL in the database for email verification flow
+     * 6. Sets user status flags (enabled, notLocked)
+     * 7. Returns the created user with its ID set
+     *
+     * @param user the user object containing registration information (firstName, lastName, email, password)
+     * @return the created User with ID populated from the database
+     * @throws ApiException if email already exists or any database operation fails
+     */
     @Override
     @Transactional
     public User create(User user) {
-/*      here is what we need to do in this method:
-        check for unique email, if unique, Save new user
-        throw exception for duplicate email
-        add role to user
-        give verification url
-        save url in verification table
-        send email to user with verification url
-        finally, we can return the new user
-        throw exceptions for any errors that may occur during the process*/
         if (getEmailCount(user.getEmail().trim().toLowerCase()) > 0)
             throw new ApiException("Email already exists, please use a different email address and try again");
-        //we want to get the ID of the user to give them roles and such
+
         log.info("Creating new user with email: {}", user.getEmail());
         try {
-            // holder is for getting the generated ID of the new user we just created, and parameterSource is for mapping the user object to the SQL query parameters
             KeyHolder holder = new GeneratedKeyHolder();
             SqlParameterSource parameterSource = getSqlParameterSource(user);
-            // once we have the parameters, we must update the database with the new user, and we will use the holder to get the generated ID of the new user
             jdbcTemplate.update(INSERT_USER_QUERY, parameterSource, holder);
-            user.setId(requireNonNull(holder.getKey()).longValue()); // this key is the newly generated ID of the user we just created, and we set it to the user object so we can return it later. We use longValue() since we defined the User.Id as a type Long
-            // we will give a role to a user now
-            roleRepository.addRoleToUser(user.getId(), ROLE_USER.name());
-            // we want to generate a random UUID since we are using this same method to generate the password verification email, password verification url, and new account verification url. This is so that we can leverage this and reuse it for other use-cases.
-            String verificationURL = getVerificationURL(UUID.randomUUID().toString(), ACCOUNT.getType());
+            user.setId(requireNonNull(holder.getKey()).longValue());
 
-            // this is for saving the verification URL in the database. we will pass the keys we need to save the URL - userId, url, and url type (account verification or password reset)
+            roleRepository.addRoleToUser(user.getId(), ROLE_USER.name());
+
+            String verificationURL = getVerificationURL(UUID.randomUUID().toString(), ACCOUNT.getType());
             jdbcTemplate.update(INSERT_ACCOUNT_VERIFICATION_URL_QUERY, Map.of("userId", user.getId(), "url", verificationURL, "type", ACCOUNT.getType()));
-            // now we must send the email to the user with the verification URL
-            // TODO: email service for sending the verifications
-            // emailService.sendVerificationURL(user.getFirstName(), user.getEmail(), verificationURL, ACCOUNT);
+
             user.setEnabled(true);
             user.setNotLocked(true);
             return user;
@@ -88,49 +89,102 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
-    // this class is of type Integer since we want to count the number of emails which match the query.
+    /**
+     * Counts the number of users with a given email in the database.
+     * Used for validation during user registration to ensure email uniqueness.
+     *
+     * @param email the email address to check
+     * @return the count of users with the specified email (0 if unique, >0 if duplicate)
+     */
     private Integer getEmailCount(String email) {
-        //this will count to see how many emails we have that match the query, and it should be 0 if the email is unique, and greater than 0 if the email already exists in the database
         return jdbcTemplate.queryForObject(COUNT_USER_EMAIL_QUERY, Map.of("email", email), Integer.class);
     }
 
-    // this method is for mapping the user object to the SQL query parameters. We will use it in the create method to insert the new user into the database
-    // this is what the user will be giving us upon registration
+    /**
+     * Maps a User entity to SQL parameter source for database insert operations.
+     * Handles password encoding using BCryptPasswordEncoder and email normalization.
+     *
+     * @param user the user entity to be mapped
+     * @return SqlParameterSource containing mapped parameters (firstName, lastName, email, encoded password)
+     */
     private SqlParameterSource getSqlParameterSource(User user) {
         return new MapSqlParameterSource()
                 .addValue("firstName", user.getFirstName())
                 .addValue("lastName", user.getLastName())
                 .addValue("email", user.getEmail().trim().toLowerCase())
-                // we don't want to store the raw password in the database, so we will use the Spring BCryptEncoder
                 .addValue("password", passwordEncoder.encode(user.getPassword()));
     }
 
-    // we are defining "key" here since every URL will need a specific unique key. It will be type String
+    /**
+     * Generates a verification URL for account activation or password reset.
+     * Constructs a backend URL that users click to verify their account or reset password.
+     *
+     * @param key a unique identifier (typically UUID) for this verification instance
+     * @param type the verification type (ACCOUNT or PASSWORD_RESET)
+     * @return the full verification URL as a String
+     */
     private String getVerificationURL(String key, String type) {
-        // this is the backend URL, one of the three options which we mentioned above
         return ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/verify" + type + "/" + key).toUriString();
     }
 
+    /**
+     * Retrieves an unimplemented paginated list of users.
+     * This method is a placeholder for future implementation.
+     *
+     * @param page the page number to retrieve
+     * @param pageSize the number of users per page
+     * @return an empty collection (not yet implemented)
+     */
     @Override
     public Collection<User> list(int page, int pageSize) {
         return List.of();
     }
 
+    /**
+     * Retrieves an unimplemented user by ID.
+     * This method is a placeholder for future implementation.
+     *
+     * @param id the user ID to retrieve
+     * @return null (not yet implemented)
+     */
     @Override
     public User get(Long id) {
         return null;
     }
 
+    /**
+     * Updates an unimplemented user record.
+     * This method is a placeholder for future implementation.
+     *
+     * @param id the ID of the user to update
+     * @param data the updated user data
+     * @return null (not yet implemented)
+     */
     @Override
     public User update(Long id, User data) {
         return null;
     }
 
+    /**
+     * Deletes an unimplemented user record.
+     * This method is a placeholder for future implementation.
+     *
+     * @param id the ID of the user to delete
+     */
     @Override
     public void delete(Long id) {
 
     }
 
+    /**
+     * Retrieves a user from the database by their email address.
+     * Attempts to find the user, logs appropriate debug/error messages,
+     * and throws an exception if the user is not found.
+     *
+     * @param email the email address to search for (case-insensitive)
+     * @return the User object if found
+     * @throws ApiException if the user is not found in the database
+     */
     @Override
     public User getUserByEmail(String email) {
         log.debug("Attempting to retrieve user from database by email: {}", email);
@@ -147,18 +201,31 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Sends a 2FA verification code to the user via SMS.
+     *
+     * This method performs the following steps:
+     * 1. Generates a random 7-character alphanumeric verification code
+     * 2. Calculates the expiration date (24 hours from now)
+     * 3. Deletes any existing 2FA codes for the user
+     * 4. Inserts the new 2FA code into the database
+     * 5. Sends the code to the user's phone number via SMS (commented out for cost)
+     *
+     * @param userDTO the user who will receive the verification code
+     * @throws ApiException if any database operation fails
+     */
     @Override
     public void sendVerificationCode(UserDTO userDTO) {
-        // here we must implement the logic to send the SMS/Voice to the user.
         String expirationDate = DateFormatUtils.format(addDays(new Date(), 1), DATE_FORMAT);
         String verificationCode = randomAlphanumeric(7).toUpperCase();
-        // we must update the database to delete/replace the 2fa code ONLY if the user already has one
+
         try {
             jdbcTemplate.update(DELETE_2FA_CODE_BY_USER_ID, Map.of("id", userDTO.getId()));
             jdbcTemplate.update(INSERT_2FA_CODE_BY_USER_ID_QUERY, Map.of("userId", userDTO.getId(), "code", verificationCode, "expirationDate", expirationDate));
-            // TODO READ BELOW!!!!!!!!!!
-            // this costs real money per SMS sent! keep commented out unless showcasing the application to someone!
+
+            // TODO: Uncomment when ready to send real SMS (costs money per SMS)
             // sendSMS(userDTO.getPhoneNumber(), "From: AngularSpringBootFullStack App, To: " + userDTO.getPhoneNumber() + ", Message: Your 2FA verification code is: " + verificationCode + ". It will expire in 24 hours.");
+
             log.debug("2FA code successfully delete/replaced on user with email: {}", userDTO.getEmail());
         } catch (Exception exception) {
             log.error("Unexpected error retrieving user by email '{}': {}", userDTO.getEmail(), exception.getMessage(), exception);
@@ -166,6 +233,22 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Loads user details by email for Spring Security authentication.
+     * This method is part of the UserDetailsService interface and is called
+     * by Spring Security during the authentication process (via DaoAuthenticationProvider).
+     *
+     * The method:
+     * 1. Attempts to retrieve the user by email using getUserByEmail()
+     * 2. If user not found, throws UsernameNotFoundException
+     * 3. Retrieves the user's role and permissions
+     * 4. Wraps the user in a UserPrincipal object with their authorities
+     * 5. Returns the UserPrincipal for Spring Security to use
+     *
+     * @param email the user's email address (used as username in this application)
+     * @return a UserDetails object (UserPrincipal) containing user and authorities
+     * @throws UsernameNotFoundException if user is not found in the database
+     */
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         log.debug("Spring Security is attempting to load user by email: {}", email);
@@ -182,9 +265,6 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         } else {
             log.info("We have found this user in our database with the following address: {} ", email);
             log.debug("Building UserPrincipal for user with email: {} and id: {}", email, user.getId());
-            // here, we are returning a UserPrincipal object with the user and their role permissions.
-            // This is because the UserPrincipal class implements the UserDetails interface, which is what Spring Security uses to authenticate and authorize users.
-            // By returning a UserPrincipal object, we are providing Spring Security with the necessary information about the user and their permissions to perform authentication and authorization checks.
             return new UserPrincipal(user, roleRepository.getRoleByUserId(user.getId()).getPermission());
         }
     }

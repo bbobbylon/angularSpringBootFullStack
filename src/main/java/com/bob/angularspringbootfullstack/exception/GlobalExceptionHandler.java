@@ -9,16 +9,37 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.LocalTime;
 
 
-/*
-this global handler is used to prevent the ApiException from being thrown and instead return a custom HttpResponse.
-This is done so that we can return a custom error message to the user instead of the generic "401 Unauthorized" message from appearing to the end user.
-This will help with giving extra context as to why an api endpoint is failing and provide a better end-user experience.
-The GlobalExceptionHandler class uses the @RestControllerAdvice annotation, which is a Spring Boot mechanism for global exception handling.
-When a controller method throws an exception (like ApiException), Spring automatically detects any class annotated with @RestControllerAdvice and invokes its @ExceptionHandler methods for matching exception types.
-Spring scans for @RestControllerAdvice beans at startup and registers them as global exception handlers. When an exception is thrown during a REST request, Spring checks for a matching @ExceptionHandler method in these beans and calls it, allowing you to customize the HTTP response.
-*/
+/**
+ * GlobalExceptionHandler is a centralized exception handling component for all REST controllers.
+ *
+ * This class uses Spring's @RestControllerAdvice annotation to intercept exceptions
+ * thrown by controller methods and provide standardized error responses to clients.
+ *
+ * Benefits:
+ * - Centralized exception handling (DRY principle)
+ * - Consistent API error response format across all endpoints
+ * - Custom error messages instead of generic Spring defaults
+ * - Better user experience with meaningful error descriptions
+ *
+ * How it works:
+ * 1. Spring scans for classes annotated with @RestControllerAdvice at startup
+ * 2. When an exception is thrown during request handling, Spring checks for matching @ExceptionHandler methods
+ * 3. If a match is found, the exception handler method is invoked
+ * 4. The handler returns a customized HttpResponse with appropriate status and message
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    /**
+     * Handles custom ApiException thrown throughout the application.
+     * Converts the exception to a standardized HTTP 400 Bad Request response.
+     *
+     * This allows business logic to throw descriptive ApiExceptions
+     * which are then automatically converted to proper HTTP responses
+     * without letting raw exceptions leak to the client.
+     *
+     * @param ex the ApiException thrown by application logic
+     * @return ResponseEntity with HttpResponse containing error details and 400 status
+     */
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<HttpResponse> handleApiException(ApiException ex) {
         HttpResponse response = HttpResponse.builder()
