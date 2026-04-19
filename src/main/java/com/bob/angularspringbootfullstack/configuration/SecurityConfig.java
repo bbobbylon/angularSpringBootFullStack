@@ -17,6 +17,12 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 import static org.springframework.http.HttpMethod.*;
 import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
@@ -38,6 +44,7 @@ class SecurityConfig {
     private final BCryptPasswordEncoder passwordEncoder;
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+    //private final JwtAuthFilter jwtAuthFilter;
 
     //this method is using the version 4 Spring Security config style. This is slightly different than our tutorial due to this. This file is used for disabling CSRF protection. This file is also being used to This is securing our application.
     @Bean
@@ -47,7 +54,8 @@ class SecurityConfig {
                 //we want to disable this because we don't need cross-site request forgery protection for the app. This is also using Lambda syntax/style!
                 .csrf(AbstractHttpConfigurer::disable)
                 //CORS is also not needed because we will be using our own configuration later.
-                .cors(AbstractHttpConfigurer::disable)
+                .cors(configure -> configure.configurationSource(corsConfigurationSource()))
+                // we are disabling this because we won't be using basic authentication. We will be using JWT
                 .httpBasic(AbstractHttpConfigurer::disable)
                 // this is the non-lambda style but still works --------> .csrf(csrf -> csrf.disable())
                 // we won't be tracking sessions via cookies because we are dealing with just one token.
@@ -74,12 +82,25 @@ class SecurityConfig {
                         .accessDeniedHandler(customAccessDeniedHandler)
                         .authenticationEntryPoint(customAuthenticationEntryPoint)
                 );
-/*                // we may need this later since we are using JWT TOKENS -- > .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                // this is for handling some exceptions when users are trying to access these endpoints/resources without the correct tokens or authentication. We are using Lambda for this entire method.
-                .exceptionHandling(ex -> ex
-                        .accessDeniedHandler((request, response, exception2) -> response.sendError(HttpServletResponse.SC_FORBIDDEN, "Access is very much denied!"))
-                        .authenticationEntryPoint((request, response, exception3) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "You are not authorized to be accessing these endpoints! Check your tokens and come again!")));*/
+        // Add the JWT filter at the correct place in the filter chain
+        // http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        var corsConfiguration = new CorsConfiguration();
+        corsConfiguration.setAllowCredentials(true);
+        corsConfiguration.setAllowedOrigins(List.of("http://localhost:4200", "http://localhost:3000", "http://angularsecureapp.org", "192.168.1.164"));
+        corsConfiguration.setAllowedHeaders(Arrays.asList("Origin", "Access-Control-Allow-Origin", "Content-Type",
+                "Accept", "Jwt-Token", "Authorization", "Origin", "Accept", "X-Requested-With",
+                "Access-Control-Request-Method", "Access-Control-Request-Headers"));
+        corsConfiguration.setExposedHeaders(Arrays.asList("Origin", "Content-Type", "Accept", "Jwt-Token", "Authorization",
+                "Access-Control-Allow-Origin", "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials", "File-Name"));
+        corsConfiguration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        var source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", corsConfiguration);
+        return source;
     }
 
     // managing the authentication manager and provider below. This is needed to process the actual authentication request that users are making.

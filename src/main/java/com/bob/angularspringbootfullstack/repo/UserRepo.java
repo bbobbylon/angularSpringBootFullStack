@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.repo;
 
+import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.model.User;
 
 import java.util.Collection;
@@ -22,6 +23,8 @@ public interface UserRepo<T extends User> {
     void delete(Long id);
 
     User getUserByEmail(String email);
+
+    void sendVerificationCode(UserDTO userDTO);
 }
 /* TODO: complex operations
 

@@ -52,24 +52,6 @@
 #debug: true
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # here we can just define what profile we want to use - either application-dev, prod, etc and Spring Boot will know which profile to use!
 spring:
   profiles:
