@@ -7,8 +7,10 @@ import com.twilio.type.PhoneNumber;
 
 public class SMSUtils {
     public static final String FROM_NUMBER = "+16414581251";
-    public static final String SID_KEY = "AC691e30e92e8535257f18c987b8d6fd6c";
-    public static final String TOKEN_KEY = "d60bc05628ead422f00d61c72090962f";
+    // TODO READ BELOW!
+    //these have been removed for security purposes. Feel free to re-add later during showcase of the applcation
+    public static final String SID_KEY = "";
+    public static final String TOKEN_KEY = "";
 
     public static void sendSMS(String toNumber, String messageBody) {
         Twilio.init(SID_KEY, TOKEN_KEY);
