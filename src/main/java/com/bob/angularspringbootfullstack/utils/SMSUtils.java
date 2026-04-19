@@ -6,9 +6,10 @@ import com.twilio.type.PhoneNumber;
 
 
 public class SMSUtils {
-    public static final String FROM_NUMBER = "+16414581251";
+
     // TODO READ BELOW!
-    //these have been removed for security purposes. Feel free to re-add later during showcase of the applcation
+    //these have been removed for security purposes. Feel free to re-add later during showcase of the application
+    public static final String FROM_NUMBER = "";
     public static final String SID_KEY = "";
     public static final String TOKEN_KEY = "";
 
