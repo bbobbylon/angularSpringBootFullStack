@@ -55,4 +55,5 @@ public class UserQuery {
 
     public static final String SELECT_USER_BY_USER_CODE_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM twofactorverifications WHERE code = :code)";
     public static final String DELETE_2FA_CODE_BY_CODE_QUERY = "DELETE FROM twofactorverifications WHERE code = :code";
+    public static final String CHECK_2FA_CODE_EXPIRE_DATE = "SELECT expiration_date < NOW() AS is_expired FROM twofactorverifications WHERE code = :code";
 }

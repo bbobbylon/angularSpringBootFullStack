@@ -241,6 +241,8 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
 
     @Override
     public User verifyCode(String email, String code) {
+        if (isVerificationCodeExpired(code))
+            throw new ApiException("This code has expired. Please request a new code to verify your account.");
         try {
             log.info("User with email '{}' is attempting to use 2FA/MFA: verifying code.", email);
             User userByCode = jdbcTemplate.queryForObject(SELECT_USER_BY_USER_CODE_QUERY, of("code", code), new UserRowMapper());
@@ -259,6 +261,18 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             throw new UsernameNotFoundException("User not found in our database: " + email);
         } catch (Exception exception) {
             log.error("Unexpected error during 2FA code verification for email '{}': {}", email, exception.getMessage(), exception);
+            throw new BadCredentialsException("An unexpected error occurred while verifying the code.");
+        }
+    }
+
+    private Boolean isVerificationCodeExpired(String code) {
+        try {
+            return jdbcTemplate.queryForObject(CHECK_2FA_CODE_EXPIRE_DATE, of("code", code), Boolean.class);
+        } catch (EmptyResultDataAccessException e) {
+            log.error("This code is not valid. Please attempt to login again.");
+            throw new UsernameNotFoundException("This code is not valid. Please attempt to login again.");
+        } catch (Exception exception) {
+            log.error("Unexpected error during 2FA code verification for email '{}'", exception.getMessage(), exception);
             throw new BadCredentialsException("An unexpected error occurred while verifying the code.");
         }
     }

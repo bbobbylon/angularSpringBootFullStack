@@ -13,16 +13,16 @@ import java.time.LocalTime;
 
 /**
  * GlobalExceptionHandler is a centralized exception handling component for all REST controllers.
- *
+ * <p>
  * This class uses Spring's @RestControllerAdvice annotation to intercept exceptions
  * thrown by controller methods and provide standardized error responses to clients.
- *
+ * <p>
  * Benefits:
  * - Centralized exception handling (DRY principle)
  * - Consistent API error response format across all endpoints
  * - Custom error messages instead of generic Spring defaults
  * - Better user experience with meaningful error descriptions
- *
+ * <p>
  * How it works:
  * 1. Spring scans for classes annotated with @RestControllerAdvice at startup
  * 2. When an exception is thrown during request handling, Spring checks for matching @ExceptionHandler methods
@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
     /**
      * Handles custom ApiException thrown throughout the application.
      * Converts the exception to a standardized HTTP 400 Bad Request response.
-     *
+     * <p>
      * This allows business logic to throw descriptive ApiExceptions
      * which are then automatically converted to proper HTTP responses
      * without letting raw exceptions leak to the client.
@@ -56,7 +56,7 @@ public class GlobalExceptionHandler {
     /**
      * Handles authentication-related exceptions (2FA verification failures, invalid credentials, etc).
      * Converts these to HTTP 401 Unauthorized responses with a generic message for security.
-     *
+     * <p>
      * This prevents leaking sensitive information like whether a user exists in the database.
      *
      * @param ex the authentication exception
@@ -71,5 +71,6 @@ public class GlobalExceptionHandler {
                 .statusCode(HttpStatus.UNAUTHORIZED.value())
                 .build();
         return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
-    }}
+    }
+}
 

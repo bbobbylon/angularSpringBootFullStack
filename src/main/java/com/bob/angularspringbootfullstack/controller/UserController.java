@@ -18,6 +18,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 
+import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpStatus.CREATED;
@@ -112,12 +113,13 @@ public class UserController {
      * which parses the permission string and creates SimpleGrantedAuthority objects
      * - These authorities are embedded in the JWT token as a claim
      * - When token is verified later, authorities are extracted and used for authorization
+     * We also switched from using the User entity to the UserDTO for security and performance reasons. One being that we want to keep the User separate in terms of not having that User object being sent all the way up the chain to the controller. Another being that we want to keep the UserDTO lightweight and only contain the necessary information for the controller to function (it doesn't contain the user's password).
      *
      * @param userDTO the authenticated user DTO (has id and email)
      * @return UserPrincipal object with User entity and authority permissions
      */
     private UserPrincipal getUserPrincipal(UserDTO userDTO) {
-        return new UserPrincipal(userService.getUser(userDTO.getEmail()), roleService.getRoleByUserId(userDTO.getId()).getPermission());
+        return new UserPrincipal(toUser(userService.getUserByEmail(userDTO.getEmail())), roleService.getRoleByUserId(userDTO.getId()).getPermission());
     }
 
     /**
