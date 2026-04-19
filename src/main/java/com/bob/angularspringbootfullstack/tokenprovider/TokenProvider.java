@@ -3,9 +3,12 @@ package com.bob.angularspringbootfullstack.tokenprovider;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.InvalidClaimException;
 import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.auth0.jwt.exceptions.TokenExpiredException;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -156,5 +159,128 @@ public class TokenProvider {
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(email, null, authorities);
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         return authToken;
+    }
+
+    /**
+     * Validates whether a JWT token is valid for the given email address.
+     * <p>
+     * A token is considered valid if:
+     * 1. The email is not empty (StringUtils.isNotEmpty)
+     * 2. The token has not expired (checked via isTokenExpired())
+     * <p>
+     * This method is typically called before attempting to extract user information from a token.
+     * <p>
+     * Flow:
+     * 1. Check if email is provided (not null, not empty)
+     * 2. Create JWTVerifier with secret key
+     * 3. Verify token signature using verifier
+     * 4. Extract expiration date from verified token
+     * 5. Compare expiration date with current time
+     * 6. Return true if email valid AND token not expired
+     *
+     * @param email the user's email to validate against token subject
+     * @param token the JWT token string to validate
+     * @return true if token is valid and not expired, false otherwise
+     * @throws JWTVerificationException if token signature is invalid or secret key is wrong
+     */
+    public boolean isTokenValid(String email, String token) {
+        JWTVerifier verifier = getJWTVerifier();
+        return StringUtils.isNotEmpty(email) && !isTokenExpired(verifier, token);
+    }
+
+    /**
+     * Checks if a JWT token has expired.
+     * <p>
+     * Extracts the expiration date from the token payload and compares it
+     * with the current system time. A token is considered expired if its
+     * expiration time is in the past.
+     * <p>
+     * How JWT expiration works:
+     * 1. Token contains "exp" claim: Unix timestamp of expiration
+     * 2. Example: exp = 1713247333 (April 16, 2024 at 10:22:13 UTC)
+     * 3. Current time: 1713247400 (April 16, 2024 at 10:23:20 UTC)
+     * 4. Current time > expiration → Token is expired
+     * <p>
+     * Internal process:
+     * 1. verifier.verify(token) validates signature and returns DecodedJWT
+     * 2. getExpiresAt() extracts the "exp" claim as a Date object
+     * 3. expiration.before(new Date()) checks if expiration is before now
+     * 4. Returns true if token is in the past (expired)
+     *
+     * @param verifier the JWTVerifier instance with secret key and issuer configured
+     * @param token    the JWT token string to check for expiration
+     * @return true if token has expired (expiration time is before current time), false if still valid
+     * @throws JWTVerificationException if token signature is invalid
+     */
+    private boolean isTokenExpired(JWTVerifier verifier, String token) {
+        Date expiration = verifier.verify(token).getExpiresAt();
+        return expiration.before(new Date());
+    }
+
+    /**
+     * Extracts the subject (username/email) from a JWT token.
+     * <p>
+     * The subject claim contains the user's email/username and is used to identify
+     * which user the token belongs to. This is called after authentication to get
+     * the user's identifier for database lookups, logging, etc.
+     * <p>
+     * Exception handling:
+     * This method catches JWT verification exceptions, stores error details in the
+     * HttpServletRequest as attributes for downstream handlers, and then re-throws
+     * the exception to propagate it up the chain.
+     * <p>
+     * Exception types handled:
+     * <p>
+     * 1. TokenExpiredException:
+     * - Thrown when token.exp < currentTime
+     * - Example: User's token from 2 hours ago is no longer valid
+     * - Stored in: request.setAttribute("expiredMessage", message)
+     * - Re-thrown: Handler catches and returns 401 with "Token expired" message
+     * - Frontend should: Request new token via refresh endpoint
+     * <p>
+     * 2. InvalidClaimException:
+     * - Thrown when a claim doesn't match expected value
+     * - Example: Issuer is not "BOBBYLON_LLC"
+     * - Example: Audience is not "BOBS_MANAGEMENT"
+     * - Stored in: request.setAttribute("invalidClaim", message)
+     * - Re-thrown: Handler catches and returns 401 with "Invalid token" message
+     * - Frontend should: User likely tampered with token, redirect to login
+     * <p>
+     * Flow example - Valid token:
+     * 1. Client sends: Authorization: Bearer eyJhbGci...
+     * 2. Filter extracts token and calls: getSubject(token, request)
+     * 3. getJWTVerifier().verify(token) succeeds
+     * 4. Returns: "bob@example.com"
+     * 5. Filter uses email for database lookup
+     * 6. Request proceeds to controller
+     * <p>
+     * Flow example - Expired token:
+     * 1. Client sends: Authorization: Bearer eyJhbGci... (from 2 hours ago)
+     * 2. Filter extracts token and calls: getSubject(token, request)
+     * 3. getJWTVerifier().verify(token) throws TokenExpiredException
+     * 4. Caught in catch block
+     * 5. request.setAttribute("expiredMessage", exception.getMessage())
+     * 6. Exception is re-thrown
+     * 7. Filter catches TokenExpiredException
+     * 8. Returns: HTTP 401 with message "Token has expired"
+     * 9. Frontend receives 401 and refreshes token or redirects to login
+     *
+     * @param token   the JWT token string to extract subject from
+     * @param request the HTTP servlet request for storing error attributes
+     * @return the subject (username/email) from the verified token
+     * @throws TokenExpiredException if token has expired
+     * @throws InvalidClaimException if claims don't match expected values (issuer, audience)
+     * @throws JWTVerificationException for any other JWT verification failures
+     */
+    public String getSubject(String token, HttpServletRequest request) throws JWTVerificationException {
+        try {
+            return getJWTVerifier().verify(token).getSubject();
+        } catch (TokenExpiredException e) {
+            request.setAttribute("expiredMessage", e.getMessage());
+            throw e;
+        } catch (InvalidClaimException e) {
+            request.setAttribute("invalidClaim", e.getMessage());
+            throw e;
+        }
     }
 }

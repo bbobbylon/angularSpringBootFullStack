@@ -17,9 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
-import java.util.Map;
 
 import static java.time.LocalTime.now;
+import static java.util.Map.of;
 import static org.springframework.http.HttpStatus.CREATED;
 import static org.springframework.http.HttpStatus.OK;
 
@@ -44,7 +44,7 @@ public class UserController {
         return ResponseEntity.created(getUri()).body(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(Map.of("user", userDTO))
+                        .data(of("user", userDTO))
                         .message("User created successfully!")
                         .status(CREATED)
                         .statusCode(CREATED.value())
@@ -65,7 +65,7 @@ public class UserController {
      * Authenticates a user and initiates the login process.
      * Validates the login credentials using AuthenticationManager. If 2FA is enabled,
      * sends a verification code. Otherwise, returns a successful login response.
-     *
+     * <p>
      * The authentication flow:
      * 1. AuthenticationManager.authenticate() receives a UsernamePasswordAuthenticationToken
      * 2. It passes through the authentication provider chain (DaoAuthenticationProvider, etc.)
@@ -96,7 +96,7 @@ public class UserController {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(Map.of("user", userDTO))
+                        .data(of("user", userDTO))
                         .message("2FA verification code was sent!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -115,7 +115,7 @@ public class UserController {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(Map.of("user", userDTO))
+                        .data(of("user", userDTO))
                         .message("Login successful!")
                         .status(OK)
                         .statusCode(OK.value())
