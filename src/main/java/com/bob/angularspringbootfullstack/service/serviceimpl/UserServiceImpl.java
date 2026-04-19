@@ -1,33 +1,92 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
-import com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper;
+import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
+import com.bob.angularspringbootfullstack.repo.RoleRepo;
 import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
+
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
     private final UserRepo<User> userRepo;
+    private final RoleRepo<Role> roleRepo;
 
-
+    /**
+     * Creates a new user in the system through the repository layer.
+     * Delegates user creation to the UserRepo, then converts the resulting User
+     * entity to a UserDTO for exposure to the presentation layer.
+     * <p>
+     * The returned UserDTO includes the user's role name and permissions as simple fields
+     * (not as a Role object), reflecting the current DTO structure for API responses.
+     *
+     * @param user the user entity containing registration information
+     * @return a UserDTO representing the newly created user (with roleName and permissions fields)
+     */
     @Override
     public UserDTO createUser(User user) {
-        // here is where we start connecting the layers - We are going to use the fromUser to be able to map the user to the userDTO. Call the repository > Take the user > runs the .create() method, and we pass it to fromUser, which creates a UserDTO, and returns that back to the controller
-        return UserDTOMapper.fromUser(userRepo.create(user));
-
+        return mapToUserDTO(userRepo.create(user));
     }
 
+    /**
+     * Retrieves a user by their email address from the repository.
+     * Converts the User entity to a UserDTO for the presentation layer.
+     * <p>
+     * The returned UserDTO includes the user's role name and permissions as simple fields.
+     *
+     * @param email the email address to search for
+     * @return a UserDTO if user is found, otherwise throws an exception
+     * @throws ApiException if user is not found in the database
+     */
     @Override
     public UserDTO getUserByEmail(String email) {
-        return UserDTOMapper.fromUser(userRepo.getUserByEmail(email));
+        return mapToUserDTO(userRepo.getUserByEmail(email));
     }
 
+    /**
+     * Sends a 2FA verification code to the user via their registered contact method.
+     * Delegates to the repository layer which handles SMS/Email sending logic.
+     *
+     * @param userDTO the user who will receive the verification code
+     */
     @Override
     public void sendVerificationCode(UserDTO userDTO) {
         userRepo.sendVerificationCode(userDTO);
+    }
+
+    /**
+     * Verifies a 2FA code for the given user email.
+     * <p>
+     * If verification succeeds, returns a UserDTO with roleName and permissions fields.
+     * If verification fails (invalid/expired code or user not found), throws an authentication exception
+     * that is mapped to a 401 Unauthorized response by the global exception handler.
+     *
+     * @param email the user's email address
+     * @param code the 2FA code to verify
+     * @return a UserDTO if verification is successful
+     * @throws org.springframework.security.authentication.BadCredentialsException or
+     *         org.springframework.security.core.userdetails.UsernameNotFoundException if verification fails
+     */
+    @Override
+    public UserDTO verifyCode(String email, String code) {
+        return mapToUserDTO(userRepo.verifyCode(email, code));
+    }
+
+    /**
+     * Maps a User entity to a UserDTO, including the user's role name and permissions.
+     * <p>
+     * This method uses the UserDTOMapper to copy properties and set roleName/permissions fields
+     * from the user's Role object, matching the current UserDTO structure.
+     *
+     * @param user the User entity
+     * @return a UserDTO with roleName and permissions fields populated
+     */
+    private UserDTO mapToUserDTO(User user) {
+        return fromUser(user, roleRepo.getRoleByUserId(user.getId()));
     }
 }

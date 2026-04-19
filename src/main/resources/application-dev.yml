@@ -1,4 +1,6 @@
 # This is the MySQL config, following the tutorial.
+jwt:
+  secret: myCrazySecretSecretKey
 spring:
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/db2
