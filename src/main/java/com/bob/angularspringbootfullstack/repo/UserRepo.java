@@ -7,11 +7,11 @@ import java.util.Collection;
 
 /**
  * UserRepo defines the data access contract for User entities.
- *
+ * <p>
  * This generic repository interface extends to any type T that extends User,
  * providing a flexible CRUD (Create, Read, Update, Delete) contract.
  * Implementations handle direct database access via SQL queries.
- *
+ * <p>
  * Generic CRUD operations include standard database operations,
  * while custom methods handle user-specific queries and operations.
  *
@@ -31,7 +31,7 @@ public interface UserRepo<T extends User> {
      * Retrieves a paginated list of users.
      * Supports pagination for large datasets.
      *
-     * @param page the page number (0-indexed)
+     * @param page     the page number (0-indexed)
      * @param pageSize the number of users per page
      * @return a collection of users on the specified page
      */
@@ -48,7 +48,7 @@ public interface UserRepo<T extends User> {
     /**
      * Updates an existing user in the database.
      *
-     * @param id the ID of the user to update
+     * @param id   the ID of the user to update
      * @param data the updated user data
      * @return the updated user
      */
@@ -76,4 +76,6 @@ public interface UserRepo<T extends User> {
      * @param userDTO the user who will receive the verification code
      */
     void sendVerificationCode(UserDTO userDTO);
+
+    User verifyCode(String email, String code);
 }

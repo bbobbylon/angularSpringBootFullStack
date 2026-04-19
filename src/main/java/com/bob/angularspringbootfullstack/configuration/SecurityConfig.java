@@ -32,80 +32,80 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
  * ═══════════════════════════════════════════════════════════════════════════════════════════════
  * SPRING SECURITY COMPLETE FLOW DOCUMENTATION
  * ═══════════════════════════════════════════════════════════════════════════════════════════════
- *
+ * <p>
  * When a user makes a login request, the following happens:
- *
+ * <p>
  * 1. HTTP REQUEST ARRIVES at /user/login with LoginForm (email, password)
- *    ↓
+ * ↓
  * 2. SecurityFilterChain intercepts the request
- *    - UsernamePasswordAuthenticationFilter checks if this is a login endpoint
- *    - Creates UsernamePasswordAuthenticationToken(email, password)
- *    ↓
+ * - UsernamePasswordAuthenticationFilter checks if this is a login endpoint
+ * - Creates UsernamePasswordAuthenticationToken(email, password)
+ * ↓
  * 3. AuthenticationManager.authenticate() is called with the token
- *    - This delegates to DaoAuthenticationProvider
- *    ↓
+ * - This delegates to DaoAuthenticationProvider
+ * ↓
  * 4. DaoAuthenticationProvider:
- *    a) Calls userDetailsService.loadUserByUsername(email)
- *       → Goes to UserRepoImpl (implements UserDetailsService)
- *       → Calls getUserByEmail(email) from database
- *       → Gets User entity
- *       → Gets user's role via roleRepository.getRoleByUserId()
- *       → Creates UserPrincipal(user, authorities)
- *       → UserPrincipal implements UserDetails interface (needed by Spring Security)
- *    b) Gets the password hash from UserPrincipal
- *    c) Compares provided password with stored BCrypt hash using passwordEncoder
- *    d) If matches: Creates Authentication token with authorities (GrantedAuthority objects)
- *    e) If doesn't match: Throws BadCredentialsException
- *    ↓
+ * a) Calls userDetailsService.loadUserByUsername(email)
+ * → Goes to UserRepoImpl (implements UserDetailsService)
+ * → Calls getUserByEmail(email) from database
+ * → Gets User entity
+ * → Gets user's role via roleRepository.getRoleByUserId()
+ * → Creates UserPrincipal(user, authorities)
+ * → UserPrincipal implements UserDetails interface (needed by Spring Security)
+ * b) Gets the password hash from UserPrincipal
+ * c) Compares provided password with stored BCrypt hash using passwordEncoder
+ * d) If matches: Creates Authentication token with authorities (GrantedAuthority objects)
+ * e) If doesn't match: Throws BadCredentialsException
+ * ↓
  * 5. If authentication succeeds:
- *    - Spring Security sets SecurityContextHolder with authenticated principal
- *    - Controller method executes
- *    - Application generates JWT token (optional next step)
- *    ↓
+ * - Spring Security sets SecurityContextHolder with authenticated principal
+ * - Controller method executes
+ * - Application generates JWT token (optional next step)
+ * ↓
  * 6. If authentication fails OR user tries to access protected resource without auth:
- *    - CustomAuthenticationEntryPoint.commence() is called → returns 401 Unauthorized
- *    ↓
+ * - CustomAuthenticationEntryPoint.commence() is called → returns 401 Unauthorized
+ * ↓
  * 7. If authenticated user lacks required authorities:
- *    - CustomAccessDeniedHandler.handle() is called → returns 403 Forbidden
- *
+ * - CustomAccessDeniedHandler.handle() is called → returns 403 Forbidden
+ * <p>
  * ═══════════════════════════════════════════════════════════════════════════════════════════════
  * KEY COMPONENTS:
  * ═══════════════════════════════════════════════════════════════════════════════════════════════
- *
+ * <p>
  * UserDetailsService Interface:
- *   - Spring Security contract for loading user information
- *   - We implement it in UserRepoImpl
- *   - Must implement: loadUserByUsername(String username) → UserDetails
- *   - Returns UserPrincipal which implements UserDetails
- *
+ * - Spring Security contract for loading user information
+ * - We implement it in UserRepoImpl
+ * - Must implement: loadUserByUsername(String username) → UserDetails
+ * - Returns UserPrincipal which implements UserDetails
+ * <p>
  * UserDetails Interface:
- *   - Spring Security contract for user information
- *   - We implement it with UserPrincipal
- *   - Must implement:
- *     * getAuthorities() → returns GrantedAuthority objects
- *     * getPassword() → returns BCrypted password
- *     * getUsername() → returns email (used as username)
- *     * isAccountNonExpired() → is account still valid?
- *     * isAccountNonLocked() → is account locked?
- *     * isCredentialsNonExpired() → did password not expire?
- *     * isEnabled() → is account enabled?
- *
+ * - Spring Security contract for user information
+ * - We implement it with UserPrincipal
+ * - Must implement:
+ * * getAuthorities() → returns GrantedAuthority objects
+ * * getPassword() → returns BCrypted password
+ * * getUsername() → returns email (used as username)
+ * * isAccountNonExpired() → is account still valid?
+ * * isAccountNonLocked() → is account locked?
+ * * isCredentialsNonExpired() → did password not expire?
+ * * isEnabled() → is account enabled?
+ * <p>
  * GrantedAuthority:
- *   - Represents a permission/role the user has
- *   - Simple implementation: SimpleGrantedAuthority("ROLE_USER")
- *   - Used in @Secured, @PreAuthorize annotations
- *   - Examples: "ROLE_USER", "READ:USER", "DELETE:USER"
- *
+ * - Represents a permission/role the user has
+ * - Simple implementation: SimpleGrantedAuthority("ROLE_USER")
+ * - Used in @Secured, @PreAuthorize annotations
+ * - Examples: "ROLE_USER", "READ:USER", "DELETE:USER"
+ * <p>
  * Authentication:
- *   - Represents an authenticated user in Spring Security
- *   - Contains: principal (UserPrincipal), credentials (password), authorities (roles)
- *   - Stored in SecurityContextHolder for duration of request
- *
+ * - Represents an authenticated user in Spring Security
+ * - Contains: principal (UserPrincipal), credentials (password), authorities (roles)
+ * - Stored in SecurityContextHolder for duration of request
+ * <p>
  * SecurityContext:
- *   - Holds the Authentication for the current request/thread
- *   - Accessed via SecurityContextHolder.getContext()
- *   - ThreadLocal storage - each request thread has its own context
- *
+ * - Holds the Authentication for the current request/thread
+ * - Accessed via SecurityContextHolder.getContext()
+ * - ThreadLocal storage - each request thread has its own context
+ * <p>
  * ═══════════════════════════════════════════════════════════════════════════════════════════════
  */
 @Configuration
@@ -119,20 +119,29 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 class SecurityConfig {
 
     private static final Logger securityLogger = LoggerFactory.getLogger(SecurityConfig.class);
-    /** Public URLs that don't require authentication */
-    private static final String[] PUBLIC_URLS = {"/user/login/**"};
+    /**
+     * Public URLs that don't require authentication
+     */
+    private static final String[] PUBLIC_URLS = {"/user/login/**", "/user/verify/code/**", "/user/register/**", "/actuator/**"};
 
-    /** BCrypt password encoder with strength 12 - used to hash/verify passwords */
+    /**
+     * BCrypt password encoder with strength 12 - used to hash/verify passwords
+     */
     private final BCryptPasswordEncoder passwordEncoder;
-    /** Handles 403 Forbidden responses when authenticated users lack permissions */
+    /**
+     * Handles 403 Forbidden responses when authenticated users lack permissions
+     */
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
-    /** Handles 401 Unauthorized responses when unauthenticated users access protected resources */
+    /**
+     * Handles 401 Unauthorized responses when unauthenticated users access protected resources
+     */
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+
     /**
      * ═══════════════════════════════════════════════════════════════════════════════════════════
      * SECURITY FILTER CHAIN CONFIGURATION
      * ═══════════════════════════════════════════════════════════════════════════════════════════
-     *
+     * <p>
      * This bean defines the security policy for the entire application. Every HTTP request
      * passes through this filter chain. The chain makes decisions about:
      * - Which URLs require authentication
@@ -140,49 +149,49 @@ class SecurityConfig {
      * - How to handle security exceptions
      * - Session management strategy
      * - CSRF and CORS settings
-     *
+     * <p>
      * REQUEST LIFECYCLE:
      * ═══════════════════════════════════════════════════════════════════════════════════════════
-     *
+     * <p>
      * 1. HTTP REQUEST arrives at any endpoint
-     *    ↓
+     * ↓
      * 2. SecurityFilterChain evaluates the request against rules
-     *    ↓
+     * ↓
      * 3. For PROTECTED endpoints:
-     *    - Check if user is authenticated
-     *    - If YES: Check if user has required authorities
-     *      - If HAS authority: Allow request to proceed to controller
-     *      - If NO authority: → customAccessDeniedHandler.handle() → 403 Forbidden
-     *    - If NO authentication: → customAuthenticationEntryPoint.commence() → 401 Unauthorized
-     *    ↓
+     * - Check if user is authenticated
+     * - If YES: Check if user has required authorities
+     * - If HAS authority: Allow request to proceed to controller
+     * - If NO authority: → customAccessDeniedHandler.handle() → 403 Forbidden
+     * - If NO authentication: → customAuthenticationEntryPoint.commence() → 401 Unauthorized
+     * ↓
      * 4. For PUBLIC endpoints (/user/login, /user/register):
-     *    - Allow request to proceed without authentication check
-     *    - Controller handles the request
-     *    ↓
+     * - Allow request to proceed without authentication check
+     * - Controller handles the request
+     * ↓
      * 5. For endpoints requiring specific AUTHORITY:
-     *    - Examples: hasAnyAuthority("DELETE:USER", "READ:CUSTOMER")
-     *    - GrantedAuthority must match exactly (case-sensitive)
-     *    - Authorities come from UserPrincipal.getAuthorities()
-     *      → Which comes from Role.permission field
-     *      → Which is split by comma: "READ:USER,UPDATE:USER,DELETE:USER"
-     *      → Each authority becomes a SimpleGrantedAuthority
-     *
+     * - Examples: hasAnyAuthority("DELETE:USER", "READ:CUSTOMER")
+     * - GrantedAuthority must match exactly (case-sensitive)
+     * - Authorities come from UserPrincipal.getAuthorities()
+     * → Which comes from Role.permission field
+     * → Which is split by comma: "READ:USER,UPDATE:USER,DELETE:USER"
+     * → Each authority becomes a SimpleGrantedAuthority
+     * <p>
      * AUTHORITY vs ROLE vs PERMISSION:
      * ═══════════════════════════════════════════════════════════════════════════════════════════
-     *
+     * <p>
      * In Spring Security:
      * - ROLE: A group of permissions. Example: "ROLE_USER", "ROLE_ADMIN"
-     *   Convention: prefix with "ROLE_"
-     *
+     * Convention: prefix with "ROLE_"
+     * <p>
      * - AUTHORITY: Specific permission. Example: "READ:USER", "DELETE:USER"
-     *   No prefix convention, can be anything
-     *
+     * No prefix convention, can be anything
+     * <p>
      * - PERMISSION: The database representation.
-     *   In our DB: Role.permission = "READ:USER,UPDATE:USER,DELETE:USER"
-     *
+     * In our DB: Role.permission = "READ:USER,UPDATE:USER,DELETE:USER"
+     * <p>
      * In this application, we use AUTHORITIES (not roles) for fine-grained control:
      * Example: User with ROLE_USER might have authorities: "READ:USER", "UPDATE:USER"
-     *          User with ROLE_ADMIN might have authorities: "READ:USER", "READ:CUSTOMER", "DELETE:USER", "DELETE:CUSTOMER"
+     * User with ROLE_ADMIN might have authorities: "READ:USER", "READ:CUSTOMER", "DELETE:USER", "DELETE:CUSTOMER"
      *
      * @param http the HttpSecurity object that we configure
      * @return the built SecurityFilterChain bean
@@ -365,22 +374,22 @@ class SecurityConfig {
      * ═══════════════════════════════════════════════════════════════════════════════════════════
      * CORS (CROSS-ORIGIN RESOURCE SHARING) CONFIGURATION
      * ═══════════════════════════════════════════════════════════════════════════════════════════
-     *
+     * <p>
      * CORS allows our Angular frontend (different origin) to make requests to our backend API.
-     *
+     * <p>
      * Browser Same-Origin Policy:
      * ─────────────────────────────────────────────────────────────────────────────────────────
      * Frontend (http://localhost:4200) tries to fetch from Backend (http://localhost:8080)
      * → Different origins (different port)
      * → Browser BLOCKS by default (Same-Origin Policy)
-     *
+     * <p>
      * CORS Solution:
      * ─────────────────────────────────────────────────────────────────────────────────────────
      * 1. Browser sees cross-origin request
      * 2. Browser sends preflight OPTIONS request:
-     *    OPTIONS /user/login
-     *    Origin: http://localhost:4200
-     *    Access-Control-Request-Method: POST
+     * OPTIONS /user/login
+     * Origin: http://localhost:4200
+     * Access-Control-Request-Method: POST
      * 3. Server responds with allowed origins/methods/headers
      * 4. Browser checks response against request
      * 5. If allowed: sends actual POST request
@@ -484,111 +493,111 @@ class SecurityConfig {
      * ═══════════════════════════════════════════════════════════════════════════════════════════
      * AUTHENTICATION MANAGER AND PROVIDER CONFIGURATION
      * ═══════════════════════════════════════════════════════════════════════════════════════════
-     *
+     * <p>
      * The AuthenticationManager is the ORCHESTRATOR of authentication.
      * When a user logs in, this is what processes the authentication.
-     *
+     * <p>
      * AUTHENTICATION FLOW (DETAILED):
      * ═══════════════════════════════════════════════════════════════════════════════════════════
-     *
+     * <p>
      * 1. User submits /user/login with email + password
-     *    ↓
+     * ↓
      * 2. Controller calls: authenticationManager.authenticate(
-     *       new UsernamePasswordAuthenticationToken(email, password)
-     *    )
-     *    ↓
+     * new UsernamePasswordAuthenticationToken(email, password)
+     * )
+     * ↓
      * 3. AuthenticationManager (ProviderManager) receives the token
-     *    - It looks for a matching AuthenticationProvider
-     *    - Found: DaoAuthenticationProvider
-     *    ↓
+     * - It looks for a matching AuthenticationProvider
+     * - Found: DaoAuthenticationProvider
+     * ↓
      * 4. DaoAuthenticationProvider.authenticate():
-     *    a) Calls: retrieveUser() which calls userDetailsService.loadUserByUsername(email)
-     *       → UserRepoImpl.loadUserByUsername(email):
-     *          - Queries database: SELECT * FROM users WHERE email = ?
-     *          - Gets User entity
-     *          - Calls roleRepository.getRoleByUserId(user.id)
-     *             → Gets Role entity with permission field
-     *          - Permissions example: "READ:USER,UPDATE:USER,DELETE:USER"
-     *          - Splits by comma → Creates List<GrantedAuthority>
-     *          - Creates UserPrincipal(user, authorities)
-     *          - Returns UserPrincipal (implements UserDetails)
-     *    b) Gets password hash: userPrincipal.getPassword()
-     *       → Returns: $2a$12$abcd...xyz (BCrypt hash)
-     *    c) Gets provided password: authenticationToken.getCredentials()
-     *       → Returns: "1234567" (plain text password from request)
-     *    d) Compares using passwordEncoder: passwordEncoder.matches(provided, stored)
-     *       → passwordEncoder.matches("1234567", "$2a$12$abcd...xyz")
-     *       → Returns: true or false
-     *    e) If MATCHES:
-     *       → Creates new Authentication object with:
-     *          * Principal: UserPrincipal
-     *          * Credentials: null (don't expose password)
-     *          * Authorities: List<GrantedAuthority> from UserPrincipal
-     *          * Authenticated: true
-     *       → Returns this new Authentication
-     *    f) If DOESN'T MATCH:
-     *       → Throws BadCredentialsException
-     *       → Spring Security catches it
-     *       → Calls authenticationEntryPoint (customAuthenticationEntryPoint)
-     *       → Returns 401 Unauthorized
-     *    ↓
+     * a) Calls: retrieveUser() which calls userDetailsService.loadUserByUsername(email)
+     * → UserRepoImpl.loadUserByUsername(email):
+     * - Queries database: SELECT * FROM users WHERE email = ?
+     * - Gets User entity
+     * - Calls roleRepository.getRoleByUserId(user.id)
+     * → Gets Role entity with permission field
+     * - Permissions example: "READ:USER,UPDATE:USER,DELETE:USER"
+     * - Splits by comma → Creates List<GrantedAuthority>
+     * - Creates UserPrincipal(user, authorities)
+     * - Returns UserPrincipal (implements UserDetails)
+     * b) Gets password hash: userPrincipal.getPassword()
+     * → Returns: $2a$12$abcd...xyz (BCrypt hash)
+     * c) Gets provided password: authenticationToken.getCredentials()
+     * → Returns: "1234567" (plain text password from request)
+     * d) Compares using passwordEncoder: passwordEncoder.matches(provided, stored)
+     * → passwordEncoder.matches("1234567", "$2a$12$abcd...xyz")
+     * → Returns: true or false
+     * e) If MATCHES:
+     * → Creates new Authentication object with:
+     * * Principal: UserPrincipal
+     * * Credentials: null (don't expose password)
+     * * Authorities: List<GrantedAuthority> from UserPrincipal
+     * * Authenticated: true
+     * → Returns this new Authentication
+     * f) If DOESN'T MATCH:
+     * → Throws BadCredentialsException
+     * → Spring Security catches it
+     * → Calls authenticationEntryPoint (customAuthenticationEntryPoint)
+     * → Returns 401 Unauthorized
+     * ↓
      * 5. Back in Controller:
-     *    - Authentication succeeded
-     *    - Spring Security sets SecurityContextHolder.getContext().setAuthentication(auth)
-     *    - Now authentication is available in SecurityContextHolder
-     *    - Controller can access it: SecurityContextHolder.getContext().getAuthentication()
-     *    ↓
+     * - Authentication succeeded
+     * - Spring Security sets SecurityContextHolder.getContext().setAuthentication(auth)
+     * - Now authentication is available in SecurityContextHolder
+     * - Controller can access it: SecurityContextHolder.getContext().getAuthentication()
+     * ↓
      * 6. Controller returns response with token (if using JWT)
-     *    - TokenProvider.createAccessToken(userPrincipal)
-     *    - Creates JWT with user info and authorities
-     *    - Returns token to frontend
-     *
-     *
+     * - TokenProvider.createAccessToken(userPrincipal)
+     * - Creates JWT with user info and authorities
+     * - Returns token to frontend
+     * <p>
+     * <p>
      * KEY CONCEPT: DaoAuthenticationProvider
      * ═══════════════════════════════════════════════════════════════════════════════════════════
-     *
+     * <p>
      * "Dao" = Data Access Object
      * DaoAuthenticationProvider loads users from a UserDetailsService (database)
-     *
+     * <p>
      * Components it needs:
      * 1. UserDetailsService: Where to load users from
-     *    - We provide: UserRepoImpl (implements UserDetailsService)
+     * - We provide: UserRepoImpl (implements UserDetailsService)
      * 2. PasswordEncoder: How to verify passwords
-     *    - We provide: BCryptPasswordEncoder
-     *
+     * - We provide: BCryptPasswordEncoder
+     * <p>
      * It uses these to:
      * - Load user from database
      * - Verify password matches stored hash
      * - Extract authorities/roles
      * - Create authenticated Authentication object
-     *
-     *
+     * <p>
+     * <p>
      * BCrypt Password Verification:
      * ═══════════════════════════════════════════════════════════════════════════════════════════
-     *
+     * <p>
      * Registration (once):
      * User provides: "myPassword123"
      * → passwordEncoder.encode("myPassword123")
      * → Returns: "$2a$12$..." (includes salt, hash, metadata)
      * → Store in database
-     *
+     * <p>
      * Login (every time):
      * User provides: "myPassword123"
      * → Get stored hash from database: "$2a$12$..."
      * → passwordEncoder.matches("myPassword123", "$2a$12$...")
      * → BCrypt internally:
-     *    1. Extracts salt from stored hash
-     *    2. Hashes provided password with that salt
-     *    3. Compares result with stored hash
+     * 1. Extracts salt from stored hash
+     * 2. Hashes provided password with that salt
+     * 3. Compares result with stored hash
      * → Returns: true or false
-     *
+     * <p>
      * Why BCrypt is secure:
      * - Salt: Each hash includes random salt (prevents rainbow tables)
      * - Rounds: STRENGTH=12 means 2^12 iterations (slows down brute force)
      * - One-way: Can't reverse hash to get password
      *
      * @param userDetailsService the UserDetailsService to load users from database
-     *                          (injected - must be a bean - which is UserRepoImpl)
+     *                           (injected - must be a bean - which is UserRepoImpl)
      * @return AuthenticationManager bean that handles authentication
      */
     @Bean

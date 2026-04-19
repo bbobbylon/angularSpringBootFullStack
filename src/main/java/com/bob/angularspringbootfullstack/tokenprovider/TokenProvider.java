@@ -31,6 +31,8 @@ In this class we are generating the tokens for the user. The following methods a
 - createRefreshToken: generates a refresh token for the user
 - getClaimsFromUser: gets the claims from the userPrincipal, which is the user that is logged in, then we are mapping the authorities to a string array, and finally we are returning the array
 we use UserPrincipal because it has the user and the permissions that we need to generate the token. We are using the JWT library to generate the tokens, and we are using the HMAC512 algorithm to sign the tokens with a secret key. The secret key is stored in the application.properties file and is injected into this class using the @Value annotation. The access token expires in 30 minutes, and the refresh token expires in 5 days.
+
+This token provider will be able to be injected and used to create the access and refresh tokens for the user.
  */
 @Component
 public class TokenProvider {
@@ -53,13 +55,12 @@ public class TokenProvider {
      * @return a signed JWT access token as a String
      */
     public String createAccessToken(UserPrincipal userPrincipal) {
-        String[] claims = getClaimsFromUser(userPrincipal);
         return JWT.create()
                 .withIssuer(BOBBYLON_LLC)
                 .withAudience(BOBS_MANAGEMENT)
                 .withIssuedAt(new Date())
                 .withSubject(userPrincipal.getUsername())
-                .withArrayClaim(AUTHORITIES, claims)
+                .withArrayClaim(AUTHORITIES, getClaimsFromUser(userPrincipal))
                 .withExpiresAt(new Date(currentTimeMillis() + ACCESS_TOKEN_EXPIRE_TIME))
                 .sign(HMAC512(secret.getBytes()));
     }
@@ -90,7 +91,6 @@ public class TokenProvider {
      * @return a signed JWT refresh token as a String
      */
     public String createRefreshToken(UserPrincipal userPrincipal) {
-        String[] claims = getClaimsFromUser(userPrincipal);
         return JWT.create()
                 .withIssuer(BOBBYLON_LLC)
                 .withAudience(BOBS_MANAGEMENT)
@@ -268,8 +268,8 @@ public class TokenProvider {
      * @param token   the JWT token string to extract subject from
      * @param request the HTTP servlet request for storing error attributes
      * @return the subject (username/email) from the verified token
-     * @throws TokenExpiredException if token has expired
-     * @throws InvalidClaimException if claims don't match expected values (issuer, audience)
+     * @throws TokenExpiredException    if token has expired
+     * @throws InvalidClaimException    if claims don't match expected values (issuer, audience)
      * @throws JWTVerificationException for any other JWT verification failures
      */
     public String getSubject(String token, HttpServletRequest request) throws JWTVerificationException {

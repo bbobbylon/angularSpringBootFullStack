@@ -2,11 +2,11 @@ package com.bob.angularspringbootfullstack.query;
 
 /**
  * UserQuery contains all SQL query constants for user-related database operations.
- *
+ * <p>
  * These queries use named parameters (`:paramName`) instead of positional parameters (`?`)
  * to work with Spring's NamedParameterJdbcTemplate. Named parameters are set in the
  * MapSqlParameterSource using .addValue() method calls.
- *
+ * <p>
  * This centralized query class makes it easy to manage SQL statements and provides
  * a single point of change if table or column names are modified.
  */
@@ -53,4 +53,6 @@ public class UserQuery {
      */
     public static final String INSERT_2FA_CODE_BY_USER_ID_QUERY = "INSERT INTO twofactorverifications (user_id, code, expiration_date) VALUES (:userId, :code, :expirationDate)";
 
+    public static final String SELECT_USER_BY_USER_CODE_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM twofactorverifications WHERE code = :code)";
+    public static final String DELETE_2FA_CODE_BY_CODE_QUERY = "DELETE FROM twofactorverifications WHERE code = :code";
 }

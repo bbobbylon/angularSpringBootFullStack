@@ -6,11 +6,11 @@ import jakarta.validation.constraints.NotEmpty;
 
 /**
  * UserService defines the business logic contract for user-related operations.
- *
+ * <p>
  * This service layer interface acts as a facade between the controller layer
  * and repository layer. It defines the operations available for user management,
  * ensuring consistent business logic and allowing for easy testing via mocking.
- *
+ * <p>
  * The service returns UserDTO objects instead of User entities to prevent
  * sensitive data (like passwords) from being exposed to the API clients.
  */
@@ -38,4 +38,8 @@ public interface UserService {
      * @param userDTO the user who will receive the verification code
      */
     void sendVerificationCode(UserDTO userDTO);
+
+    User getUser(String email);
+
+    UserDTO verifyCode(String email, String code);
 }

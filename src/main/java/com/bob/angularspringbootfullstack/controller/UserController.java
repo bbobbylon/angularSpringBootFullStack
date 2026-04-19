@@ -4,16 +4,16 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.form.LoginForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.User;
+import com.bob.angularspringbootfullstack.model.UserPrincipal;
+import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import com.bob.angularspringbootfullstack.tokenprovider.TokenProvider;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
@@ -28,7 +28,9 @@ import static org.springframework.http.HttpStatus.OK;
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
+    private final RoleService roleService;
     private final AuthenticationManager authenticationManager;
+    private final TokenProvider tokenProvider;
 
     /**
      * Registers a new user in the system.
@@ -59,6 +61,63 @@ public class UserController {
      */
     private URI getUri() {
         return URI.create(ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/get/<userId>").toUriString());
+    }
+
+    @GetMapping("/verify/code/{email}/{code}")
+    public ResponseEntity<HttpResponse> verifyCode(@PathVariable("email") String email, @PathVariable("code") String code) {
+        UserDTO userDTO = userService.verifyCode(email, code);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
+                        .message("Login successful!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Creates a UserPrincipal object from a UserDTO.
+     * <p>
+     * UserPrincipal is Spring Security's representation of an authenticated user.
+     * It implements the UserDetails interface and is needed for:
+     * - Creating JWT tokens (TokenProvider.createAccessToken() expects UserPrincipal)
+     * - Spring Security context (stores UserPrincipal in SecurityContextHolder)
+     * - Authorization checks (contains user's authorities/permissions)
+     * <p>
+     * Process:
+     * 1. Gets full User entity from database:
+     * - userService.getUser(userDTO.getEmail())
+     * - Queries: SELECT * FROM users WHERE email = ?
+     * - Returns complete User object with all fields
+     * <p>
+     * 2. Gets user's role and permissions:
+     * - roleService.getRoleByUserId(userDTO.getId())
+     * - Queries: SELECT role WHERE user_id = ?
+     * - Returns Role object containing permission string
+     * <p>
+     * 3. Extracts permissions from role:
+     * - roleService.getRoleByUserId(...).getPermission()
+     * - Example: "READ:USER,UPDATE:USER,DELETE:USER"
+     * <p>
+     * 4. Creates UserPrincipal with User and permissions:
+     * - UserPrincipal(user, permissions)
+     * - UserPrincipal converts permission string to List<GrantedAuthority>
+     * - Each permission becomes a SimpleGrantedAuthority
+     * <p>
+     * Why we need this:
+     * - JWT token creation requires UserPrincipal to extract authorities
+     * - TokenProvider.createAccessToken(userPrincipal) calls:
+     * getClaimsFromUser(userPrincipal) which calls userPrincipal.getAuthorities()
+     * which parses the permission string and creates SimpleGrantedAuthority objects
+     * - These authorities are embedded in the JWT token as a claim
+     * - When token is verified later, authorities are extracted and used for authorization
+     *
+     * @param userDTO the authenticated user DTO (has id and email)
+     * @return UserPrincipal object with User entity and authority permissions
+     */
+    private UserPrincipal getUserPrincipal(UserDTO userDTO) {
+        return new UserPrincipal(userService.getUser(userDTO.getEmail()), roleService.getRoleByUserId(userDTO.getId()).getPermission());
     }
 
     /**
@@ -107,15 +166,37 @@ public class UserController {
      * Sends a successful login response to users without 2FA enabled.
      * This method completes the authentication for users who don't have
      * two-factor authentication enabled.
+     * <p>
+     * Response includes:
+     * - User DTO with profile information (password excluded)
+     * - Access token: JWT token valid for 30 minutes, used to authenticate subsequent requests
+     * - Refresh token: JWT token valid for 5 days, used to obtain a new access token when it expires
+     * <p>
+     * Token generation flow:
+     * 1. getUserPrincipal(userDTO) is called to create UserPrincipal with:
+     * - User entity (from database lookup by email)
+     * - Authorities (from user's role permissions)
+     * 2. Access token is created with:
+     * - Subject: user's email
+     * - Authorities claim: comma-separated permissions
+     * - Expiration: 30 minutes from now
+     * 3. Refresh token is created with:
+     * - Subject: user's email
+     * - No authorities claim (refresh tokens don't need permissions)
+     * - Expiration: 5 days from now
+     * <p>
+     * The tokens are returned to the frontend in the response data map,
+     * so the frontend can store them (typically in localStorage) and include
+     * them in Authorization headers for subsequent API requests.
      *
      * @param userDTO the successfully authenticated user
-     * @return ResponseEntity with HttpResponse indicating successful login
+     * @return ResponseEntity with HttpResponse containing user data and JWT tokens
      */
     private ResponseEntity<HttpResponse> sendResponse(UserDTO userDTO) {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userDTO))
+                        .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
                         .message("Login successful!")
                         .status(OK)
                         .statusCode(OK.value())

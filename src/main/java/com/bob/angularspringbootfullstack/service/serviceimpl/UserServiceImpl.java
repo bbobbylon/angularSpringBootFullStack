@@ -1,12 +1,13 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
-import com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 
 @Service
 @RequiredArgsConstructor
@@ -17,7 +18,7 @@ public class UserServiceImpl implements UserService {
      * Creates a new user in the system through the repository layer.
      * Delegates user creation to the UserRepo, then converts the resulting User
      * entity to a UserDTO for exposure to the presentation layer.
-     *
+     * <p>
      * This method bridges the service layer and repository layer, ensuring
      * that domain models (User) are not exposed to the controller layer.
      *
@@ -26,7 +27,7 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     public UserDTO createUser(User user) {
-        return UserDTOMapper.fromUser(userRepo.create(user));
+        return fromUser(userRepo.create(user));
     }
 
     /**
@@ -39,7 +40,7 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     public UserDTO getUserByEmail(String email) {
-        return UserDTOMapper.fromUser(userRepo.getUserByEmail(email));
+        return fromUser(userRepo.getUserByEmail(email));
     }
 
     /**
@@ -51,5 +52,15 @@ public class UserServiceImpl implements UserService {
     @Override
     public void sendVerificationCode(UserDTO userDTO) {
         userRepo.sendVerificationCode(userDTO);
+    }
+
+    @Override
+    public User getUser(String email) {
+        return userRepo.getUserByEmail(email);
+    }
+
+    @Override
+    public UserDTO verifyCode(String email, String code) {
+        return fromUser(userRepo.verifyCode(email, code));
     }
 }
