@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.configuration;
 
+import com.bob.angularspringbootfullstack.filter.CustomAuthFilter;
 import com.bob.angularspringbootfullstack.handler.CustomAccessDeniedHandler;
 import com.bob.angularspringbootfullstack.handler.CustomAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -117,13 +119,12 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
  */
 @EnableMethodSecurity()
 class SecurityConfig {
-
     private static final Logger securityLogger = LoggerFactory.getLogger(SecurityConfig.class);
     /**
      * Public URLs that don't require authentication
      */
     private static final String[] PUBLIC_URLS = {"/user/login/**", "/user/verify/code/**", "/user/register/**", "/actuator/**"};
-
+    private final CustomAuthFilter customAuthFilter;
     /**
      * BCrypt password encoder with strength 12 - used to hash/verify passwords
      */
@@ -339,8 +340,9 @@ class SecurityConfig {
                          * If not authenticated: CustomAuthenticationEntryPoint → 401
                          */
                         .anyRequest().authenticated()
-                )
 
+                )
+                .addFilterBefore(customAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 /**
                  * EXCEPTION HANDLING
                  * ───────────────────────────────────────────────────────────────────────────────

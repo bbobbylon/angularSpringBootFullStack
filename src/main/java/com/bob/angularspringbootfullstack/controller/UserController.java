@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -120,6 +121,45 @@ public class UserController {
      */
     private UserPrincipal getUserPrincipal(UserDTO userDTO) {
         return new UserPrincipal(toUser(userService.getUserByEmail(userDTO.getEmail())), roleService.getRoleByUserId(userDTO.getId()).getPermission());
+    }
+
+    /**
+     * Retrieves the authenticated user's profile information.
+     * <p>
+     * This endpoint is protected by Spring Security and requires a valid JWT token.
+     * The Authentication object is automatically injected by Spring Security's
+     * SecurityContextHolder, which is populated by CustomAuthFilter during request processing.
+     * <p>
+     * Flow:
+     * 1. Extracts user email from Authentication.getName() (set by TokenProvider)
+     * 2. Calls UserService.getUserByEmail() to fetch UserDTO from the database
+     * 3. Casts Authentication.getPrincipal() to UserPrincipal (created by TokenProvider)
+     * 4. Logs debug information about the authenticated user and their authorities
+     * 5. Returns UserDTO in HttpResponse wrapper
+     * <p>
+     * Integration points:
+     * - CustomAuthFilter: Validates JWT and sets Authentication in SecurityContext
+     * - TokenProvider: Creates UserPrincipal with User entity and permissions
+     * - UserService: Provides UserDTO via database lookup
+     * - UserPrincipal: Contains the full User entity and GrantedAuthority list
+     *
+     * @param authentication Spring Security Authentication object containing user details
+     * @return ResponseEntity with HttpResponse containing UserDTO and success message
+     */
+    @GetMapping("/profile")
+    public ResponseEntity<HttpResponse> getProfile(Authentication authentication) {
+        UserDTO userDTO = userService.getUserByEmail(authentication.getName());
+        //System.out.println(authentication.getPrincipal());
+        // info for the currently logged-in user.
+        System.out.println(authentication);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userDTO))
+                        .message("We have fetched your profile for you!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
     }
 
     /**
