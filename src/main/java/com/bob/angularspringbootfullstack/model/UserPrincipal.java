@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.model;
 
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.GrantedAuthority;
@@ -7,7 +8,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
 
@@ -197,6 +197,7 @@ public class UserPrincipal implements UserDetails {
     /**
      * The actual user entity with profile information
      */
+    @Getter
     private final User user;
     /**
      * Comma-separated permissions/authorities (e.g., "READ:USER,UPDATE:USER,DELETE:USER")
@@ -361,4 +362,5 @@ public class UserPrincipal implements UserDetails {
     public boolean isEnabled() {
         return this.user.isEnabled();
     }
+
 }
