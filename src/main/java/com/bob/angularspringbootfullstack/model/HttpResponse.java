@@ -59,5 +59,9 @@ public class HttpResponse {
      * Map containing response data payload (can hold user objects, lists, etc.)
      */
     protected Map<?, ?> data;
+    /**
+     * Request URI path (e.g., "/user/profile", "/user/login")
+     */
+    protected String path;
 
 }
