@@ -25,15 +25,15 @@ import static java.lang.System.currentTimeMillis;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
 
-/*
-In this class we are generating the tokens for the user. The following methods are used to generate the tokens:
-- createAccessToken: generates an access token for the user
-- createRefreshToken: generates a refresh token for the user
-- getClaimsFromUser: gets the claims from the userPrincipal, which is the user that is logged in, then we are mapping the authorities to a string array, and finally we are returning the array
-we use UserPrincipal because it has the user and the permissions that we need to generate the token. We are using the JWT library to generate the tokens, and we are using the HMAC512 algorithm to sign the tokens with a secret key. The secret key is stored in the application.properties file and is injected into this class using the @Value annotation. The access token expires in 30 minutes, and the refresh token expires in 5 days.
-
-This token provider will be able to be injected and used to create the access and refresh tokens for the user.
- */
+/**
+ * In this class we are generating the tokens for the user. The following methods are used to generate the tokens:
+ * - createAccessToken: generates an access token for the user
+ * - createRefreshToken: generates a refresh token for the user
+ * - getClaimsFromUser: gets the claims from the userPrincipal, which is the user that is logged in, then we are mapping the authorities to a string array, and finally we are returning the array
+ * we use UserPrincipal because it has the user and the permissions that we need to generate the token. We are using the JWT library to generate the tokens, and we are using the HMAC512 algorithm to sign the tokens with a secret key. The secret key is stored in the application.properties file and is injected into this class using the @Value annotation. The access token expires in 30 minutes, and the refresh token expires in 5 days.
+ * <p>
+ * This token provider will be able to be injected and used to create the access and refresh tokens for the user.
+ **/
 @Component
 public class TokenProvider {
     private static final String BOBBYLON_LLC = "BOBBYLON_LLC";
@@ -111,7 +111,6 @@ public class TokenProvider {
      */
     public List<GrantedAuthority> getAuthorities(String token) {
         String[] claims = getClaimsFromToken(token);
-        // "::new" is a reference to the constructor of SimpleGrantedAuthority
         return stream(claims).map(SimpleGrantedAuthority::new).collect(toList());
     }
 
@@ -138,7 +137,7 @@ public class TokenProvider {
         JWTVerifier verifier;
         try {
             Algorithm alg = HMAC512(secret);
-            verifier = JWT.require(alg).withIssuer(BOBBYLON_LLC).build();
+            verifier = JWT.require(alg).withIssuer(BOBBYLON_LLC).withClaimPresence(AUTHORITIES).build();
         } catch (JWTVerificationException e) {
             throw new JWTVerificationException(TOKEN_UNVERIFIABLE);
         }

@@ -19,6 +19,11 @@ spring:
     init:
       mode: never
       continue-on-error: true
+  web:
+    error:
+      path: /user/error
+      whitelabel:
+        enabled: false
 logging:
   level:
     "[org.springframework.security, org.springframework.boot, org.hibernate]": DEBUG

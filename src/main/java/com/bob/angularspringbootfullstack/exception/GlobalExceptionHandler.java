@@ -3,8 +3,6 @@ package com.bob.angularspringbootfullstack.exception;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -62,7 +60,7 @@ public class GlobalExceptionHandler {
      * @param ex the authentication exception
      * @return ResponseEntity with HttpResponse containing 401 status and generic message
      */
-    @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
+/*    @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
     public ResponseEntity<HttpResponse> handleAuthenticationExceptions(Exception ex) {
         HttpResponse response = HttpResponse.builder()
                 .timeStamp(LocalTime.now().toString())
@@ -71,6 +69,6 @@ public class GlobalExceptionHandler {
                 .statusCode(HttpStatus.UNAUTHORIZED.value())
                 .build();
         return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
-    }
+    }*/
 }
 

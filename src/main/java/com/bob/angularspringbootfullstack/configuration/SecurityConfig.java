@@ -633,6 +633,15 @@ class SecurityConfig {
         daoAuthenticationProvider.setPasswordEncoder(passwordEncoder);
 
         /**
+         * Configure whether to hide UserNotFoundException
+         * ─────────────────────────────────────────────────────────────────
+         * Default is true (for security, to prevent user enumeration)
+         * Setting to false allows UsernameNotFoundException to be thrown
+         * which can then be caught by a specific exception handler.
+         */
+        daoAuthenticationProvider.setHideUserNotFoundExceptions(false);
+
+        /**
          * Create and return ProviderManager with the DaoAuthenticationProvider
          * ─────────────────────────────────────────────────────────────────────
          * ProviderManager is the default AuthenticationManager implementation
@@ -654,3 +663,4 @@ class SecurityConfig {
         return authenticationManager;
     }
 }
+

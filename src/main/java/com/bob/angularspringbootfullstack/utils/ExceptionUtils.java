@@ -1,9 +1,7 @@
 package com.bob.angularspringbootfullstack.utils;
 
-import com.auth0.jwt.exceptions.TokenExpiredException;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
-import io.jsonwebtoken.InvalidClaimException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -76,12 +74,12 @@ public class ExceptionUtils {
      *   <li>BadCredentialsException - Invalid login credentials</li>
      * </ul>
      *
-     * @param request the HTTP servlet request containing request details (URI, method, etc.)
-     * @param response the HTTP servlet response where the error response will be written
+     * @param request   the HTTP servlet request containing request details (URI, method, etc.)
+     * @param response  the HTTP servlet response where the error response will be written
      * @param exception the exception that occurred during request processing
      */
     public static void processError(HttpServletRequest request, HttpServletResponse response, Exception exception) {
-        if (exception instanceof ApiException || exception instanceof DisabledException || exception instanceof LockedException || exception instanceof InvalidClaimException || exception instanceof TokenExpiredException || exception instanceof BadCredentialsException) {
+        if (exception instanceof ApiException || exception instanceof DisabledException || exception instanceof LockedException || exception instanceof BadCredentialsException) {
             HttpResponse httpResponse = getHttpResponse(request, response, exception.getMessage(), BAD_REQUEST);
             writeResponse(response, httpResponse);
         } else {
@@ -111,9 +109,9 @@ public class ExceptionUtils {
      *   <li>Sets HTTP status code via response.setStatus()</li>
      * </ul>
      *
-     * @param request the HTTP servlet request (used to capture request URI via request.getRequestURI())
-     * @param response the HTTP servlet response (configured with status code and content type)
-     * @param message the error message to include in the response (from exception or generic message)
+     * @param request    the HTTP servlet request (used to capture request URI via request.getRequestURI())
+     * @param response   the HTTP servlet response (configured with status code and content type)
+     * @param message    the error message to include in the response (from exception or generic message)
      * @param httpStatus the HTTP status to send back to client (BAD_REQUEST for known exceptions, INTERNAL_SERVER_ERROR for others)
      * @return HttpResponse object ready to be serialized to JSON and sent to client
      */
@@ -148,7 +146,7 @@ public class ExceptionUtils {
      * <p>
      * <b>Called by:</b> processError() after building the HttpResponse
      *
-     * @param response the HTTP servlet response where the JSON will be written
+     * @param response     the HTTP servlet response where the JSON will be written
      * @param httpResponse the HttpResponse object to serialize and send to client
      */
     private static void writeResponse(HttpServletResponse response, HttpResponse httpResponse) {
@@ -167,4 +165,3 @@ public class ExceptionUtils {
 
 
 }
-

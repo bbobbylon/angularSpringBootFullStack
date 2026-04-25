@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.model;
 
+import com.bob.angularspringbootfullstack.dto.UserDTO;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -8,6 +9,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+
+import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
 
@@ -200,9 +203,11 @@ public class UserPrincipal implements UserDetails {
     @Getter
     private final User user;
     /**
-     * Comma-separated permissions/authorities (e.g., "READ:USER,UPDATE:USER,DELETE:USER")
+     * Comma-separated permissions/authorities (e.g., "READ:USER,UPDATE:USER,DELETE:USER"). Now, we are going to be switching over to the Role object instead, because it will be a cleaner way since our authenticationManager is calling the database, and then we are making a second call when we are hitting the /login resource (in the /login method we see authManager.authenticate() as well as user = userService.getUserByEmail. Instead of this, we should make a singular call. We will do this by using the Role object instead of permissions
+     *
      */
     private final String permissions;
+    private final Role role;
 
     /**
      * ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -254,7 +259,10 @@ public class UserPrincipal implements UserDetails {
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         // Example: "READ:USER,UPDATE:USER,DELETE:USER"
-        return stream(permissions.split(","))
+/*        return stream(permissions.split(","))
+                .map(p -> new SimpleGrantedAuthority(p.trim()))  // .trim() removes spaces
+                .collect(toList());*/
+        return stream(role.getPermission().split(","))
                 .map(p -> new SimpleGrantedAuthority(p.trim()))  // .trim() removes spaces
                 .collect(toList());
     }
@@ -363,4 +371,8 @@ public class UserPrincipal implements UserDetails {
         return this.user.isEnabled();
     }
 
+    // now we can get a user from the authentication instead of having to make two calls. Instead of returning just the email we can return the entire user object. This is going to be really helpful because we can get the user's profile information from the authentication instead of having to make a second call to the database to get the user by email.
+    public UserDTO getUser() {
+        return fromUser(this.user, role);
+    }
 }
