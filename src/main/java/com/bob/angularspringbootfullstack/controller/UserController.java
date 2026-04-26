@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.LoginForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.User;
@@ -9,12 +10,12 @@ import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import com.bob.angularspringbootfullstack.tokenprovider.TokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -22,9 +23,11 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
+import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpStatus.*;
+import static org.springframework.security.authentication.UsernamePasswordAuthenticationToken.unauthenticated;
 
 @RestController
 @RequestMapping(path = "/user")
@@ -35,6 +38,8 @@ public class UserController {
     private final RoleService roleService;
     private final AuthenticationManager authenticationManager;
     private final TokenProvider tokenProvider;
+    private final HttpServletRequest request;
+    private final HttpServletResponse response;
 
     /**
      * Registers a new user in the system.
@@ -122,7 +127,7 @@ public class UserController {
      * @return UserPrincipal object with User entity and authority permissions
      */
     private UserPrincipal getUserPrincipal(UserDTO userDTO) {
-        return new UserPrincipal(toUser(userService.getUserByEmail(userDTO.getEmail())), roleService.getRoleByUserId(userDTO.getId()).getPermission());
+        return new UserPrincipal(toUser(userService.getUserByEmail(userDTO.getEmail())), roleService.getRoleByUserId(userDTO.getId()));
     }
 
     /**
@@ -194,9 +199,25 @@ public class UserController {
      */
     @PostMapping("/login")
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
-        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginForm.getEmail(), loginForm.getPassword()));
-        UserDTO userDTO = userService.getUserByEmail(loginForm.getEmail());
+        // no longer needed UserDTO userDTO = userService.getUserByEmail(loginForm.getEmail());
+        Authentication auth = authenticate(loginForm.getEmail(), loginForm.getPassword());
+        UserDTO userDTO = getAuthenticatedUser(auth);
         return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
+    }
+
+    private Authentication authenticate(String email, String password) {
+        try {
+            Authentication authentication = authenticationManager.authenticate(unauthenticated(email, password));
+            return authentication;
+        } catch (Exception e) {
+            processError(request, response, e);
+            throw new ApiException(e.getMessage());
+        }
+
+    }
+
+    private UserDTO getAuthenticatedUser(Authentication auth) {
+        return ((UserPrincipal) auth.getPrincipal()).getUser();
     }
 
     /**

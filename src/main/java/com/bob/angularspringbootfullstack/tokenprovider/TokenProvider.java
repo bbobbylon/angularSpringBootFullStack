@@ -7,7 +7,9 @@ import com.auth0.jwt.exceptions.InvalidClaimException;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.exceptions.TokenExpiredException;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
+import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -35,6 +37,8 @@ import static java.util.stream.Collectors.toList;
  * This token provider will be able to be injected and used to create the access and refresh tokens for the user.
  **/
 @Component
+//@RequiredArgsConstructor is for our dependency injection, it will generate a constructor with the required arguments, which in this case is the UserService. This allows us to inject the UserService into this class without having to write a constructor ourselves.
+@RequiredArgsConstructor
 public class TokenProvider {
     private static final String BOBBYLON_LLC = "BOBBYLON_LLC";
     private static final String BOBS_MANAGEMENT = "BOBS_MANAGEMENT";
@@ -42,6 +46,7 @@ public class TokenProvider {
     private static final long ACCESS_TOKEN_EXPIRE_TIME = 1_800_000;
     private static final long REFRESH_TOKEN_EXPIRE_TIME = 432_000_000;
     private static final String TOKEN_UNVERIFIABLE = "Invalid JWT secret key";
+    private final UserService userService;
     @Value("${jwt.secret}")
     private String secret;
 
@@ -155,7 +160,7 @@ public class TokenProvider {
      * @return an Authentication object for Spring Security
      */
     public Authentication getAuthentication(String email, List<GrantedAuthority> authorities, HttpServletRequest request) {
-        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(email, null, authorities);
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userService.getUserByEmail(email), null, authorities);
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         return authToken;
     }

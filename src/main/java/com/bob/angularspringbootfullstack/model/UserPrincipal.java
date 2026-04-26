@@ -206,7 +206,7 @@ public class UserPrincipal implements UserDetails {
      * Comma-separated permissions/authorities (e.g., "READ:USER,UPDATE:USER,DELETE:USER"). Now, we are going to be switching over to the Role object instead, because it will be a cleaner way since our authenticationManager is calling the database, and then we are making a second call when we are hitting the /login resource (in the /login method we see authManager.authenticate() as well as user = userService.getUserByEmail. Instead of this, we should make a singular call. We will do this by using the Role object instead of permissions
      *
      */
-    private final String permissions;
+    //private final String permissions;
     private final Role role;
 
     /**
@@ -262,7 +262,7 @@ public class UserPrincipal implements UserDetails {
 /*        return stream(permissions.split(","))
                 .map(p -> new SimpleGrantedAuthority(p.trim()))  // .trim() removes spaces
                 .collect(toList());*/
-        return stream(role.getPermission().split(","))
+        return stream(this.role.getPermission().split(","))
                 .map(p -> new SimpleGrantedAuthority(p.trim()))  // .trim() removes spaces
                 .collect(toList());
     }
