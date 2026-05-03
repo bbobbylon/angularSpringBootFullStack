@@ -24,7 +24,7 @@ spring:
       path: /user/error
       whitelabel:
         enabled: false
-logging:
-  level:
-    "[org.springframework.security, org.springframework.boot, org.hibernate]": DEBUG
-    
+#logging:
+#  level:
+#    "[org.springframework.security, org.springframework.boot, org.hibernate]": DEBUG
+#

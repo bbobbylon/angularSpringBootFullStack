@@ -1,9 +1,8 @@
 package com.bob.angularspringbootfullstack.dto;
 
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
@@ -21,8 +20,7 @@ import java.time.LocalDateTime;
  * <p>
  * Fields match the User entity except for password.
  */
-@Getter
-@Setter
+@Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class UserDTO {

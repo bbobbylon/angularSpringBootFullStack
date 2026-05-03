@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.repo.repoimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.VerificationType;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
@@ -10,7 +11,6 @@ import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.time.DateFormatUtils;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -33,10 +33,12 @@ import java.util.UUID;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.enumeration.VerificationType.ACCOUNT;
+import static com.bob.angularspringbootfullstack.enumeration.VerificationType.PASSWORD;
 import static com.bob.angularspringbootfullstack.query.UserQuery.*;
 import static java.util.Map.of;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
+import static org.apache.commons.lang3.time.DateFormatUtils.format;
 import static org.apache.commons.lang3.time.DateUtils.addDays;
 
 // here the actual logic/ db queries will be implemented.
@@ -84,6 +86,8 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
 
             String verificationURL = getVerificationURL(UUID.randomUUID().toString(), ACCOUNT.getType());
             jdbcTemplate.update(INSERT_ACCOUNT_VERIFICATION_URL_QUERY, of("userId", user.getId(), "url", verificationURL, "type", ACCOUNT.getType()));
+            // Log the account verification link for auditing/debugging (do not log passwords)
+            log.info("Account verification url {} sent to user with email: {}", verificationURL, user.getEmail());
 
             user.setEnabled(true);
             user.setNotLocked(true);
@@ -129,7 +133,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * @return the full verification URL as a String
      */
     private String getVerificationURL(String key, String type) {
-        return ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/verify" + type + "/" + key).toUriString();
+        return ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/verify/" + type + "/" + key).toUriString();
     }
 
     /**
@@ -221,7 +225,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      */
     @Override
     public void sendVerificationCode(UserDTO userDTO) {
-        String expirationDate = DateFormatUtils.format(addDays(new Date(), 1), DATE_FORMAT);
+        String expirationDate = format(addDays(new Date(), 1), DATE_FORMAT);
         String verificationCode = randomAlphanumeric(7).toUpperCase();
 
         try {
@@ -265,6 +269,96 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    @Override
+    public void resetPassword(String email) {
+        if (getEmailCount(email.trim().toLowerCase()) <= 0)
+            throw new ApiException("Email not found in our database");
+        try {
+            String expirationDate = format(addDays(new Date(), 1), DATE_FORMAT);
+            User user = getUserByEmail(email);
+            String verificationURL = getVerificationURL(UUID.randomUUID().toString(), PASSWORD.getType());
+            jdbcTemplate.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", user.getId()));
+            jdbcTemplate.update(INSERT_PASSWORD_VERIFICATION_QUERY, of("userId", user.getId(), "url", verificationURL, "expirationDate", expirationDate));
+            log.info("Password reset verification url {} sent to user with email: {}", verificationURL, email);
+            // TODO send email with url to our user
+        } catch (Exception exception) {
+            log.error("Unexpected error during password reset verification '{}'", exception.getMessage(), exception);
+            throw new BadCredentialsException("An unexpected error occurred while verifying the code.");
+        }
+    }
+
+    @Override
+    public User verifyPasswordKey(String key) {
+        if (isLinkExpired(key, PASSWORD))
+            throw new ApiException("This link is not valid. Please request a new password reset link.");
+        try {
+            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("url", getVerificationURL(key, PASSWORD.getType())), new UserRowMapper());
+            // Delete the password verification row by user_id. Use the existing constant for deleting by user id
+            // jdbcTemplate.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", user.getId())); // remove the verification record for this user
+            return user;
+        } catch (EmptyResultDataAccessException e) {
+            log.error(e.getMessage());
+            throw new ApiException("This link is not valid. Please request a new password reset link.");
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An unexpected error occurred. Please try again.");
+        }
+    }
+
+    @Override
+    public void setNewPassword(String key, String newPassword, String confirmPassword) {
+        if (!newPassword.equals(confirmPassword))
+            throw new ApiException("Passwords do not match. Please try again!");
+        if (isLinkExpired(key, PASSWORD))
+            throw new ApiException("This link is not valid. Please request a new password reset link.");
+        try {
+            // Resolve the full verification URL once and look up the user tied to it so we can log the email
+            String url = getVerificationURL(key, PASSWORD.getType());
+            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("url", url), new UserRowMapper());
+
+            jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_URL_QUERY, of("password", passwordEncoder.encode(newPassword), "url", url));
+            jdbcTemplate.update(DELETE_VERIFICATION_BY_URL_QUERY, of("url", url));
+
+            // Log the actual user's email for auditing (safe because password is not logged)
+            log.info("Password successfully reset for user with email: {}", user.getEmail());
+        } catch (EmptyResultDataAccessException e) {
+            log.error(e.getMessage());
+            throw new ApiException("This link is not valid. Please request a new password reset link.");
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An unexpected error occurred. Please try again.");
+        }
+    }
+
+    @Override
+    public User verifyAccountKey(String key) {
+        try {
+            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_ACCOUNT_QUERY, of("url", getVerificationURL(key, ACCOUNT.getType())), new UserRowMapper());
+            jdbcTemplate.update(UPDATE_USER_ENABLED_QUERY, of("enabled", true, "id", user.getId()));
+            // Log successful account verification for auditing
+            log.info("Account successfully verified for user with email: {}", user.getEmail());
+            return user;
+        } catch (EmptyResultDataAccessException e) {
+            log.error("This code is not valid. Please attempt to login again.");
+            throw new UsernameNotFoundException("This code is not valid. Please attempt to login again.");
+        } catch (Exception exception) {
+            log.error("Unexpected error during 2FA code verification for email '{}'", exception.getMessage(), exception);
+            throw new BadCredentialsException("An unexpected error occurred while verifying the account.");
+        }
+    }
+
+    private boolean isLinkExpired(String key, VerificationType password) {
+        try {
+            return jdbcTemplate.queryForObject(SELECT_EXPIRATION_BY_URL, of("url", getVerificationURL(key, password.getType())), Boolean.class);
+        } catch (EmptyResultDataAccessException e) {
+            log.error(e.getMessage());
+            throw new ApiException("This link is not valid. Please request a new password reset link.");
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An unexpected error occurred. Please try again.");
+        }
+    }
+
     private Boolean isVerificationCodeExpired(String code) {
         try {
             return jdbcTemplate.queryForObject(CHECK_2FA_CODE_EXPIRE_DATE, of("code", code), Boolean.class);
@@ -298,3 +392,5 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 }
+
+

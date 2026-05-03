@@ -58,7 +58,7 @@ public class CustomAuthFilter extends OncePerRequestFilter {
     /**
      * Public endpoints that do not require authentication.
      */
-    private static final String[] PUBLIC_ROUTES = {"/user/login", "/user/verify/code", "/user/register", "/actuator"};
+    private static final String[] PUBLIC_ROUTES = {"/user/login", "/user/verify/code", "/user/register", "/actuator", "/user/refresh/token"};
     private final TokenProvider tokenProvider;
 
     /**
@@ -86,11 +86,11 @@ public class CustomAuthFilter extends OncePerRequestFilter {
         try {
             Map<String, String> values = getRequestValues(request);
             String token = getToken(request);
-             if (tokenProvider.isTokenValid(values.get(EMAIL_KEY), token)) {
-                 List<GrantedAuthority> authorities = tokenProvider.getAuthorities(values.get(TOKEN_KEY));
-                 Authentication auth = tokenProvider.getAuthentication(values.get(EMAIL_KEY), authorities, request);
-                 SecurityContextHolder.getContext().setAuthentication(auth);
-             } else {
+            if (tokenProvider.isTokenValid(values.get(EMAIL_KEY), token)) {
+                List<GrantedAuthority> authorities = tokenProvider.getAuthorities(values.get(TOKEN_KEY));
+                Authentication authentication = tokenProvider.getAuthentication(values.get(EMAIL_KEY), authorities, request);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            } else {
                 //clear the context of the thread if the token is invalid since the user would be not authenticated
                 SecurityContextHolder.clearContext();
             }

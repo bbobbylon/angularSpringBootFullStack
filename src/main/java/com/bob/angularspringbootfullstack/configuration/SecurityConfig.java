@@ -123,7 +123,7 @@ class SecurityConfig {
     /**
      * Public URLs that don't require authentication
      */
-    private static final String[] PUBLIC_URLS = {"/user/login/**", "/user/verify/code/**", "/user/register/**", "/actuator/**"};
+    private static final String[] PUBLIC_URLS = {"/user/login/**", "/user/verify/code/**", "/user/register/**", "/actuator/**", "/user/resetpassword/**", "/user/verify/password/**", "/user/verify/account/**", "/user/refresh/token/**"};
     private final CustomAuthFilter customAuthFilter;
     /**
      * BCrypt password encoder with strength 12 - used to hash/verify passwords
@@ -299,7 +299,6 @@ class SecurityConfig {
                         .requestMatchers(POST, "/user/login").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers(PUBLIC_URLS).permitAll()
-
                         /**
                          * AUTHORITY-BASED AUTHORIZATION
                          * ───────────────────────────────────────────────────────────────────────
