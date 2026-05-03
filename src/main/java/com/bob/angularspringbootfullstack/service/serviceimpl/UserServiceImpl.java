@@ -67,14 +67,34 @@ public class UserServiceImpl implements UserService {
      * that is mapped to a 401 Unauthorized response by the global exception handler.
      *
      * @param email the user's email address
-     * @param code the 2FA code to verify
+     * @param code  the 2FA code to verify
      * @return a UserDTO if verification is successful
      * @throws org.springframework.security.authentication.BadCredentialsException or
-     *         org.springframework.security.core.userdetails.UsernameNotFoundException if verification fails
+     *                                                                             org.springframework.security.core.userdetails.UsernameNotFoundException if verification fails
      */
     @Override
     public UserDTO verifyCode(String email, String code) {
         return mapToUserDTO(userRepo.verifyCode(email, code));
+    }
+
+    @Override
+    public void resetPassword(String email) {
+        userRepo.resetPassword(email);
+    }
+
+    @Override
+    public UserDTO verifyPasswordKey(String key) {
+        return mapToUserDTO(userRepo.verifyPasswordKey(key));
+    }
+
+    @Override
+    public void setNewPassword(String key, String newPassword, String confirmPassword) {
+        userRepo.setNewPassword(key, newPassword, confirmPassword);
+    }
+
+    @Override
+    public UserDTO verifyAccount(String key) {
+        return mapToUserDTO(userRepo.verifyAccountKey(key));
     }
 
     /**

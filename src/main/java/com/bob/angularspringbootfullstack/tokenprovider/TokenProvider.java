@@ -6,6 +6,8 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.InvalidClaimException;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.exceptions.TokenExpiredException;
+import com.auth0.jwt.interfaces.Claim;
+import com.auth0.jwt.interfaces.DecodedJWT;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -128,7 +130,13 @@ public class TokenProvider {
      */
     private String[] getClaimsFromToken(String token) {
         JWTVerifier verifier = getJWTVerifier();
-        return verifier.verify(token).getClaim(AUTHORITIES).asArray(String.class);
+        DecodedJWT decoded = verifier.verify(token);
+        Claim claim = decoded.getClaim(AUTHORITIES);
+        if (claim == null || claim.isNull()) {
+            return new String[0];
+        }
+        String[] arr = claim.asArray(String.class);
+        return arr == null ? new String[0] : arr;
     }
 
     /**
@@ -142,7 +150,9 @@ public class TokenProvider {
         JWTVerifier verifier;
         try {
             Algorithm alg = HMAC512(secret);
-            verifier = JWT.require(alg).withIssuer(BOBBYLON_LLC).withClaimPresence(AUTHORITIES).build();
+            // Do not require the 'authorities' claim at verification time because refresh tokens
+            // do not include authorities. Claim presence is enforced only when authorities are needed.
+            verifier = JWT.require(alg).withIssuer(BOBBYLON_LLC).build();
         } catch (JWTVerificationException e) {
             throw new JWTVerificationException(TOKEN_UNVERIFIABLE);
         }
@@ -285,6 +295,16 @@ public class TokenProvider {
         } catch (InvalidClaimException e) {
             request.setAttribute("invalidClaim", e.getMessage());
             throw e;
+        } catch (com.auth0.jwt.exceptions.JWTDecodeException | IllegalArgumentException decodeEx) {
+            // Token couldn't be decoded (not valid Base64 or malformed). Map to a clear client error.
+            String msg = "Could not decode the token. The input is not a valid Base64-encoded JWT.";
+            request.setAttribute("invalidToken", decodeEx.getMessage());
+            throw new org.springframework.security.authentication.BadCredentialsException(msg);
+        } catch (JWTVerificationException verificationEx) {
+            // Any other verification issues (signature invalid, claim checks) - return a clear message
+            String msg = "Invalid token. " + verificationEx.getMessage();
+            request.setAttribute("invalidToken", verificationEx.getMessage());
+            throw new com.bob.angularspringbootfullstack.exception.ApiException(msg);
         }
     }
 }

@@ -78,4 +78,12 @@ public interface UserRepo<T extends User> {
     void sendVerificationCode(UserDTO userDTO);
 
     User verifyCode(String email, String code);
+
+    void resetPassword(String email);
+
+    T verifyPasswordKey(String key);
+
+    void setNewPassword(String key, String newPassword, String confirmPassword);
+
+    T verifyAccountKey(String key);
 }

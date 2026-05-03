@@ -26,6 +26,7 @@ import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
+import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpStatus.*;
 import static org.springframework.security.authentication.UsernamePasswordAuthenticationToken.unauthenticated;
 
@@ -34,6 +35,7 @@ import static org.springframework.security.authentication.UsernamePasswordAuthen
 @RequiredArgsConstructor
 @Slf4j
 public class UserController {
+    private static final String TOKEN_PREFIX = "Bearer ";
     private final UserService userService;
     private final RoleService roleService;
     private final AuthenticationManager authenticationManager;
@@ -130,6 +132,50 @@ public class UserController {
         return new UserPrincipal(toUser(userService.getUserByEmail(userDTO.getEmail())), roleService.getRoleByUserId(userDTO.getId()));
     }
 
+    @GetMapping("/verify/account/{key}")
+    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String key) {
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .message(userService.verifyAccount(key).isEnabled() ? "Your account is already verified. Please log in." : "Account verified successfully! You can now log in.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    @GetMapping("/refresh/token")
+    public ResponseEntity<HttpResponse> sendNewRefreshToken(HttpServletRequest request) {
+        if (isHeaderAndTokenValid(request)) {
+            String refreshToken = request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length());
+            UserDTO userDTO = userService.getUserByEmail(tokenProvider.getSubject(refreshToken, request));
+            return ResponseEntity.ok(
+                    HttpResponse.builder()
+                            .timeStamp(now().toString())
+                            .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", refreshToken))
+                            .message("New refresh token sent successfully!")
+                            .status(OK)
+                            .statusCode(OK.value())
+                            .build());
+        } else {
+            return ResponseEntity.badRequest().body(
+                    HttpResponse.builder()
+                            .timeStamp(now().toString())
+                            .reason("Invalid or missing token. Please try again.")
+                            .message("The refresh token is invalid or missing. Please log in again to obtain a new token.")
+                            .status(BAD_REQUEST)
+                            .statusCode(BAD_REQUEST.value())
+                            .build());
+        }
+    }
+
+    private boolean isHeaderAndTokenValid(HttpServletRequest request) {
+        return request.getHeader(AUTHORIZATION) != null
+                && request.getHeader(AUTHORIZATION).startsWith(TOKEN_PREFIX)
+                && tokenProvider.isTokenValid(
+                tokenProvider.getSubject(request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length()), request),
+                request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length()));
+    }
+
     /**
      * Retrieves the authenticated user's profile information.
      * <p>
@@ -169,6 +215,43 @@ public class UserController {
                         .build());
     }
 
+    @GetMapping("/resetpassword/{email}")
+    public ResponseEntity<HttpResponse> resetPassword(@PathVariable("email") String email) {
+        userService.resetPassword(email);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .message("Email sent to reset password. Please check your inbox. If you don't see it, please check your spam folder.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    @GetMapping("/verify/password/{key}")
+    public ResponseEntity<HttpResponse> verifyPasswordURL(@PathVariable("key") String key) {
+        UserDTO userDTO = userService.verifyPasswordKey(key);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userDTO))
+                        .message("Please enter your new password")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    @PostMapping("/resetpassword/{key}/{newPassword}/{confirmPassword}")
+    public ResponseEntity<HttpResponse> setNewPassword(@PathVariable("key") String key, @PathVariable("newPassword") String newPassword, @PathVariable("confirmPassword") String confirmPassword) {
+        userService.setNewPassword(key, newPassword, confirmPassword);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .message("Password reset successful! You can now log in with your new password.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
     @RequestMapping("/error")
     public ResponseEntity<HttpResponse> errorHandling(HttpServletRequest request) {
         log.info(String.valueOf(request));
@@ -181,6 +264,19 @@ public class UserController {
                         .statusCode(BAD_REQUEST.value())
                         .build());
     }
+
+    // This method is the same as errorHandling, but it uses the Contrustor for the ResponseEntity instead, which some might say is much more flexible.
+/*    @RequestMapping("/error")
+    public ResponseEntity<HttpResponse> errorHandling1(HttpServletRequest request) {
+        log.info(String.valueOf(request));
+        System.out.println(request.getRequestURI());
+        return new ResponseEntity<>(HttpResponse.builder()
+                .timeStamp(now().toString())
+                .message("An unknown error has occurred. There is no mapping for a " + request.getMethod() + "request for this path on our server. Sorry! Please try something else.")
+                .status(BAD_REQUEST)
+                .statusCode(BAD_REQUEST.value())
+                .build(), NOT_FOUND);
+    }*/
 
     /**
      * Authenticates a user and initiates the login process.
@@ -200,8 +296,10 @@ public class UserController {
     @PostMapping("/login")
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
         // no longer needed UserDTO userDTO = userService.getUserByEmail(loginForm.getEmail());
-        Authentication auth = authenticate(loginForm.getEmail(), loginForm.getPassword());
-        UserDTO userDTO = getAuthenticatedUser(auth);
+        Authentication authentication = authenticate(loginForm.getEmail(), loginForm.getPassword());
+        UserDTO userDTO = getAuthenticatedUser(authentication);
+        System.out.println(authentication);
+        System.out.println(((UserPrincipal) authentication.getPrincipal()).getUser());
         return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
     }
 
@@ -216,8 +314,8 @@ public class UserController {
 
     }
 
-    private UserDTO getAuthenticatedUser(Authentication auth) {
-        return ((UserPrincipal) auth.getPrincipal()).getUser();
+    private UserDTO getAuthenticatedUser(Authentication authentication) {
+        return ((UserPrincipal) authentication.getPrincipal()).getUser();
     }
 
     /**
@@ -282,3 +380,4 @@ public class UserController {
     }
 
 }
+
