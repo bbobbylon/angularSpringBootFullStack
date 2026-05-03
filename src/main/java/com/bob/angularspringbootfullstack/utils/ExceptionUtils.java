@@ -62,17 +62,44 @@ public class ExceptionUtils {
      *   <li>Logs the exception on the server side for monitoring</li>
      * </ol>
      * <p>
-     * <b>Called by:</b> CustomAuthenticationEntryPoint, CustomAccessDeniedHandler, Security filters
+     * <b>Called by:</b> CustomAuthenticationEntryPoint, CustomAccessDeniedHandler, Security filters, CustomAuthFilter
      * <p>
-     * <b>Exception categorization:</b>
+     * <b>Exception categorization (BAD_REQUEST 400):</b>
      * <ul>
-     *   <li>ApiException - Custom business logic exception</li>
-     *   <li>DisabledException - User account is disabled</li>
-     *   <li>LockedException - User account is locked (too many login attempts)</li>
-     *   <li>InvalidClaimException - JWT claims validation failed</li>
-     *   <li>TokenExpiredException - JWT token has expired</li>
-     *   <li>BadCredentialsException - Invalid login credentials</li>
+     *   <li><b>ApiException:</b> Custom business logic exception (email exists, link expired, etc.)</li>
+     *   <li><b>DisabledException:</b> User account is disabled</li>
+     *   <li><b>LockedException:</b> User account is locked (too many login attempts)</li>
+     *   <li><b>BadCredentialsException:</b> Invalid login credentials OR malformed token (NEW - May 2026)</li>
      * </ul>
+     * <p>
+     * <b>Exception categorization (Other status codes):</b>
+     * <ul>
+     *   <li><b>InvalidClaimException:</b> JWT claims validation failed (issuer/audience mismatch) → throws 401</li>
+     *   <li><b>TokenExpiredException:</b> JWT token has expired → throws 401</li>
+     *   <li><b>Unknown exceptions:</b> Maps to INTERNAL_SERVER_ERROR 500 for security (no details leaked)</li>
+     * </ul>
+     * <p>
+     * <b>New Behavior (May 2026 - Refresh Token Enhancement):</b>
+     * <p>
+     * BadCredentialsException now handles two scenarios:
+     * <ol>
+     *   <li><b>Invalid credentials:</b> User provided wrong email/password at login (original behavior)</li>
+     *   <li><b>Malformed token:</b> Token cannot be decoded as Base64 JWT (new behavior from TokenProvider.getSubject())</li>
+     * </ol>
+     * <p>
+     * When TokenProvider.getSubject() encounters a JWTDecodeException (malformed token), it wraps it as:
+     * <pre>
+     * throw new BadCredentialsException("Could not decode the token. The input is not a valid Base64-encoded JWT.");
+     * </pre>
+     * This method then maps it to BAD_REQUEST (400) with the clear message, preventing client from seeing raw JWT library errors.
+     * <p>
+     * <b>Response Examples:</b>
+     * <pre>
+     * Invalid credentials: {"reason": "Invalid email or password", "statusCode": 400}
+     * Malformed token: {"reason": "Could not decode the token...", "statusCode": 400}
+     * Expired token: {"reason": "Token has expired", "statusCode": 401}
+     * Generic error: {"reason": "An error has occurred, please try again", "statusCode": 500}
+     * </pre>
      *
      * @param request   the HTTP servlet request containing request details (URI, method, etc.)
      * @param response  the HTTP servlet response where the error response will be written
