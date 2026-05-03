@@ -165,7 +165,83 @@ When client sends token:
 
 ---
 
-## 🗺️ Component Interaction Map
+#### Refresh Token Flow (NEW - May 2026)
+
+```
+Client has valid access token (expires in 30 min)
+    ↓
+Access token expires
+    ↓
+Client sends refresh token to GET /user/refresh/token
+    ↓
+CustomAuthFilter.shouldNotFilter() sees it's a public route
+    ↓
+UserController.sendNewRefreshToken() gets the request
+    ↓
+TokenProvider.getSubject(refreshToken, request):
+  - Validates refresh token signature
+  - Extracts email (no authorities needed)
+  - Returns email
+    ↓
+TokenProvider.createAccessToken(userPrincipal):
+  - Creates NEW access token with authorities
+  - Returns to client
+    ↓
+Client stores new access token
+  - Uses it for subsequent API calls
+  - Cycle repeats when it expires
+
+Key Difference:
+- Access Token: HAS authorities claim (for API calls)
+- Refresh Token: NO authorities claim (refresh only)
+```
+
+**Read about this:** README.md → "4. Refresh Access Token" section
+
+---
+
+### Error Handling Improvements (NEW - May 2026)
+
+| Error Type | Root Cause | Status Code | Client Message |
+|---|---|---|---|
+| **Malformed Token** | Token not valid Base64 | 400 | "Could not decode the token..." |
+| **Expired Token** | Token.exp < current time | 401 | "Token has expired" |
+| **Invalid Claims** | Issuer/Audience mismatch | 401 | "Invalid claim" |
+| **Invalid Signature** | Token tampered with | 401 | "Invalid token" |
+| **Missing/Invalid Header** | No Authorization header | 401 | "Unauthorized" |
+
+**Read about this:** TokenProvider.java → getSubject() method documentation
+
+---
+
+### Token Type Detection (NEW - May 2026)
+
+```
+Custom Auth Filter receives token in Authorization header:
+    ↓
+isTokenValid() returns true (signature, issuer, expiration OK)
+    ↓
+getAuthorities(token) extracts authorities array
+    ↓
+    ├─ Authorities FOUND (non-empty array)
+    │  └─ ACCESS TOKEN detected
+    │     └─ Create Authentication with authorities
+    │        └─ Set in SecurityContext
+    │           └─ Controller can access authorities
+    │
+    └─ Authorities NOT FOUND (empty array)
+       └─ REFRESH TOKEN detected
+          └─ Do NOT set Authentication
+             └─ Request treated as unauthenticated
+                └─ Only whitelisted endpoints allowed
+                   (e.g., /user/refresh/token)
+```
+
+**Read about this:** CustomAuthFilter.java → doFilterInternal() method documentation
+
+---
+
+
 
 ```
 HTTP Request
@@ -217,6 +293,11 @@ Controller (UserController)
 | "Why is the system stateless?"                 | SecurityConfig.java → sessionManagement() method documentation                      |
 | "Why is CSRF disabled?"                        | SecurityConfig.java → securityFilterChain() → csrf() method documentation           |
 | "How does CORS work?"                          | SecurityConfig.java → corsConfigurationSource() method documentation                |
+| **"How do refresh tokens work?"** (NEW)        | **TokenProvider.java → createRefreshToken() + getSubject() methods**                 |
+| **"Why do refresh tokens have no authorities?"** (NEW) | **CustomAuthFilter.java → doFilterInternal() method documentation**                |
+| **"How does the filter detect token types?"** (NEW) | **CustomAuthFilter.java → doFilterInternal() method (token type detection)**        |
+| **"What happens with malformed tokens?"** (NEW) | **TokenProvider.java → getSubject() → JWTDecodeException handling**                  |
+| **"How are verification links logged?"** (NEW) | **UserRepoImpl.java → create() and setNewPassword() method documentation**           |
 
 ---
 

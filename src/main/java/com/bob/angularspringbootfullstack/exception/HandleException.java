@@ -80,10 +80,22 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<HttpResponse> badCredentialsException(BadCredentialsException exception) {
         log.error(exception.getMessage());
+        // NEW (May 2026): BadCredentialsException now represents two scenarios:
+        // 1. Login failure: User provided wrong email/password
+        // 2. Malformed token: Token cannot be decoded as Base64 JWT (from TokenProvider.getSubject())
+        // The exception message from TokenProvider will contain "Could not decode the token..."
+        String reason = exception.getMessage();
+        if (reason != null && reason.contains("Could not decode")) {
+            // Malformed token scenario - use the clear message from TokenProvider
+            reason = "The input is not a valid base 64 encoded string.";
+        } else {
+            // Login credentials scenario - append default message
+            reason = reason + ", Incorrect email or password";
+        }
         return new ResponseEntity<>(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .reason(exception.getMessage() + ", Incorrect email or password")
+                        .reason(reason)
                         .devMessage(exception.getMessage())
                         .status(BAD_REQUEST)
                         .statusCode(BAD_REQUEST.value())

@@ -82,16 +82,133 @@ public class UserServiceImpl implements UserService {
         userRepo.resetPassword(email);
     }
 
+    /**
+     * Verifies a password reset link/key and returns the associated user.
+     * <p>
+     * <b>Purpose:</b> When a user clicks a password reset link, the key/token in the URL is sent to this method.
+     * This method verifies the link is still valid (not expired) and returns the user associated with it.
+     * <p>
+     * <b>Flow:</b>
+     * <ol>
+     *   <li>Extract the key from the reset link (e.g., /user/verify/password/{key})</li>
+     *   <li>Call userRepo.verifyPasswordKey(key)</li>
+     *   <li>Repository checks if link exists and is not expired</li>
+     *   <li>Deletes the link row (so it can't be reused)</li>
+     *   <li>Returns User entity associated with the link</li>
+     *   <li>This method converts User to UserDTO</li>
+     * </ol>
+     * <p>
+     * <b>Server Logging (NEW - May 2026):</b><br/>
+     * When a password reset link is verified successfully, the repository logs:
+     * <pre>
+     * INFO: Password reset verification url http://localhost:8080/user/verify/password/550e8400-...
+     *       has been verified for user with email: bob@example.com
+     * </pre>
+     * <p>
+     * <b>Security Notes:</b>
+     * <ul>
+     *   <li>Link expires after 24 hours (set in UserRepoImpl.resetPassword())</li>
+     *   <li>Link is deleted after verification (can't be reused)</li>
+     *   <li>Link contains UUID key that's unique to each reset request</li>
+     * </ul>
+     *
+     * @param key the password reset token/key from the URL
+     * @return a UserDTO if the link is valid, otherwise throws ApiException
+     * @throws ApiException if link is not valid or has expired
+     */
     @Override
     public UserDTO verifyPasswordKey(String key) {
         return mapToUserDTO(userRepo.verifyPasswordKey(key));
     }
 
+    /**
+     * Sets a new password for a user using a valid password reset key.
+     * <p>
+     * <b>Purpose:</b> After user submits a new password via the reset form, this method updates the password.
+     * <p>
+     * <b>Flow:</b>
+     * <ol>
+     *   <li>Receive reset key, new password, and confirmation password</li>
+     *   <li>Validate passwords match (throws ApiException if not)</li>
+     *   <li>Validate reset link is not expired (throws ApiException if expired)</li>
+     *   <li>Lookup user by reset link key</li>
+     *   <li>Encode new password with BCrypt</li>
+     *   <li>Update user's password in database</li>
+     *   <li>Delete reset link (so it can't be used again)</li>
+     * </ol>
+     * <p>
+     * <b>Server Logging (NEW - May 2026):</b><br/>
+     * When password is successfully reset, the repository logs:
+     * <pre>
+     * INFO: Password successfully reset for user with email: bob@example.com
+     * </pre>
+     * <p>
+     * <b>Security Measures:</b>
+     * <ul>
+     *   <li>Password is encoded with BCrypt (strength 12) before storing</li>
+     *   <li>Reset link is deleted after use (prevents replay attacks)</li>
+     *   <li>Confirmation password must match (prevents typos)</li>
+     *   <li>Link expiration checked (prevents old links from being used)</li>
+     * </ul>
+     *
+     * @param key               the password reset token from the URL
+     * @param newPassword       the new password to set
+     * @param confirmPassword   the confirmation password (must match newPassword)
+     * @throws ApiException if passwords don't match, link is expired, or other validation fails
+     */
     @Override
     public void setNewPassword(String key, String newPassword, String confirmPassword) {
         userRepo.setNewPassword(key, newPassword, confirmPassword);
     }
 
+    /**
+     * Verifies an account using the verification link key and enables the account.
+     * <p>
+     * <b>Purpose:</b> When a new user registers, they receive an account verification email with a link.
+     * Clicking the link calls this method to verify ownership of the email address and enable the account.
+     * <p>
+     * <b>Flow:</b>
+     * <ol>
+     *   <li>Extract the key from the verification link</li>
+     *   <li>Lookup the verificationurl record in the database</li>
+     *   <li>Check if the link is still valid (not expired)</li>
+     *   <li>Update the user's enabled flag to true</li>
+     *   <li>Delete the verification link (so it can't be used again)</li>
+     *   <li>Return the verified user</li>
+     * </ol>
+     * <p>
+     * <b>Server Logging (NEW - May 2026):</b><br/>
+     * When account is successfully verified, the repository logs:
+     * <pre>
+     * INFO: Account successfully verified for user with email: bob@example.com
+     * </pre>
+     * <p>
+     * <b>Timeline:</b>
+     * <pre>
+     * 1. POST /user/register (new user)
+     *    → Server generates verification URL with UUID key
+     *    → Stores URL in accountverifications table
+     *    → Logs: "Account verification url http://localhost:8080/user/verify/account/{key}
+     *             sent to user with email: bob@example.com"
+     *
+     * 2. User receives email with link
+     *    → User clicks link OR calls GET /user/verify/account/{key}
+     *
+     * 3. GET /user/verify/account/{key}
+     *    → Calls this method (verifyAccount)
+     *    → Calls userRepo.verifyAccountKey(key)
+     *    → Repository verifies key, enables user, deletes link
+     *    → Logs: "Account successfully verified for user with email: bob@example.com"
+     *    → Returns 200 OK
+     *
+     * 4. User can now log in
+     * </pre>
+     *
+     * @param key the account verification token from the URL
+     * @return a UserDTO of the verified user, otherwise throws exception
+     * @throws ApiException if link is not valid or has expired
+     * @throws UsernameNotFoundException if user cannot be found
+     */
     @Override
     public UserDTO verifyAccount(String key) {
         return mapToUserDTO(userRepo.verifyAccountKey(key));

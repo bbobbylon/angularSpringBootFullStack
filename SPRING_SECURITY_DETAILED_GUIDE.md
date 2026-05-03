@@ -681,18 +681,184 @@ Subsequent Requests
 
 ---
 
+## ✨ Refresh Token Flow (NEW - May 2026)
+
+### Why Refresh Tokens?
+
+Access tokens expire after 30 minutes for security. If they lasted longer, a stolen token could be used for longer. 
+Refresh tokens expire after 5 days and can only be used to request a new access token (not for API access).
+
+```
+Timeline:
+Time 0:00   → User logs in
+             → Receive access_token + refresh_token
+             → Store both in localStorage
+
+Time 0:20   → User calls /user/profile with access_token
+             → Works fine (token valid for 30 min)
+
+Time 0:35   → User calls /user/profile with access_token
+             → ERROR: Access token expired (exp: 0:30)
+             → Frontend detects 401
+
+Time 0:35   → Frontend calls /user/refresh/token with refresh_token
+             → Backend validates refresh_token
+             → Creates new access_token
+             → Returns new access_token
+             → Frontend stores new access_token
+
+Time 0:40   → User calls /user/profile with new access_token
+             → Works fine (new token valid until 1:10)
+
+Time 5:00   → Refresh token expires (exp: 5:00)
+             → Frontend can no longer refresh
+             → User must re-login to get new tokens
+```
+
+### Access Token vs Refresh Token
+
+| Aspect | Access Token | Refresh Token |
+|--------|--------------|---------------|
+| **Purpose** | Authenticate API requests | Request new access token |
+| **Validity** | 30 minutes | 5 days |
+| **Authorities** | YES - includes permissions | NO - no permissions |
+| **Used For** | GET /user/profile, etc. | GET /user/refresh/token ONLY |
+| **In Header** | Authorization: Bearer <access_token> | Authorization: Bearer <refresh_token> |
+| **Can Access APIs** | YES | NO - filter rejects (empty authorities) |
+| **JWT Payload** | Contains "authorities": [...] | No "authorities" claim |
+
+### Why Refresh Token Has No Authorities
+
+Security principle: **Principle of Least Privilege**
+
+- Refresh token should ONLY refresh, not access
+- If refresh token had authorities, a thief could use it for API calls
+- Filter rejects any token without authorities on non-public endpoints
+- Refresh endpoint is public (whitelisted in SecurityConfig)
+
+```
+Hacker steals refresh_token from localStorage:
+    ↓
+Tries: GET /user/profile with refresh_token
+    ↓
+CustomAuthFilter.doFilterInternal():
+  - Validates refresh_token (signature OK)
+  - Extracts authorities: [] (empty)
+  - Sees empty authorities
+  - Clears SecurityContext (does NOT authenticate)
+    ↓
+SecurityConfig rule: .anyRequest().authenticated()
+    ↓
+CustomAuthenticationEntryPoint returns 401
+    ↓
+Hacker cannot access /user/profile
+```
+
+### Refresh Token Flow Code Path
+
+```
+UserController.sendNewRefreshToken(request)
+├─ Check Authorization header has Bearer prefix
+├─ Extract refresh_token from header
+├─ Call isHeaderAndTokenValid(refresh_token)
+│  ├─ tokenProvider.getSubject(refreshToken, request)
+│  │  ├─ getJWTVerifier().verify(refreshToken) [validates signature, issuer, expiration]
+│  │  ├─ Extract "sub" (email) from token
+│  │  ├─ Return email (no authorities required!)
+│  │  └─ Map any errors to BadCredentialsException
+│  └─ tokenProvider.isTokenValid(email, refreshToken)
+│     └─ Return true if valid
+├─ userService.getUserByEmail(email)
+│  └─ Get fresh user data from database
+├─ getUserPrincipal(userDTO)
+│  ├─ Load User entity
+│  ├─ Load Role with authorities
+│  └─ Create UserPrincipal(user, authorities)
+├─ tokenProvider.createAccessToken(userPrincipal)
+│  ├─ Extract authorities from UserPrincipal
+│  ├─ Create NEW access token with authorities
+│  ├─ Set exp: now + 30 minutes
+│  └─ Return new token string
+└─ Return 200 with new access_token
+```
+
+### Error Scenarios
+
+**Scenario 1: Refresh token is invalid**
+```
+Frontend sends: GET /user/refresh/token -H "Authorization: Bearer invalid.token.here"
+    ↓
+tokenProvider.getSubject(invalidToken, request)
+    ↓
+getJWTVerifier().verify(invalidToken) throws JWTDecodeException
+    ↓
+Caught and mapped to BadCredentialsException("Could not decode the token...")
+    ↓
+ExceptionUtils.processError() → 400 Bad Request
+    ↓
+Frontend sees: {"reason": "Could not decode the token..."}
+```
+
+**Scenario 2: Refresh token is expired**
+```
+Frontend sends: GET /user/refresh/token -H "Authorization: Bearer eyJhbGci...expired_token"
+    ↓
+tokenProvider.getSubject(expiredToken, request)
+    ↓
+getJWTVerifier().verify(expiredToken) throws TokenExpiredException
+    ↓
+Re-thrown as TokenExpiredException
+    ↓
+ExceptionUtils.processError() → 401 Unauthorized
+    ↓
+Frontend sees: {"reason": "Token has expired"}
+    ↓
+Frontend must prompt user to log in again
+```
+
+**Scenario 3: Trying to use refresh token as access token**
+```
+Frontend sends: GET /user/profile -H "Authorization: Bearer eyJhbGci...refresh_token"
+    ↓
+CustomAuthFilter.doFilterInternal():
+  1. Validates refresh token (signature OK, not expired)
+  2. Extracts authorities: [] (empty array)
+  3. Sees authorities.isEmpty() is TRUE
+  4. Calls SecurityContextHolder.clearContext() (do NOT authenticate)
+    ↓
+Request continues without Authentication
+    ↓
+SecurityConfig rule: .anyRequest().authenticated()
+    ↓
+CustomAuthenticationEntryPoint.commence()
+    ↓
+Returns 401 Unauthorized
+    ↓
+Frontend sees: {"reason": "..."}
+```
+
+### Key Security Properties
+
+1. **Access token cannot refresh**: It has no refresh endpoint that accepts access tokens, and it expires
+2. **Refresh token cannot access APIs**: Filter explicitly rejects tokens without authorities
+3. **Old tokens cannot be used**: Expired tokens throw TokenExpiredException which is caught and mapped to 401
+4. **Malformed tokens are rejected**: JWTDecodeException mapped to 400 Bad Request
+5. **Token signature ensures authenticity**: Only backend with secret key can create/verify tokens
+
+---
+
 ## Key Takeaways
 
 1. **Authentication** = "Who are you?" (Done once at login)
    - Verified by comparing provided password with stored BCrypt hash
-   - Results in JWT token
+   - Results in JWT tokens (access + refresh)
 
 2. **Authorization** = "What can you do?" (Checked on each request)
    - Determined by user's authorities/permissions
    - Checked in SecurityFilterChain or with annotations
 
 3. **Stateless** = No session storage
-   - Token contains all info needed
+   - Tokens contain all info needed
    - Each request is independent
    - Scales horizontally
 
@@ -701,17 +867,34 @@ Subsequent Requests
    - Payload: User data + authorities + expiration
    - Signature: Proves backend created token
 
-5. **GrantedAuthority** = One permission
+5. **Access vs Refresh Tokens** (NEW)
+   - Access Token: 30 minutes, includes authorities, authenticates API calls
+   - Refresh Token: 5 days, no authorities, only refreshes access tokens
+   - Filter rejects refresh tokens on non-refresh endpoints (empty authorities)
+
+6. **GrantedAuthority** = One permission
    - Format: "RESOURCE:ACTION"
    - Stored in database as comma-separated string
    - Converted to List<GrantedAuthority> at runtime
 
-6. **SecurityContextHolder** = ThreadLocal storage
+7. **SecurityContextHolder** = ThreadLocal storage
    - Available throughout request
    - Contains Authentication object
    - Accessible via: SecurityContextHolder.getContext().getAuthentication()
 
-7. **401 vs 403**
-   - 401: Not authenticated (no token/invalid token)
-   - 403: Authenticated but not authorized (lacks permissions)
+8. **Filter Logic** (NEW - May 2026)
+   - CustomAuthFilter detects token type by checking authorities
+   - Empty authorities → treat as refresh token → clear context
+   - Non-empty authorities → treat as access token → set context
+   - Prevents refresh token misuse
+
+9. **Error Handling** (NEW - May 2026)
+   - Malformed tokens → 400 Bad Request
+   - Expired tokens → 401 Unauthorized
+   - Invalid claims/signature → 401 Unauthorized
+   - Missing token → 401 Unauthorized
+
+10. **401 vs 403**
+    - 401: Not authenticated (no token/invalid token)
+    - 403: Authenticated but not authorized (lacks permissions)
 
