@@ -28,8 +28,16 @@ import java.util.stream.Collectors;
 
 import static java.time.LocalTime.now;
 import static org.springframework.http.HttpStatus.*;
+//TODO remove the bad practices for prod, specifically .reason, .message, etc so that PPI information is not exposed. 
 
-// TODO remove the bad dev practices specifically for .reason, .devMessage, and related for PRODUCTION builds. We need to replace this with something more secure.
+/**
+ * Central {@code @RestControllerAdvice} for translating framework and application exceptions into a
+ * consistent {@link HttpResponse} JSON payload.
+ *
+ * <p><b>Security note:</b> this handler currently returns {@code devMessage} and (in some cases)
+ * exception messages to the client. That is useful during development but should be reduced/removed
+ * for production deployments to avoid leaking internal details.
+ */
 @RestControllerAdvice
 @Slf4j
 public class HandleException extends ResponseEntityExceptionHandler implements ErrorController {
@@ -77,6 +85,20 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
     }
 
 
+    /**
+     * Handles {@link BadCredentialsException}.
+     *
+     * <p>This exception is used for both:
+     * <ul>
+     *   <li>Login failures (wrong email/password)</li>
+     *   <li>Malformed JWT input (e.g., refresh/access token cannot be decoded as Base64 JWT)
+     *       surfaced by {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider#getSubject(String, jakarta.servlet.http.HttpServletRequest)}
+     *   </li>
+     * </ul>
+     *
+     * <p>For malformed JWTs we return a short, client-friendly message rather than leaking the
+     * low-level JWT library error.
+     */
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<HttpResponse> badCredentialsException(BadCredentialsException exception) {
         log.error(exception.getMessage());

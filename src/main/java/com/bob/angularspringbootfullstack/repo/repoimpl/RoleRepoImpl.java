@@ -16,6 +16,11 @@ import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.query.RoleQuery.*;
 import static java.util.Objects.requireNonNull;
 
+/**
+ * JDBC-based {@link com.bob.angularspringbootfullstack.repo.RoleRepo} implementation.
+ *
+ * <p>In this project roles hold the permission string used to construct authorities.
+ */
 @Repository
 @RequiredArgsConstructor
 @Slf4j

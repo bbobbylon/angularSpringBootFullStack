@@ -12,6 +12,12 @@ import java.time.LocalDateTime;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT;
 
+/**
+ * User entity representing a registered user.
+ *
+ * <p>This model maps to the {@code users} table and contains profile fields as well as
+ * authentication-related flags (enabled/locked/2FA).
+ */
 @Data
 @SuperBuilder
 @NoArgsConstructor

@@ -188,7 +188,7 @@ public class TokenProvider {
      *
      * @param token the JWT token string to extract authorities from (already verified by caller)
      * @return an array of authority/permission strings (e.g., ["READ:USER", "UPDATE:USER"])
-     *         Returns empty String[0] if the "authorities" claim is missing or null
+     * Returns empty String[0] if the "authorities" claim is missing or null
      * @throws JWTVerificationException if token signature is invalid or other verification fails
      * @see #getJWTVerifier() for verification logic
      * @see TokenProvider#getAuthorities(String) for conversion of String[] to List&lt;GrantedAuthority&gt;

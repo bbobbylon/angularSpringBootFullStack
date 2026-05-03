@@ -9,6 +9,12 @@ import lombok.experimental.SuperBuilder;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT;
 
+/**
+ * Role entity representing a user role/authority in the system.
+ *
+ * <p>This model maps to the {@code roles} table and provides the permission string that is
+ * converted into Spring Security {@code GrantedAuthority} instances.
+ */
 @Data
 @SuperBuilder
 @NoArgsConstructor

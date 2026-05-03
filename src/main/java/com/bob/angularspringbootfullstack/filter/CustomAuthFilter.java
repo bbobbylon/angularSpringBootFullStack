@@ -40,6 +40,14 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
  *   <li><b>TokenProvider:</b> Used for token validation, extracting authorities, and building Authentication objects.</li>
  *   <li><b>Spring Security:</b> Sets or clears the SecurityContextHolder for downstream filters/controllers.</li>
  * </ul>
+ *      *   <li>Check if filter should run (skip for public routes, without Authorization header, OPTIONS)</li>
+ *      *   <li>Extract email and token from request</li>
+ *      *   <li>Validate token (signature, expiration, issuer, audience)</li>
+ *      *   <li>Extract authorities/permissions from token</li>
+ *      *   <li><b>NEW:</b> Check if token has authorities (access token) or is missing them (refresh token)</li>
+ *      *   <li>If has authorities → set Authentication in SecurityContext (request is now authenticated)</li>
+ *      *   <li>If no authorities → clear SecurityContext (request is unauthenticated, avoid refresh token bypass)</li>
+ *      *   <li>Continue filter chain (even if auth failed)</li>
  */
 @Component
 @RequiredArgsConstructor
@@ -62,8 +70,17 @@ public class CustomAuthFilter extends OncePerRequestFilter {
     private final TokenProvider tokenProvider;
 
     /**
-     * Determines if the filter should be skipped for the current request.
-     * Skips if the Authorization header is missing/invalid, method is OPTIONS, or URI is public.
+     * Determines whether this filter should run for the current request.
+     *
+     * <p>The filter is skipped when:
+     * <ul>
+     *   <li>There is no {@code Authorization: Bearer ...} header</li>
+     *   <li>The request is an {@code OPTIONS} preflight</li>
+     *   <li>The request URI is one of {@link #PUBLIC_ROUTES}</li>
+     * </ul>
+     *
+     * @param request current HTTP request
+     * @return {@code true} to skip filtering; {@code false} to run {@link #doFilterInternal}
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
@@ -79,17 +96,19 @@ public class CustomAuthFilter extends OncePerRequestFilter {
      * to authenticate it based on the JWT token in the Authorization header. It extracts the token,
      * validates it, and if valid, sets an Authentication in Spring Security's SecurityContext so
      * downstream authorization rules can check permissions.
+     * * Extracts and validates a JWT from the {@code Authorization} header and (when appropriate)
+     * * installs an {@link Authentication} into {@link SecurityContextHolder}.
+     * *
+     * * <p>Algorithm:
      * <p>
      * <b>High-Level Flow:</b>
      * <ol>
-     *   <li>Check if filter should run (skip for public routes, without Authorization header, OPTIONS)</li>
-     *   <li>Extract email and token from request</li>
-     *   <li>Validate token (signature, expiration, issuer, audience)</li>
-     *   <li>Extract authorities/permissions from token</li>
-     *   <li><b>NEW:</b> Check if token has authorities (access token) or is missing them (refresh token)</li>
-     *   <li>If has authorities → set Authentication in SecurityContext (request is now authenticated)</li>
-     *   <li>If no authorities → clear SecurityContext (request is unauthenticated, avoid refresh token bypass)</li>
-     *   <li>Continue filter chain (even if auth failed)</li>
+     *   <li>Read email + token via {@link #getRequestValues(HttpServletRequest)}.</li>
+     *   <li>Validate token via {@link TokenProvider#isTokenValid(String, String)}.</li>
+     *   <li>Extract authorities via {@link TokenProvider#getAuthorities(String)}.</li>
+     *   <li>If authorities are empty, treat the token as a refresh token and do <b>not</b> authenticate.</li>
+     *   <li>Otherwise, create an {@link Authentication} via
+     *       {@link TokenProvider#getAuthentication(String, List, HttpServletRequest)}.</li>
      * </ol>
      * <p>
      * <b>The Authorities Check (NEW KEY LOGIC):</b>
@@ -212,7 +231,6 @@ public class CustomAuthFilter extends OncePerRequestFilter {
      * @param filterChain the filter chain to continue processing
      * @throws ServletException if request/response processing fails
      * @throws IOException      if I/O error occurs during processing
-     *
      * @see CustomAuthFilter#shouldNotFilter(HttpServletRequest) for public route logic
      * @see TokenProvider#isTokenValid(String, String) for token validation
      * @see TokenProvider#getAuthorities(String) for authority extraction
@@ -227,7 +245,6 @@ public class CustomAuthFilter extends OncePerRequestFilter {
             String token = getToken(request);
             if (tokenProvider.isTokenValid(values.get(EMAIL_KEY), token)) {
                 List<GrantedAuthority> authorities = tokenProvider.getAuthorities(values.get(TOKEN_KEY));
-                // ...existing code...
                 if (authorities == null || authorities.isEmpty()) {
                     // do not authenticate with a token that lacks authorities; leave security context cleared
                     SecurityContextHolder.clearContext();

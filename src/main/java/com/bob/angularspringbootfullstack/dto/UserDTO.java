@@ -108,6 +108,12 @@ public class UserDTO {
      * Timestamp of when the account was created
      */
     private LocalDateTime createdAt;
+    /**
+     * Role name assigned to the user (flattened from {@link com.bob.angularspringbootfullstack.model.Role}).
+     */
     private String roleName;
+    /**
+     * Comma-separated permission string for the user's role (flattened from {@link com.bob.angularspringbootfullstack.model.Role}).
+     */
     private String permissions;
 }
