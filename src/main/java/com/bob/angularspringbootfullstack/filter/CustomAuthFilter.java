@@ -86,11 +86,11 @@ public class CustomAuthFilter extends OncePerRequestFilter {
         try {
             Map<String, String> values = getRequestValues(request);
             String token = getToken(request);
-            if (tokenProvider.isTokenValid(values.get(EMAIL_KEY), token)) {
-                List<GrantedAuthority> authorities = tokenProvider.getAuthorities(values.get(TOKEN_KEY));
-                Authentication auth = tokenProvider.getAuthentication(values.get(EMAIL_KEY), authorities, request);
-                SecurityContextHolder.getContext().setAuthentication(auth);
-            } else {
+             if (tokenProvider.isTokenValid(values.get(EMAIL_KEY), token)) {
+                 List<GrantedAuthority> authorities = tokenProvider.getAuthorities(values.get(TOKEN_KEY));
+                 Authentication auth = tokenProvider.getAuthentication(values.get(EMAIL_KEY), authorities, request);
+                 SecurityContextHolder.getContext().setAuthentication(auth);
+             } else {
                 //clear the context of the thread if the token is invalid since the user would be not authenticated
                 SecurityContextHolder.clearContext();
             }

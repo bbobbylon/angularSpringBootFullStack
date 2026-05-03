@@ -7,7 +7,9 @@ import com.auth0.jwt.exceptions.InvalidClaimException;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.exceptions.TokenExpiredException;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
+import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,16 +27,18 @@ import static java.lang.System.currentTimeMillis;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
 
-/*
-In this class we are generating the tokens for the user. The following methods are used to generate the tokens:
-- createAccessToken: generates an access token for the user
-- createRefreshToken: generates a refresh token for the user
-- getClaimsFromUser: gets the claims from the userPrincipal, which is the user that is logged in, then we are mapping the authorities to a string array, and finally we are returning the array
-we use UserPrincipal because it has the user and the permissions that we need to generate the token. We are using the JWT library to generate the tokens, and we are using the HMAC512 algorithm to sign the tokens with a secret key. The secret key is stored in the application.properties file and is injected into this class using the @Value annotation. The access token expires in 30 minutes, and the refresh token expires in 5 days.
-
-This token provider will be able to be injected and used to create the access and refresh tokens for the user.
- */
+/**
+ * In this class we are generating the tokens for the user. The following methods are used to generate the tokens:
+ * - createAccessToken: generates an access token for the user
+ * - createRefreshToken: generates a refresh token for the user
+ * - getClaimsFromUser: gets the claims from the userPrincipal, which is the user that is logged in, then we are mapping the authorities to a string array, and finally we are returning the array
+ * we use UserPrincipal because it has the user and the permissions that we need to generate the token. We are using the JWT library to generate the tokens, and we are using the HMAC512 algorithm to sign the tokens with a secret key. The secret key is stored in the application.properties file and is injected into this class using the @Value annotation. The access token expires in 30 minutes, and the refresh token expires in 5 days.
+ * <p>
+ * This token provider will be able to be injected and used to create the access and refresh tokens for the user.
+ **/
 @Component
+//@RequiredArgsConstructor is for our dependency injection, it will generate a constructor with the required arguments, which in this case is the UserService. This allows us to inject the UserService into this class without having to write a constructor ourselves.
+@RequiredArgsConstructor
 public class TokenProvider {
     private static final String BOBBYLON_LLC = "BOBBYLON_LLC";
     private static final String BOBS_MANAGEMENT = "BOBS_MANAGEMENT";
@@ -42,6 +46,7 @@ public class TokenProvider {
     private static final long ACCESS_TOKEN_EXPIRE_TIME = 1_800_000;
     private static final long REFRESH_TOKEN_EXPIRE_TIME = 432_000_000;
     private static final String TOKEN_UNVERIFIABLE = "Invalid JWT secret key";
+    private final UserService userService;
     @Value("${jwt.secret}")
     private String secret;
 
@@ -111,7 +116,6 @@ public class TokenProvider {
      */
     public List<GrantedAuthority> getAuthorities(String token) {
         String[] claims = getClaimsFromToken(token);
-        // "::new" is a reference to the constructor of SimpleGrantedAuthority
         return stream(claims).map(SimpleGrantedAuthority::new).collect(toList());
     }
 
@@ -138,7 +142,7 @@ public class TokenProvider {
         JWTVerifier verifier;
         try {
             Algorithm alg = HMAC512(secret);
-            verifier = JWT.require(alg).withIssuer(BOBBYLON_LLC).build();
+            verifier = JWT.require(alg).withIssuer(BOBBYLON_LLC).withClaimPresence(AUTHORITIES).build();
         } catch (JWTVerificationException e) {
             throw new JWTVerificationException(TOKEN_UNVERIFIABLE);
         }
@@ -156,7 +160,7 @@ public class TokenProvider {
      * @return an Authentication object for Spring Security
      */
     public Authentication getAuthentication(String email, List<GrantedAuthority> authorities, HttpServletRequest request) {
-        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(email, null, authorities);
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userService.getUserByEmail(email), null, authorities);
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         return authToken;
     }

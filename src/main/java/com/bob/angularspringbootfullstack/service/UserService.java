@@ -28,7 +28,6 @@ public interface UserService {
      *
      * @param email the email address to search for (must not be empty)
      * @return a UserDTO if user is found
-     * @throws ApiException if user is not found
      */
     UserDTO getUserByEmail(@NotEmpty String email);
 

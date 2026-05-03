@@ -294,7 +294,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             log.info("We have found this user in our database with the following address: {} ", email);
             log.debug("Building UserPrincipal for user with email: {} and id: {}", email, user.getId());
             log.info("User with email '{}' has 2FA/MFA enabled: {}", email, user.isUsing2FA());
-            return new UserPrincipal(user, roleRepository.getRoleByUserId(user.getId()).getPermission());
+            return new UserPrincipal(user, roleRepository.getRoleByUserId(user.getId()));
         }
     }
 }
