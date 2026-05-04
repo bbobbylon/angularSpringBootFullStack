@@ -149,12 +149,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Retrieves an unimplemented paginated list of users.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns an empty collection.
      *
-     * @param page     the page number to retrieve
-     * @param pageSize the number of users per page
-     * @return an empty collection (not yet implemented)
+     * @param page     0-indexed page number
+     * @param pageSize page size
+     * @return an empty list
      */
     @Override
     public Collection<User> list(int page, int pageSize) {
@@ -162,11 +161,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Retrieves an unimplemented user by ID.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns null. Use {@link #getUserByEmail(String)}
+     * for the lookup the application currently performs.
      *
-     * @param id the user ID to retrieve
-     * @return null (not yet implemented)
+     * @param id the user id
+     * @return null
      */
     @Override
     public User get(Long id) {
@@ -174,12 +173,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Updates an unimplemented user record.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns null.
      *
-     * @param id   the ID of the user to update
-     * @param data the updated user data
-     * @return null (not yet implemented)
+     * @param id   the id of the user to update
+     * @param data the new user data
+     * @return null
      */
     @Override
     public User update(Long id, User data) {
@@ -187,10 +185,9 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Deletes an unimplemented user record.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; no-op.
      *
-     * @param id the ID of the user to delete
+     * @param id the id of the user to delete
      */
     @Override
     public void delete(Long id) {

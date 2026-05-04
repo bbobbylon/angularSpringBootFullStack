@@ -30,6 +30,11 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpStatus.*;
 import static org.springframework.security.authentication.UsernamePasswordAuthenticationToken.unauthenticated;
 
+/**
+ * REST endpoints for user registration, login, 2FA, account/password
+ * verification, and token refresh. Wraps every response in HttpResponse for a
+ * consistent JSON shape.
+ */
 @RestController
 @RequestMapping(path = "/user")
 @RequiredArgsConstructor
@@ -44,12 +49,12 @@ public class UserController {
     private final HttpServletResponse response;
 
     /**
-     * Registers a new user in the system.
-     * Validates the incoming user data, creates the user via the UserService,
-     * and returns a 201 CREATED response with the newly created UserDTO.
+     * Registers a new user. Validates the payload, creates the user via
+     * UserService, and returns the created DTO with a 201 Location header
+     * pointing to the new resource.
      *
-     * @param user the user registration data (validated with @Valid)
-     * @return ResponseEntity with HttpResponse containing the created user data and CREATED status
+     * @param user the registration payload (validated with @Valid)
+     * @return 201 CREATED with the new user inside an HttpResponse
      */
     @PostMapping("/register")
     public ResponseEntity<HttpResponse> saveUser(@RequestBody @Valid User user) {
@@ -65,15 +70,24 @@ public class UserController {
     }
 
     /**
-     * Constructs a URI for the registered user resource.
-     * This URI is used in the Location header of the 201 CREATED response.
+     * Builds the Location URI returned with a 201 CREATED registration
+     * response.
      *
-     * @return a URI pointing to the user resource (e.g., /user/get/<userId>)
+     * @return the URI pointing to the new user resource
      */
     private URI getUri() {
         return URI.create(ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/get/<userId>").toUriString());
     }
 
+    /**
+     * Verifies a 2FA code submitted via URL and, on success, returns the user
+     * along with a freshly issued access/refresh token pair. Used to complete
+     * login for accounts with 2FA enabled.
+     *
+     * @param email the email of the user verifying the code
+     * @param code  the 2FA code received over SMS
+     * @return 200 OK with user and tokens
+     */
     @GetMapping("/verify/code/{email}/{code}")
     public ResponseEntity<HttpResponse> verifyCode(@PathVariable("email") String email, @PathVariable("code") String code) {
         UserDTO userDTO = userService.verifyCode(email, code);
@@ -88,50 +102,25 @@ public class UserController {
     }
 
     /**
-     * Creates a UserPrincipal object from a UserDTO.
-     * <p>
-     * UserPrincipal is Spring Security's representation of an authenticated user.
-     * It implements the UserDetails interface and is needed for:
-     * - Creating JWT tokens (TokenProvider.createAccessToken() expects UserPrincipal)
-     * - Spring Security context (stores UserPrincipal in SecurityContextHolder)
-     * - Authorization checks (contains user's authorities/permissions)
-     * <p>
-     * Process:
-     * 1. Gets full User entity from database:
-     * - userService.getUser(userDTO.getEmail())
-     * - Queries: SELECT * FROM users WHERE email = ?
-     * - Returns complete User object with all fields
-     * <p>
-     * 2. Gets user's role and permissions:
-     * - roleService.getRoleByUserId(userDTO.getId())
-     * - Queries: SELECT role WHERE user_id = ?
-     * - Returns Role object containing permission string
-     * <p>
-     * 3. Extracts permissions from role:
-     * - roleService.getRoleByUserId(...).getPermission()
-     * - Example: "READ:USER,UPDATE:USER,DELETE:USER"
-     * <p>
-     * 4. Creates UserPrincipal with User and permissions:
-     * - UserPrincipal(user, permissions)
-     * - UserPrincipal converts permission string to List<GrantedAuthority>
-     * - Each permission becomes a SimpleGrantedAuthority
-     * <p>
-     * Why we need this:
-     * - JWT token creation requires UserPrincipal to extract authorities
-     * - TokenProvider.createAccessToken(userPrincipal) calls:
-     * getClaimsFromUser(userPrincipal) which calls userPrincipal.getAuthorities()
-     * which parses the permission string and creates SimpleGrantedAuthority objects
-     * - These authorities are embedded in the JWT token as a claim
-     * - When token is verified later, authorities are extracted and used for authorization
-     * We also switched from using the User entity to the UserDTO for security and performance reasons. One being that we want to keep the User separate in terms of not having that User object being sent all the way up the chain to the controller. Another being that we want to keep the UserDTO lightweight and only contain the necessary information for the controller to function (it doesn't contain the user's password).
+     * Reloads the User entity and Role for the given DTO and wraps them in a
+     * UserPrincipal so TokenProvider can mint tokens whose authorities reflect
+     * the user's current permissions.
      *
-     * @param userDTO the authenticated user DTO (has id and email)
-     * @return UserPrincipal object with User entity and authority permissions
+     * @param userDTO an authenticated user
+     * @return a UserPrincipal carrying the User and Role
      */
     private UserPrincipal getUserPrincipal(UserDTO userDTO) {
         return new UserPrincipal(toUser(userService.getUserByEmail(userDTO.getEmail())), roleService.getRoleByUserId(userDTO.getId()));
     }
 
+    /**
+     * Activates a newly registered account using the UUID key embedded in the
+     * verification email link.
+     *
+     * @param key the activation key from the URL
+     * @return 200 OK with a message indicating whether the account was newly
+     *         verified or already verified
+     */
     @GetMapping("/verify/account/{key}")
     public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String key) {
         return ResponseEntity.ok(
@@ -143,6 +132,14 @@ public class UserController {
                         .build());
     }
 
+    /**
+     * Exchanges a valid refresh token for a new access token. Validates the
+     * Authorization header, extracts the subject, and returns a new
+     * access token alongside the same refresh token; otherwise returns 400.
+     *
+     * @param request the HTTP request, expected to carry "Authorization: Bearer &lt;refresh&gt;"
+     * @return 200 OK with the new access token, or 400 when the header/token is invalid
+     */
     @GetMapping("/refresh/token")
     public ResponseEntity<HttpResponse> sendNewRefreshToken(HttpServletRequest request) {
         if (isHeaderAndTokenValid(request)) {
@@ -168,6 +165,13 @@ public class UserController {
         }
     }
 
+    /**
+     * Returns true when the request carries a "Bearer " Authorization header
+     * whose token verifies and matches its subject.
+     *
+     * @param request the HTTP request to inspect
+     * @return true if the header is present, well-formed, and the token is valid
+     */
     private boolean isHeaderAndTokenValid(HttpServletRequest request) {
         return request.getHeader(AUTHORIZATION) != null
                 && request.getHeader(AUTHORIZATION).startsWith(TOKEN_PREFIX)
@@ -177,34 +181,16 @@ public class UserController {
     }
 
     /**
-     * Retrieves the authenticated user's profile information.
-     * <p>
-     * This endpoint is protected by Spring Security and requires a valid JWT token.
-     * The Authentication object is automatically injected by Spring Security's
-     * SecurityContextHolder, which is populated by CustomAuthFilter during request processing.
-     * <p>
-     * Flow:
-     * 1. Extracts user email from Authentication.getName() (set by TokenProvider)
-     * 2. Calls UserService.getUserByEmail() to fetch UserDTO from the database
-     * 3. Casts Authentication.getPrincipal() to UserPrincipal (created by TokenProvider)
-     * 4. Logs debug information about the authenticated user and their authorities
-     * 5. Returns UserDTO in HttpResponse wrapper
-     * <p>
-     * Integration points:
-     * - CustomAuthFilter: Validates JWT and sets Authentication in SecurityContext
-     * - TokenProvider: Creates UserPrincipal with User entity and permissions
-     * - UserService: Provides UserDTO via database lookup
-     * - UserPrincipal: Contains the full User entity and GrantedAuthority list
+     * Returns the current user's profile. Spring Security supplies the
+     * Authentication populated by CustomAuthFilter; the email comes from the
+     * token's subject and is used to look the user up.
      *
-     * @param authentication Spring Security Authentication object containing user details
-     * @return ResponseEntity with HttpResponse containing UserDTO and success message
+     * @param authentication the current Authentication injected by Spring Security
+     * @return 200 OK with the user as a DTO
      */
     @GetMapping("/profile")
     public ResponseEntity<HttpResponse> getProfile(Authentication authentication) {
         UserDTO userDTO = userService.getUserByEmail(authentication.getName());
-        //System.out.println(authentication.getPrincipal());
-        // info for the currently logged-in user.
-        System.out.println(authentication);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -215,6 +201,13 @@ public class UserController {
                         .build());
     }
 
+    /**
+     * Starts the password reset flow for the given email by generating a
+     * one-time reset URL via UserService.
+     *
+     * @param email the email requesting a reset
+     * @return 200 OK with a message advising the user to check their inbox
+     */
     @GetMapping("/resetpassword/{email}")
     public ResponseEntity<HttpResponse> resetPassword(@PathVariable("email") String email) {
         userService.resetPassword(email);
@@ -227,6 +220,13 @@ public class UserController {
                         .build());
     }
 
+    /**
+     * Resolves a password reset link to its user so the frontend can render
+     * the new-password form. Returns 200 OK if the link is still valid.
+     *
+     * @param key the UUID portion of the reset URL
+     * @return 200 OK with the user awaiting a new password
+     */
     @GetMapping("/verify/password/{key}")
     public ResponseEntity<HttpResponse> verifyPasswordURL(@PathVariable("key") String key) {
         UserDTO userDTO = userService.verifyPasswordKey(key);
@@ -240,6 +240,16 @@ public class UserController {
                         .build());
     }
 
+    /**
+     * Completes the password reset flow by setting a new password for the
+     * user identified by the reset key. Confirms the two passwords match
+     * before persisting.
+     *
+     * @param key             the UUID portion of the reset URL
+     * @param newPassword     the new password
+     * @param confirmPassword must equal newPassword
+     * @return 200 OK on success
+     */
     @PostMapping("/resetpassword/{key}/{newPassword}/{confirmPassword}")
     public ResponseEntity<HttpResponse> setNewPassword(@PathVariable("key") String key, @PathVariable("newPassword") String newPassword, @PathVariable("confirmPassword") String confirmPassword) {
         userService.setNewPassword(key, newPassword, confirmPassword);
@@ -252,10 +262,16 @@ public class UserController {
                         .build());
     }
 
+    /**
+     * Catch-all for requests that don't match any /user mapping. Returns a
+     * 400 with an HttpResponse describing the missing route.
+     *
+     * @param request the unmatched HTTP request
+     * @return 400 BAD_REQUEST with a generic explanation
+     */
     @RequestMapping("/error")
     public ResponseEntity<HttpResponse> errorHandling(HttpServletRequest request) {
         log.info(String.valueOf(request));
-        System.out.println(request.getRequestURI());
         return ResponseEntity.badRequest().body(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -265,66 +281,56 @@ public class UserController {
                         .build());
     }
 
-    // This method is the same as errorHandling, but it uses the Contrustor for the ResponseEntity instead, which some might say is much more flexible.
-/*    @RequestMapping("/error")
-    public ResponseEntity<HttpResponse> errorHandling1(HttpServletRequest request) {
-        log.info(String.valueOf(request));
-        System.out.println(request.getRequestURI());
-        return new ResponseEntity<>(HttpResponse.builder()
-                .timeStamp(now().toString())
-                .message("An unknown error has occurred. There is no mapping for a " + request.getMethod() + "request for this path on our server. Sorry! Please try something else.")
-                .status(BAD_REQUEST)
-                .statusCode(BAD_REQUEST.value())
-                .build(), NOT_FOUND);
-    }*/
-
     /**
-     * Authenticates a user and initiates the login process.
-     * Validates the login credentials using AuthenticationManager. If 2FA is enabled,
-     * sends a verification code. Otherwise, returns a successful login response.
-     * <p>
-     * The authentication flow:
-     * 1. AuthenticationManager.authenticate() receives a UsernamePasswordAuthenticationToken
-     * 2. It passes through the authentication provider chain (DaoAuthenticationProvider, etc.)
-     * 3. If successful, the user is authenticated
-     * 4. UserDTO is retrieved and checked for 2FA status
-     * 5. Either a verification code is sent (2FA enabled) or a direct login response (2FA disabled)
+     * Authenticates a user by email and password. When 2FA is enabled the
+     * response signals that a verification code was sent; otherwise it
+     * returns the user along with a fresh access and refresh token.
      *
-     * @param loginForm the login credentials containing email and password
-     * @return ResponseEntity with HttpResponse indicating either 2FA code sent or successful login
+     * @param loginForm validated email and password
+     * @return 200 OK with either a "code sent" message or login data
      */
     @PostMapping("/login")
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
-        // no longer needed UserDTO userDTO = userService.getUserByEmail(loginForm.getEmail());
         Authentication authentication = authenticate(loginForm.getEmail(), loginForm.getPassword());
         UserDTO userDTO = getAuthenticatedUser(authentication);
-        System.out.println(authentication);
-        System.out.println(((UserPrincipal) authentication.getPrincipal()).getUser());
         return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
     }
 
+    /**
+     * Delegates to the AuthenticationManager. Catches any failure, hands it
+     * to ExceptionUtils#processError so the client gets a JSON error, and
+     * rethrows as ApiException so the caller stops processing.
+     *
+     * @param email    the submitted email
+     * @param password the submitted password
+     * @return the resulting authenticated Authentication
+     */
     private Authentication authenticate(String email, String password) {
         try {
-            Authentication authentication = authenticationManager.authenticate(unauthenticated(email, password));
-            return authentication;
+            return authenticationManager.authenticate(unauthenticated(email, password));
         } catch (Exception e) {
             processError(request, response, e);
             throw new ApiException(e.getMessage());
         }
-
     }
 
+    /**
+     * Pulls the UserDTO out of an Authentication's principal (a UserPrincipal).
+     *
+     * @param authentication the Authentication produced by AuthenticationManager
+     * @return the authenticated user as a DTO
+     */
     private UserDTO getAuthenticatedUser(Authentication authentication) {
         return ((UserPrincipal) authentication.getPrincipal()).getUser();
     }
 
     /**
-     * Sends a 2FA verification code to the user via their registered phone number or email.
-     * This method is called when a user with 2FA enabled attempts to log in.
-     * The verification code must be validated before completing the authentication.
+     * Asks UserService to send a 2FA code and returns a 200 OK response
+     * informing the client a code is on the way. Used when the authenticated
+     * user has 2FA enabled.
      *
-     * @param userDTO the authenticated user (with 2FA enabled)
-     * @return ResponseEntity with HttpResponse indicating the 2FA code has been sent
+     * @param userDTO the user awaiting 2FA verification
+     * @return 200 OK with a "code sent" message
      */
     private ResponseEntity<HttpResponse> sendVerificationCode(UserDTO userDTO) {
         userService.sendVerificationCode(userDTO);
@@ -339,34 +345,12 @@ public class UserController {
     }
 
     /**
-     * Sends a successful login response to users without 2FA enabled.
-     * This method completes the authentication for users who don't have
-     * two-factor authentication enabled.
-     * <p>
-     * Response includes:
-     * - User DTO with profile information (password excluded)
-     * - Access token: JWT token valid for 30 minutes, used to authenticate subsequent requests
-     * - Refresh token: JWT token valid for 5 days, used to obtain a new access token when it expires
-     * <p>
-     * Token generation flow:
-     * 1. getUserPrincipal(userDTO) is called to create UserPrincipal with:
-     * - User entity (from database lookup by email)
-     * - Authorities (from user's role permissions)
-     * 2. Access token is created with:
-     * - Subject: user's email
-     * - Authorities claim: comma-separated permissions
-     * - Expiration: 30 minutes from now
-     * 3. Refresh token is created with:
-     * - Subject: user's email
-     * - No authorities claim (refresh tokens don't need permissions)
-     * - Expiration: 5 days from now
-     * <p>
-     * The tokens are returned to the frontend in the response data map,
-     * so the frontend can store them (typically in localStorage) and include
-     * them in Authorization headers for subsequent API requests.
+     * Builds the standard login success response: the user plus a 30-minute
+     * access token and a 5-day refresh token created from a freshly loaded
+     * UserPrincipal.
      *
      * @param userDTO the successfully authenticated user
-     * @return ResponseEntity with HttpResponse containing user data and JWT tokens
+     * @return 200 OK with user data and both tokens
      */
     private ResponseEntity<HttpResponse> sendResponse(UserDTO userDTO) {
         return ResponseEntity.ok(
@@ -380,4 +364,3 @@ public class UserController {
     }
 
 }
-
