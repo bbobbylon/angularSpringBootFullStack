@@ -20,7 +20,7 @@ import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 /**
  * Helpers shared by the security filter chain for serializing exceptions into
  * the application's HttpResponse JSON shape.
- *
+ * <p>
  * Used by CustomAuthFilter and the controller's authenticate() helper to turn
  * known auth/security exceptions (ApiException, DisabledException,
  * LockedException, BadCredentialsException) into a 400 response, and anything
@@ -30,7 +30,7 @@ import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 public class ExceptionUtils {
     /**
      * Writes a JSON error response derived from the given exception.
-     *
+     * <p>
      * Known auth-related exceptions (ApiException, DisabledException,
      * LockedException, BadCredentialsException) become a 400 carrying the
      * exception message; anything else becomes a 500 with a generic message
@@ -67,6 +67,7 @@ public class ExceptionUtils {
         HttpResponse httpResponse = HttpResponse.builder()
                 .timeStamp(now().toString())
                 .reason(message)
+                .devMessage(message)
                 .status(httpStatus)
                 .statusCode(httpStatus.value())
                 .path(request.getRequestURI())
