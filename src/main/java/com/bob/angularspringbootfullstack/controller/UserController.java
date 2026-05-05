@@ -23,7 +23,6 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
-import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
@@ -119,7 +118,7 @@ public class UserController {
      *
      * @param key the activation key from the URL
      * @return 200 OK with a message indicating whether the account was newly
-     *         verified or already verified
+     * verified or already verified
      */
     @GetMapping("/verify/account/{key}")
     public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String key) {
@@ -309,7 +308,8 @@ public class UserController {
         try {
             return authenticationManager.authenticate(unauthenticated(email, password));
         } catch (Exception e) {
-            processError(request, response, e);
+            // After running our front end, we are seeing that processError is preventing from the actual backend error message to show up on the front end error message (in the alert), so we have commented this out. The reason behind this is that the processError is writing the response to the HttpServletResponse, which is not compatible with our current front end error handling approach. By commenting this out, we allow the ApiException to be thrown and handled by our GlobalExceptionHandler, which will return a structured JSON response that our front end can easily parse and display the error message in an alert. If we were to keep processError, it would interfere with the normal flow of exception handling and prevent our front end from receiving the expected error response format.
+            // processError(request, response, e);
             throw new ApiException(e.getMessage());
         }
     }

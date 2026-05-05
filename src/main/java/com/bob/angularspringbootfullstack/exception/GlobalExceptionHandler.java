@@ -45,6 +45,7 @@ public class GlobalExceptionHandler {
         HttpResponse response = HttpResponse.builder()
                 .timeStamp(LocalTime.now().toString())
                 .reason(ex.getMessage())
+                .devMessage(ex.getMessage())
                 .status(HttpStatus.BAD_REQUEST)
                 .statusCode(HttpStatus.BAD_REQUEST.value())
                 .build();
