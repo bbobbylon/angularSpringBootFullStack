@@ -44,13 +44,17 @@ export class LoginComponent {
       }),
       startWith({
         dataState: DataState.LOADING,
-        isUsingMfa: false,
+        loginSuccess: false,
+        isUsingMfa: true,
+        phone: this.phoneSubject.value.substring(this.phoneSubject.value.length - 4),
       }),
       catchError((error: string) => {
         return of({
           dataState: DataState.ERROR,
           error,
-          isUsingMfa: false,
+          isUsingMfa: true,
+          loginSuccess: false,
+          phone: this.phoneSubject.value.substring(this.phoneSubject.value.length - 4),
         });
       }),
     );
@@ -90,6 +94,7 @@ export class LoginComponent {
           dataState: DataState.ERROR,
           error,
           isUsingMfa: false,
+          loginSuccess: false,
         });
       }),
     );

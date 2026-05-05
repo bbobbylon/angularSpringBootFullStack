@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
@@ -9,13 +9,13 @@ import { CustomHttpResponseInterface } from '../interface/customhttpresponse.int
   providedIn: 'root',
 })
 export class UserService {
+  private http = inject(HttpClient);
+  private readonly server: string = 'http://localhost:8080';
+
   verifyCode$ = (email: string, code: string): Observable<CustomHttpResponseInterface<Profile>> =>
     this.http
       .get<CustomHttpResponseInterface<Profile>>(`${this.server}/user/verify/code/${email}/${code}`)
       .pipe(tap(console.log), catchError(this.handleError));
-  private http = inject(HttpClient);
-
-  private readonly server: string = 'http://localhost:8080';
 
   login$ = (email: string, password: string): Observable<CustomHttpResponseInterface<Profile>> =>
     this.http
@@ -30,6 +30,9 @@ export class UserService {
     } else {
       if (error.error?.reason) {
         errorMessage = error.error.reason as string;
+        console.log(error.error);
+        console.log(errorMessage);
+        console.log(error);
       } else {
         errorMessage = `Server returned code: ${error.status}, error message is: ${error.message}`;
       }
