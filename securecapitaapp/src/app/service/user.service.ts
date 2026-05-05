@@ -22,6 +22,8 @@ export class UserService {
       .post<CustomHttpResponseInterface<Profile>>(`${this.server}/user/login`, { email, password })
       .pipe(tap(console.log), catchError(this.handleError));
 
+  profile$ = (): Observable<CustomHttpResponseInterface<Profile>> =>
+    this.http.get<CustomHttpResponseInterface<Profile>>(`${this.server}/user/profile`).pipe(tap(console.log), catchError(this.handleError));
   private handleError(error: HttpErrorResponse): Observable<never> {
     let errorMessage: string;
 
