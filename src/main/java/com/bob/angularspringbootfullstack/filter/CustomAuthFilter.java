@@ -25,21 +25,15 @@ import static org.apache.commons.lang3.StringUtils.EMPTY;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 
 /**
- * Custom authentication filter for JWT-based security.
- * <p>
- * Intercepts incoming HTTP requests and processes JWT tokens for authentication.
- * <ul>
- *   <li>Skips filtering for public routes (login, register, 2FA verification, actuator) and OPTIONS requests.</li>
- *   <li>Extracts and validates JWT from the Authorization header.</li>
- *   <li>If valid, sets the authentication in the Spring Security context using TokenProvider.</li>
- *   <li>If invalid or absent, clears the security context.</li>
- *   <li>Ensures the filter chain always continues, regardless of authentication outcome.</li>
- * </ul>
- * <b>Interactions:</b>
- * <ul>
- *   <li><b>TokenProvider:</b> Used for token validation, extracting authorities, and building Authentication objects.</li>
- *   <li><b>Spring Security:</b> Sets or clears the SecurityContextHolder for downstream filters/controllers.</li>
- * </ul>
+ * Per-request JWT authentication filter.
+ *
+ * Skips public routes and OPTIONS preflights, otherwise pulls the bearer token
+ * off the Authorization header and asks TokenProvider to validate it. When the
+ * token has authorities (an access token) the filter installs an Authentication
+ * in the SecurityContext; when it has none (a refresh token, only valid at
+ * /user/refresh/token) the context is cleared so it can't be used to satisfy
+ * authority checks. The filter chain always continues so SecurityConfig's
+ * authorization rules and entry point can produce the right response.
  */
 @Component
 @RequiredArgsConstructor
@@ -62,8 +56,17 @@ public class CustomAuthFilter extends OncePerRequestFilter {
     private final TokenProvider tokenProvider;
 
     /**
-     * Determines if the filter should be skipped for the current request.
-     * Skips if the Authorization header is missing/invalid, method is OPTIONS, or URI is public.
+     * Determines whether this filter should run for the current request.
+     *
+     * <p>The filter is skipped when:
+     * <ul>
+     *   <li>There is no {@code Authorization: Bearer ...} header</li>
+     *   <li>The request is an {@code OPTIONS} preflight</li>
+     *   <li>The request URI is one of {@link #PUBLIC_ROUTES}</li>
+     * </ul>
+     *
+     * @param request current HTTP request
+     * @return {@code true} to skip filtering; {@code false} to run {@link #doFilterInternal}
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
@@ -72,153 +75,23 @@ public class CustomAuthFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Processes JWT authentication for each HTTP request with intelligent token type detection.
-     * <p>
-     * <b>Purpose:</b><br/>
-     * This is the core authentication filter that intercepts every HTTP request and decides whether
-     * to authenticate it based on the JWT token in the Authorization header. It extracts the token,
-     * validates it, and if valid, sets an Authentication in Spring Security's SecurityContext so
-     * downstream authorization rules can check permissions.
-     * <p>
-     * <b>High-Level Flow:</b>
-     * <ol>
-     *   <li>Check if filter should run (skip for public routes, without Authorization header, OPTIONS)</li>
-     *   <li>Extract email and token from request</li>
-     *   <li>Validate token (signature, expiration, issuer, audience)</li>
-     *   <li>Extract authorities/permissions from token</li>
-     *   <li><b>NEW:</b> Check if token has authorities (access token) or is missing them (refresh token)</li>
-     *   <li>If has authorities → set Authentication in SecurityContext (request is now authenticated)</li>
-     *   <li>If no authorities → clear SecurityContext (request is unauthenticated, avoid refresh token bypass)</li>
-     *   <li>Continue filter chain (even if auth failed)</li>
-     * </ol>
-     * <p>
-     * <b>The Authorities Check (NEW KEY LOGIC):</b>
-     * <p>
-     * This filter now has a critical responsibility to distinguish between two token types:
-     * <pre>
-     * ACCESS TOKEN (with authorities):
-     *   - Example authorities: ["READ:USER", "UPDATE:USER", "DELETE:USER"]
-     *   - Contains permissions the user has
-     *   - Should authenticate the request (set Authentication in SecurityContext)
-     *   - Valid for 30 minutes
-     *   - Used for actual API requests to protected endpoints
+     * Validates the bearer token and, when it carries authorities, installs an
+     * Authentication in the SecurityContext for the rest of the chain.
      *
-     * REFRESH TOKEN (NO authorities):
-     *   - No "authorities" claim in the token
-     *   - Purpose: request a new access token from /user/refresh/token endpoint
-     *   - Should NOT authenticate the request for other endpoints
-     *   - Valid for 5 days
-     *   - If used incorrectly on other endpoints, this filter will refuse to authenticate
-     * </pre>
-     * <p>
-     * <b>Why this check is critical:</b>
-     * <ul>
-     *   <li>Security: Prevents refresh tokens from being misused to access protected endpoints</li>
-     *   <li>Intended behavior: Refresh tokens can only call /user/refresh/token (whitelisted)</li>
-     *   <li>If refresh token sent to /user/profile (protected): filter won't set Authentication → 401</li>
-     *   <li>If access token sent to /user/profile (protected): filter sets Authentication → request proceeds</li>
-     * </ul>
-     * <p>
-     * <b>Example Scenarios:</b>
-     * <p>
-     * <b>Scenario 1: Client sends valid ACCESS token to /user/profile</b>
-     * <pre>
-     * 1. Request: GET /user/profile -H "Authorization: Bearer eyJhbGci...access_token..."
-     * 2. Filter extracts token and email from header
-     * 3. Token is valid (signature, expiration, issuer match)
-     * 4. Extract authorities: ["READ:USER", "UPDATE:USER"]
-     * 5. Authorities are NOT empty
-     * 6. Create Authentication object with email + authorities
-     * 7. Set Authentication in SecurityContextHolder
-     * 8. Continue filter chain → controller receives authenticated request
-     * 9. Controller returns user profile
-     * Result: ✅ 200 OK with user data
-     * </pre>
-     * <p>
-     * <b>Scenario 2: Client sends valid REFRESH token to /user/profile</b>
-     * <pre>
-     * 1. Request: GET /user/profile -H "Authorization: Bearer eyJhbGci...refresh_token..."
-     * 2. Filter extracts token and email from header
-     * 3. Token is valid (signature, expiration, issuer match)
-     * 4. Extract authorities: [] (empty array; refresh tokens don't have authorities)
-     * 5. Authorities ARE empty
-     * 6. Clear SecurityContextHolder (do NOT set Authentication)
-     * 7. Continue filter chain → controller sees no Authentication
-     * 8. SecurityConfig rule .anyRequest().authenticated() kicks in
-     * 9. CustomAuthenticationEntryPoint returns 401 Unauthorized
-     * Result: ❌ 401 Unauthorized (user must use access token or refresh to get one)
-     * </pre>
-     * <p>
-     * <b>Scenario 3: Client sends valid REFRESH token to /user/refresh/token</b>
-     * <pre>
-     * 1. Request: GET /user/refresh/token -H "Authorization: Bearer eyJhbGci...refresh_token..."
-     * 2. CustomAuthFilter.shouldNotFilter() checks if route is public
-     * 3. "/user/refresh/token" is in PUBLIC_ROUTES → filter is SKIPPED (shouldNotFilter returns true)
-     * 4. Request goes directly to UserController.sendNewRefreshToken()
-     * 5. Controller calls tokenProvider.getSubject(refreshToken, request)
-     * 6. Token is valid (signature, expiration, no authorities required)
-     * 7. Returns email from refresh token
-     * 8. Controller creates new access token
-     * 9. Returns access token to client
-     * Result: ✅ 200 OK with new access token (refresh successful)
-     * </pre>
-     * <p>
-     * <b>Scenario 4: Client sends MALFORMED token to any endpoint</b>
-     * <pre>
-     * 1. Request: GET /user/profile -H "Authorization: Bearer corrupted.data.here"
-     * 2. Filter extracts token and email from header
-     * 3. tokenProvider.isTokenValid() calls tokenProvider.getSubject() to extract email
-     * 4. JWTDecodeException thrown (cannot decode as valid Base64)
-     * 5. Caught by TokenProvider.getSubject() and mapped to BadCredentialsException
-     * 6. BadCredentialsException propagates back to filter's catch block
-     * 7. ExceptionUtils.processError() called
-     * 8. BadCredentialsException maps to BAD_REQUEST (400)
-     * 9. Returns clean JSON: {"reason": "Could not decode the token..."}
-     * Result: ❌ 400 Bad Request (clear error message sent to client)
-     * </pre>
-     * <p>
-     * <b>SecurityContext Behavior:</b>
-     * <ul>
-     *   <li><b>If Authentication is set:</b> Authorization rules can check authorities via getAuthorities()</li>
-     *   <li><b>If Authentication is NOT set:</b> Request is treated as unauthenticated; public endpoints allowed, protected endpoints return 401</li>
-     *   <li><b>clearContext():</b> Used when token is invalid OR when token has no authorities (refresh token on non-refresh endpoint)</li>
-     * </ul>
-     * <p>
-     * <b>Why the Filter Always Continues (filterChain.doFilter):</b>
-     * <ul>
-     *   <li>Even if authentication fails, we must continue the filter chain</li>
-     *   <li>Other filters/controllers may handle unauthenticated requests (e.g., public endpoints)</li>
-     *   <li>SecurityConfig rules will enforce whether unauthenticated requests are allowed</li>
-     *   <li>If not allowed, CustomAuthenticationEntryPoint will return 401</li>
-     * </ul>
-     * <p>
-     * <b>Integration with SecurityFilterChain:</b>
-     * <ul>
-     *   <li>This filter runs BEFORE UsernamePasswordAuthenticationFilter</li>
-     *   <li>It sets Authentication in SecurityContextHolder.getContext()</li>
-     *   <li>Downstream authorization rules in SecurityConfig.securityFilterChain() use this Authentication</li>
-     * </ul>
-     * <p>
-     * <b>Error Handling:</b>
-     * <ul>
-     *   <li>Any exception during processing is caught and passed to ExceptionUtils.processError()</li>
-     *   <li>ExceptionUtils maps exceptions to HttpStatus and serializes error JSON response</li>
-     *   <li>Known exceptions (TokenExpiredException, BadCredentialsException, ApiException) → 400/401</li>
-     *   <li>Unknown exceptions → 500 Internal Server Error</li>
-     * </ul>
+     * Reads email and token via {@link #getRequestValues(HttpServletRequest)},
+     * checks validity with TokenProvider, and pulls authorities from the
+     * token. An empty authorities list means a refresh token was sent to a
+     * non-refresh route, so the SecurityContext is cleared instead of
+     * authenticated; the SecurityConfig rules then return 401. Any exception
+     * during processing is funneled through ExceptionUtils#processError so
+     * the client gets a JSON error matching HttpResponse. The filter chain is
+     * always continued so downstream handlers can run.
      *
-     * @param request     the HTTP request being processed
-     * @param response    the HTTP response being built
-     * @param filterChain the filter chain to continue processing
-     * @throws ServletException if request/response processing fails
-     * @throws IOException      if I/O error occurs during processing
-     *
-     * @see CustomAuthFilter#shouldNotFilter(HttpServletRequest) for public route logic
-     * @see TokenProvider#isTokenValid(String, String) for token validation
-     * @see TokenProvider#getAuthorities(String) for authority extraction
-     * @see TokenProvider#getSubject(String, HttpServletRequest) for email extraction
-     * @see TokenProvider#getAuthentication(String, List, HttpServletRequest) for Authentication creation
-     * @see ExceptionUtils#processError(HttpServletRequest, HttpServletResponse, Exception) for error handling
+     * @param request     the current HTTP request
+     * @param response    the current HTTP response
+     * @param filterChain the rest of the filter chain
+     * @throws ServletException if a downstream filter throws
+     * @throws IOException      if writing to the response fails
      */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
@@ -227,7 +100,6 @@ public class CustomAuthFilter extends OncePerRequestFilter {
             String token = getToken(request);
             if (tokenProvider.isTokenValid(values.get(EMAIL_KEY), token)) {
                 List<GrantedAuthority> authorities = tokenProvider.getAuthorities(values.get(TOKEN_KEY));
-                // ...existing code...
                 if (authorities == null || authorities.isEmpty()) {
                     // do not authenticate with a token that lacks authorities; leave security context cleared
                     SecurityContextHolder.clearContext();

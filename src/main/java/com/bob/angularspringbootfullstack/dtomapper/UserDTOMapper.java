@@ -34,7 +34,16 @@ public class UserDTOMapper {
         return userDTO;
     }
 
-    // method overloading taking place here. This is for taking the user's role information along with the user.
+    /**
+     * Converts a {@link User} plus its {@link Role} into a {@link UserDTO}.
+     *
+     * <p>In addition to copying the basic user properties, this overload flattens role information
+     * onto the DTO via {@code roleName} and {@code permissions} fields.
+     *
+     * @param user the user entity
+     * @param role the user's role (source of role name and permission string)
+     * @return a DTO containing user profile data plus role/permission metadata
+     */
     public static UserDTO fromUser(User user, Role role) {
         UserDTO userDTO = new UserDTO();
         BeanUtils.copyProperties(user, userDTO);

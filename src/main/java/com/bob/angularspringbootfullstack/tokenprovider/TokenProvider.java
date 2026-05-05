@@ -30,16 +30,16 @@ import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
 
 /**
- * In this class we are generating the tokens for the user. The following methods are used to generate the tokens:
- * - createAccessToken: generates an access token for the user
- * - createRefreshToken: generates a refresh token for the user
- * - getClaimsFromUser: gets the claims from the userPrincipal, which is the user that is logged in, then we are mapping the authorities to a string array, and finally we are returning the array
- * we use UserPrincipal because it has the user and the permissions that we need to generate the token. We are using the JWT library to generate the tokens, and we are using the HMAC512 algorithm to sign the tokens with a secret key. The secret key is stored in the application.properties file and is injected into this class using the @Value annotation. The access token expires in 30 minutes, and the refresh token expires in 5 days.
- * <p>
- * This token provider will be able to be injected and used to create the access and refresh tokens for the user.
- **/
+ * Issues and verifies JWTs for authenticated users.
+ *
+ * Access tokens carry the user's authorities and expire in 30 minutes; refresh
+ * tokens carry only the subject (email) and expire in 5 days. Both are signed
+ * with HMAC512 using the secret from application properties. Verification
+ * intentionally does not require the "authorities" claim so refresh tokens
+ * remain valid; CustomAuthFilter then refuses to authenticate any token that
+ * lacks authorities.
+ */
 @Component
-//@RequiredArgsConstructor is for our dependency injection, it will generate a constructor with the required arguments, which in this case is the UserService. This allows us to inject the UserService into this class without having to write a constructor ourselves.
 @RequiredArgsConstructor
 public class TokenProvider {
     private static final String BOBBYLON_LLC = "BOBBYLON_LLC";
@@ -72,15 +72,12 @@ public class TokenProvider {
                 .sign(HMAC512(secret.getBytes()));
     }
 
-    // this method is for getting the AUTHORITIES from the userPrincipal, which is the user that is logged in, then we are mapping the authorities to a string array, and finally we are returning the array. This will allow us to get the permissions of the user.
-
     /**
-     * Extracts the authorities (roles/permissions) from the UserPrincipal
-     * and returns them as a String array. This is used to embed the user's
-     * permissions into the JWT token as a claim.
+     * Flattens the principal's authorities into a String array suitable for
+     * embedding as the "authorities" JWT claim.
      *
-     * @param userPrincipal an authenticated user
-     * @return an array of authority names (e.g., ROLE_USER, ROLE_ADMIN)
+     * @param userPrincipal the authenticated user
+     * @return the authority names (e.g. "READ:USER")
      */
     private String[] getClaimsFromUser(UserPrincipal userPrincipal) {
         return userPrincipal.getAuthorities().stream()
@@ -122,76 +119,16 @@ public class TokenProvider {
     }
 
     /**
-     * Retrieves the "authorities" claim from a JWT token safely, handling tokens that don't have it.
-     * <p>
-     * <b>Purpose:</b><br/>
-     * Extracts the authorities (permissions/roles) from a JWT token's claims. This is called when
-     * CustomAuthFilter processes a request, so it needs to be resilient to different token types.
-     * <p>
-     * <b>Why Safe Handling is Critical:</b>
-     * <ul>
-     *   <li><b>Access Tokens:</b> Always include "authorities" claim with user's permissions</li>
-     *   <li><b>Refresh Tokens:</b> Intentionally DO NOT include authorities (they don't need permissions)</li>
-     *   <li><b>Old Tokens:</b> Legacy tokens from different systems may not have the claim</li>
-     * </ul>
-     * <p>
-     * This method must not throw an exception when the "authorities" claim is missing, because
-     * refresh tokens are valid and need processing even though they lack that claim.
-     * <p>
-     * <b>Implementation Details:</b>
-     * <ol>
-     *   <li>Verify token signature, issuer, and expiration (using getJWTVerifier())</li>
-     *   <li>Extract the decoded JWT payload</li>
-     *   <li>Get the "authorities" claim from the payload</li>
-     *   <li>If claim is missing (null) or marked as null: return empty String array</li>
-     *   <li>Otherwise: convert Claim to String[] and return it (or empty array if conversion fails)</li>
-     * </ol>
-     * <p>
-     * <b>Return Value Semantics:</b>
-     * <ul>
-     *   <li><b>Non-empty array:</b> Token has authorities; calling code (filter) will create Authentication</li>
-     *   <li><b>Empty array:</b> Token has no authorities (refresh token or other); calling code must handle this</li>
-     * </ul>
-     * <p>
-     * <b>Usage in CustomAuthFilter:</b>
-     * <pre>
-     * List&lt;GrantedAuthority&gt; authorities = tokenProvider.getAuthorities(token);
-     * // getAuthorities() calls this method, then converts String[] to List&lt;GrantedAuthority&gt;
+     * Verifies the token and returns its "authorities" claim as a String array.
      *
-     * // Filter checks: if authorities is empty, this is likely a refresh token
-     * if (authorities == null || authorities.isEmpty()) {
-     *     SecurityContextHolder.clearContext();  // Do NOT authenticate
-     * } else {
-     *     Authentication auth = tokenProvider.getAuthentication(email, authorities, request);
-     *     SecurityContextHolder.getContext().setAuthentication(auth);  // Authenticate
-     * }
-     * </pre>
-     * <p>
-     * <b>Example Outputs:</b>
-     * <ul>
-     *   <li><b>Access Token with authorities:</b><br/>
-     *       Input: JWT with "authorities": ["READ:USER", "UPDATE:USER", "DELETE:USER"]<br/>
-     *       Output: ["READ:USER", "UPDATE:USER", "DELETE:USER"]
-     *   </li>
-     *   <li><b>Refresh Token (no authorities):</b><br/>
-     *       Input: JWT with no "authorities" claim (or claim is null)<br/>
-     *       Output: [] (empty array)
-     *   </li>
-     * </ul>
-     * <p>
-     * <b>Why This Method Changed:</b>
-     * <ul>
-     *   <li><b>Before (old code):</b> Called .asArray(String.class) directly → throws exception if claim missing</li>
-     *   <li><b>After (new code):</b> Check if claim is null/missing first → return empty array gracefully</li>
-     *   <li><b>Trigger:</b> Refresh token implementation; refresh tokens must be verifiable without authorities</li>
-     * </ul>
+     * Returns an empty array when the claim is missing or null so refresh
+     * tokens (which intentionally omit authorities) verify without throwing;
+     * the caller decides whether to authenticate based on the array being
+     * non-empty.
      *
-     * @param token the JWT token string to extract authorities from (already verified by caller)
-     * @return an array of authority/permission strings (e.g., ["READ:USER", "UPDATE:USER"])
-     *         Returns empty String[0] if the "authorities" claim is missing or null
-     * @throws JWTVerificationException if token signature is invalid or other verification fails
-     * @see #getJWTVerifier() for verification logic
-     * @see TokenProvider#getAuthorities(String) for conversion of String[] to List&lt;GrantedAuthority&gt;
+     * @param token a JWT
+     * @return the authority strings, or an empty array if the claim is absent
+     * @throws JWTVerificationException if signature, issuer, or expiration verification fails
      */
     private String[] getClaimsFromToken(String token) {
         JWTVerifier verifier = getJWTVerifier();
@@ -224,15 +161,15 @@ public class TokenProvider {
         return verifier;
     }
 
-    // this is for building the filter of our Spring Security request flow
-
     /**
-     * Creates an authentication token for Spring Security based on the provided email, authorities, and HTTP request.
+     * Builds an authenticated UsernamePasswordAuthenticationToken for the
+     * SecurityContext, using the user loaded by email as the principal and
+     * stamping web details (IP, session id) onto it from the request.
      *
-     * @param email       the user's email
-     * @param authorities the user's granted authorities
-     * @param request     the HTTP request
-     * @return an Authentication object for Spring Security
+     * @param email       the user's email (subject extracted from the token)
+     * @param authorities authorities pulled from the token
+     * @param request     the current HTTP request, used to attach WebAuthenticationDetails
+     * @return a fully populated Authentication ready to place in the SecurityContext
      */
     public Authentication getAuthentication(String email, List<GrantedAuthority> authorities, HttpServletRequest request) {
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userService.getUserByEmail(email), null, authorities);
@@ -241,26 +178,14 @@ public class TokenProvider {
     }
 
     /**
-     * Validates whether a JWT token is valid for the given email address.
-     * <p>
-     * A token is considered valid if:
-     * 1. The email is not empty (StringUtils.isNotEmpty)
-     * 2. The token has not expired (checked via isTokenExpired())
-     * <p>
-     * This method is typically called before attempting to extract user information from a token.
-     * <p>
-     * Flow:
-     * 1. Check if email is provided (not null, not empty)
-     * 2. Create JWTVerifier with secret key
-     * 3. Verify token signature using verifier
-     * 4. Extract expiration date from verified token
-     * 5. Compare expiration date with current time
-     * 6. Return true if email valid AND token not expired
+     * Returns true when the email is non-empty and the token verifies and is
+     * not past its expiration. Used by CustomAuthFilter as a gate before
+     * extracting authorities and authenticating the request.
      *
-     * @param email the user's email to validate against token subject
-     * @param token the JWT token string to validate
-     * @return true if token is valid and not expired, false otherwise
-     * @throws JWTVerificationException if token signature is invalid or secret key is wrong
+     * @param email the email previously extracted via {@link #getSubject(String, HttpServletRequest)}
+     * @param token the raw JWT
+     * @return true if both checks pass
+     * @throws JWTVerificationException if token verification fails
      */
     public boolean isTokenValid(String email, String token) {
         JWTVerifier verifier = getJWTVerifier();
@@ -268,28 +193,12 @@ public class TokenProvider {
     }
 
     /**
-     * Checks if a JWT token has expired.
-     * <p>
-     * Extracts the expiration date from the token payload and compares it
-     * with the current system time. A token is considered expired if its
-     * expiration time is in the past.
-     * <p>
-     * How JWT expiration works:
-     * 1. Token contains "exp" claim: Unix timestamp of expiration
-     * 2. Example: exp = 1713247333 (April 16, 2024 at 10:22:13 UTC)
-     * 3. Current time: 1713247400 (April 16, 2024 at 10:23:20 UTC)
-     * 4. Current time > expiration → Token is expired
-     * <p>
-     * Internal process:
-     * 1. verifier.verify(token) validates signature and returns DecodedJWT
-     * 2. getExpiresAt() extracts the "exp" claim as a Date object
-     * 3. expiration.before(new Date()) checks if expiration is before now
-     * 4. Returns true if token is in the past (expired)
+     * Verifies the token and returns true when its "exp" claim is before now.
      *
-     * @param verifier the JWTVerifier instance with secret key and issuer configured
-     * @param token    the JWT token string to check for expiration
-     * @return true if token has expired (expiration time is before current time), false if still valid
-     * @throws JWTVerificationException if token signature is invalid
+     * @param verifier the configured JWTVerifier
+     * @param token    the raw JWT
+     * @return true if the token is past its expiration
+     * @throws JWTVerificationException if verification fails
      */
     private boolean isTokenExpired(JWTVerifier verifier, String token) {
         Date expiration = verifier.verify(token).getExpiresAt();
@@ -297,132 +206,24 @@ public class TokenProvider {
     }
 
     /**
-     * Extracts the subject (username/email) from a JWT token with comprehensive error handling.
-     * <p>
-     * <b>Purpose:</b><br/>
-     * The subject claim contains the user's email/username and is used to identify which user the token
-     * belongs to. This is called after authentication to get the user's identifier for database lookups,
-     * logging, refresh token processing, etc.
-     * <p>
-     * <b>Key Responsibilities:</b>
-     * <ul>
-     *   <li>Verify JWT token signature and claims (issuer, audience, expiration)</li>
-     *   <li>Extract and return the "sub" (subject/email) claim from valid tokens</li>
-     *   <li>Handle various failure modes (decode errors, expired, invalid signature, etc.)</li>
-     *   <li>Store error details in request attributes for downstream exception handlers</li>
-     *   <li>Throw appropriate exceptions for each error type (BadCredentialsException, ApiException, etc.)</li>
-     * </ul>
-     * <p>
-     * <b>Why This Method is Critical:</b>
-     * <ul>
-     *   <li><b>Access Token Flow:</b> CustomAuthFilter calls this during authentication to extract the user's email</li>
-     *   <li><b>Refresh Token Flow:</b> UserController.sendNewRefreshToken() calls this to extract email for token refresh</li>
-     *   <li><b>Error Reporting:</b> Catches low-level JWT library exceptions and translates them to application exceptions</li>
-     *   <li><b>Security:</b> Validates token signature prevents replay and tampering attacks</li>
-     * </ul>
-     * <p>
-     * <b>Exception Handling Strategy (Detailed):</b>
-     * <p>
-     * This method catches 5 categories of exceptions and handles each appropriately:
-     * <p>
-     * <b>1. TokenExpiredException (401 Unauthorized):</b>
-     * <pre>
-     * - Thrown: Token.exp timestamp is before current time
-     * - Example: User's access token from 2 hours ago (exp: 30 min)
-     * - Action: Set request attribute "expiredMessage" and re-throw as TokenExpiredException
-     * - Client sees: 401 {"reason": "Token has expired"}
-     * - Frontend action: Call /user/refresh/token with refresh token to get new access token
-     * </pre>
-     * <p>
-     * <b>2. InvalidClaimException (401 Unauthorized):</b>
-     * <pre>
-     * - Thrown: A claim doesn't match expected value
-     * - Examples: Issuer != "BOBBYLON_LLC", Audience != "BOBS_MANAGEMENT"
-     * - Action: Set request attribute "invalidClaim" and re-throw as InvalidClaimException
-     * - Client sees: 401 {"reason": "Invalid claim"}
-     * - Frontend action: User likely tampered with token; force redirect to login
-     * </pre>
-     * <p>
-     * <b>3. JWTDecodeException / IllegalArgumentException (400 Bad Request):</b>
-     * <pre>
-     * - Thrown: Token cannot be decoded as Base64 (malformed JWT)
-     * - Examples: Token missing dots, invalid Base64 characters, corrupted data
-     * - Action: Map to BadCredentialsException with clear message
-     * - Client sees: 400 {"reason": "Could not decode the token. The input is not a valid Base64-encoded JWT."}
-     * - Frontend action: User provided invalid token; prompt for login again
-     * - NOTE: This is NEW behavior (as of refresh token implementation). Previously this error bubbled up
-     *         as a garbled JSON message from the JWT library. Now it's caught and translated.
-     * </pre>
-     * <p>
-     * <b>4. Other JWTVerificationException (400 Bad Request):</b>
-     * <pre>
-     * - Thrown: Any other verification failure (invalid signature, etc.)
-     * - Action: Map to ApiException with "Invalid token" message
-     * - Client sees: 400 {"reason": "Invalid token. [library message]"}
-     * - Frontend action: Treat as invalid token; prompt for login
-     * </pre>
-     * <p>
-     * <b>5. Any other exception (not mapped above):</b>
-     * <pre>
-     * - Action: NOT caught here; bubbles to global exception handler
-     * - Client sees: 500 Internal Server Error (serialized by ExceptionUtils)
-     * </pre>
-     * <p>
-     * <b>Usage Flows:</b>
-     * <p>
-     * <b>Scenario A: Access Token (Normal Request)</b>
-     * <pre>
-     * 1. Client sends: GET /user/profile -H "Authorization: Bearer eyJhbGci..." (access token, valid 30 min)
-     * 2. CustomAuthFilter.doFilterInternal() calls: tokenProvider.getSubject(token, request)
-     * 3. Token is valid → returns "bob@example.com"
-     * 4. Filter looks up user → sets Authentication in SecurityContext
-     * 5. Controller receives authenticated request, returns user profile
-     * </pre>
-     * <p>
-     * <b>Scenario B: Refresh Token (Token Refresh)</b>
-     * <pre>
-     * 1. Client sends: GET /user/refresh/token -H "Authorization: Bearer eyJhbGci..." (refresh token, valid 5 days)
-     * 2. UserController.sendNewRefreshToken() calls: tokenProvider.getSubject(refreshToken, request)
-     * 3. Refresh token verification:
-     *    - No "authorities" claim present (expected; refresh tokens don't have it)
-     *    - Signature valid, issuer matches, not expired → returns "bob@example.com"
-     * 4. Controller gets user, creates new access token, returns it
-     * 5. Client stores new access token, uses it for subsequent requests
-     * </pre>
-     * <p>
-     * <b>Scenario C: Malformed/Corrupted Token</b>
-     * <pre>
-     * 1. Client sends: GET /user/profile -H "Authorization: Bearer corrupted.data.here"
-     * 2. CustomAuthFilter.doFilterInternal() calls: tokenProvider.getSubject(token, request)
-     * 3. JWTDecodeException thrown (cannot parse as valid Base64 JWT)
-     * 4. Caught and mapped to BadCredentialsException("Could not decode the token...")
-     * 5. Re-thrown → caught by ExceptionUtils → returns 400 Bad Request with clean JSON
-     * 6. Client sees: {"reason": "Could not decode the token. The input is not a valid Base64-encoded JWT."}
-     * </pre>
-     * <p>
-     * <b>Request Attributes Set (for downstream handlers):</b>
-     * <ul>
-     *   <li><b>expiredMessage:</b> Set when token is expired (TokenExpiredException case)</li>
-     *   <li><b>invalidClaim:</b> Set when claim validation fails (InvalidClaimException case)</li>
-     *   <li><b>invalidToken:</b> Set when token cannot be decoded or verified (new cases)</li>
-     * </ul>
-     * These attributes are used by exception handlers to provide context in error responses.
-     * <p>
-     * <b>Security Notes:</b>
-     * <ul>
-     *   <li>This method does NOT log the token itself (tokens are sensitive/secrets)</li>
-     *   <li>Low-level exception messages from JWT library are stored in request attributes for server-side logs only</li>
-     *   <li>Client-facing error messages are generic and do not expose internal implementation details</li>
-     * </ul>
+     * Verifies the token and returns its subject (the user's email).
      *
-     * @param token   the JWT token string to extract subject from (typically from "Authorization: Bearer <token>" header)
-     * @param request the HTTP servlet request for storing error details and context
-     * @return the subject (username/email) from the verified token (e.g., "bob@example.com")
-     * @throws TokenExpiredException    if token.exp < current time (catch in filter and return 401)
-     * @throws InvalidClaimException    if issuer/audience don't match (catch in filter and return 401)
-     * @throws BadCredentialsException  if token cannot be decoded as Base64 (catch in ExceptionUtils and return 400)
-     * @throws ApiException             if any other verification failure (catch in ExceptionUtils and return 400)
-     * @throws JWTVerificationException (parent class) any verification issue not explicitly handled
+     * Catches the JWT library's failure modes and remaps them so callers see
+     * exceptions with consistent semantics: TokenExpiredException and
+     * InvalidClaimException are rethrown as-is (the global handler maps them
+     * to 401), JWTDecodeException/IllegalArgumentException become a
+     * BadCredentialsException with a client-safe message ("Could not decode
+     * the token..."), and any other verification failure becomes an
+     * ApiException. The original library message is stashed on the request
+     * attributes "expiredMessage", "invalidClaim", or "invalidToken" for
+     * server-side logging.
+     *
+     * @param token   the raw JWT
+     * @param request the current request, used to stash error context
+     * @return the subject claim (the user's email)
+     * @throws TokenExpiredException    if the token is expired
+     * @throws InvalidClaimException    if a required claim doesn't match
+     * @throws JWTVerificationException for other verification failures
      */
     public String getSubject(String token, HttpServletRequest request) throws JWTVerificationException {
         try {

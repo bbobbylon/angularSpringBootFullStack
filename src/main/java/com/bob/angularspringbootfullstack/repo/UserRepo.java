@@ -77,13 +77,44 @@ public interface UserRepo<T extends User> {
      */
     void sendVerificationCode(UserDTO userDTO);
 
+    /**
+     * Verifies a user's 2FA code.
+     *
+     * @param email user's email
+     * @param code  verification code
+     * @return the user if the code is valid and not expired
+     */
     User verifyCode(String email, String code);
 
+    /**
+     * Initiates password reset for the given email.
+     *
+     * @param email email address of the user
+     */
     void resetPassword(String email);
 
+    /**
+     * Verifies a password reset URL key and returns the associated user.
+     *
+     * @param key URL key portion (UUID) from the reset link
+     * @return the user associated with the key
+     */
     T verifyPasswordKey(String key);
 
+    /**
+     * Updates a user's password using a valid password reset key.
+     *
+     * @param key             URL key portion (UUID) from the reset link
+     * @param newPassword     new password
+     * @param confirmPassword must match {@code newPassword}
+     */
     void setNewPassword(String key, String newPassword, String confirmPassword);
 
+    /**
+     * Verifies an account verification key and enables the account.
+     *
+     * @param key URL key portion (UUID) from the account verification link
+     * @return the verified user
+     */
     T verifyAccountKey(String key);
 }

@@ -41,12 +41,24 @@ import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
 import static org.apache.commons.lang3.time.DateFormatUtils.format;
 import static org.apache.commons.lang3.time.DateUtils.addDays;
 
-// here the actual logic/ db queries will be implemented.
+/**
+ * JDBC-based {@link UserRepo} implementation.
+ *
+ * <p>Responsibilities:
+ * <ul>
+ *   <li>User creation (including default role assignment)</li>
+ *   <li>Authentication support via {@link UserDetailsService#loadUserByUsername(String)}</li>
+ *   <li>2FA code generation/verification</li>
+ *   <li>Password reset and account verification URL workflows</li>
+ * </ul>
+ */
 @Repository
 @RequiredArgsConstructor
 @Slf4j
 public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
-    //standard MySQL date format
+    /**
+     * Standard MySQL-compatible timestamp format used when persisting expiration timestamps.
+     */
     private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
     // here we are injecting some BEANS
     private final NamedParameterJdbcTemplate jdbcTemplate;
@@ -137,12 +149,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Retrieves an unimplemented paginated list of users.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns an empty collection.
      *
-     * @param page     the page number to retrieve
-     * @param pageSize the number of users per page
-     * @return an empty collection (not yet implemented)
+     * @param page     0-indexed page number
+     * @param pageSize page size
+     * @return an empty list
      */
     @Override
     public Collection<User> list(int page, int pageSize) {
@@ -150,11 +161,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Retrieves an unimplemented user by ID.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns null. Use {@link #getUserByEmail(String)}
+     * for the lookup the application currently performs.
      *
-     * @param id the user ID to retrieve
-     * @return null (not yet implemented)
+     * @param id the user id
+     * @return null
      */
     @Override
     public User get(Long id) {
@@ -162,12 +173,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Updates an unimplemented user record.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns null.
      *
-     * @param id   the ID of the user to update
-     * @param data the updated user data
-     * @return null (not yet implemented)
+     * @param id   the id of the user to update
+     * @param data the new user data
+     * @return null
      */
     @Override
     public User update(Long id, User data) {
@@ -175,10 +185,9 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Deletes an unimplemented user record.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; no-op.
      *
-     * @param id the ID of the user to delete
+     * @param id the id of the user to delete
      */
     @Override
     public void delete(Long id) {
@@ -233,7 +242,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             jdbcTemplate.update(DELETE_2FA_CODE_BY_USER_ID, of("id", userDTO.getId()));
             jdbcTemplate.update(INSERT_2FA_CODE_BY_USER_ID_QUERY, of("userId", userDTO.getId(), "code", verificationCode, "expirationDate", expirationDate));
 
-            // TODO: Uncomment when ready to send real SMS (costs money per SMS)
+            // TODO: enable SMS sending when ready (Twilio messages incur cost)
             // sendSMS(userDTO.getPhoneNumber(), "From: AngularSpringBootFullStack App, To: " + userDTO.getPhoneNumber() + ", Message: Your 2FA verification code is: " + verificationCode + ". It will expire in 24 hours.");
             log.info("Verification code: {}", verificationCode);
             log.debug("2FA code successfully delete/replaced on user with email: {}", userDTO.getEmail());
@@ -243,6 +252,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Verifies that a 2FA code exists, is not expired, and belongs to the given email.
+     *
+     * <p>If the code is valid, the verification row is deleted (single-use).
+     */
     @Override
     public User verifyCode(String email, String code) {
         if (isVerificationCodeExpired(code))
@@ -269,6 +283,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Creates a password reset verification URL for a user.
+     *
+     * <p>The URL is persisted with an expiration timestamp and is intended to be emailed to the user.
+     */
     @Override
     public void resetPassword(String email) {
         if (getEmailCount(email.trim().toLowerCase()) <= 0)
@@ -287,6 +306,12 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Resolves and validates a password reset key/link.
+     *
+     * <p>This method only verifies the key is present and not expired; updating the password is
+     * performed by {@link #setNewPassword(String, String, String)}.
+     */
     @Override
     public User verifyPasswordKey(String key) {
         if (isLinkExpired(key, PASSWORD))
@@ -305,6 +330,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Updates a user's password after validating the reset key and confirming passwords match.
+     *
+     * <p>After a successful update, the verification URL row is deleted (single-use).
+     */
     @Override
     public void setNewPassword(String key, String newPassword, String confirmPassword) {
         if (!newPassword.equals(confirmPassword))
@@ -330,6 +360,9 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Verifies an account verification key by enabling the user and returning the user.
+     */
     @Override
     public User verifyAccountKey(String key) {
         try {
@@ -347,6 +380,13 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Checks whether a verification URL (password/account) has expired.
+     *
+     * @param key      the UUID key portion from the URL
+     * @param password verification type (PASSWORD or ACCOUNT)
+     * @return {@code true} if expired
+     */
     private boolean isLinkExpired(String key, VerificationType password) {
         try {
             return jdbcTemplate.queryForObject(SELECT_EXPIRATION_BY_URL, of("url", getVerificationURL(key, password.getType())), Boolean.class);
@@ -359,6 +399,12 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Checks whether a 2FA verification code has expired.
+     *
+     * @param code verification code
+     * @return {@code true} if expired
+     */
     private Boolean isVerificationCodeExpired(String code) {
         try {
             return jdbcTemplate.queryForObject(CHECK_2FA_CODE_EXPIRE_DATE, of("code", code), Boolean.class);
@@ -371,6 +417,12 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Required by Spring Security's {@link UserDetailsService}; loads a user for authentication.
+     *
+     * <p>The returned {@link UserPrincipal} contains the {@link User} plus the user's {@link Role}
+     * used to derive authorities.
+     */
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         log.debug("Spring Security is attempting to load user by email: {}", email);

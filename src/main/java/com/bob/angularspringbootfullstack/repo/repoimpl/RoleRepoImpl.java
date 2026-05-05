@@ -16,6 +16,11 @@ import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.query.RoleQuery.*;
 import static java.util.Objects.requireNonNull;
 
+/**
+ * JDBC-based {@link com.bob.angularspringbootfullstack.repo.RoleRepo} implementation.
+ *
+ * <p>In this project roles hold the permission string used to construct authorities.
+ */
 @Repository
 @RequiredArgsConstructor
 @Slf4j
@@ -23,11 +28,11 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
-     * Creates an unimplemented role.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns null. Roles are seeded directly in the
+     * database for now.
      *
-     * @param data the role data to create
-     * @return null (not yet implemented)
+     * @param data the role to create
+     * @return null
      */
     @Override
     public Role create(Role data) {
@@ -35,12 +40,11 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Retrieves an unimplemented paginated list of roles.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns null.
      *
-     * @param page the page number to retrieve
-     * @param pageSize the number of roles per page
-     * @return null (not yet implemented)
+     * @param page     0-indexed page number
+     * @param pageSize page size
+     * @return null
      */
     @Override
     public java.util.Collection<Role> list(int page, int pageSize) {
@@ -48,11 +52,11 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Retrieves an unimplemented role by ID.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns null. Use {@link #getRoleByUserId(Long)}
+     * for the only role lookup the application currently performs.
      *
-     * @param id the role ID to retrieve
-     * @return null (not yet implemented)
+     * @param id the role id
+     * @return null
      */
     @Override
     public Role get(Long id) {
@@ -60,12 +64,11 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Updates an unimplemented role record.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns null.
      *
-     * @param id the ID of the role to update
-     * @param data the updated role data
-     * @return null (not yet implemented)
+     * @param id   the id of the role to update
+     * @param data the new role data
+     * @return null
      */
     @Override
     public Role update(Long id, Role data) {
@@ -73,10 +76,9 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Deletes an unimplemented role record.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; no-op.
      *
-     * @param id the ID of the role to delete
+     * @param id the id of the role to delete
      */
     @Override
     public void delete(Long id) {
@@ -134,11 +136,11 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Retrieves an unimplemented role by user email.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; returns null. Lookups go through
+     * {@link #getRoleByUserId(Long)} after a separate user lookup.
      *
-     * @param email the user's email address
-     * @return null (not yet implemented)
+     * @param email the user's email
+     * @return null
      */
     @Override
     public Role getRoleByUserEmail(String email) {
@@ -146,11 +148,10 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Updates an unimplemented user role assignment.
-     * This method is a placeholder for future implementation.
+     * Not yet implemented; no-op. Role reassignment is not exposed yet.
      *
-     * @param userId the ID of the user whose role should be updated
-     * @param roleName the new role name to assign
+     * @param userId   the user whose role should change
+     * @param roleName the new role name
      */
     @Override
     public void updateUserRole(Long userId, String roleName) {

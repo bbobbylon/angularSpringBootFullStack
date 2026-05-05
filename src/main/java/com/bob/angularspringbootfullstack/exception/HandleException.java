@@ -8,7 +8,6 @@ import org.springframework.boot.webmvc.error.ErrorController;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -28,12 +27,30 @@ import java.util.stream.Collectors;
 
 import static java.time.LocalTime.now;
 import static org.springframework.http.HttpStatus.*;
+//TODO remove the bad practices for prod, specifically .reason, .message, etc so that PPI information is not exposed. 
 
-// TODO remove the bad dev practices specifically for .reason, .devMessage, and related for PRODUCTION builds. We need to replace this with something more secure.
+/**
+ * Central {@code @RestControllerAdvice} for translating framework and application exceptions into a
+ * consistent {@link HttpResponse} JSON payload.
+ *
+ * <p><b>Security note:</b> this handler currently returns {@code devMessage} and (in some cases)
+ * exception messages to the client. That is useful during development but should be reduced/removed
+ * for production deployments to avoid leaking internal details.
+ */
 @RestControllerAdvice
 @Slf4j
 public class HandleException extends ResponseEntityExceptionHandler implements ErrorController {
 
+    /**
+     * Translates @Valid bean-validation failures into an HttpResponse whose
+     * reason field is the comma-joined list of field-error messages.
+     *
+     * @param exception the validation failure thrown by Spring MVC
+     * @param headers   response headers chosen by the framework
+     * @param statusCode the HTTP status the framework selected
+     * @param request   the current request
+     * @return an HttpResponse-bodied ResponseEntity with the validation messages
+     */
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException exception, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
         log.error(exception.getMessage());
@@ -49,6 +66,18 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                 .build(), statusCode);
     }
 
+    /**
+     * Hook used by ResponseEntityExceptionHandler for the framework-internal
+     * exceptions it already maps to a status; rewraps the body so it conforms
+     * to the application's HttpResponse shape.
+     *
+     * @param exception  the framework exception
+     * @param body       the body Spring would otherwise return (ignored)
+     * @param headers    response headers
+     * @param statusCode the framework-selected status
+     * @param request    the current request
+     * @return a ResponseEntity carrying an HttpResponse
+     */
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(Exception exception, @Nullable Object body, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
         log.error(exception.getMessage());
@@ -62,6 +91,14 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                 .build(), statusCode);
     }
 
+    /**
+     * Returns 400 for SQL integrity-constraint violations. When the underlying
+     * message is a "Duplicate entry" the reason is collapsed to a friendlier
+     * string; otherwise the raw message is passed through.
+     *
+     * @param exception the SQL violation
+     * @return 400 BAD_REQUEST with the duplicate-friendly message
+     */
     @ExceptionHandler(SQLIntegrityConstraintViolationException.class)
     public ResponseEntity<HttpResponse> sQLIntegrityConstraintViolationException(SQLIntegrityConstraintViolationException exception) {
         log.error(exception.getMessage());
@@ -77,6 +114,16 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
     }
 
 
+    /**
+     * Returns 400 for BadCredentialsException, which covers both wrong
+     * email/password and malformed JWTs. When the message indicates a decode
+     * failure (raised by TokenProvider#getSubject) the reason is replaced
+     * with a clean client-facing string; otherwise the standard "Incorrect
+     * email or password" suffix is appended.
+     *
+     * @param exception the credentials/decode failure
+     * @return 400 BAD_REQUEST with a sanitized reason
+     */
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<HttpResponse> badCredentialsException(BadCredentialsException exception) {
         log.error(exception.getMessage());
@@ -102,6 +149,13 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                         .build(), BAD_REQUEST);
     }
 
+    /**
+     * Maps an application-thrown ApiException to a 400 with the exception's
+     * message as the reason.
+     *
+     * @param exception the business-logic failure
+     * @return 400 BAD_REQUEST
+     */
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<HttpResponse> apiException(ApiException exception) {
         log.error(exception.getMessage());
@@ -115,6 +169,13 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                         .build(), BAD_REQUEST);
     }
 
+    /**
+     * Returns 403 when an authenticated user is missing the authority required
+     * for an endpoint.
+     *
+     * @param exception the access-denied failure
+     * @return 403 FORBIDDEN with a generic reason
+     */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<HttpResponse> accessDeniedException(AccessDeniedException exception) {
         log.error(exception.getMessage());
@@ -143,6 +204,15 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
     }
 */
 
+    /**
+     * Catch-all for any exception not handled more specifically. Maps to 500
+     * with the exception message; "expected 1, actual 0" (from
+     * NamedParameterJdbcTemplate#queryForObject) is rewritten to
+     * "Record not found".
+     *
+     * @param exception any unhandled exception
+     * @return 500 INTERNAL_SERVER_ERROR
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<HttpResponse> exception(Exception exception) {
         log.error(exception.getMessage());
@@ -159,6 +229,14 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                         .build(), INTERNAL_SERVER_ERROR);
     }
 
+    /**
+     * Returns 500 with a generic "Could not decode the token" message when
+     * the JWT library fails to parse a token. The original message is logged
+     * but not returned to the client.
+     *
+     * @param exception the decode failure
+     * @return 500 INTERNAL_SERVER_ERROR
+     */
     @ExceptionHandler(JWTDecodeException.class)
     public ResponseEntity<HttpResponse> exception(JWTDecodeException exception) {
         log.error(exception.getMessage());
@@ -172,6 +250,13 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                         .build(), INTERNAL_SERVER_ERROR);
     }
 
+    /**
+     * Returns 400 when a JdbcTemplate "queryForObject" finds no row.
+     * "expected 1, actual 0" messages are rewritten to "Record not found".
+     *
+     * @param exception the empty-result failure
+     * @return 400 BAD_REQUEST
+     */
     @ExceptionHandler(EmptyResultDataAccessException.class)
     public ResponseEntity<HttpResponse> emptyResultDataAccessException(EmptyResultDataAccessException exception) {
         log.error(exception.getMessage());
@@ -185,6 +270,13 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                         .build(), BAD_REQUEST);
     }
 
+    /**
+     * Returns 400 when DaoAuthenticationProvider rejects login because the
+     * user account is disabled (typically: email not yet verified).
+     *
+     * @param exception the disabled-account failure
+     * @return 400 BAD_REQUEST
+     */
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<HttpResponse> disabledException(DisabledException exception) {
         log.error(exception.getMessage());
@@ -199,6 +291,13 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                 , BAD_REQUEST);
     }
 
+    /**
+     * Returns 400 when DaoAuthenticationProvider rejects login because the
+     * user account is locked.
+     *
+     * @param exception the locked-account failure
+     * @return 400 BAD_REQUEST
+     */
     @ExceptionHandler(LockedException.class)
     public ResponseEntity<HttpResponse> lockedException(LockedException exception) {
         log.error(exception.getMessage());
@@ -213,6 +312,14 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                 , BAD_REQUEST);
     }
 
+    /**
+     * Returns 400 for any Spring DataAccessException, with the message
+     * cleaned up by {@link #processErrorMessage(String)} (e.g. duplicate
+     * account/password verification rows get friendly messages).
+     *
+     * @param exception the data-access failure
+     * @return 400 BAD_REQUEST
+     */
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<HttpResponse> dataAccessException(DataAccessException exception) {
         log.error(exception.getMessage());
@@ -226,6 +333,14 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                 , BAD_REQUEST);
     }
 
+    /**
+     * Maps low-level "Duplicate entry" SQL errors to user-facing strings,
+     * recognizing the AccountVerifications and ResetPasswordVerifications
+     * tables specifically.
+     *
+     * @param errorMessage the raw exception message
+     * @return a friendlier reason, or "Some error occurred" when null
+     */
     private String processErrorMessage(String errorMessage) {
         if (errorMessage != null) {
             if (errorMessage.contains("Duplicate entry") && errorMessage.contains("AccountVerifications")) {
@@ -239,17 +354,6 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
             }
         }
         return "Some error occurred";
-    }
-
-    private ResponseEntity<HttpResponse> createErrorHttpResponse(HttpStatus httpStatus, String reason, Exception exception) {
-        return new ResponseEntity<>(
-                HttpResponse.builder()
-                        .timeStamp(now().toString())
-                        .devMessage(exception.getMessage())
-                        .reason(reason)
-                        .status(httpStatus)
-                        .statusCode(httpStatus.value()).build()
-                , httpStatus);
     }
 
 }

@@ -51,24 +51,5 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
-    /**
-     * Handles authentication-related exceptions (2FA verification failures, invalid credentials, etc).
-     * Converts these to HTTP 401 Unauthorized responses with a generic message for security.
-     * <p>
-     * This prevents leaking sensitive information like whether a user exists in the database.
-     *
-     * @param ex the authentication exception
-     * @return ResponseEntity with HttpResponse containing 401 status and generic message
-     */
-/*    @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
-    public ResponseEntity<HttpResponse> handleAuthenticationExceptions(Exception ex) {
-        HttpResponse response = HttpResponse.builder()
-                .timeStamp(LocalTime.now().toString())
-                .reason("You must login to access this resource.")
-                .status(HttpStatus.UNAUTHORIZED)
-                .statusCode(HttpStatus.UNAUTHORIZED.value())
-                .build();
-        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
-    }*/
 }
 
