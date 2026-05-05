@@ -1,0 +1,10 @@
+import { ChangeDetectionStrategy, Component } from '@angular/core';
+
+@Component({
+  selector: 'app-customers',
+  imports: [],
+  templateUrl: './customers.component.html',
+  styleUrl: './customers.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class CustomersComponent { }
