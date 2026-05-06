@@ -1,5 +1,6 @@
 # Securecapitaapp
 
+TODO - add admin access to allow specific users to view all users in the server/system/database.
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.3.
 
 ## Development server

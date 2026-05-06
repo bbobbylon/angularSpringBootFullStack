@@ -27,7 +27,7 @@ export class UserService {
     this.http
       .get<
         CustomHttpResponseInterface<ProfileInterface>
-      >(`${this.server}/user/profile`, { headers: new HttpHeaders().set('Authorization', 'Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJCT0JCWUxPTl9MTEMiLCJhdWQiOiJCT0JTX01BTkFHRU1FTlQiLCJpYXQiOjE3NzgwMjY5MzMsInN1YiI6ImJvYm5vbWZhQHlvcG1haWwuY29tIiwiYXV0aG9yaXRpZXMiOlsiUkVBRDpVU0VSIiwiUkVBRDpDVVNUT01FUiJdLCJleHAiOjE3NzgwMjg3MzN9.FQ567tIHM7ZaiGy6cGG-glPJRtmhRTT4ikQq7c0Z_sYB2oJIF5SSYJ4Xiu9lSwhAdGu6MgQ3e1gJcwbJk4__Kg') })
+      >(`${this.server}/user/profile`, { headers: new HttpHeaders().set('Authorization', 'Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJCT0JCWUxPTl9MTEMiLCJhdWQiOiJCT0JTX01BTkFHRU1FTlQiLCJpYXQiOjE3NzgxMDQ3MzIsInN1YiI6ImJvYm5vbWZhQHlvcG1haWwuY29tIiwiYXV0aG9yaXRpZXMiOlsiUkVBRDpVU0VSIiwiUkVBRDpDVVNUT01FUiJdLCJleHAiOjE3NzgxMTg1MzJ9.f6QPFTMsAgAIEN77Hc5q0oWJy-c1kaBzW9XqQQ0NpwKBNJPnbotiLY_tdNmZ2WpuJUwDKF5qyt96XY6dBN4NIg') })
       .pipe(tap(console.log), catchError(this.handleError));
   private handleError(error: HttpErrorResponse): Observable<never> {
     let errorMessage: string;
