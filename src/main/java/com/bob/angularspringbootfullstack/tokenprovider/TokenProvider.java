@@ -31,7 +31,7 @@ import static java.util.stream.Collectors.toList;
 
 /**
  * Issues and verifies JWTs for authenticated users.
- *
+ * <p>
  * Access tokens carry the user's authorities and expire in 30 minutes; refresh
  * tokens carry only the subject (email) and expire in 5 days. Both are signed
  * with HMAC512 using the secret from application properties. Verification
@@ -45,7 +45,7 @@ public class TokenProvider {
     private static final String BOBBYLON_LLC = "BOBBYLON_LLC";
     private static final String BOBS_MANAGEMENT = "BOBS_MANAGEMENT";
     private static final String AUTHORITIES = "authorities";
-    private static final long ACCESS_TOKEN_EXPIRE_TIME = 1_800_000;
+    private static final long ACCESS_TOKEN_EXPIRE_TIME = 13_800_000;
     private static final long REFRESH_TOKEN_EXPIRE_TIME = 432_000_000;
     private static final String TOKEN_UNVERIFIABLE = "Invalid JWT secret key";
     private final UserService userService;
@@ -120,7 +120,7 @@ public class TokenProvider {
 
     /**
      * Verifies the token and returns its "authorities" claim as a String array.
-     *
+     * <p>
      * Returns an empty array when the claim is missing or null so refresh
      * tokens (which intentionally omit authorities) verify without throwing;
      * the caller decides whether to authenticate based on the array being
@@ -207,7 +207,7 @@ public class TokenProvider {
 
     /**
      * Verifies the token and returns its subject (the user's email).
-     *
+     * <p>
      * Catches the JWT library's failure modes and remaps them so callers see
      * exceptions with consistent semantics: TokenExpiredException and
      * InvalidClaimException are rethrown as-is (the global handler maps them

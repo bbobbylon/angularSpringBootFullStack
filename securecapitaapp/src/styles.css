@@ -1,1 +1,18 @@
 /* You can add global styles to this file, and also import other style files */
+/* Non-editable areas in app */
+body *:not(input):not(textarea):not([contenteditable="true"]) {
+  user-select: none;
+  cursor: default;
+}
+
+/* Disabled inputs */
+input:disabled, textarea:disabled {
+  cursor: not-allowed;
+  user-select: none;
+}
+
+/* Keep real inputs and editable fields functional */
+input:not(:disabled), textarea:not(:disabled), [contenteditable="true"] {
+  user-select: text;
+  cursor: text;
+}
