@@ -26,7 +26,7 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 
 /**
  * Per-request JWT authentication filter.
- *
+ * <p>
  * Skips public routes and OPTIONS preflights, otherwise pulls the bearer token
  * off the Authorization header and asks TokenProvider to validate it. When the
  * token has authorities (an access token) the filter installs an Authentication
@@ -77,7 +77,7 @@ public class CustomAuthFilter extends OncePerRequestFilter {
     /**
      * Validates the bearer token and, when it carries authorities, installs an
      * Authentication in the SecurityContext for the rest of the chain.
-     *
+     * <p>
      * Reads email and token via {@link #getRequestValues(HttpServletRequest)},
      * checks validity with TokenProvider, and pulls authorities from the
      * token. An empty authorities list means a refresh token was sent to a
@@ -125,7 +125,7 @@ public class CustomAuthFilter extends OncePerRequestFilter {
      * @param request HTTP request
      * @return Map with keys EMAIL_KEY and TOKEN_KEY
      */
-    Map<String, String> getRequestValues(HttpServletRequest request) {
+    private Map<String, String> getRequestValues(HttpServletRequest request) {
         return of(EMAIL_KEY, tokenProvider.getSubject(getToken(request), request), TOKEN_KEY, getToken(request));
     }
 

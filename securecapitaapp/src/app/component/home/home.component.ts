@@ -7,7 +7,7 @@ import { StatsComponent } from '../stats/stats.component';
 
 @Pipe({ name: 'ExtractArrayValue', standalone: true })
 export class ExtractArrayValuePipe implements PipeTransform {
-  transform(value: number | { totalPages?: number } | any, mode?: string): unknown[] {
+  transform(value: number | { totalPages?: number } | any, _mode?: string): unknown[] {
     if (typeof value === 'number') {
       return Array.from({ length: value }, (_, i) => i);
     }
@@ -60,7 +60,7 @@ export class HomeComponent {
   homeState$: Observable<HomeState> = of({
     appData: {
       data: {
-        user: { name: 'Demo User', id: 0 },
+        user: { name: 'Demo UserInterface', id: 0 },
         stats: { totalCustomers: 0 },
         page: {
           content: [

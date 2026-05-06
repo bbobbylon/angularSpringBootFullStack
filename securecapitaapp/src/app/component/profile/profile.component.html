@@ -1,6 +1,10 @@
 <app-navbar></app-navbar>
 
 @if (profile(); as state) {
+  @if (profileState$ | async) {
+    <div>{{ state | json }}</div>
+  }
+
   <section>
     <div class="container">
       <nav aria-label="breadcrumb" style="margin-top: 8px;">
@@ -20,7 +24,7 @@
           <div class="p-4">
             <div class="img-circle text-center mb-3">
               <span style="position: relative">
-                <img [src]="state.user.imageUrl" [alt]="state.user.firstName" class="shadow" />
+                <img [alt]="state.user.firstName" [src]="state.user.imageUrl" class="shadow" />
                 <i (click)="fileInput.click()" class="bi bi-camera-fill right-position"></i>
               </span>
             </div>
@@ -84,7 +88,7 @@
                   <div class="form-group">
                     <label>Phone</label>
                     <input [disabled]="state.user.roleName === 'ROLE_USER' || isLoading()"
-                           [ngModel]="state.user.phone" class="form-control" name="phone" type="text">
+                           [ngModel]="state.user.phoneNumber" class="form-control" name="phone" type="text">
                   </div>
                 </div>
                 <div class="col-md-6">
@@ -177,13 +181,15 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label style="margin-bottom: 5px;">Role Name</label>
-                    <select [disabled]="!(state.user.roleName === 'ROLE_SYSADMIN' || state.user.roleName === 'ROLE_ADMIN') || isLoading()"
-                            [ngModel]="state.user.roleName"
-                            class="form-control select-cl" name="roleName" required>
+                    <select
+                      [disabled]="!(state.user.roleName === 'ROLE_SYSADMIN' || state.user.roleName === 'ROLE_ADMIN') || isLoading()"
+                      [ngModel]="state.user.roleName"
+                      class="form-control select-cl" name="roleName" required>
                       @for (role of state.roles; track role.name) {
                         <option [ngValue]="role.name"
                                 [selected]="state.user.roleName === role.name"
-                                class="select-cl">{{ role.name }}</option>
+                                class="select-cl">{{ role.name }}
+                        </option>
                       }
                     </select>
                   </div>
@@ -199,8 +205,9 @@
                 </div>
               </div>
               <div>
-                <button [disabled]="!(state.user.roleName === 'ROLE_SYSADMIN' || state.user.roleName === 'ROLE_ADMIN') || isLoading()"
-                        class="btn btn-primary" type="submit">
+                <button
+                  [disabled]="!(state.user.roleName === 'ROLE_SYSADMIN' || state.user.roleName === 'ROLE_ADMIN') || isLoading()"
+                  class="btn btn-primary" type="submit">
                   @if (isLoading()) {
                     <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                           style="margin-right: 5px;"></span>
@@ -226,22 +233,23 @@
                       <input [checked]="state.user.enabled"
                              [disabled]="!(state.user.roleName === 'ROLE_SYSADMIN' || state.user.roleName === 'ROLE_ADMIN') || isLoading()"
                              [ngModel]="state.user.enabled"
-                             class="form-check-input" name="enabled" type="checkbox" id="enabled">
+                             class="form-check-input" id="enabled" name="enabled" type="checkbox">
                       <label class="form-check-label" for="enabled">Account Active</label>
                     </div>
                     <div class="form-check">
-                      <input [checked]="state.user.notLocked"
+                      <input [checked]="state.user.isNotLocked"
                              [disabled]="!(state.user.roleName === 'ROLE_SYSADMIN' || state.user.roleName === 'ROLE_ADMIN') || isLoading()"
-                             [ngModel]="state.user.notLocked"
-                             class="form-check-input" name="notLocked" type="checkbox" id="notLocked">
-                      <label class="form-check-label" for="notLocked">Account Unlocked</label>
+                             [ngModel]="state.user.isNotLocked"
+                             class="form-check-input" id="isNotLocked" name="isNotLocked" type="checkbox">
+                      <label class="form-check-label" for="isNotLocked">Account Unlocked</label>
                     </div>
                   </div>
                 </div>
               </div>
               <div>
-                <button [disabled]="!(state.user.roleName === 'ROLE_SYSADMIN' || state.user.roleName === 'ROLE_ADMIN') || isLoading()"
-                        class="btn btn-primary" type="submit">
+                <button
+                  [disabled]="!(state.user.roleName === 'ROLE_SYSADMIN' || state.user.roleName === 'ROLE_ADMIN') || isLoading()"
+                  class="btn btn-primary" type="submit">
                   @if (isLoading()) {
                     <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                           style="margin-right: 5px;"></span>
@@ -264,7 +272,7 @@
                 <div class="row align-items-center">
                   <div class="col">
                     <strong class="mb-2">Multi-Factor Authentication</strong>
-                    @if (state.user.usingMfa) {
+                    @if (state.user.using2FA) {
                       <span class="badge bg-success mx-3">Enabled</span>
                     } @else {
                       <span class="badge bg-warning mx-3">Disabled</span>
@@ -277,7 +285,7 @@
                     <button (click)="toggleMfa()"
                             [disabled]="state.user.roleName === 'ROLE_USER' || isLoading()"
                             class="btn btn-primary btn-sm">
-                      {{ state.user.usingMfa ? 'Disable' : 'Enable' }}
+                      {{ state.user.using2FA ? 'Disable' : 'Enable' }}
                       @if (isLoading()) {
                         <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                               style="margin-right: 5px;"></span>
@@ -315,14 +323,14 @@
                 <h6 class="card-subtitle mb-2 text-muted">Latest activities on your account.</h6>
                 <table class="table table-hover">
                   <thead>
-                    <tr>
-                      <th scope="col">Device</th>
-                      <th scope="col">IP Address</th>
-                      <th scope="col">Date</th>
-                      <th scope="col">Type</th>
-                      <th scope="col">Description</th>
-                      <th scope="col">Action</th>
-                    </tr>
+                  <tr>
+                    <th scope="col">Device</th>
+                    <th scope="col">IP Address</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Description</th>
+                    <th scope="col">Action</th>
+                  </tr>
                   </thead>
                   <tbody>
                     @for (event of state.events; track event.createdAt) {
@@ -331,16 +339,16 @@
                         <td>{{ event.ipAddress }}</td>
                         <td>{{ event.createdAt | date: 'MMMM d, y, h:mm a' }}</td>
                         <td>
-                          <span class="badge pill"
+                          <span [class.bg-danger]="event.type === EventType.LOGIN_ATTEMPT_FAILURE"
+                                [class.bg-info]="event.type === EventType.ROLE_UPDATE
+                                                 || event.type === EventType.MFA_UPDATE"
+                                [class.bg-primary]="event.type === EventType.PROFILE_UPDATE
+                                                    || event.type === EventType.PROFILE_PICTURE_UPDATE"
                                 [class.bg-success]="event.type === EventType.LOGIN_ATTEMPT_SUCCESS"
                                 [class.bg-warning]="event.type === EventType.LOGIN_ATTEMPT
                                                     || event.type === EventType.ACCOUNT_SETTINGS_UPDATE
                                                     || event.type === EventType.PASSWORD_UPDATE"
-                                [class.bg-primary]="event.type === EventType.PROFILE_UPDATE
-                                                    || event.type === EventType.PROFILE_PICTURE_UPDATE"
-                                [class.bg-danger]="event.type === EventType.LOGIN_ATTEMPT_FAILURE"
-                                [class.bg-info]="event.type === EventType.ROLE_UPDATE
-                                                 || event.type === EventType.MFA_UPDATE">
+                                class="badge pill">
                             {{ event.type }}
                           </span>
                         </td>

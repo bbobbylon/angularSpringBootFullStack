@@ -23,6 +23,8 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
+import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
+import static com.bob.angularspringbootfullstack.utils.UserUtils.getLoggedInUser;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
@@ -180,16 +182,20 @@ public class UserController {
     }
 
     /**
-     * Returns the current user's profile. Spring Security supplies the
-     * Authentication populated by CustomAuthFilter; the email comes from the
-     * token's subject and is used to look the user up.
+     * Returns the current user's profile.
+     *
+     * <p>The {@link Authentication} was installed by {@code CustomAuthFilter}, which stores a
+     * {@link UserDTO} directly as the principal (see {@code TokenProvider#getAuthentication}).
+     * {@link com.bob.angularspringbootfullstack.utils.UserUtils#getAuthenticatedUser(Authentication)}
+     * casts it back so we can read the email and reload the full profile — this avoids
+     * {@code Authentication#getName()}, which would fall back to {@code UserDTO#toString()}.
      *
      * @param authentication the current Authentication injected by Spring Security
      * @return 200 OK with the user as a DTO
      */
     @GetMapping("/profile")
     public ResponseEntity<HttpResponse> getProfile(Authentication authentication) {
-        UserDTO userDTO = userService.getUserByEmail(authentication.getName());
+        UserDTO userDTO = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -199,6 +205,7 @@ public class UserController {
                         .statusCode(OK.value())
                         .build());
     }
+
 
     /**
      * Starts the password reset flow for the given email by generating a
@@ -281,9 +288,13 @@ public class UserController {
     }
 
     /**
-     * Authenticates a user by email and password. When 2FA is enabled the
-     * response signals that a verification code was sent; otherwise it
-     * returns the user along with a fresh access and refresh token.
+     * Authenticates a user by email and password.
+     *
+     * <p>{@code AuthenticationManager} returns an {@link Authentication} whose principal is a
+     * {@link UserPrincipal}, so we unwrap it with
+     * {@link com.bob.angularspringbootfullstack.utils.UserUtils#getLoggedInUser(Authentication)}.
+     * When 2FA is enabled the response only signals that a verification code was sent; otherwise
+     * it returns the user along with a fresh access and refresh token pair.
      *
      * @param loginForm validated email and password
      * @return 200 OK with either a "code sent" message or login data
@@ -291,7 +302,7 @@ public class UserController {
     @PostMapping("/login")
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
         Authentication authentication = authenticate(loginForm.getEmail(), loginForm.getPassword());
-        UserDTO userDTO = getAuthenticatedUser(authentication);
+        UserDTO userDTO = getLoggedInUser(authentication);
         return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
     }
 
@@ -312,16 +323,6 @@ public class UserController {
             // processError(request, response, e);
             throw new ApiException(e.getMessage());
         }
-    }
-
-    /**
-     * Pulls the UserDTO out of an Authentication's principal (a UserPrincipal).
-     *
-     * @param authentication the Authentication produced by AuthenticationManager
-     * @return the authenticated user as a DTO
-     */
-    private UserDTO getAuthenticatedUser(Authentication authentication) {
-        return ((UserPrincipal) authentication.getPrincipal()).getUser();
     }
 
     /**
@@ -358,6 +359,7 @@ public class UserController {
                         .timeStamp(now().toString())
                         .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
                         .message("Login successful!")
+                        .devMessage("AuthenticationManager succeeded; 30-min access token and 5-day refresh token issued via TokenProvider.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
