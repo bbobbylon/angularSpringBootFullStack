@@ -3,7 +3,7 @@ import { Component, inject } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { DataState } from '../../enumeration/datastate.enum';
-import { LoginState } from '../../interface/appstates.interface';
+import { LoginStateInterface } from '../../interface/appstates.interface';
 import { UserService } from '../../service/user.service';
 import { BehaviorSubject, catchError, map, Observable, of, startWith } from 'rxjs';
 import { Key } from '../../enumeration/key.enumeration';
@@ -16,12 +16,11 @@ import { Key } from '../../enumeration/key.enumeration';
   imports: [RouterModule, CommonModule, FormsModule],
 })
 export class LoginComponent {
-  readonly DataState = DataState;
-  loginState$: Observable<LoginState> = of({
+  loginState$: Observable<LoginStateInterface> = of({
     dataState: DataState.LOADED,
     isUsingMfa: false,
   });
-  state: LoginState = {
+  state: LoginStateInterface = {
     dataState: DataState.LOADED,
     loginSuccess: false,
     isUsingMfa: false,
@@ -29,6 +28,7 @@ export class LoginComponent {
     error: '',
     message: '',
   };
+  readonly DataState = DataState;
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private phoneSubject = new BehaviorSubject<string | null>(null);

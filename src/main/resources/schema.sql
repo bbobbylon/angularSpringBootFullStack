@@ -1,4 +1,4 @@
-# MySQL Database Schema for User Management System from Junior from Get Arrays LLC
+# MySQL Database Schema for User Management System from Junior from Get Arrays LLC tutorial on Udemy! circa 2022
 CREATE SCHEMA IF NOT EXISTS db2;
 
 SET NAMES 'UTF8MB4';

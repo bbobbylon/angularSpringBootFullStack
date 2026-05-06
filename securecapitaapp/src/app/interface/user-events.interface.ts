@@ -1,6 +1,6 @@
 import { EventType } from '../enumeration/event-type.enum';
 
-export interface UserEvents {
+export interface UserEventsInterface {
   id: number;
   type: EventType;
   description: string;

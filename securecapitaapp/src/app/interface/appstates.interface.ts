@@ -1,10 +1,10 @@
 import { DataState } from '../enumeration/datastate.enum';
-import { User } from './user.interface';
-import { UserEvents } from './user-events.interface';
-import { Roles } from './roles.interface';
+import { UserInterface } from './user.interface';
+import { UserEventsInterface } from './user-events.interface';
+import { RolesInterface } from './roles.interface';
 
 // Define the possible states of data fetching
-export interface LoginState {
+export interface LoginStateInterface {
   dataState: DataState;
   loginSuccess?: boolean;
   error?: string;
@@ -12,10 +12,10 @@ export interface LoginState {
   isUsingMfa?: boolean;
   phone?: string;
 }
-export interface Profile {
-  user?: User;
+export interface ProfileInterface {
+  user?: UserInterface;
   access_token: string;
   refresh_token: string;
-  events?: UserEvents[];
-  roles?: Roles[];
+  events?: UserEventsInterface[];
+  roles?: RolesInterface[];
 }
