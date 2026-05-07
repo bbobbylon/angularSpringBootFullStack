@@ -807,11 +807,11 @@ tokenProvider.getSubject(expiredToken, request)
     ↓
 getJWTVerifier().verify(expiredToken) throws TokenExpiredException
     ↓
-Re-thrown as TokenExpiredException
+Caught and wrapped as generic JWTVerificationException("Authentication failed.")
     ↓
 ExceptionUtils.processError() → 401 Unauthorized
     ↓
-Frontend sees: {"reason": "Token has expired"}
+Frontend sees: {"reason": "Invalid token. Please log in again."}
     ↓
 Frontend must prompt user to log in again
 ```
@@ -841,7 +841,7 @@ Frontend sees: {"reason": "..."}
 
 1. **Access token cannot refresh**: It has no refresh endpoint that accepts access tokens, and it expires
 2. **Refresh token cannot access APIs**: Filter explicitly rejects tokens without authorities
-3. **Old tokens cannot be used**: Expired tokens throw TokenExpiredException which is caught and mapped to 401
+3. **Old tokens cannot be used**: Expired tokens are caught and wrapped as a generic JWTVerificationException, mapped to 401 without revealing expiry details
 4. **Malformed tokens are rejected**: JWTDecodeException mapped to 400 Bad Request
 5. **Token signature ensures authenticity**: Only backend with secret key can create/verify tokens
 

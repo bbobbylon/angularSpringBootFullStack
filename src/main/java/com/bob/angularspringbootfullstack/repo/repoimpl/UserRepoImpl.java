@@ -395,7 +395,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      *
      * @param user the form data containing the updated user fields
      * @return the updated {@link User} fetched after the writing of the new details to the database
-     * @throws ApiException if the database update fails for any reason.
+     * @throws ApiException if the email is already taken by another account, or if any other database error occurs.
      *                      See {@code getUserDetailsSQLParameterSource} for how the UpdateForm is mapped to SQL parameters
      */
     @Override
@@ -406,6 +406,9 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         } catch (EmptyResultDataAccessException e) {
             log.error("We cannot update the user details because we cannot find the user in our database with id: {}", user.getId());
             throw new UsernameNotFoundException("User not found. Please try again.");
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            log.error("Email already in use during profile update for user id {}: {}", user.getId(), e.getMessage());
+            throw new ApiException("An error occurred while updating your profile. Please try again.");
         } catch (Exception e) {
             log.error(e.getMessage());
             throw new ApiException("An Error has occurred. Please try again.");
