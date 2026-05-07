@@ -88,7 +88,7 @@
                   <div class="form-group">
                     <label>Phone</label>
                     <input [disabled]="!hasPermission('UPDATE:USER') || (isLoading$ | async)"
-                           [ngModel]="state.appData?.data?.user.phoneNumber" class="form-control" name="phone"
+                           [ngModel]="state.appData?.data?.user.phoneNumber" class="form-control" name="phoneNumber"
                            type="text">
                   </div>
                 </div>

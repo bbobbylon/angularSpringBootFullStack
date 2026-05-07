@@ -11,6 +11,7 @@ import { CustomHttpResponseInterface } from '../../interface/customhttpresponse.
 import { ProfileInterface } from '../../interface/appstates.interface';
 import { EventType } from '../../enumeration/event-type.enum';
 
+// TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
 interface ActivityEvent {
   device: string;
   ipAddress: string;
@@ -77,6 +78,7 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
     this.isLoadingSubject.next(true);
     this.profileState$ = this.userService.profile$().pipe(
       map(response => {
+        console.log('Fetched profile data:', response);
         this.dataSubject.next(response);
         this.isLoadingSubject.next(false);
         return { dataState: DataState.LOADED, appData: response };
@@ -89,6 +91,33 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
     );
   }
 
+  /**
+   * This method is responsible for updating the user's profile information. It takes a NgForm as an argument, which contains the updated profile data entered by the user. The method first sets the loading state to true, then it retrieves the current user data from the dataSubject and merges it with the new values from the profileForm. It then calls the update$ method of the UserService to send the updated user data to the server. The response from the server is handled using RxJS operators: if the update is successful, it updates the dataSubject with the new profile data and sets the loading state to false; if there is an error, it catches the error, sets the loading state to false, and updates the profileState$ observable with an error state.
+   * @param profileForm
+   * @returns void
+   * @important This method is crucial for allowing users to update their profile information and ensuring that the UI reflects the latest data from the server. It also demonstrates how to handle asynchronous operations and manage loading and error states effectively in an Angular component using RxJS.
+   */
+  updateProfile(profileForm: NgForm): void {
+    this.isLoadingSubject.next(true);
+    const currentUser = this.dataSubject.value?.data?.user;
+    console.log('Current user data before update:', currentUser);
+    const updatedUser = { ...currentUser, ...profileForm.value };
+    console.log('Updated user data to be sent to server:', updatedUser);
+    this.profileState$ = this.userService.update$(updatedUser).pipe(
+      map(response => {
+        console.log('Profile updated successfully:', response);
+        this.dataSubject.next({ ...response, data: response.data });
+        this.isLoadingSubject.next(false);
+        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
+      }),
+      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
+      catchError((error: string) => {
+        this.isLoadingSubject.next(false);
+        return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+      }),
+    );
+  }
+
   protected hasPermission(permission: string): boolean {
     const permissions = this.dataSubject.value?.data?.user?.permissions;
     if (!permissions) return false;
@@ -96,10 +125,6 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
       .split(',')
       .map((p: string) => p.trim())
       .includes(permission);
-  }
-
-  protected updateProfile(form: NgForm): void {
-    console.log('updateProfile', form.value);
   }
 
   protected updatePassword(form: NgForm): void {

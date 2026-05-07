@@ -29,7 +29,7 @@ import java.time.LocalTime;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-    /**
+    /*    *//**
      * Handles custom ApiException thrown throughout the application.
      * Converts the exception to a standardized HTTP 400 Bad Request response.
      * <p>
@@ -39,7 +39,31 @@ public class GlobalExceptionHandler {
      *
      * @param ex the ApiException thrown by application logic
      * @return ResponseEntity with HttpResponse containing error details and 400 status
+     *//*
      */
+
+    /**
+     * Handles Bean Validation failures from @Valid-annotated controller parameters.
+     * Collects all field-level constraint messages and joins them so the client
+     * sees every problem in one response rather than just the first.
+     *
+     * @param ex the validation exception containing one FieldError per failed constraint
+     * @return 400 BAD_REQUEST with all validation messages in the reason field
+     *//*
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<HttpResponse> handleValidationException(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .collect(java.util.stream.Collectors.joining(", "));
+        HttpResponse response = HttpResponse.builder()
+                .timeStamp(LocalTime.now().toString())
+                .reason(message)
+                .devMessage(message)
+                .status(HttpStatus.BAD_REQUEST)
+                .statusCode(HttpStatus.BAD_REQUEST.value())
+                .build();
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }*/
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<HttpResponse> handleApiException(ApiException ex) {
         HttpResponse response = HttpResponse.builder()
