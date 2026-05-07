@@ -12,7 +12,6 @@ import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -23,6 +22,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 import static com.auth0.jwt.algorithms.Algorithm.HMAC512;
 import static java.lang.System.currentTimeMillis;
@@ -32,8 +32,9 @@ import static java.util.stream.Collectors.toList;
 /**
  * Issues and verifies JWTs for authenticated users.
  * <p>
- * Access tokens carry the user's authorities and expire in 30 minutes; refresh
- * tokens carry only the subject (email) and expire in 5 days. Both are signed
+ * Access tokens carry the user's authorities, use the numeric user ID as the
+ * subject, and expire in 230 minutes; refresh tokens carry only the subject
+ * (user ID) and expire in 5 days. Both are signed
  * with HMAC512 using the secret from application properties. Verification
  * intentionally does not require the "authorities" claim so refresh tokens
  * remain valid; CustomAuthFilter then refuses to authenticate any token that
@@ -54,19 +55,20 @@ public class TokenProvider {
 
     /**
      * Generates a JWT access token for the given UserPrincipal.
-     * The token includes issuer, audience, issued at, subject (username),
-     * authorities (permissions/roles), and an expiration time (30 minutes).
+     * The token includes issuer, audience, issued at, subject (user ID),
+     * authorities (permissions/roles), and an expiration time (230 minutes).
      * The token is signed using HMAC512 with the secret key.
      *
      * @param userPrincipal an authenticated user
      * @return a signed JWT access token as a String
      */
     public String createAccessToken(UserPrincipal userPrincipal) {
+        //TODO explore the available options/methods in the JWT library to see if we can add cooler stuff to the tokens!
         return JWT.create()
                 .withIssuer(BOBBYLON_LLC)
                 .withAudience(BOBS_MANAGEMENT)
                 .withIssuedAt(new Date())
-                .withSubject(userPrincipal.getUsername())
+                .withSubject(String.valueOf(userPrincipal.getUser().getId()))
                 .withArrayClaim(AUTHORITIES, getClaimsFromUser(userPrincipal))
                 .withExpiresAt(new Date(currentTimeMillis() + ACCESS_TOKEN_EXPIRE_TIME))
                 .sign(HMAC512(secret.getBytes()));
@@ -87,7 +89,7 @@ public class TokenProvider {
 
     /**
      * Generates a JWT refresh token for the given UserPrincipal.
-     * The refresh token includes issuer, audience, issued at, subject (username),
+     * The refresh token includes issuer, audience, issued at, subject (user ID),
      * and an expiration time (5 days). It does NOT include authorities.
      * The token is signed using HMAC512 with the secret key.
      *
@@ -99,7 +101,8 @@ public class TokenProvider {
                 .withIssuer(BOBBYLON_LLC)
                 .withAudience(BOBS_MANAGEMENT)
                 .withIssuedAt(new Date())
-                .withSubject(userPrincipal.getUsername())
+                //returns a string, but we will convert it to type Long when we extract the subject from the token. The subject is the user's ID.
+                .withSubject(String.valueOf(userPrincipal.getUser().getId()))
                 .withExpiresAt(new Date(currentTimeMillis() + REFRESH_TOKEN_EXPIRE_TIME))
                 .sign(HMAC512(secret.getBytes()));
     }
@@ -163,16 +166,16 @@ public class TokenProvider {
 
     /**
      * Builds an authenticated UsernamePasswordAuthenticationToken for the
-     * SecurityContext, using the user loaded by email as the principal and
+     * SecurityContext, using the user loaded by ID as the principal and
      * stamping web details (IP, session id) onto it from the request.
      *
-     * @param email       the user's email (subject extracted from the token)
+     * @param userID      the user's numeric ID (subject extracted from the access token)
      * @param authorities authorities pulled from the token
      * @param request     the current HTTP request, used to attach WebAuthenticationDetails
      * @return a fully populated Authentication ready to place in the SecurityContext
      */
-    public Authentication getAuthentication(String email, List<GrantedAuthority> authorities, HttpServletRequest request) {
-        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userService.getUserByEmail(email), null, authorities);
+    public Authentication getAuthentication(Long userID, List<GrantedAuthority> authorities, HttpServletRequest request) {
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userService.getUserById(userID), null, authorities);
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         return authToken;
     }
@@ -182,14 +185,15 @@ public class TokenProvider {
      * not past its expiration. Used by CustomAuthFilter as a gate before
      * extracting authorities and authenticating the request.
      *
-     * @param email the email previously extracted via {@link #getSubject(String, HttpServletRequest)}
-     * @param token the raw JWT
+     * @param userID the numeric user ID previously extracted via {@link #getSubject(String, HttpServletRequest)}
+     * @param token  the raw JWT
      * @return true if both checks pass
      * @throws JWTVerificationException if token verification fails
      */
-    public boolean isTokenValid(String email, String token) {
+    public boolean isTokenValid(Long userID, String token) {
         JWTVerifier verifier = getJWTVerifier();
-        return StringUtils.isNotEmpty(email) && !isTokenExpired(verifier, token);
+        // return StringUtils.isNotEmpty(email) && !isTokenExpired(verifier, token);
+        return !Objects.isNull(userID) && !isTokenExpired(verifier, token);
     }
 
     /**
@@ -206,7 +210,7 @@ public class TokenProvider {
     }
 
     /**
-     * Verifies the token and returns its subject (the user's email).
+     * Verifies the token and returns its subject (the user's ID).
      * <p>
      * Catches the JWT library's failure modes and remaps them so callers see
      * exceptions with consistent semantics: TokenExpiredException and
@@ -220,14 +224,15 @@ public class TokenProvider {
      *
      * @param token   the raw JWT
      * @param request the current request, used to stash error context
-     * @return the subject claim (the user's email)
+     * @return the subject claim (the user's ID)
      * @throws TokenExpiredException    if the token is expired
      * @throws InvalidClaimException    if a required claim doesn't match
      * @throws JWTVerificationException for other verification failures
      */
-    public String getSubject(String token, HttpServletRequest request) throws JWTVerificationException {
+    public Long getSubject(String token, HttpServletRequest request) throws JWTVerificationException {
         try {
-            return getJWTVerifier().verify(token).getSubject();
+            // returns a string, which we convert into type Long.
+            return Long.valueOf(getJWTVerifier().verify(token).getSubject());
         } catch (TokenExpiredException e) {
             request.setAttribute("expiredMessage", e.getMessage());
             throw e;

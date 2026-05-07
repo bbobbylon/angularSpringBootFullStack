@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.repo.repoimpl;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.VerificationType;
 import com.bob.angularspringbootfullstack.exception.ApiException;
+import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
@@ -161,15 +162,24 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Not yet implemented; returns null. Use {@link #getUserByEmail(String)}
-     * for the lookup the application currently performs.
+     * Retrieves a user by their database ID.
      *
-     * @param id the user id
-     * @return null
+     * @param id the user's primary key
+     * @return the matching {@link User}
+     * @throws UsernameNotFoundException if no user exists with the given ID or an unexpected error occurs
      */
     @Override
     public User get(Long id) {
-        return null;
+        log.debug("Attempting to retrieve user from database by id: {}", id);
+        try {
+            return jdbcTemplate.queryForObject(SELECT_USER_BY_ID_QUERY, of("id", id), new UserRowMapper());
+        } catch (EmptyResultDataAccessException exception) {
+            log.error("User not found in our database by ID: {}", id);
+            throw new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found in our database: " + id);
+        } catch (Exception exception) {
+            log.error("Unexpected error retrieving user by id '{}': {}", id, exception.getMessage(), exception);
+            throw new org.springframework.security.core.userdetails.UsernameNotFoundException("An unexpected error occurred while retrieving user by id: " + id);
+        }
     }
 
     /**
@@ -378,6 +388,50 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             log.error("Unexpected error during 2FA code verification for email '{}'", exception.getMessage(), exception);
             throw new BadCredentialsException("An unexpected error occurred while verifying the account.");
         }
+    }
+
+    /**
+     * Updates the profile details of an existing user in the database.
+     *
+     * @param user the form data containing the updated user fields
+     * @return the updated {@link User} fetched after the writing of the new details to the database
+     * @throws ApiException if the database update fails for any reason.
+     *                      See {@code getUserDetailsSQLParameterSource} for how the UpdateForm is mapped to SQL parameters
+     */
+    @Override
+    public User updateUserDetails(UpdateForm user) {
+        try {
+            jdbcTemplate.update(UPDATE_USER_DETAILS_QUERY, (getUserDetailsSQLParameterSource(user)));
+            return get(user.getId());
+        } catch (EmptyResultDataAccessException e) {
+            log.error("We cannot update the user details because we cannot find the user in our database with id: {}", user.getId());
+            throw new UsernameNotFoundException("User not found. Please try again.");
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An Error has occurred. Please try again.");
+        }
+    }
+
+    /**
+     * Builds the named SQL parameter source for the update-user-details query.
+     * <p>
+     * This method maps the fields from the UpdateForm to the corresponding named parameters expected by the UPDATE_USER_DETAILS_QUERY. It also normalizes the email and handles any necessary transformations.
+     * </p>
+     *
+     * @param user the form data to map into SQL parameters
+     * @return a {@link SqlParameterSource} ready for use with {@code jdbcTemplate.update}
+     */
+    private SqlParameterSource getUserDetailsSQLParameterSource(UpdateForm user) {
+        return new MapSqlParameterSource()
+                .addValue("id", user.getId())
+                .addValue("firstName", user.getFirstName())
+                .addValue("lastName", user.getLastName())
+                .addValue("email", user.getEmail().trim().toLowerCase())
+                .addValue("imageUrl", user.getImageUrl())
+                .addValue("phoneNumber", user.getPhoneNumber())
+                .addValue("address", user.getAddress())
+                .addValue("title", user.getTitle())
+                .addValue("bio", user.getBio());
     }
 
     /**

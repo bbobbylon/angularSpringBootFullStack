@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.repo;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.User;
 
 import java.util.Collection;
@@ -117,4 +118,12 @@ public interface UserRepo<T extends User> {
      * @return the verified user
      */
     T verifyAccountKey(String key);
+
+    /**
+     * Updates profile fields for an existing user.
+     *
+     * @param user the form data containing the fields to update
+     * @return the updated user entity
+     */
+    T updateUserDetails(UpdateForm user);
 }

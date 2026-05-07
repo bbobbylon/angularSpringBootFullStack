@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
@@ -118,6 +119,29 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDTO verifyAccount(String key) {
         return mapToUserDTO(userRepo.verifyAccountKey(key));
+    }
+
+    /**
+     * Updates an existing user's profile details and returns the refreshed DTO.
+     *
+     * @param user the validated form containing the fields to update
+     * @return the updated user as a DTO with role/permission fields filled in
+     */
+    @Override
+    public UserDTO updateUserDTO(UpdateForm user) {
+        return mapToUserDTO(userRepo.updateUserDetails(user));
+
+    }
+
+    /**
+     * Retrieves a user by their numeric database ID and returns them as a DTO.
+     *
+     * @param userID the user's primary key
+     * @return the matching user as a DTO with role/permission fields filled in
+     */
+    @Override
+    public UserDTO getUserById(Long userID) {
+        return mapToUserDTO(userRepo.get(userID));
     }
 
     /**

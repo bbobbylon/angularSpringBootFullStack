@@ -53,29 +53,60 @@ public class UserQuery {
      */
     public static final String INSERT_2FA_CODE_BY_USER_ID_QUERY = "INSERT INTO twofactorverifications (user_id, code, expiration_date) VALUES (:userId, :code, :expirationDate)";
 
-    /** Selects a user by a 2FA verification code. Parameter: code. */
+    /**
+     * Selects a user by a 2FA verification code. Parameter: code.
+     */
     public static final String SELECT_USER_BY_USER_CODE_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM twofactorverifications WHERE code = :code)";
-    /** Deletes a 2FA verification row by code. Parameter: code. */
+    /**
+     * Deletes a 2FA verification row by code. Parameter: code.
+     */
     public static final String DELETE_2FA_CODE_BY_CODE_QUERY = "DELETE FROM twofactorverifications WHERE code = :code";
-    /** Returns whether a 2FA code is expired. Parameter: code. */
+    /**
+     * Returns whether a 2FA code is expired. Parameter: code.
+     */
     public static final String CHECK_2FA_CODE_EXPIRE_DATE = "SELECT expiration_date < NOW() AS is_expired FROM twofactorverifications WHERE code = :code";
 
-    /** Deletes any existing password reset verification rows for a user. Parameter: userId. */
+    /**
+     * Deletes any existing password reset verification rows for a user. Parameter: userId.
+     */
     public static final String DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY = "DELETE FROM resetpasswordverifications WHERE user_id = :userId";
-    /** Inserts a password reset verification URL with expiration timestamp. Parameters: userId, url, expirationDate. */
+    /**
+     * Inserts a password reset verification URL with expiration timestamp. Parameters: userId, url, expirationDate.
+     */
     public static final String INSERT_PASSWORD_VERIFICATION_QUERY = "INSERT INTO resetpasswordverifications (user_id, url, expiration_date) VALUES (:userId, :url, :expirationDate)";
-    /** Returns whether a verification URL is expired. Parameter: url. */
+    /**
+     * Returns whether a verification URL is expired. Parameter: url.
+     */
     public static final String SELECT_EXPIRATION_BY_URL = "SELECT expiration_date < NOW() AS is_expired FROM resetpasswordverifications WHERE url = :url";
-    /** Selects a user by password reset verification URL. Parameter: url. */
+    /**
+     * Selects a user by password reset verification URL. Parameter: url.
+     */
     public static final String SELECT_USER_BY_PASSWORD_URL_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM resetpasswordverifications WHERE url = :url)";
-    /** Updates a user's password via password reset verification URL. Parameters: password, url. */
+    /**
+     * Updates a user's password via password reset verification URL. Parameters: password, url.
+     */
     public static final String UPDATE_USER_PASSWORD_BY_URL_QUERY = "UPDATE users SET password = :password WHERE id = (SELECT user_id FROM resetpasswordverifications WHERE url = :url)";
-    /** Deletes a password reset verification row by URL. Parameter: url. */
+    /**
+     * Deletes a password reset verification row by URL. Parameter: url.
+     */
     public static final String DELETE_VERIFICATION_BY_URL_QUERY = "DELETE FROM resetpasswordverifications WHERE url = :url";
 
-    /** Selects a user by account verification URL. Parameter: url. */
+    /**
+     * Selects a user by account verification URL. Parameter: url.
+     */
     public static final String SELECT_USER_BY_ACCOUNT_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM accountverifications WHERE url = :url)";
-    /** Enables/disables a user account. Parameters: enabled, id. */
+    /**
+     * Enables/disables a user account. Parameters: enabled, id.
+     */
     public static final String UPDATE_USER_ENABLED_QUERY = "UPDATE users SET enabled = :enabled WHERE id = :id";
+    /**
+     * Updates a user's editable profile fields. Parameters: firstName, lastName, email, imageUrl, address, phoneNumber, bio, title, id.
+     * image_url uses COALESCE so a null :imageUrl preserves the existing value rather than overwriting it.
+     */
+    public static final String UPDATE_USER_DETAILS_QUERY = "UPDATE users SET first_name = :firstName, last_name = :lastName, email = :email, image_url = COALESCE(:imageUrl, image_url), address = :address, phone = :phoneNumber, bio = :bio, title = :title WHERE id = :id";
+    /**
+     * Selects all fields for a user by their primary key. Parameter: id.
+     */
+    public static final String SELECT_USER_BY_ID_QUERY = "SELECT * FROM users WHERE id = :id";
 
 }

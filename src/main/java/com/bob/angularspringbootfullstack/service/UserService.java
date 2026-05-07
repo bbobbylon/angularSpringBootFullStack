@@ -1,7 +1,9 @@
 package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.User;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 
 /**
@@ -81,4 +83,20 @@ public interface UserService {
      * @return the verified user
      */
     UserDTO verifyAccount(String key);
+
+    /**
+     * Updates an existing user's profile details from the supplied form data.
+     *
+     * @param user the validated form containing the fields to update
+     * @return the updated user as a DTO
+     */
+    UserDTO updateUserDTO(@Valid UpdateForm user);
+
+    /**
+     * Retrieves a user by their numeric database ID.
+     *
+     * @param userID the user's primary key
+     * @return the matching user as a DTO
+     */
+    UserDTO getUserById(Long userID);
 }

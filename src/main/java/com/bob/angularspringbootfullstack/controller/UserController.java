@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.controller;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.LoginForm;
+import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.util.concurrent.TimeUnit;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
@@ -145,7 +147,7 @@ public class UserController {
     public ResponseEntity<HttpResponse> sendNewRefreshToken(HttpServletRequest request) {
         if (isHeaderAndTokenValid(request)) {
             String refreshToken = request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length());
-            UserDTO userDTO = userService.getUserByEmail(tokenProvider.getSubject(refreshToken, request));
+            UserDTO userDTO = userService.getUserById(tokenProvider.getSubject(refreshToken, request));
             return ResponseEntity.ok(
                     HttpResponse.builder()
                             .timeStamp(now().toString())
@@ -206,6 +208,38 @@ public class UserController {
                         .build());
     }
 
+    /**
+     * Updates the authenticated user's profile with the supplied form data.
+     * The user ID is always sourced from the authenticated principal — the client-supplied value is ignored.
+     *
+     * @param authentication the current authentication injected by Spring Security
+     * @param user           the validated update payload
+     * @return 200 OK with the updated user as a DTO
+     */
+    @PatchMapping("/update")
+    public ResponseEntity<HttpResponse> updateUser(Authentication authentication, @RequestBody @Valid UpdateForm user) throws InterruptedException {
+        //UserDTO authenticatedUser = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
+        //user.setId(authenticatedUser.getId());
+        TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+        UserDTO updatedUser = userService.updateUserDTO(user);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", updatedUser))
+                        .message("Your profile has been updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+
+    // TODO(admin-update): Add a PATCH /user/admin/update/{userId} endpoint restricted to ADMIN role.
+    //   - Accept a userId path variable; trust it (don't overwrite from JWT) so an admin can target any user.
+    //   - Guard with @PreAuthorize or a permission check (e.g. UPDATE:USER authority).
+    //   - SUPER_ADMIN bypasses org check; ORG_ADMIN must share an active org with the target user
+    //     (see RoleRepoImpl#adminSharesOrgWithUser — throws 403 if no shared org found).
+    //   - Frontend skeleton: Home > Users > User's Name already exists; wire it to this endpoint.
+    //   - See RoleRepoImpl class Javadoc for full org-scoped RBAC design and schema.
 
     /**
      * Starts the password reset flow for the given email by generating a
@@ -346,7 +380,7 @@ public class UserController {
     }
 
     /**
-     * Builds the standard login success response: the user plus a 30-minute
+     * Builds the standard login success response: the user plus a 230-minute
      * access token and a 5-day refresh token created from a freshly loaded
      * UserPrincipal.
      *
@@ -359,7 +393,7 @@ public class UserController {
                         .timeStamp(now().toString())
                         .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
                         .message("Login successful!")
-                        .devMessage("AuthenticationManager succeeded; 30-min access token and 5-day refresh token issued via TokenProvider.")
+                        .devMessage("AuthenticationManager succeeded; 230-min access token and 5-day refresh token issued via TokenProvider.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
