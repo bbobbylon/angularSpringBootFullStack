@@ -39,6 +39,7 @@ import static com.bob.angularspringbootfullstack.query.UserQuery.*;
 import static java.util.Map.of;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
+import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.apache.commons.lang3.time.DateFormatUtils.format;
 import static org.apache.commons.lang3.time.DateUtils.addDays;
 
@@ -421,18 +422,45 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * next request.
      */
     @Override
-    public void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword) {
+    public void updatePassword(Long userID, String currentPassword, String newPassword, String confirmPassword) {
         if (!newPassword.equals(confirmPassword))
             throw new ApiException("Your passwords do not match. Please try again!");
-        User user = get(id);
+        User user = get(userID);
         if (passwordEncoder.matches(currentPassword, user.getPassword())) {
             try {
-                jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY, of("userId", id, "password", passwordEncoder.encode(newPassword)));
+                jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY, of("userId", userID, "password", passwordEncoder.encode(newPassword)));
             } catch (Exception exception) {
                 throw new ApiException("An unexpected error occurred. Please try again.");
             }
         } else {
             throw new ApiException("Current password is incorrect. Please try again.");
+        }
+
+    }
+
+    @Override
+    public void updateAccountSettings(Long userID, Boolean enabled, Boolean notLocked) {
+        try {
+            jdbcTemplate.update(UPDATE_USER_SETTINGS_QUERY, of("userId", userID, "enabled", enabled, "notLocked", notLocked));
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An unexpected error occurred. Please try again.");
+        }
+    }
+
+    @Override
+    public User toggleMFA(String email) {
+        User user = getUserByEmail(email);
+        if (isBlank(user.getPhoneNumber())) {
+            throw new ApiException("A phone number is required to enable 2FA/MFA. Please add a phone number to your profile and try again.");
+        }
+        user.setUsing2FA(!user.isUsing2FA());
+        try {
+            jdbcTemplate.update(TOGGLE_USER_2FA_QUERY, of("using2FA", user.isUsing2FA(), "email", email));
+            return user;
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("Unable to update 2FA/MFA setting at this time. Please try again.");
         }
 
     }

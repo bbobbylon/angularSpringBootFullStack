@@ -116,6 +116,8 @@ public class UserQuery {
      * invalidate any tokens issued before this moment. Parameters: password, userId.
      */
     public static final String UPDATE_USER_PASSWORD_BY_ID_QUERY = "UPDATE users SET password = :password, password_changed_at = NOW() WHERE id = :userId";
+    public static final String UPDATE_USER_SETTINGS_QUERY = "UPDATE users SET enabled = :enabled, non_locked = :notLocked WHERE id = :userId";
+    public static final String TOGGLE_USER_2FA_QUERY = "UPDATE users SET using_mfa = :using2FA WHERE email = :email";
 
 
 }

@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.controller;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.LoginForm;
+import com.bob.angularspringbootfullstack.form.SettingsForm;
 import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.form.UpdatePasswordForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
@@ -166,6 +167,48 @@ public class UserController {
                         .build());
     }
 
+    @PatchMapping("/update/role/{roleName}")
+    public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication, @PathVariable("roleName") String roleName) {
+        UserDTO userDTO = getAuthenticatedUser(authentication);
+        userService.updateUserRole(userDTO.getId(), roleName);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserById(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .message("Your role has been updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    @PatchMapping("/update/settings")
+    public ResponseEntity<HttpResponse> updateAccountSettings(Authentication authentication, @RequestBody @Valid SettingsForm settingsForm) {
+        UserDTO userDTO = getAuthenticatedUser(authentication);
+        userService.updateAccountSettings(userDTO.getId(), settingsForm.getEnabled(), settingsForm.getNotLocked());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserById(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .message("Your account settings have been updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    @PatchMapping("/update/togglemfa")
+    public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) throws InterruptedException {
+        TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+        UserDTO userDTO = userService.toggleMFA(getAuthenticatedUser(authentication).getEmail());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userDTO, "roles", roleService.getAllRoles()))
+                        .message("Multi-Factor authentication setting has been updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
     /**
      * Exchanges a valid refresh token for a new access token. Validates the
      * Authorization header, extracts the subject, and returns a new
@@ -215,16 +258,18 @@ public class UserController {
     }
 
     /**
-     * Returns the current user's profile.
+     * Returns the current user's profile along with all available roles.
      *
      * <p>The {@link Authentication} was installed by {@code CustomAuthFilter}, which stores a
      * {@link UserDTO} directly as the principal (see {@code TokenProvider#getAuthentication}).
      * {@link com.bob.angularspringbootfullstack.utils.UserUtils#getAuthenticatedUser(Authentication)}
      * casts it back so we can read the email and reload the full profile — this avoids
      * {@code Authentication#getName()}, which would fall back to {@code UserDTO#toString()}.
+     * The full roles list is included so the frontend can populate the role selector in
+     * the Authorization tab without a separate request.
      *
      * @param authentication the current Authentication injected by Spring Security
-     * @return 200 OK with the user as a DTO
+     * @return 200 OK with the user as a DTO and the full collection of roles
      */
     @GetMapping("/profile")
     public ResponseEntity<HttpResponse> getProfile(Authentication authentication) {

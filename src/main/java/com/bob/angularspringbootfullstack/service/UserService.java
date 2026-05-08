@@ -1,9 +1,7 @@
 package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
-import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.User;
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 
 /**
@@ -93,12 +91,47 @@ public interface UserService {
     UserDTO updateUserDTO(@Valid UpdateForm user);
 
     /**
-     * Retrieves a user by their numeric database ID.
+     * Retrieves a user by their ID.
      *
-     * @param userID the user's primary key
-     * @return the matching user as a DTO
+     * @param id The ID of the user to retrieve.
+     * @return A UserDTO representing the user.
      */
-    UserDTO getUserById(Long userID);
+    UserDTO getUserById(Long id);
 
-    void updatePassword(Long id, @NotEmpty(message = "The current password is required") String currentPassword, @NotEmpty(message = "The new password is required") String newPassword, @NotEmpty(message = "Confirmation password cannot be empty") String confirmPassword);
+    /**
+     * Updates a user's password.
+     *
+     * @param id              The ID of the user.
+     * @param currentPassword The user's current password.
+     * @param newPassword     The new password.
+     * @param confirmPassword The confirmation of the new password.
+     */
+    void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword);
+
+    /**
+     * Updates the role of a user.
+     *
+     * @param id       The ID of the user.
+     * @param roleName The name of the new role.
+     */
+    void updateUserRole(Long id, String roleName);
+
+    /**
+     * Updates a user's account settings.
+     *
+     * @param id        The ID of the user.
+     * @param enabled   The new enabled status.
+     * @param notLocked The new locked status.
+     */
+    void updateAccountSettings(Long id, Boolean enabled, Boolean notLocked);
+
+    /**
+     * Toggles a user's multi-factor authentication status.
+     *
+     * @param email The email of the user.
+     * @return The updated UserDTO.
+     */
+    UserDTO toggleMFA(String email);
 }
+
+

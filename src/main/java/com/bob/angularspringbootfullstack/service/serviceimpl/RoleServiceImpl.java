@@ -6,6 +6,8 @@ import com.bob.angularspringbootfullstack.service.RoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
+
 /**
  * RoleServiceImpl provides role-related business operations.
  * <p>
@@ -42,6 +44,20 @@ public class RoleServiceImpl implements RoleService {
     @Override
     public Role getRoleByUserId(Long id) {
         return roleRepository.getRoleByUserId(id);
+    }
+
+    /**
+     * Returns every role defined in the system by delegating to the repository.
+     * <p>
+     * Called by {@code GET /user/profile} to embed the full role catalogue in the
+     * response, giving the frontend everything it needs to populate the role
+     * selector in the Authorization tab without a separate network request.
+     *
+     * @return a collection of all available {@link Role} entities
+     */
+    @Override
+    public Collection<Role> getAllRoles() {
+        return roleRepository.list();
     }
 }
 

@@ -6,11 +6,11 @@ import java.util.Collection;
 
 /**
  * RoleRepo defines the data access contract for Role entities.
- *
+ * <p>
  * This generic repository interface extends to any type T that extends Role,
  * providing a flexible CRUD (Create, Read, Update, Delete) contract plus
  * custom role management operations. Implementations handle direct database access.
- *
+ * <p>
  * Generic CRUD operations provide standard database operations,
  * while custom methods handle role-specific queries and user-role relationships.
  *
@@ -26,14 +26,15 @@ public interface RoleRepo<T extends Role> {
     T create(T data);
 
     /**
-     * Retrieves a paginated list of roles.
-     * Supports pagination for large datasets.
+     * Returns all roles stored in the database, ordered by ID.
+     * <p>
+     * The result is used by the {@code GET /user/profile} endpoint to embed the
+     * full role catalogue in the profile response so the frontend can populate
+     * the Authorization tab role selector without issuing a separate request.
      *
-     * @param page the page number (0-indexed)
-     * @param pageSize the number of roles per page
-     * @return a collection of roles on the specified page
+     * @return a collection of all {@link Role} entities
      */
-    Collection<T> list(int page, int pageSize);
+    Collection<T> list();
 
     /**
      * Retrieves a single role by ID.
@@ -46,7 +47,7 @@ public interface RoleRepo<T extends Role> {
     /**
      * Updates an existing role in the database.
      *
-     * @param id the ID of the role to update
+     * @param id   the ID of the role to update
      * @param data the updated role data
      * @return the updated role
      */
@@ -63,7 +64,7 @@ public interface RoleRepo<T extends Role> {
      * Assigns a role to a user by role name.
      * Creates a relationship in the user_roles junction table.
      *
-     * @param userId the ID of the user to assign the role to
+     * @param userId   the ID of the user to assign the role to
      * @param roleName the name of the role to assign
      * @throws ApiException if the role name is not found
      */
@@ -89,7 +90,7 @@ public interface RoleRepo<T extends Role> {
     /**
      * Updates a user's role assignment.
      *
-     * @param userId the ID of the user whose role should be updated
+     * @param userId   the ID of the user whose role should be updated
      * @param roleName the new role name to assign
      */
     void updateUserRole(Long userId, String roleName);

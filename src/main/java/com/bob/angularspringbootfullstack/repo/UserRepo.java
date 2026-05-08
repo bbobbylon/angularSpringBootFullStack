@@ -131,5 +131,10 @@ public interface UserRepo<T extends User> {
      * Verifies {@code currentPassword}, then updates the user's password and
      * stamps {@code password_changed_at} to invalidate pre-change tokens.
      */
-    void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword);
+    void updatePassword(Long userID, String currentPassword, String newPassword, String confirmPassword);
+
+    void updateAccountSettings(Long userID, Boolean enabled, Boolean notLocked);
+
+    T toggleMFA(String email);
 }
+

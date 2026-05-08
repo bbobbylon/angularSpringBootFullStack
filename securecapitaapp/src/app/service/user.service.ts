@@ -135,6 +135,21 @@ export class UserService {
       catchError(this.handleError),
     );
 
+  updateUserRole$ = (roleName: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/role/${roleName}`, {})
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  updateAccountSettings$ = (settingsForm: { enabled: boolean; notLocked: boolean }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/settings`, settingsForm)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  toggleMFA$ = (): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/togglemfa`, {})
+      .pipe(tap(console.log), catchError(this.handleError));
+
   /**
    * Normalises HTTP errors into a single Observable<never> so all callers
    * receive a consistent Error instance regardless of whether the failure
