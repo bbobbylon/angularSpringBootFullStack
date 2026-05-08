@@ -107,6 +107,15 @@ public class UserQuery {
     /**
      * Selects all fields for a user by their primary key. Parameter: id.
      */
+    /**
+     * Selects all fields for a user by their primary key. Parameter: id.
+     */
     public static final String SELECT_USER_BY_ID_QUERY = "SELECT * FROM users WHERE id = :id";
+    /**
+     * Updates a user's password and stamps password_changed_at to NOW() to
+     * invalidate any tokens issued before this moment. Parameters: password, userId.
+     */
+    public static final String UPDATE_USER_PASSWORD_BY_ID_QUERY = "UPDATE users SET password = :password, password_changed_at = NOW() WHERE id = :userId";
+
 
 }

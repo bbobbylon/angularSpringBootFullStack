@@ -17,6 +17,11 @@ spring:
     generate-ddl: true
   sql:
     init:
+      # "never" means schema.sql is NOT run on startup — existing DB is used as-is.
+      # To apply schema changes (new columns, tables, etc.), either:
+      #   1. Run ALTER TABLE manually in your DB client, OR
+      #   2. Temporarily set mode to "always", restart, then set back to "never".
+      # WARNING: "always" drops and recreates all tables, wiping all existing data.
       mode: never
       continue-on-error: true
   web:

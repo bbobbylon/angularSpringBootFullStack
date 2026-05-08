@@ -126,4 +126,10 @@ public interface UserRepo<T extends User> {
      * @return the updated user entity
      */
     T updateUserDetails(UpdateForm user);
+
+    /**
+     * Verifies {@code currentPassword}, then updates the user's password and
+     * stamps {@code password_changed_at} to invalidate pre-change tokens.
+     */
+    void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword);
 }

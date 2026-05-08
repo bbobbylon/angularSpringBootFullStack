@@ -118,6 +118,35 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
     );
   }
 
+  /** Submits a password change. Guards against mismatched passwords client-side before hitting the API. */
+  updatePassword(passwordForm: NgForm): void {
+    this.isLoadingSubject.next(true);
+    /*    const currentUser = this.dataSubject.value?.data?.user;
+    console.log('Current user data before update:', currentUser);
+    const updatedUser = { ...currentUser, ...passwordForm.value };
+    console.log('Updated user data to be sent to server:', updatedUser);*/
+
+    if (passwordForm.value.newPassword === passwordForm.value.confirmPassword) {
+      this.profileState$ = this.userService.updatePassword$(passwordForm.value).pipe(
+        map(response => {
+          console.log('Profile updated successfully:', response);
+          passwordForm.reset();
+          this.isLoadingSubject.next(false);
+          return { dataState: DataState.LOADED, appData: this.dataSubject.value };
+        }),
+        startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
+        catchError((error: string) => {
+          this.isLoadingSubject.next(false);
+          passwordForm.reset();
+          return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+        }),
+      );
+    } else {
+      passwordForm.reset();
+      this.isLoadingSubject.next(false);
+    }
+  }
+
   protected hasPermission(permission: string): boolean {
     const permissions = this.dataSubject.value?.data?.user?.permissions;
     if (!permissions) return false;
@@ -125,15 +154,6 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
       .split(',')
       .map((p: string) => p.trim())
       .includes(permission);
-  }
-
-  protected updatePassword(form: NgForm): void {
-    if (form.value.newPassword !== form.value.confirmNewPassword) {
-      form.reset();
-      return;
-    }
-    console.log('updatePassword', form.value);
-    form.reset();
   }
 
   protected updateRole(form: NgForm): void {

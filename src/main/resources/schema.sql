@@ -23,8 +23,9 @@ CREATE TABLE users
     enabled    BOOLEAN      DEFAULT FALSE,
     non_locked BOOLEAN      DEFAULT TRUE,
     using_mfa  BOOLEAN      DEFAULT FALSE,
-    created_at DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    image_url  VARCHAR(255) DEFAULT 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
+    created_at          DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    password_changed_at DATETIME     DEFAULT NULL,
+    image_url           VARCHAR(255) DEFAULT 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
     CONSTRAINT UQ_Users_Email UNIQUE (email)
 );
 

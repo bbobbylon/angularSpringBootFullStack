@@ -92,6 +92,36 @@ export class UserService {
       );
 
   /**
+   * TODO make other javadocs/tsdocs as detailed and as concise as this one!
+   * Here we can define an interface and pass it in, like the other Observables, but we can also pass in the object literal. It must match the backend properties directly i.e., UpdatePasswordForm.java's variables, which would then be the variables that the updatePassword() method uses as parameters for the @RequestBody in the backend of the UserController.java /update/password endpoint. Spring Boot will then go in and use the @Setter or @Data annotation to set those properties and match them together. Spring Boot will try to do the mapping and will fail if these properties don't match. So we have to make sure that the properties in the object literal that we pass in here match the properties in the UpdatePasswordForm.java class in the backend.
+   * @param form
+   */
+  /**
+   * Submits a password change for the authenticated user. On success the
+   * backend returns a fresh token pair (because the old tokens are invalidated
+   * by the passwordChangedAt check), which the tap operator swaps into
+   * localStorage so subsequent requests use the new tokens automatically.
+   *
+   * Field names must match UpdatePasswordForm.java exactly for Spring to deserialize them.
+   */
+  updatePassword$ = (form: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/password`, form)
+      .pipe(
+        tap(response => {
+          localStorage.removeItem(Key.TOKEN);
+          localStorage.removeItem(Key.REFRESH_TOKEN);
+          localStorage.setItem(Key.TOKEN, response.data.access_token);
+          localStorage.setItem(Key.REFRESH_TOKEN, response.data.refresh_token);
+        }),
+        catchError(this.handleError),
+      );
+
+  /**
    * Normalises HTTP errors into a single Observable<never> so all callers
    * receive a consistent Error instance regardless of whether the failure
    * was a client-side network event or a structured server error response.
