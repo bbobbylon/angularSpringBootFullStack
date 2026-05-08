@@ -3,7 +3,7 @@
   <div class="container">
     <a [routerLink]="['/']" class="navbar-brand">
       <i class="bi bi-safe" style="margin-right: 5px;"></i>
-      SecureCapita
+      A Cool Application
     </a>
     <button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"
             class="navbar-toggler" data-bs-target="#navbarSupportedContent" data-bs-toggle="collapse"
@@ -45,7 +45,7 @@
              id="navbarDropdownProfile"
              role="button">
             @if (user(); as u) {
-              <img [alt]="u.firstName" [src]="u.imageUrl" class="user-avatar-md rounded-circle">
+              <img [alt]="u.firstName" [src]="u.imageUrl" class="user-avatar-md rounded-circle" style="max-width: 40px">
             } @else {
               <i class="bi bi-person-circle" style="font-size: 1.5rem;"></i>
             }

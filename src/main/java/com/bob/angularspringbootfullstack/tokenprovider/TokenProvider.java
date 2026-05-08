@@ -33,7 +33,7 @@ import static java.util.stream.Collectors.toList;
  * Issues and verifies JWTs for authenticated users.
  * <p>
  * Access tokens carry the user's authorities, use the numeric user ID as the
- * subject, and expire in 230 minutes; refresh tokens carry only the subject
+ * subject, and expire in 30 minutes; refresh tokens carry only the subject
  * (user ID) and expire in 5 days. Both are signed
  * with HMAC512 using the secret from application properties. Verification
  * intentionally does not require the "authorities" claim so refresh tokens
@@ -46,7 +46,7 @@ public class TokenProvider {
     private static final String BOBBYLON_LLC = "BOBBYLON_LLC";
     private static final String BOBS_MANAGEMENT = "BOBS_MANAGEMENT";
     private static final String AUTHORITIES = "authorities";
-    private static final long ACCESS_TOKEN_EXPIRE_TIME = 13_800_000;
+    private static final long ACCESS_TOKEN_EXPIRE_TIME = 1_800_000;
     private static final long REFRESH_TOKEN_EXPIRE_TIME = 432_000_000;
     private static final String TOKEN_UNVERIFIABLE = "Invalid JWT secret key";
     private final UserService userService;
@@ -56,7 +56,7 @@ public class TokenProvider {
     /**
      * Generates a JWT access token for the given UserPrincipal.
      * The token includes issuer, audience, issued at, subject (user ID),
-     * authorities (permissions/roles), and an expiration time (230 minutes).
+     * authorities (permissions/roles), and an expiration time (30 minutes).
      * The token is signed using HMAC512 with the secret key.
      *
      * @param userPrincipal an authenticated user
@@ -213,9 +213,9 @@ public class TokenProvider {
      * Verifies the token and returns its subject (the user's ID).
      * <p>
      * Catches the JWT library's failure modes and remaps them so callers see
-     * exceptions with consistent semantics: TokenExpiredException and
-     * InvalidClaimException are rethrown as-is (the global handler maps them
-     * to 401), JWTDecodeException/IllegalArgumentException become a
+     * exceptions with consistent semantics: expired tokens and
+     * InvalidClaimException become a generic JWTVerificationException (401),
+     * JWTDecodeException/IllegalArgumentException become a
      * BadCredentialsException with a client-safe message ("Could not decode
      * the token..."), and any other verification failure becomes an
      * ApiException. The original library message is stashed on the request
@@ -225,17 +225,16 @@ public class TokenProvider {
      * @param token   the raw JWT
      * @param request the current request, used to stash error context
      * @return the subject claim (the user's ID)
-     * @throws TokenExpiredException    if the token is expired
-     * @throws InvalidClaimException    if a required claim doesn't match
-     * @throws JWTVerificationException for other verification failures
+     * @throws JWTVerificationException for all token verification failures
      */
     public Long getSubject(String token, HttpServletRequest request) throws JWTVerificationException {
         try {
             // returns a string, which we convert into type Long.
             return Long.valueOf(getJWTVerifier().verify(token).getSubject());
         } catch (TokenExpiredException e) {
+            // Store the detail server-side for logging but never expose it to the client.
             request.setAttribute("expiredMessage", e.getMessage());
-            throw e;
+            throw new JWTVerificationException("Authentication failed.");
         } catch (InvalidClaimException e) {
             request.setAttribute("invalidClaim", e.getMessage());
             throw e;

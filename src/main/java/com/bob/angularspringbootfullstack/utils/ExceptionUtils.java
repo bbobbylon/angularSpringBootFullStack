@@ -1,7 +1,6 @@
 package com.bob.angularspringbootfullstack.utils;
 
 import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.exceptions.TokenExpiredException;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,7 +16,6 @@ import java.io.OutputStream;
 
 import static java.time.LocalTime.now;
 import static org.springframework.http.HttpStatus.*;
-import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 
 /**
  * Helpers shared by the security filter chain for serializing exceptions into
@@ -25,7 +23,7 @@ import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
  * <p>
  * Used by CustomAuthFilter and the controller's authenticate() helper to turn
  * known auth/security exceptions into structured HTTP responses:
- * TokenExpiredException/JWTVerificationException → 401,
+ * JWTVerificationException (including expired tokens) → 401,
  * ApiException/DisabledException/LockedException/BadCredentialsException → 400,
  * anything else → generic 500 so internal details are not leaked to the client.
  */
@@ -34,6 +32,7 @@ public class ExceptionUtils {
     /**
      * Writes a JSON error response derived from the given exception.
      * <p>
+     * JWTVerificationException (covers all token failures including expiry) becomes a 401.
      * Known auth-related exceptions (ApiException, DisabledException,
      * LockedException, BadCredentialsException) become a 400 carrying the
      * exception message; anything else becomes a 500 with a generic message
@@ -45,10 +44,7 @@ public class ExceptionUtils {
      * @param exception the exception to translate
      */
     public static void processError(HttpServletRequest request, HttpServletResponse response, Exception exception) {
-        if (exception instanceof TokenExpiredException) {
-            HttpResponse httpResponse = getHttpResponse(request, response, "Your session has expired. Please log in again.", UNAUTHORIZED);
-            writeResponse(response, httpResponse);
-        } else if (exception instanceof JWTVerificationException) {
+        if (exception instanceof JWTVerificationException) {
             HttpResponse httpResponse = getHttpResponse(request, response, "Invalid token. Please log in again.", UNAUTHORIZED);
             writeResponse(response, httpResponse);
         } else if (exception instanceof ApiException || exception instanceof DisabledException || exception instanceof LockedException || exception instanceof BadCredentialsException) {
