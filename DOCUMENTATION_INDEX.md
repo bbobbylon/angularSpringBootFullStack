@@ -35,6 +35,13 @@
 | **REFACTORING_COMPLETE_SUMMARY.md**   | 300 lines   | What was documented and why          | Files changed, how to use docs                                    |
 | **DOCUMENTATION_SUMMARY.md**          | 200 lines   | Overview of all 30 files             | Quick reference                                                   |
 
+### Frontend Guides (Angular)
+
+| File                                | Purpose                                           |
+|-------------------------------------|---------------------------------------------------|
+| **securecapitaapp/README.md**       | Frontend overview, routes, auth flow, run steps   |
+| **FRONTEND_DOCUMENTATION_SETUP.md** | Current Angular architecture and integration notes |
+
 ### Source Code Files (READ SECOND)
 
 | File                                    | Why Read It                                                                                       |
@@ -134,8 +141,8 @@ JWT = Header . Payload . Signature
 
 Header: {"alg": "HS512", "typ": "JWT"}
 
-Payload: {
-  "sub": "bob@example.com",
+  Payload: {
+    "sub": "1",
   "authorities": ["READ:USER", "UPDATE:USER", "DELETE:USER"],
   "exp": 1713247333,
   ...
@@ -180,8 +187,8 @@ UserController.sendNewRefreshToken() gets the request
     ↓
 TokenProvider.getSubject(refreshToken, request):
   - Validates refresh token signature
-  - Extracts email (no authorities needed)
-  - Returns email
+  - Extracts user ID (no authorities needed)
+  - Returns user ID
     ↓
 TokenProvider.createAccessToken(userPrincipal):
   - Creates NEW access token with authorities

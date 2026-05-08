@@ -3,6 +3,8 @@
 ## Overview
 
 Comprehensive JavaDoc comments have been added to all source files in the Angular Spring Boot Full Stack project.
+Frontend TypeScript files now include concise multi-line TSdoc comments where applicable, and the frontend docs
+have been refreshed to reflect the current Angular standalone structure.
 Each method includes detailed documentation explaining what it does, its parameters, return values, and exceptions
 thrown. **Recent updates include detailed documentation for refresh token flow, JWT error handling, and token type detection.**
 
@@ -73,9 +75,10 @@ thrown. **Recent updates include detailed documentation for refresh token flow, 
 
 - **LoginForm.java** - Data transfer object for login requests
 
-### Utilities (1 file)
+### Utilities (2 files)
 
 - **SMSUtils.java** - Twilio SMS sending utility for 2FA codes
+- **UserUtils.java** - Helper for extracting authenticated user details from Authentication
 
 ### Enumerations (2 files)
 
@@ -85,6 +88,11 @@ thrown. **Recent updates include detailed documentation for refresh token flow, 
 ### Main Application (1 file)
 
 - **AngularSpringBootFullStackApplication.java** - Spring Boot main class and bean configuration
+
+### Frontend Documentation (2 files)
+
+- **securecapitaapp/README.md** - Frontend overview, routes, and auth flow
+- **FRONTEND_DOCUMENTATION_SETUP.md** - Current Angular architecture and integration notes
 
 ## Documentation Style
 

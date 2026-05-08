@@ -144,7 +144,16 @@ public class UserServiceImpl implements UserService {
         return mapToUserDTO(userRepo.get(userID));
     }
 
-    /** Delegates password update to the repo, which also stamps {@code password_changed_at}. */
+    /**
+     * Delegates the password change to the repository, which validates the current password,
+     * BCrypt-encodes the new one, and stamps {@code password_changed_at} to invalidate any
+     * JWTs issued before this moment.
+     *
+     * @param id              the user's primary key
+     * @param currentPassword the user's existing password for verification
+     * @param newPassword     the replacement password (encoded by the repo before storage)
+     * @param confirmPassword must equal {@code newPassword}; validated by the repo
+     */
     @Override
     public void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword) {
         userRepo.updatePassword(id, currentPassword, newPassword, confirmPassword);

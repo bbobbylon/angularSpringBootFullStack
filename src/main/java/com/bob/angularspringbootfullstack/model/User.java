@@ -42,6 +42,14 @@ public class User {
     private boolean isNotLocked;
     private boolean isUsing2FA;
     private LocalDateTime createdAt;
-    /** Set to NOW() on every password change; tokens issued before this timestamp are rejected. */
+    /**
+     * Timestamp of the most recent password change.
+     * <p>
+     * Set to {@code NOW()} by the database on every password update. Any JWT whose
+     * {@code issuedAt} is not after this value is rejected by
+     * {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider#isTokenValid},
+     * preventing stolen pre-change tokens from remaining usable.
+     * Null for users who have never changed their password.
+     */
     private LocalDateTime passwordChangedAt;
 }

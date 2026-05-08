@@ -102,24 +102,38 @@ export class UserService {
    * by the passwordChangedAt check), which the tap operator swaps into
    * localStorage so subsequent requests use the new tokens automatically.
    *
-   * Field names must match UpdatePasswordForm.java exactly for Spring to deserialize them.
+   * Field names must match UpdatePasswordForm.java so Spring can bind the
+   * request body and deserialize them. On success, refreshed tokens are saved to localStorage.
+   * Submits a password change for the authenticated user.
+   *
+   * Flow:
+   * 1) Accepts the form payload from the profile screen.
+   * 2) Sends the payload to POST /user/update/password.
+   * 3) Backend validates current password and confirms new/confirm match.
+   * 4) Backend returns a fresh access + refresh token pair.
+   * 5) tap() replaces localStorage tokens so subsequent API calls stay valid.
+   * Important details:
+   * - Field names must match UpdatePasswordForm.java exactly.
+   * - Token rotation is required because passwordChangedAt invalidates old tokens.
+   * - Errors are normalized through handleError so callers receive a single message.
+   *
+   * @param form - currentPassword, newPassword, confirmPassword
+   * @returns Observable of the standard API envelope containing updated tokens
    */
   updatePassword$ = (form: {
     currentPassword: string;
     newPassword: string;
     confirmPassword: string;
   }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
-    this.http
-      .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/password`, form)
-      .pipe(
-        tap(response => {
-          localStorage.removeItem(Key.TOKEN);
-          localStorage.removeItem(Key.REFRESH_TOKEN);
-          localStorage.setItem(Key.TOKEN, response.data.access_token);
-          localStorage.setItem(Key.REFRESH_TOKEN, response.data.refresh_token);
-        }),
-        catchError(this.handleError),
-      );
+    this.http.patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/password`, form).pipe(
+      tap(response => {
+        localStorage.removeItem(Key.TOKEN);
+        localStorage.removeItem(Key.REFRESH_TOKEN);
+        localStorage.setItem(Key.TOKEN, response.data.access_token);
+        localStorage.setItem(Key.REFRESH_TOKEN, response.data.refresh_token);
+      }),
+      catchError(this.handleError),
+    );
 
   /**
    * Normalises HTTP errors into a single Observable<never> so all callers

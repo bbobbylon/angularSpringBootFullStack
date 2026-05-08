@@ -8,6 +8,12 @@ import { UserService } from '../../service/user.service';
 import { BehaviorSubject, catchError, map, Observable, of, startWith } from 'rxjs';
 import { Key } from '../../enumeration/key.enumeration';
 
+/**
+ * Handles login and MFA verification flows.
+ *
+ * Drives the login form, token storage, and the optional
+ * two-factor verification step when required by the backend.
+ */
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -16,6 +22,8 @@ import { Key } from '../../enumeration/key.enumeration';
   imports: [RouterModule, CommonModule, FormsModule],
 })
 export class LoginComponent {
+  /** Template access to the DataState enum for UI state rendering. */
+  readonly DataState = DataState;
   loginState$: Observable<LoginStateInterface> = of({
     dataState: DataState.LOADED,
     isUsingMfa: false,
@@ -28,12 +36,17 @@ export class LoginComponent {
     error: '',
     message: '',
   };
-  readonly DataState = DataState;
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private phoneSubject = new BehaviorSubject<string | null>(null);
   private emailSubject = new BehaviorSubject<string | null>(null);
 
+  /**
+   * Submits the MFA verification code once the backend has requested 2FA.
+   *
+   * Stores tokens, navigates to the home route on success, and emits
+   * an error state if the verification fails.
+   */
   verifyCode(verifyCodeForm: NgForm): void {
     this.loginState$ = this.userService.verifyCode$(this.emailSubject.value, verifyCodeForm.value.code).pipe(
       map(response => {
@@ -60,12 +73,23 @@ export class LoginComponent {
     );
   }
 
+  /**
+   * Resets the login view back to the initial form state.
+   *
+   * Used when the user wants to switch back from MFA entry.
+   */
   loginPage(): void {
     this.loginState$ = of({
       dataState: DataState.LOADED,
     });
   }
 
+  /**
+   * Authenticates with email/password and handles optional 2FA.
+   *
+   * On success stores tokens and routes to the home page; on failure
+   * emits an error state for the template to display.
+   */
   login(loginForm: NgForm): void {
     this.loginState$ = this.userService.login$(loginForm.value.email, loginForm.value.password).pipe(
       map(response => {

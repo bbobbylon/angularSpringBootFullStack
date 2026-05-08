@@ -2,6 +2,8 @@ package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.model.Role;
 
+import java.util.Collection;
+
 /**
  * Service-layer facade for role lookups.
  *
@@ -15,4 +17,7 @@ public interface RoleService {
      * @return the user's role
      */
     Role getRoleByUserId(Long id);
+
+    Collection<Role> getAllRoles();
+
 }

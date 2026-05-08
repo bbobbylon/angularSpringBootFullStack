@@ -143,8 +143,8 @@ public class UserController {
      * despite the {@code passwordChangedAt} invalidation check in
      * {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider#isTokenValid}.
      *
-     * @param authentication      the current Spring Security authentication
-     * @param updatePasswordForm  the current password plus the new password and confirmation
+     * @param authentication     the current Spring Security authentication
+     * @param updatePasswordForm the current password plus the new password and confirmation
      * @return 200 OK with the user and fresh access/refresh tokens
      */
     @PatchMapping("/update/password")
@@ -232,7 +232,7 @@ public class UserController {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userDTO))
+                        .data(of("user", userDTO, "roles", roleService.getAllRoles()))
                         .message("We have fetched your profile for you!")
                         .status(OK)
                         .statusCode(OK.value())

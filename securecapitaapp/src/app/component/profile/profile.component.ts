@@ -20,6 +20,12 @@ interface ActivityEvent {
   description: string;
 }
 
+/**
+ * Profile view for authenticated users.
+ *
+ * Loads profile data, supports profile updates and password changes,
+ * and manages local UI state such as loading and audit-log toggles.
+ */
 @Component({
   selector: 'app-profile',
   standalone: true,
@@ -63,17 +69,12 @@ export class ProfileComponent implements OnInit {
   private isLoadingSubject = new BehaviorSubject<boolean>(false);
   protected isLoading$ = this.isLoadingSubject.asObservable();
 
-  /** in this method, When we run the .pipe() on the profile$ observable, we are transforming the emitted value (which is of type CustomHttpResponseInterface<ProfileInterface>) into a new object that matches the GlobalStateInterface structure expected by our component's template.
-We also handle loading and error states appropriately.
-This is important to note because the original profile$ observable emits a different type than what our template expects, so we need to map it to the correct structure before it can be used in the template.
-If we check the GlobalState, we can see that it has a dataState property to indicate the loading state, an appData property to hold the actual profile data, and an error property to hold any error messages.
-By mapping the profile$ observable to this structure, we ensure that our template can react correctly to loading, success, and error states when displaying the user's profile information.
-Another thing to keep in mind is that we are also using the startWith operator to emit an initial loading state before the profile data is fetched, and the catchError operator to handle any errors that may occur during the HTTP request and emit an error state accordingly.
-This is all needed to ensure that our component can handle the asynchronous nature of fetching profile data and provide a good user experience by showing loading indicators and error messages when necessary.
-When we call ngOnInit, we will make the Http call, and once we get the response, we will log it, save it in a local variable as an observable, which is profileState$. profileState$ is the observable we will be using in the template to display the profile data. */
-  //private readonly router = inject(Router);
-
-  // We return dataState to the profileState$ observable.
+  /**
+   * Loads the current profile into the component state on initial render.
+   *
+   * Emits loading and error states for the template to display while
+   * the profile request is in flight.
+   */
   ngOnInit(): void {
     this.isLoadingSubject.next(true);
     this.profileState$ = this.userService.profile$().pipe(
@@ -92,10 +93,10 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
   }
 
   /**
-   * This method is responsible for updating the user's profile information. It takes a NgForm as an argument, which contains the updated profile data entered by the user. The method first sets the loading state to true, then it retrieves the current user data from the dataSubject and merges it with the new values from the profileForm. It then calls the update$ method of the UserService to send the updated user data to the server. The response from the server is handled using RxJS operators: if the update is successful, it updates the dataSubject with the new profile data and sets the loading state to false; if there is an error, it catches the error, sets the loading state to false, and updates the profileState$ observable with an error state.
-   * @param profileForm
-   * @returns void
-   * @important This method is crucial for allowing users to update their profile information and ensuring that the UI reflects the latest data from the server. It also demonstrates how to handle asynchronous operations and manage loading and error states effectively in an Angular component using RxJS.
+   * Persists updated profile fields entered in the form.
+   *
+   * Merges form values with the current user snapshot and updates
+   * the observable state so the template reflects the new profile.
    */
   updateProfile(profileForm: NgForm): void {
     this.isLoadingSubject.next(true);
@@ -118,7 +119,12 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
     );
   }
 
-  /** Submits a password change. Guards against mismatched passwords client-side before hitting the API. */
+  /**
+   * Submits a password change after confirming the two new passwords match.
+   *
+   * Resets the form on success or failure and relies on the backend to
+   * return refreshed tokens that keep the session active.
+   */
   updatePassword(passwordForm: NgForm): void {
     this.isLoadingSubject.next(true);
     /*    const currentUser = this.dataSubject.value?.data?.user;
@@ -147,6 +153,11 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
     }
   }
 
+  /**
+   * Checks whether the current user has a specific permission.
+   *
+   * Parses the comma-delimited permissions string returned by the backend.
+   */
   protected hasPermission(permission: string): boolean {
     const permissions = this.dataSubject.value?.data?.user?.permissions;
     if (!permissions) return false;
@@ -156,22 +167,47 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
       .includes(permission);
   }
 
+  /**
+   * Handles a role update form submission (stub until backend wiring).
+   *
+   * @param form - the role form payload
+   */
   protected updateRole(form: NgForm): void {
     console.log('updateRole', form.value);
   }
 
+  /**
+   * Handles account settings updates (stub until backend wiring).
+   *
+   * @param form - the settings form payload
+   */
   protected updateAccountSettings(form: NgForm): void {
     console.log('updateAccountSettings', form.value);
   }
 
+  /**
+   * Toggles multi-factor authentication in the UI (placeholder).
+   *
+   * Backend integration will be added alongside the account settings API.
+   */
   protected toggleMfa(): void {
     /* empty */
   }
 
+  /**
+   * Shows or hides the activity log panel.
+   *
+   * Implemented via a signal to keep template updates cheap.
+   */
   protected toggleLogs(): void {
     this.showLogs.update(v => !v);
   }
 
+  /**
+   * Handles selection of a new avatar image (stub).
+   *
+   * Extracts the chosen file for future upload handling.
+   */
   protected updatePicture(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
