@@ -20,6 +20,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
@@ -181,19 +183,31 @@ public class TokenProvider {
     }
 
     /**
-     * Returns true when the email is non-empty and the token verifies and is
-     * not past its expiration. Used by CustomAuthFilter as a gate before
-     * extracting authorities and authenticating the request.
+     * Returns true when the token is structurally valid, not expired, and was
+     * issued after the user's last password change. Used by CustomAuthFilter as
+     * a gate before extracting authorities and authenticating the request.
+     * <p>
+     * The {@code passwordChangedAt} check ensures tokens issued before a password
+     * change are invalidated — preventing stolen pre-change tokens from remaining
+     * usable.
      *
      * @param userID the numeric user ID previously extracted via {@link #getSubject(String, HttpServletRequest)}
      * @param token  the raw JWT
-     * @return true if both checks pass
+     * @return true if all checks pass
      * @throws JWTVerificationException if token verification fails
      */
     public boolean isTokenValid(Long userID, String token) {
+        if (Objects.isNull(userID)) return false;
         JWTVerifier verifier = getJWTVerifier();
-        // return StringUtils.isNotEmpty(email) && !isTokenExpired(verifier, token);
-        return !Objects.isNull(userID) && !isTokenExpired(verifier, token);
+        if (isTokenExpired(verifier, token)) return false;
+        LocalDateTime passwordChangedAt = userService.getUserById(userID).getPasswordChangedAt();
+        if (passwordChangedAt != null) {
+            // Reject tokens that were issued before the last password change.
+            LocalDateTime issuedAt = verifier.verify(token).getIssuedAt()
+                    .toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+            if (!issuedAt.isAfter(passwordChangedAt)) return false;
+        }
+        return true;
     }
 
     /**

@@ -99,4 +99,6 @@ public interface UserService {
      * @return the matching user as a DTO
      */
     UserDTO getUserById(Long userID);
+
+    void updatePassword(Long id, @NotEmpty(message = "The current password is required") String currentPassword, @NotEmpty(message = "The new password is required") String newPassword, @NotEmpty(message = "Confirmation password cannot be empty") String confirmPassword);
 }

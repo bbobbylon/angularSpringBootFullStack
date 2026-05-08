@@ -416,6 +416,28 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
+     * Validates the current password, then persists the new one alongside a
+     * {@code password_changed_at} timestamp so old tokens are rejected on the
+     * next request.
+     */
+    @Override
+    public void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword) {
+        if (!newPassword.equals(confirmPassword))
+            throw new ApiException("Your passwords do not match. Please try again!");
+        User user = get(id);
+        if (passwordEncoder.matches(currentPassword, user.getPassword())) {
+            try {
+                jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY, of("userId", id, "password", passwordEncoder.encode(newPassword)));
+            } catch (Exception exception) {
+                throw new ApiException("An unexpected error occurred. Please try again.");
+            }
+        } else {
+            throw new ApiException("Current password is incorrect. Please try again.");
+        }
+
+    }
+
+    /**
      * Builds the named SQL parameter source for the update-user-details query.
      * <p>
      * This method maps the fields from the UpdateForm to the corresponding named parameters expected by the UPDATE_USER_DETAILS_QUERY. It also normalizes the email and handles any necessary transformations.

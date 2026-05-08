@@ -144,6 +144,12 @@ public class UserServiceImpl implements UserService {
         return mapToUserDTO(userRepo.get(userID));
     }
 
+    /** Delegates password update to the repo, which also stamps {@code password_changed_at}. */
+    @Override
+    public void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword) {
+        userRepo.updatePassword(id, currentPassword, newPassword, confirmPassword);
+    }
+
     /**
      * Looks up the user's role and converts the User entity into a UserDTO
      * with roleName and permissions populated.

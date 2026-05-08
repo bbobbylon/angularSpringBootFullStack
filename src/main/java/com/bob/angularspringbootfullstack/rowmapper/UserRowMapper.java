@@ -66,6 +66,9 @@ public class UserRowMapper implements RowMapper<User> {
                 .phoneNumber(resultSet.getString("phone"))
                 .imageUrl(resultSet.getString("image_url"))
                 .address(resultSet.getString("address"))
+                .passwordChangedAt(resultSet.getTimestamp("password_changed_at") != null
+                        ? resultSet.getTimestamp("password_changed_at").toLocalDateTime()
+                        : null)
                 .build();
 
     }

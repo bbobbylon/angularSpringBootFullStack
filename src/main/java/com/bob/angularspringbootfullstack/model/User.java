@@ -42,4 +42,6 @@ public class User {
     private boolean isNotLocked;
     private boolean isUsing2FA;
     private LocalDateTime createdAt;
+    /** Set to NOW() on every password change; tokens issued before this timestamp are rejected. */
+    private LocalDateTime passwordChangedAt;
 }

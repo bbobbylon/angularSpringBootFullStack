@@ -4,6 +4,7 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.LoginForm;
 import com.bob.angularspringbootfullstack.form.UpdateForm;
+import com.bob.angularspringbootfullstack.form.UpdatePasswordForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
@@ -130,6 +131,36 @@ public class UserController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .message(userService.verifyAccount(key).isEnabled() ? "Your account is already verified. Please log in." : "Account verified successfully! You can now log in.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Updates the authenticated user's password. Reloads the user from the DB
+     * to ensure the operation is scoped to the authenticated principal. On
+     * success, issues a fresh token pair so the user's session remains valid
+     * despite the {@code passwordChangedAt} invalidation check in
+     * {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider#isTokenValid}.
+     *
+     * @param authentication      the current Spring Security authentication
+     * @param updatePasswordForm  the current password plus the new password and confirmation
+     * @return 200 OK with the user and fresh access/refresh tokens
+     */
+    @PatchMapping("/update/password")
+    public ResponseEntity<HttpResponse> updateUserPassword(Authentication authentication, @RequestBody @Valid UpdatePasswordForm updatePasswordForm) {
+        UserDTO authUser = getAuthenticatedUser(authentication);
+        UserDTO dbUser = userService.getUserById(authUser.getId());
+        if (!authUser.getId().equals(dbUser.getId()))
+            throw new ApiException("Unauthorized request.");
+        userService.updatePassword(dbUser.getId(), updatePasswordForm.getCurrentPassword(), updatePasswordForm.getNewPassword(), updatePasswordForm.getConfirmPassword());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", dbUser,
+                                "access_token", tokenProvider.createAccessToken(getUserPrincipal(dbUser)),
+                                "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(dbUser))))
+                        .message("Your password has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

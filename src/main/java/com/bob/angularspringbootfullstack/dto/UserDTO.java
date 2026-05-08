@@ -116,4 +116,6 @@ public class UserDTO {
      * Comma-separated permission string for the user's role (flattened from {@link com.bob.angularspringbootfullstack.model.Role}).
      */
     private String permissions;
+    /** Mirrors {@code User#passwordChangedAt}; used by TokenProvider to reject pre-change tokens. */
+    private LocalDateTime passwordChangedAt;
 }
