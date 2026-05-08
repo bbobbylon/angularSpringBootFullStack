@@ -8,6 +8,12 @@ import { CustomerComponent } from './component/customer/customer.component';
 import { ProfileComponent } from './component/profile/profile.component';
 import { CustomersComponent } from './component/customers/customers.component';
 
+/**
+ * Application route table for the standalone router.
+ *
+ * Maps public auth flows, verification links, and core
+ * feature pages to their respective standalone components.
+ */
 export const routes: Routes = [
   { path: '', component: HomeComponent, pathMatch: 'full' },
   { path: 'login', component: LoginComponent },

@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.controller;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.LoginForm;
+import com.bob.angularspringbootfullstack.form.SettingsForm;
 import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.form.UpdatePasswordForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
@@ -143,8 +144,8 @@ public class UserController {
      * despite the {@code passwordChangedAt} invalidation check in
      * {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider#isTokenValid}.
      *
-     * @param authentication      the current Spring Security authentication
-     * @param updatePasswordForm  the current password plus the new password and confirmation
+     * @param authentication     the current Spring Security authentication
+     * @param updatePasswordForm the current password plus the new password and confirmation
      * @return 200 OK with the user and fresh access/refresh tokens
      */
     @PatchMapping("/update/password")
@@ -161,6 +162,77 @@ public class UserController {
                                 "access_token", tokenProvider.createAccessToken(getUserPrincipal(dbUser)),
                                 "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(dbUser))))
                         .message("Your password has been updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Reassigns the authenticated user's role to the given role name.
+     * Returns the refreshed user profile alongside the full roles catalogue so
+     * the frontend Authorization tab can update its selector without a separate
+     * request.
+     *
+     * @param authentication the current Spring Security authentication
+     * @param roleName       the target role name (e.g. "ROLE_ADMIN")
+     * @return 200 OK with the updated user and the full roles list
+     */
+    @PatchMapping("/update/role/{roleName}")
+    public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication, @PathVariable("roleName") String roleName) {
+        UserDTO userDTO = getAuthenticatedUser(authentication);
+        userService.updateUserRole(userDTO.getId(), roleName);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserById(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .message("Your role has been updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Updates the authenticated user's account settings (enabled / non-locked flags).
+     * Reads both flags from the validated {@link SettingsForm} body and persists them
+     * via the service. Returns the refreshed user alongside the full roles list.
+     *
+     * @param authentication the current Spring Security authentication
+     * @param settingsForm   the validated payload carrying {@code enabled} and {@code notLocked}
+     * @return 200 OK with the updated user and the full roles list
+     */
+    @PatchMapping("/update/settings")
+    public ResponseEntity<HttpResponse> updateAccountSettings(Authentication authentication, @RequestBody @Valid SettingsForm settingsForm) {
+        UserDTO userDTO = getAuthenticatedUser(authentication);
+        userService.updateAccountSettings(userDTO.getId(), settingsForm.getEnabled(), settingsForm.getNotLocked());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserById(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .message("Your account settings have been updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Flips the authenticated user's MFA (two-factor authentication) flag.
+     * Requires a phone number to be set on the account; the service throws if one
+     * is missing. The 2-second sleep simulates backend latency for frontend
+     * loading-state testing and should be removed before production.
+     *
+     * @param authentication the current Spring Security authentication
+     * @return 200 OK with the updated user and the full roles list
+     * @throws InterruptedException if the sleep is interrupted
+     */
+    @PatchMapping("/update/togglemfa")
+    public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) throws InterruptedException {
+        TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+        UserDTO userDTO = userService.toggleMFA(getAuthenticatedUser(authentication).getEmail());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userDTO, "roles", roleService.getAllRoles()))
+                        .message("Multi-Factor authentication setting has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
@@ -215,16 +287,18 @@ public class UserController {
     }
 
     /**
-     * Returns the current user's profile.
+     * Returns the current user's profile along with all available roles.
      *
      * <p>The {@link Authentication} was installed by {@code CustomAuthFilter}, which stores a
      * {@link UserDTO} directly as the principal (see {@code TokenProvider#getAuthentication}).
      * {@link com.bob.angularspringbootfullstack.utils.UserUtils#getAuthenticatedUser(Authentication)}
      * casts it back so we can read the email and reload the full profile — this avoids
      * {@code Authentication#getName()}, which would fall back to {@code UserDTO#toString()}.
+     * The full roles list is included so the frontend can populate the role selector in
+     * the Authorization tab without a separate request.
      *
      * @param authentication the current Authentication injected by Spring Security
-     * @return 200 OK with the user as a DTO
+     * @return 200 OK with the user as a DTO and the full collection of roles
      */
     @GetMapping("/profile")
     public ResponseEntity<HttpResponse> getProfile(Authentication authentication) {
@@ -232,7 +306,7 @@ public class UserController {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userDTO))
+                        .data(of("user", userDTO, "roles", roleService.getAllRoles()))
                         .message("We have fetched your profile for you!")
                         .status(OK)
                         .statusCode(OK.value())

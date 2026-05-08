@@ -39,6 +39,7 @@ import static com.bob.angularspringbootfullstack.query.UserQuery.*;
 import static java.util.Map.of;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
+import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.apache.commons.lang3.time.DateFormatUtils.format;
 import static org.apache.commons.lang3.time.DateUtils.addDays;
 
@@ -421,18 +422,70 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * next request.
      */
     @Override
-    public void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword) {
+    public void updatePassword(Long userID, String currentPassword, String newPassword, String confirmPassword) {
         if (!newPassword.equals(confirmPassword))
             throw new ApiException("Your passwords do not match. Please try again!");
-        User user = get(id);
+        User user = get(userID);
         if (passwordEncoder.matches(currentPassword, user.getPassword())) {
             try {
-                jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY, of("userId", id, "password", passwordEncoder.encode(newPassword)));
+                jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY, of("userId", userID, "password", passwordEncoder.encode(newPassword)));
             } catch (Exception exception) {
                 throw new ApiException("An unexpected error occurred. Please try again.");
             }
         } else {
             throw new ApiException("Current password is incorrect. Please try again.");
+        }
+
+    }
+
+    /**
+     * Persists the enabled and notLocked flags for the given user.
+     * <p>
+     * Maps directly to {@link com.bob.angularspringbootfullstack.query.UserQuery#UPDATE_USER_SETTINGS_QUERY}.
+     * Both flags are required — the endpoint's {@code @Valid SettingsForm} guarantees
+     * neither is null before this method is reached.
+     *
+     * @param userID    the ID of the user whose settings should change
+     * @param enabled   {@code true} to activate the account, {@code false} to deactivate it
+     * @param notLocked {@code true} to unlock the account, {@code false} to lock it
+     * @throws ApiException if any database error occurs
+     */
+    @Override
+    public void updateAccountSettings(Long userID, Boolean enabled, Boolean notLocked) {
+        try {
+            jdbcTemplate.update(UPDATE_USER_SETTINGS_QUERY, of("userId", userID, "enabled", enabled, "notLocked", notLocked));
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An unexpected error occurred. Please try again.");
+        }
+    }
+
+    /**
+     * Flips the {@code using2FA} flag for the user identified by the given email.
+     * <p>
+     * Requires the user to have a phone number on their profile; throws
+     * {@link ApiException} if the phone number is blank, since 2FA codes are
+     * delivered via SMS. Reads the current flag value, inverts it in memory, then
+     * persists the new value with
+     * {@link com.bob.angularspringbootfullstack.query.UserQuery#TOGGLE_USER_2FA_QUERY}.
+     *
+     * @param email the email address of the user toggling MFA
+     * @return the updated {@link User} entity with the new {@code using2FA} value
+     * @throws ApiException if no phone number is set, or if any database error occurs
+     */
+    @Override
+    public User toggleMFA(String email) {
+        User user = getUserByEmail(email);
+        if (isBlank(user.getPhoneNumber())) {
+            throw new ApiException("A phone number is required to enable 2FA/MFA. Please add a phone number to your profile and try again.");
+        }
+        user.setUsing2FA(!user.isUsing2FA());
+        try {
+            jdbcTemplate.update(TOGGLE_USER_2FA_QUERY, of("using2FA", user.isUsing2FA(), "email", email));
+            return user;
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("Unable to update 2FA/MFA setting at this time. Please try again.");
         }
 
     }

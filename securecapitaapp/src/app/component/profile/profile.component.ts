@@ -10,16 +10,33 @@ import { GlobalStateInterface } from '../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../interface/customhttpresponse.interface';
 import { ProfileInterface } from '../../interface/appstates.interface';
 import { EventType } from '../../enumeration/event-type.enum';
+import { RolesInterface } from '../../interface/roles.interface';
 
 // TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
+
+/**
+ * Represents a single user activity event for display in the audit log.
+ * This interface defines the structure for events like logins, profile updates, etc.
+ */
 interface ActivityEvent {
+  /** The device and browser from which the event originated. */
   device: string;
+  /** The IP address associated with the event. */
   ipAddress: string;
+  /** The timestamp when the event occurred, in ISO 8601 format. */
   createdAt: string;
+  /** The type of the event, categorized using the `EventType` enum. */
   type: EventType;
+  /** A human-readable description of the event. */
   description: string;
 }
 
+/**
+ * Profile view for authenticated users.
+ *
+ * Loads profile data, supports profile updates and password changes,
+ * and manages local UI state such as loading and audit-log toggles.
+ */
 @Component({
   selector: 'app-profile',
   standalone: true,
@@ -28,13 +45,24 @@ interface ActivityEvent {
   styleUrl: './profile.component.css',
 })
 export class ProfileComponent implements OnInit {
+  /** Exposes the `DataState` enum to the template for asynchronous data handling. */
   readonly DataState = DataState;
+  /**
+   * Observable state for the profile view.
+   * It holds the global state, including the current data state (e.g., LOADING, LOADED, ERROR),
+   * application data, and any errors that may occur during data fetching.
+   */
   profileState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<ProfileInterface>>> = of({
     dataState: DataState.LOADED,
     isUsingMfa: false,
   });
+  /** Exposes the `EventType` enum to the template for styling and displaying event information. */
   protected readonly EventType = EventType;
+  /** A signal that controls the visibility of the user's activity logs section. */
   protected readonly showLogs = signal(true);
+  /** A signal holding the list of permissions for the currently selected role. */
+  protected readonly permissions = signal<string[]>([]);
+  /** A signal containing dummy data for user activity events, used for display until the real data is available. */
   protected readonly dummyEvents = signal<ActivityEvent[]>([
     {
       device: 'Chrome on Windows',
@@ -58,22 +86,25 @@ export class ProfileComponent implements OnInit {
       description: 'Failed login attempt — wrong password',
     },
   ]);
+  /** Injected `UserService` to interact with the backend for user-related operations. */
   private readonly userService = inject(UserService);
+  /** A BehaviorSubject to hold and manage the raw profile data fetched from the server. */
   private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<ProfileInterface>>(null);
+  /** A BehaviorSubject to track the loading state of asynchronous operations. */
   private isLoadingSubject = new BehaviorSubject<boolean>(false);
+  /** An observable of the loading state, derived from `isLoadingSubject`, for use in the template. */
   protected isLoading$ = this.isLoadingSubject.asObservable();
 
-  /** in this method, When we run the .pipe() on the profile$ observable, we are transforming the emitted value (which is of type CustomHttpResponseInterface<ProfileInterface>) into a new object that matches the GlobalStateInterface structure expected by our component's template.
-We also handle loading and error states appropriately.
-This is important to note because the original profile$ observable emits a different type than what our template expects, so we need to map it to the correct structure before it can be used in the template.
-If we check the GlobalState, we can see that it has a dataState property to indicate the loading state, an appData property to hold the actual profile data, and an error property to hold any error messages.
-By mapping the profile$ observable to this structure, we ensure that our template can react correctly to loading, success, and error states when displaying the user's profile information.
-Another thing to keep in mind is that we are also using the startWith operator to emit an initial loading state before the profile data is fetched, and the catchError operator to handle any errors that may occur during the HTTP request and emit an error state accordingly.
-This is all needed to ensure that our component can handle the asynchronous nature of fetching profile data and provide a good user experience by showing loading indicators and error messages when necessary.
-When we call ngOnInit, we will make the Http call, and once we get the response, we will log it, save it in a local variable as an observable, which is profileState$. profileState$ is the observable we will be using in the template to display the profile data. */
-  //private readonly router = inject(Router);
-
-  // We return dataState to the profileState$ observable.
+  /**
+   * Initializes the component by fetching the user's profile information.
+   * This method is an Angular lifecycle hook that is called after the component's
+   * data-bound properties have been initialized. It retrieves the user data from
+   * the application state, which is managed by a BehaviorSubject in the UserService.
+   * It subscribes to the user$ observable to get the latest user data and updates
+   * the component's state. This ensures that the profile information is always
+   * current. The method also sets the initial data state to LOADING and then
+   * updates it to LOADED or ERROR based on the outcome of the data fetch operation.
+   */
   ngOnInit(): void {
     this.isLoadingSubject.next(true);
     this.profileState$ = this.userService.profile$().pipe(
@@ -81,6 +112,7 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
         console.log('Fetched profile data:', response);
         this.dataSubject.next(response);
         this.isLoadingSubject.next(false);
+        this.permissions.set(response.data.user.permissions.split(',').map((p: string) => p.trim()));
         return { dataState: DataState.LOADED, appData: response };
       }),
       startWith({ dataState: DataState.LOADING }),
@@ -92,10 +124,30 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
   }
 
   /**
-   * This method is responsible for updating the user's profile information. It takes a NgForm as an argument, which contains the updated profile data entered by the user. The method first sets the loading state to true, then it retrieves the current user data from the dataSubject and merges it with the new values from the profileForm. It then calls the update$ method of the UserService to send the updated user data to the server. The response from the server is handled using RxJS operators: if the update is successful, it updates the dataSubject with the new profile data and sets the loading state to false; if there is an error, it catches the error, sets the loading state to false, and updates the profileState$ observable with an error state.
-   * @param profileForm
-   * @returns void
-   * @important This method is crucial for allowing users to update their profile information and ensuring that the UI reflects the latest data from the server. It also demonstrates how to handle asynchronous operations and manage loading and error states effectively in an Angular component using RxJS.
+   * Updates the permissions signal based on the selected role.
+   * When a user selects a different role in the UI, this method finds the corresponding role
+   * from the profile data and updates the `permissions` signal with the permissions of that role.
+   * @param roleName The name of the role selected by the user.
+   */
+  onRoleChange(roleName: string): void {
+    const roles = this.dataSubject.value?.data?.roles;
+    const match = roles?.find((r: RolesInterface) => r.name === roleName);
+    if (match?.permission) {
+      this.permissions.set(match.permission.split(',').map((p: string) => p.trim()));
+    }
+  }
+
+  /**
+   * Handles the form submission for updating the user's profile information.
+   * This method is triggered when the user submits the profile update form.
+   * It sets the application state to LOADING to indicate that an operation is in progress.
+   * It then calls the `update$` method from the `UserService`, passing the form data.
+   * The subscription to the `update$` observable handles the response from the server.
+   * On a successful update, it updates the local user data and sets the application
+   * state to LOADED. If an error occurs, it logs the error and sets the state to ERROR.
+   *
+   * Merges form values with the current user snapshot and updates
+   * the observable state so the template reflects the new profile.
    */
   updateProfile(profileForm: NgForm): void {
     this.isLoadingSubject.next(true);
@@ -118,7 +170,17 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
     );
   }
 
-  /** Submits a password change. Guards against mismatched passwords client-side before hitting the API. */
+  /**
+   * Handles the form submission for updating the user's password.
+   * This method is called when the user submits the password update form.
+   * It sets the application state to LOADING. It then calls the `updatePassword$`
+   * method from the `UserService` with the password form data. The subscription
+   * handles the server's response, showing a notification to the user upon success
+   * or logging an error and showing an error notification if the update fails.
+   * After the operation, the form is reset.
+   *
+   * @param {NgForm} updatePasswordForm - The form containing the user's current and new passwords.
+   */
   updatePassword(passwordForm: NgForm): void {
     this.isLoadingSubject.next(true);
     /*    const currentUser = this.dataSubject.value?.data?.user;
@@ -147,6 +209,75 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
     }
   }
 
+  /**
+   * Submits the role-change form and reassigns the authenticated user's role.
+   * Sends the selected {@code roleName} to the backend via {@code updateUserRole$},
+   * then refreshes {@code profileState$} and the local {@code dataSubject} snapshot
+   * so the Authorization tab reflects the new role and its permissions immediately.
+   *
+   * @param roleForm - the submitted NgForm containing the selected {@code roleName}
+   */
+  updateRole(roleForm: NgForm): void {
+    /*    this.isLoadingSubject.next(true);
+    const currentUser = this.dataSubject.value?.data?.user;
+    console.log('Current user data before update:', currentUser);
+    const updatedUser = { ...currentUser, ...profileForm.value };
+    console.log('Updated user data to be sent to server:', updatedUser);*/
+    this.isLoadingSubject.next(true);
+    console.log(roleForm);
+    this.profileState$ = this.userService.updateUserRole$(roleForm.value.roleName).pipe(
+      map(response => {
+        console.log('Role updated successfully:', response);
+        this.dataSubject.next({ ...response, data: response.data });
+        this.isLoadingSubject.next(false);
+        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
+      }),
+      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
+      catchError((error: string) => {
+        this.isLoadingSubject.next(false);
+        return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+      }),
+    );
+  }
+
+  /**
+   * Updates the user's account settings.
+   * This method is triggered when the user saves changes to their account settings.
+   * It sets the application state to LOADING and calls the `updateAccountSettings$`
+   * method from the `UserService`. The subscription handles the server's response,
+   * updating the local user data and showing a success notification. If an error
+   * occurs, it is logged, and an error notification is shown.
+   *
+   * @param {NgForm} settingsForm - The form containing the updated account settings.
+   */
+  updateAccountSettings(settingsForm: NgForm): void {
+    /*    this.isLoadingSubject.next(true);
+    const currentUser = this.dataSubject.value?.data?.user;
+    console.log('Current user data before update:', currentUser);
+    const updatedUser = { ...currentUser, ...profileForm.value };
+    console.log('Updated user data to be sent to server:', updatedUser);*/
+    this.isLoadingSubject.next(true);
+    console.log(settingsForm);
+    this.profileState$ = this.userService.updateAccountSettings$(settingsForm.value).pipe(
+      map(response => {
+        console.log('Account Settings updated successfully:', response);
+        this.dataSubject.next({ ...response, data: response.data });
+        this.isLoadingSubject.next(false);
+        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
+      }),
+      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
+      catchError((error: string) => {
+        this.isLoadingSubject.next(false);
+        return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+      }),
+    );
+  }
+
+  /**
+   * Checks whether the current user has a specific permission.
+   *
+   * Parses the comma-delimited permissions string returned by the backend.
+   */
   protected hasPermission(permission: string): boolean {
     const permissions = this.dataSubject.value?.data?.user?.permissions;
     if (!permissions) return false;
@@ -156,22 +287,44 @@ When we call ngOnInit, we will make the Http call, and once we get the response,
       .includes(permission);
   }
 
-  protected updateRole(form: NgForm): void {
-    console.log('updateRole', form.value);
-  }
-
-  protected updateAccountSettings(form: NgForm): void {
-    console.log('updateAccountSettings', form.value);
-  }
-
+  /**
+   * Flips the authenticated user's MFA status via the backend toggle endpoint.
+   * Sets the loading state before the call and clears it on success or error.
+   * The backend enforces that a phone number is set; if it is missing, the error
+   * propagates through {@code catchError} and surfaces in the template.
+   */
   protected toggleMfa(): void {
-    /* empty */
+    this.isLoadingSubject.next(true);
+    this.profileState$ = this.userService.toggleMFA$().pipe(
+      map(response => {
+        console.log('MFA Settings updated successfully:', response);
+        this.dataSubject.next({ ...response, data: response.data });
+        this.isLoadingSubject.next(false);
+        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
+      }),
+      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
+      catchError((error: string) => {
+        this.isLoadingSubject.next(false);
+        return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+      }),
+    );
   }
 
+  /**
+   * Shows or hides the activity log panel.
+   *
+   * Implemented via a signal (`showLogs`) to keep template updates efficient.
+   * Toggling this signal's value will conditionally render the activity log section in the component's template.
+   */
   protected toggleLogs(): void {
     this.showLogs.update(v => !v);
   }
 
+  /**
+   * Handles selection of a new avatar image (stub).
+   *
+   * Extracts the chosen file for future upload handling.
+   */
   protected updatePicture(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];

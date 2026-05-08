@@ -10,7 +10,7 @@
           </li>
           <li class="breadcrumb-item active">Users</li>
           <li aria-current="page" class="breadcrumb-item active">
-            {{ state.appData?.data?.user.firstName }} {{ state.appData?.data?.user.lastName }}
+            {{ state?.appData?.data?.user.firstName }} {{ state?.appData?.data?.user.lastName }}
           </li>
         </ol>
       </nav>
@@ -20,14 +20,14 @@
           <div class="p-4">
             <div class="img-circle text-center mb-3">
               <span style="position: relative">
-                <img [alt]="state.appData?.data?.user.firstName" [src]="state.appData?.data?.user.imageUrl"
+                <img [alt]="state?.appData?.data?.user.firstName" [src]="state?.appData?.data?.user.imageUrl"
                      class="shadow" />
                 <i (click)="fileInput.click()" class="bi bi-camera-fill right-position"></i>
               </span>
             </div>
             <h4
-              class="text-center">{{ state.appData?.data?.user.firstName }} {{ state.appData?.data?.user.lastName }}</h4>
-            <span>Since {{ state.appData?.data?.user.createdAt | date: 'MMMM d, y' }}</span>
+              class="text-center">{{ state?.appData?.data?.user.firstName }} {{ state?.appData?.data?.user.lastName }}</h4>
+            <span>Since {{ state?.appData?.data?.user.createdAt | date: 'MMMM d, y' }}</span>
           </div>
           <div aria-orientation="vertical" class="nav flex-column nav-pills" id="v-pills-tab" role="tablist">
             <a aria-controls="profile" aria-selected="true" class="nav-link active" data-bs-target="#profile-tab"
@@ -59,13 +59,14 @@
                style="min-height: 510px;">
             <h3 class="mb-4">Profile Settings</h3>
             <form #profileForm="ngForm" (ngSubmit)="updateProfile(profileForm)">
-              <input [ngModel]="state.appData?.data?.user.id" name="id" type="hidden">
+              <input [ngModel]="state?.appData?.data?.user.id" name="id" type="hidden">
               <div class="row">
                 <div class="col-md-6">
                   <div class="form-group">
                     <label for="firstName">First Name</label>
                     <input [disabled]="!hasPermission('UPDATE:USER') || (isLoading$ | async)"
-                           [ngModel]="state.appData?.data?.user.firstName" class="form-control" id="firstName" name="firstName"
+                           [ngModel]="state?.appData?.data?.user.firstName" class="form-control" id="firstName"
+                           name="firstName"
                            type="text">
                   </div>
                 </div>
@@ -73,7 +74,8 @@
                   <div class="form-group">
                     <label for="lastName">Last Name</label>
                     <input [disabled]="!hasPermission('UPDATE:USER') || (isLoading$ | async)"
-                           [ngModel]="state.appData?.data?.user.lastName" class="form-control" id="lastName" name="lastName"
+                           [ngModel]="state?.appData?.data?.user.lastName" class="form-control" id="lastName"
+                           name="lastName"
                            type="text">
                   </div>
                 </div>
@@ -81,14 +83,16 @@
                   <div class="form-group">
                     <label for="email">Email</label>
                     <input [disabled]="!hasPermission('UPDATE:USER') || (isLoading$ | async)"
-                           [ngModel]="state.appData?.data?.user.email" class="form-control" id="email" name="email" type="text">
+                           [ngModel]="state?.appData?.data?.user.email" class="form-control" id="email" name="email"
+                           type="text">
                   </div>
                 </div>
                 <div class="col-md-6">
                   <div class="form-group">
                     <label for="phoneNumber">Phone</label>
                     <input [disabled]="!hasPermission('UPDATE:USER') || (isLoading$ | async)"
-                           [ngModel]="state.appData?.data?.user.phoneNumber" class="form-control" id="phoneNumber" name="phoneNumber"
+                           [ngModel]="state?.appData?.data?.user.phoneNumber" class="form-control" id="phoneNumber"
+                           name="phoneNumber"
                            type="text">
                   </div>
                 </div>
@@ -96,7 +100,8 @@
                   <div class="form-group">
                     <label for="address">Address</label>
                     <input [disabled]="!hasPermission('UPDATE:USER') || (isLoading$ | async)"
-                           [ngModel]="state.appData?.data?.user.address" class="form-control" id="address" name="address"
+                           [ngModel]="state?.appData?.data?.user.address" class="form-control" id="address"
+                           name="address"
                            type="text">
                   </div>
                 </div>
@@ -104,14 +109,15 @@
                   <div class="form-group">
                     <label for="title">Job Title</label>
                     <input [disabled]="!hasPermission('UPDATE:USER') || (isLoading$ | async)"
-                           [ngModel]="state.appData?.data?.user.title" class="form-control" id="title" name="title" type="text">
+                           [ngModel]="state?.appData?.data?.user.title" class="form-control" id="title" name="title"
+                           type="text">
                   </div>
                 </div>
                 <div class="col-md-12">
                   <div class="form-group">
                     <label for="bio">Bio</label>
                     <textarea [disabled]="!hasPermission('UPDATE:USER') || (isLoading$ | async)"
-                              [ngModel]="state.appData?.data?.user.bio" class="form-control" id="bio" name="bio"
+                              [ngModel]="state?.appData?.data?.user.bio" class="form-control" id="bio" name="bio"
                               rows="4"></textarea>
                   </div>
                 </div>
@@ -140,7 +146,8 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label for="currentPassword">Current password</label>
-                    <input [disabled]="(isLoading$ | async)" class="form-control" id="currentPassword" name="currentPassword" ngModel
+                    <input [disabled]="(isLoading$ | async)" class="form-control" id="currentPassword"
+                           name="currentPassword" ngModel
                            required type="password">
                   </div>
                 </div>
@@ -149,14 +156,16 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label for="newPassword">New password</label>
-                    <input [disabled]="(isLoading$ | async)" class="form-control" id="newPassword" minlength="5" name="newPassword"
+                    <input [disabled]="(isLoading$ | async)" class="form-control" id="newPassword" minlength="5"
+                           name="newPassword"
                            ngModel required type="password">
                   </div>
                 </div>
                 <div class="col-md-6">
                   <div class="form-group">
                     <label for="confirmPassword">Confirm new password</label>
-                    <input [disabled]="(isLoading$ | async)" class="form-control" id="confirmPassword" minlength="5" name="confirmPassword"
+                    <input [disabled]="(isLoading$ | async)" class="form-control" id="confirmPassword" minlength="5"
+                           name="confirmPassword"
                            ngModel required type="password">
                   </div>
                 </div>
@@ -185,13 +194,15 @@
                   <div class="form-group">
                     <label for="roleName" style="margin-bottom: 5px;">Role Name</label>
                     <select
+                      (ngModelChange)="onRoleChange($event)"
                       [disabled]="!hasPermission('CREATE:USER') || (isLoading$ | async)"
-                      [ngModel]="state.appData?.data?.user.roleName"
+                      [ngModel]="state?.appData?.data?.user.roleName"
                       class="form-control select-cl" id="roleName" name="roleName" required>
-                      @for (role of state.appData?.data?.roles; track role.name) {
+                      @for (role of state?.appData?.data?.roles; track role.name) {
                         <option [ngValue]="role.name"
-                                [selected]="state.appData?.data?.user.roleName === role.name"
+                                [selected]="state?.appData?.data?.user.roleName === role.name"
                                 class="select-cl">{{ role.name }}
+
                         </option>
                       }
                     </select>
@@ -200,7 +211,7 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <p style="margin-bottom: 5px;">Role Permissions</p>
-                    @for (permission of state.appData?.data?.user.permissions.split(','); track permission) {
+                    @for (permission of permissions(); track permission) {
                       <input [disabled]="true" [value]="permission" class="form-control"
                              style="margin-bottom: 5px;" type="text">
                     }
@@ -233,17 +244,17 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <div class="form-check">
-                      <input [checked]="state.appData?.data?.user.enabled"
+                      <input [checked]="state?.appData?.data?.user.enabled"
                              [disabled]="!hasPermission('CREATE:USER') || (isLoading$ | async)"
-                             [ngModel]="state.appData?.data?.user.enabled"
+                             [ngModel]="state?.appData?.data?.user.enabled"
                              class="form-check-input" id="enabled" name="enabled" type="checkbox">
                       <label class="form-check-label" for="enabled">Account Active</label>
                     </div>
                     <div class="form-check">
-                      <input [checked]="state.appData?.data?.user.isNotLocked"
+                      <input [checked]="state?.appData?.data?.user.isNotLocked"
                              [disabled]="!hasPermission('CREATE:USER') || (isLoading$ | async)"
-                             [ngModel]="state.appData?.data?.user.isNotLocked"
-                             class="form-check-input" id="isNotLocked" name="isNotLocked" type="checkbox">
+                             [ngModel]="state?.appData?.data?.user.isNotLocked"
+                             class="form-check-input" id="isNotLocked" name="notLocked" type="checkbox">
                       <label class="form-check-label" for="isNotLocked">Account Unlocked</label>
                     </div>
                   </div>
@@ -275,7 +286,7 @@
                 <div class="row align-items-center">
                   <div class="col">
                     <strong class="mb-2">Multi-Factor Authentication</strong>
-                    @if (state.appData?.data?.user.using2FA) {
+                    @if (state?.appData?.data?.user.using2FA) {
                       <span class="badge bg-success mx-3">Enabled</span>
                     } @else {
                       <span class="badge bg-warning mx-3">Disabled</span>
@@ -288,7 +299,7 @@
                     <button (click)="toggleMfa()"
                             [disabled]="!hasPermission('UPDATE:USER') || (isLoading$ | async)"
                             class="btn btn-primary btn-sm">
-                      {{ state.appData?.data?.user.using2FA ? 'Disable' : 'Enable' }}
+                      {{ state?.appData?.data?.user.using2FA ? 'Disable' : 'Enable' }}
                       @if ((isLoading$ | async)) {
                         <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                               style="margin-right: 5px;"></span>
@@ -317,6 +328,7 @@
         </div>
       </div>
 
+      <!-- Account activities -->
       @if (showLogs()) {
         <div class="row">
           <div class="col-xl-12 mt-4">
@@ -336,7 +348,7 @@
                   </tr>
                   </thead>
                   <tbody>
-                  <!--       @for (event of state.appData?.data?.event
+                  <!--       @for (event of state?.appData?.data?.event
                       -s; track event.createdAt) {   -->
                     @for (event of dummyEvents(); track event.createdAt) {
                       <tr>

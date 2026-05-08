@@ -99,15 +99,23 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Not yet implemented; returns null.
+     * Returns all roles from the database, ordered by ID.
+     * <p>
+     * Delegates to {@link com.bob.angularspringbootfullstack.query.RoleQuery#SELECT_ALL_ROLES_QUERY}
+     * and maps each row with {@link com.bob.angularspringbootfullstack.rowmapper.RoleRowMapper}.
      *
-     * @param page     0-indexed page number
-     * @param pageSize page size
-     * @return null
+     * @return a collection of all {@link Role} entities
+     * @throws ApiException if any database error occurs
      */
     @Override
-    public java.util.Collection<Role> list(int page, int pageSize) {
-        return null;
+    public java.util.Collection<Role> list() {
+        log.info("Fetching all roles from the database");
+        try {
+            return jdbcTemplate.query(SELECT_ALL_ROLES_QUERY, new RoleRowMapper());
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
+        }
     }
 
     /**
@@ -207,13 +215,28 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Not yet implemented; no-op. Role reassignment is not exposed yet.
+     * Reassigns the given user to a new role by name.
+     * <p>
+     * Looks up the target role by name using
+     * {@link com.bob.angularspringbootfullstack.query.RoleQuery#SELECT_ROLE_BY_NAME_QUERY},
+     * then updates the {@code userroles} junction table entry for the user with
+     * {@link com.bob.angularspringbootfullstack.query.RoleQuery#UPDATE_USER_ROLE_QUERY}.
      *
-     * @param userId   the user whose role should change
-     * @param roleName the new role name
+     * @param userId   the ID of the user whose role should change
+     * @param roleName the name of the new role (e.g. "ROLE_ADMIN")
+     * @throws ApiException if the role name is not found, or if any database error occurs
      */
     @Override
     public void updateUserRole(Long userId, String roleName) {
-
+        log.info("Updating role to user with ID {}", userId);
+        try {
+            Role role = jdbcTemplate.queryForObject(SELECT_ROLE_BY_NAME_QUERY, of("name", roleName), new RoleRowMapper());
+            jdbcTemplate.update(UPDATE_USER_ROLE_QUERY, of("userId", userId, "roleId", role.getId()));
+        } catch (EmptyResultDataAccessException e) {
+            throw new ApiException("Can't find role via name " + roleName);
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
+        }
     }
 }

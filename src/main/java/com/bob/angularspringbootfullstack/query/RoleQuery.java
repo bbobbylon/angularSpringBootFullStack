@@ -2,11 +2,11 @@ package com.bob.angularspringbootfullstack.query;
 
 /**
  * RoleQuery contains all SQL query constants for role-related database operations.
- *
+ * <p>
  * These queries use named parameters (`:paramName`) instead of positional parameters (`?`)
  * to work with Spring's NamedParameterJdbcTemplate. Named parameters are set in the
  * MapSqlParameterSource using .addValue() method calls.
- *
+ * <p>
  * Role queries handle both direct role lookups and user-role relationship operations.
  */
 public class RoleQuery {
@@ -31,4 +31,19 @@ public class RoleQuery {
      * Parameter: id (user_id)
      */
     public static final String SELECT_ROLE_BY_ID_QUERY = "SELECT r.id, r.name, r.permission FROM roles r JOIN userroles ur ON ur.role_id = r.id JOIN Users u ON u.id = ur.user_id WHERE u.id = :id";
+    /**
+     * Selects every role row ordered by ID.
+     * <p>
+     * Used by {@code GET /user/profile} to embed the full roles list in the profile
+     * response, allowing the frontend Authorization tab to populate its role selector
+     * without a separate request.
+     */
+    public static final String SELECT_ALL_ROLES_QUERY = "SELECT * FROM roles ORDER BY id";
+
+    /**
+     * Updates the role assigned to a user in the junction table.
+     * Replaces the existing role assignment with the new role.
+     * Parameters: roleId, userId
+     */
+    public static final String UPDATE_USER_ROLE_QUERY = "UPDATE userroles SET role_id = :roleId WHERE user_id = :userId";
 }

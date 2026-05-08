@@ -173,8 +173,8 @@
 │           → Who is this token for? Our backend API                       │
 │        .withIssuedAt(new Date())                                          │
 │           → When was token created? Now                                  │
-│        .withSubject(userPrincipal.getUsername())                          │
-│           → Who is this token about? bob@example.com                     │
+│        .withSubject(String.valueOf(userPrincipal.getUser().getId()))       │
+│           → Who is this token about? User ID (e.g., 1)                    │
 │        .withArrayClaim("authorities", ["READ:USER", "UPDATE:USER", "DELETE:USER"])
 │           → What can this user do? These permissions                     │
 │        .withExpiresAt(new Date(currentTimeMillis() + 1_800_000))        │
@@ -240,7 +240,7 @@ AJ8DGt-X6y2K9pL4mN8oP5qR6sT7uV8wX9yZ0aB1cD2eF3gH4iJ5kL6mN7oP8qR9sT0uV1wX2yZ3aB4c
   "iss": "BOBBYLON_LLC",                                  // Issuer
   "aud": "BOBS_MANAGEMENT",                              // Audience
   "iat": 1713245533,                                     // Issued at (Unix timestamp)
-  "sub": "bob@example.com",                             // Subject (who)
+  "sub": "1",                                           // Subject (user ID)
   "authorities": ["READ:USER", "UPDATE:USER", "DELETE:USER"], // Permissions
   "exp": 1713247333                                      // Expiration time (Unix timestamp)
 }
@@ -636,7 +636,7 @@ UserController.login(LoginForm form)
 │  │  └─ userPrincipal.getAuthorities() [get List<GrantedAuthority>]
 │  │     └─ map to String[] ["READ:USER", "UPDATE:USER", "DELETE:USER"]
 │  └─ JWT.create()
-│     .withSubject(userPrincipal.getUsername()) [email]
+│     .withSubject(String.valueOf(userPrincipal.getUser().getId())) [user ID]
 │     .withArrayClaim("authorities", claims)
 │     .withExpiresAt(...)
 │     .sign(HMAC512(secret))
@@ -763,12 +763,12 @@ UserController.sendNewRefreshToken(request)
 ├─ Call isHeaderAndTokenValid(refresh_token)
 │  ├─ tokenProvider.getSubject(refreshToken, request)
 │  │  ├─ getJWTVerifier().verify(refreshToken) [validates signature, issuer, expiration]
-│  │  ├─ Extract "sub" (email) from token
-│  │  ├─ Return email (no authorities required!)
+│  │  ├─ Extract "sub" (user ID) from token
+│  │  ├─ Return user ID (no authorities required!)
 │  │  └─ Map any errors to BadCredentialsException
-│  └─ tokenProvider.isTokenValid(email, refreshToken)
+│  └─ tokenProvider.isTokenValid(userId, refreshToken)
 │     └─ Return true if valid
-├─ userService.getUserByEmail(email)
+├─ userService.getUserById(userId)
 │  └─ Get fresh user data from database
 ├─ getUserPrincipal(userDTO)
 │  ├─ Load User entity

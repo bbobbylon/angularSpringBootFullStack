@@ -30,7 +30,13 @@ comprehensive security features including JWT authentication, refresh tokens, 2F
 
 ### Frontend (Angular)
 
-*(Set up via FRONTEND_DOCUMENTATION_SETUP.md)*
+- ✅ Standalone Angular components (no AppModule)
+- ✅ HTTP interceptor for token attachment + refresh retry
+- ✅ Login + MFA verification flow
+- ✅ Profile update + password change flows
+- ✅ Bootstrap-based responsive UI
+
+See `securecapitaapp/README.md` and `FRONTEND_DOCUMENTATION_SETUP.md` for frontend architecture details.
 
 ---
 
@@ -42,7 +48,7 @@ comprehensive security features including JWT authentication, refresh tokens, 2F
 ├─────────────────────────────────────────────────────┤
 │ CustomAuthFilter (JWT validation & authentication)  │
 │         ↓                                            │
-│ SecurityFilterChain (authorization rules)           │  
+│ SecurityFilterChain (authorization rules)           │
 │         ↓                                            │
 │ Controller Layer (REST endpoints)                   │
 │         ↓                                            │
@@ -50,6 +56,26 @@ comprehensive security features including JWT authentication, refresh tokens, 2F
 │         ↓                                            │
 │ Repository Layer (database operations)              │
 └─────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│                               FRONTEND                                 │
+│  Angular Components → UserService → Token Interceptor → HttpClient      │
+└────────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        SPRING SECURITY FILTER CHAIN                     │
+├────────────────────────────────────────────────────────────────────────┤
+│ CustomAuthFilter (JWT validation & authentication)                      │
+│         ↓                                                               │
+│ SecurityFilterChain (authorization rules)                               │  
+│         ↓                                                               │
+│ Controller Layer (REST endpoints)                                       │
+│         ↓                                                               │
+│ Service Layer (business logic)                                          │
+│         ↓                                                               │
+│ Repository Layer (database operations)                                  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -118,7 +144,10 @@ curl -X GET http://localhost:8080/actuator/health
 
 ### Step 2: Frontend Setup
 
-Follow **FRONTEND_DOCUMENTATION_SETUP.md** for Angular setup.
+Frontend lives under `securecapitaapp/`.
+
+- Quick start: `securecapitaapp/README.md`
+- Full frontend docs: `FRONTEND_DOCUMENTATION_SETUP.md`
 
 ---
 
@@ -208,8 +237,8 @@ curl -X POST http://localhost:8080/user/login \
 
 **Token Structure:**
 
-- **Access Token**: Valid 30 minutes, includes authorities (permissions)
-- **Refresh Token**: Valid 5 days, no authorities, refresh access tokens only
+- **Access Token**: Valid 30 minutes, includes authorities (permissions), subject is user ID
+- **Refresh Token**: Valid 5 days, no authorities, subject is user ID
 
 ---
 
@@ -414,7 +443,7 @@ INFO: Account successfully verified for user with email: john@example.com
 
 ```json
 {
-  "sub": "john@example.com",
+  "sub": "1",
   "authorities": [
     "READ:USER",
     "UPDATE:USER",
@@ -431,7 +460,7 @@ INFO: Account successfully verified for user with email: john@example.com
 
 ```json
 {
-  "sub": "john@example.com",
+  "sub": "1",
   "iss": "BOBBYLON_LLC",
   "aud": "BOBS_MANAGEMENT",
   "exp": 1715259600,
