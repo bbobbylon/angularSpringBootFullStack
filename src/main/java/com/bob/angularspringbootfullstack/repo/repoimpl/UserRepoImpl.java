@@ -438,6 +438,18 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
 
     }
 
+    /**
+     * Persists the enabled and notLocked flags for the given user.
+     * <p>
+     * Maps directly to {@link com.bob.angularspringbootfullstack.query.UserQuery#UPDATE_USER_SETTINGS_QUERY}.
+     * Both flags are required — the endpoint's {@code @Valid SettingsForm} guarantees
+     * neither is null before this method is reached.
+     *
+     * @param userID    the ID of the user whose settings should change
+     * @param enabled   {@code true} to activate the account, {@code false} to deactivate it
+     * @param notLocked {@code true} to unlock the account, {@code false} to lock it
+     * @throws ApiException if any database error occurs
+     */
     @Override
     public void updateAccountSettings(Long userID, Boolean enabled, Boolean notLocked) {
         try {
@@ -448,6 +460,19 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         }
     }
 
+    /**
+     * Flips the {@code using2FA} flag for the user identified by the given email.
+     * <p>
+     * Requires the user to have a phone number on their profile; throws
+     * {@link ApiException} if the phone number is blank, since 2FA codes are
+     * delivered via SMS. Reads the current flag value, inverts it in memory, then
+     * persists the new value with
+     * {@link com.bob.angularspringbootfullstack.query.UserQuery#TOGGLE_USER_2FA_QUERY}.
+     *
+     * @param email the email address of the user toggling MFA
+     * @return the updated {@link User} entity with the new {@code using2FA} value
+     * @throws ApiException if no phone number is set, or if any database error occurs
+     */
     @Override
     public User toggleMFA(String email) {
         User user = getUserByEmail(email);

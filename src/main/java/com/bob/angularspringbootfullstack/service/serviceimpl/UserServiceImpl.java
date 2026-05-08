@@ -9,7 +9,6 @@ import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 
@@ -25,7 +24,7 @@ import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUse
 public class UserServiceImpl implements UserService {
 
     private final UserRepo<User> userRepo;
-    private final RoleRepo<Role> roleRepository;
+    private final RoleRepo<Role> roleRepo;
 
     /**
      * Creates a new user.
@@ -34,8 +33,6 @@ public class UserServiceImpl implements UserService {
      *
      * @param user the registration data
      * @return the created user as a DTO
-     * @param user The User object to be created.
-     * @return A UserDTO representing the newly created user.
      */
     @Override
     public UserDTO createUser(User user) {
@@ -46,8 +43,8 @@ public class UserServiceImpl implements UserService {
      * Retrieves a user by their email address.
      * This method is used to fetch a user's details based on their email.
      *
-     * @param email The email of the user to retrieve.
-     * @return A UserDTO representing the user.
+     * @param email the email of the user to retrieve
+     * @return a UserDTO representing the user
      */
     @Override
     public UserDTO getUserByEmail(String email) {
@@ -59,7 +56,7 @@ public class UserServiceImpl implements UserService {
      * This method generates a verification code, saves it to the database with an expiration time,
      * and then (in a real application) would send it to the user via SMS or another method.
      *
-     * @param userDTO The DTO of the user to send the code to.
+     * @param userDTO the DTO of the user to send the code to
      */
     @Override
     public void sendVerificationCode(UserDTO userDTO) {
@@ -70,9 +67,9 @@ public class UserServiceImpl implements UserService {
      * Verifies a two-factor authentication code provided by a user.
      * This method checks the code against the one stored in the database.
      *
-     * @param email The user's email.
-     * @param code The verification code.
-     * @return A UserDTO if the code is valid.
+     * @param email the user's email
+     * @param code  the verification code
+     * @return a UserDTO if the code is valid
      */
     @Override
     public UserDTO verifyCode(String email, String code) {
@@ -83,7 +80,7 @@ public class UserServiceImpl implements UserService {
      * Initiates the password reset process for a user.
      * This method calls the repository to generate and send a password reset link.
      *
-     * @param email The email of the user requesting a password reset.
+     * @param email the email of the user requesting a password reset
      */
     @Override
     public void resetPassword(String email) {
@@ -91,29 +88,26 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Verifies a password reset URL.
+     * Verifies a password reset key and returns the associated user.
      *
-     * @param url The password reset URL.
-     * @return A UserDTO if the URL is valid.
+     * @param key the UUID portion of the reset URL
+     * @return a UserDTO if the key is valid
      */
     @Override
-    public UserDTO verifyPasswordUrl(String url) {
-        return mapToUserDTO(userRepo.verifyPasswordUrl(url));
+    public UserDTO verifyPasswordKey(String key) {
+        return mapToUserDTO(userRepo.verifyPasswordKey(key));
     }
 
     /**
-     * Sets a new password for a user after a password reset.
+     * Sets a new password for a user after a successful password reset verification.
      *
      * @param key             the UUID portion of the reset URL
-     * @param newPassword     the new password (encoded with BCrypt before storage)
-     * @param confirmPassword must equal newPassword
-     * @param newPassword The new password.
-     * @param confirmPassword The confirmation of the new password.
-     * @param url The password reset URL.
+     * @param newPassword     the new password
+     * @param confirmPassword must match {@code newPassword}
      */
     @Override
-    public void newPassword(Long userId, String newPassword, String confirmPassword, String url) {
-        userRepo.newPassword(userId, newPassword, confirmPassword, url);
+    public void setNewPassword(String key, String newPassword, String confirmPassword) {
+        userRepo.setNewPassword(key, newPassword, confirmPassword);
     }
 
     /**
@@ -121,7 +115,6 @@ public class UserServiceImpl implements UserService {
      *
      * @param key the UUID portion of the activation URL
      * @return the now-enabled user as a DTO
-     * @return A UserDTO if the key is valid.
      */
     @Override
     public UserDTO verifyAccount(String key) {
@@ -129,23 +122,21 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Updates a user's profile details.
+     * Updates a user's profile details from the supplied form data.
      *
-     * @param userDTO The DTO containing the updated user information.
-     * @return The updated UserDTO.
+     * @param user the validated form containing the fields to update
+     * @return the updated user as a DTO
      */
     @Override
-    public UserDTO updateUserDetails(UserDTO userDTO) {
-        return mapToUserDTO(userRepo.updateUserDetails(userDTO));
-
+    public UserDTO updateUserDTO(UpdateForm user) {
+        return mapToUserDTO(userRepo.updateUserDetails(user));
     }
 
     /**
      * Retrieves a user by their ID.
      *
-     * @param userID the user's primary key
-     * @param id The ID of the user to retrieve.
-     * @return A UserDTO representing the user.
+     * @param id the user's primary key
+     * @return a UserDTO representing the user
      */
     @Override
     public UserDTO getUserById(Long id) {
@@ -155,10 +146,10 @@ public class UserServiceImpl implements UserService {
     /**
      * Updates a user's password.
      *
-     * @param id The ID of the user.
-     * @param currentPassword The user's current password.
-     * @param newPassword The new password.
-     * @param confirmPassword The confirmation of the new password.
+     * @param id              the ID of the user
+     * @param currentPassword the user's current password
+     * @param newPassword     the new password
+     * @param confirmPassword the confirmation of the new password
      */
     @Override
     public void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword) {
@@ -168,20 +159,20 @@ public class UserServiceImpl implements UserService {
     /**
      * Updates the role of a user.
      *
-     * @param id The ID of the user.
-     * @param roleName The name of the new role.
+     * @param id       the ID of the user
+     * @param roleName the name of the new role
      */
     @Override
     public void updateUserRole(Long id, String roleName) {
-        roleRepository.updateUserRole(id, roleName);
+        roleRepo.updateUserRole(id, roleName);
     }
 
     /**
      * Updates a user's account settings.
      *
-     * @param id The ID of the user.
-     * @param enabled The new enabled status.
-     * @param notLocked The new locked status.
+     * @param id        the ID of the user
+     * @param enabled   the new enabled status
+     * @param notLocked the new locked status
      */
     @Override
     public void updateAccountSettings(Long id, Boolean enabled, Boolean notLocked) {
@@ -191,23 +182,14 @@ public class UserServiceImpl implements UserService {
     /**
      * Toggles a user's multi-factor authentication status.
      *
-     * @param email The email of the user.
-     * @return The updated UserDTO.
+     * @param email the email of the user
+     * @return the updated UserDTO
      */
     @Override
     public UserDTO toggleMFA(String email) {
         return mapToUserDTO(userRepo.toggleMFA(email));
     }
 
-    /**
-     * Updates a user's profile image.
-     *
-     * @param id The ID of the user.
-     * @param image The new profile image.
-     */
-    @Override
-    public void updateProfileImage(Long id, MultipartFile image) {
-        userRepo.updateProfileImage(id, image);
     /**
      * Looks up the user's role and converts the User entity into a UserDTO
      * with roleName and permissions populated.

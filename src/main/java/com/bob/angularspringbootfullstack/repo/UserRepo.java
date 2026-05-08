@@ -67,7 +67,7 @@ public interface UserRepo<T extends User> {
      *
      * @param email the user's email address
      * @return the user if found
-     * @throws ApiException if user is not found
+     * throws ApiException if user is not found
      */
     User getUserByEmail(String email);
 

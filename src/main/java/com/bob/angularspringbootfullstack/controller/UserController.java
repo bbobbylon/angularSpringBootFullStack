@@ -167,6 +167,16 @@ public class UserController {
                         .build());
     }
 
+    /**
+     * Reassigns the authenticated user's role to the given role name.
+     * Returns the refreshed user profile alongside the full roles catalogue so
+     * the frontend Authorization tab can update its selector without a separate
+     * request.
+     *
+     * @param authentication the current Spring Security authentication
+     * @param roleName       the target role name (e.g. "ROLE_ADMIN")
+     * @return 200 OK with the updated user and the full roles list
+     */
     @PatchMapping("/update/role/{roleName}")
     public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication, @PathVariable("roleName") String roleName) {
         UserDTO userDTO = getAuthenticatedUser(authentication);
@@ -181,6 +191,15 @@ public class UserController {
                         .build());
     }
 
+    /**
+     * Updates the authenticated user's account settings (enabled / non-locked flags).
+     * Reads both flags from the validated {@link SettingsForm} body and persists them
+     * via the service. Returns the refreshed user alongside the full roles list.
+     *
+     * @param authentication the current Spring Security authentication
+     * @param settingsForm   the validated payload carrying {@code enabled} and {@code notLocked}
+     * @return 200 OK with the updated user and the full roles list
+     */
     @PatchMapping("/update/settings")
     public ResponseEntity<HttpResponse> updateAccountSettings(Authentication authentication, @RequestBody @Valid SettingsForm settingsForm) {
         UserDTO userDTO = getAuthenticatedUser(authentication);
@@ -195,6 +214,16 @@ public class UserController {
                         .build());
     }
 
+    /**
+     * Flips the authenticated user's MFA (two-factor authentication) flag.
+     * Requires a phone number to be set on the account; the service throws if one
+     * is missing. The 2-second sleep simulates backend latency for frontend
+     * loading-state testing and should be removed before production.
+     *
+     * @param authentication the current Spring Security authentication
+     * @return 200 OK with the updated user and the full roles list
+     * @throws InterruptedException if the sleep is interrupted
+     */
     @PatchMapping("/update/togglemfa")
     public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) throws InterruptedException {
         TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state

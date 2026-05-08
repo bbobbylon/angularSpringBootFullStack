@@ -210,12 +210,12 @@ export class ProfileComponent implements OnInit {
   }
 
   /**
-   * Toggles the user's multi-factor authentication (MFA) status.
-   * This method is called when the user interacts with the MFA toggle.
-   * It sets the application state to LOADING and then calls the `toggleMfa$`
-   * method from the `UserService`. The subscription handles the server's response,
-   * updating the local user data with the new MFA status and showing a success
-   * notification. If an error occurs, it is logged, and an error notification is shown.
+   * Submits the role-change form and reassigns the authenticated user's role.
+   * Sends the selected {@code roleName} to the backend via {@code updateUserRole$},
+   * then refreshes {@code profileState$} and the local {@code dataSubject} snapshot
+   * so the Authorization tab reflects the new role and its permissions immediately.
+   *
+   * @param roleForm - the submitted NgForm containing the selected {@code roleName}
    */
   updateRole(roleForm: NgForm): void {
     /*    this.isLoadingSubject.next(true);
@@ -288,9 +288,10 @@ export class ProfileComponent implements OnInit {
   }
 
   /**
-   * Toggles multi-factor authentication in the UI (placeholder).
-   *
-   * Backend integration will be added alongside the account settings API.
+   * Flips the authenticated user's MFA status via the backend toggle endpoint.
+   * Sets the loading state before the call and clears it on success or error.
+   * The backend enforces that a phone number is set; if it is missing, the error
+   * propagates through {@code catchError} and surfaces in the template.
    */
   protected toggleMfa(): void {
     this.isLoadingSubject.next(true);

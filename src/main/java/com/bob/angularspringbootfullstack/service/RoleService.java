@@ -28,19 +28,5 @@ public interface RoleService {
      *
      * @return a collection of all available {@link Role} entities
      */
-}
-     * Retrieves a role by its name.
-     *
-     * @param name The name of the role to retrieve.
-     * @return The Role object if found, otherwise null.
-     */
-    Role getRoleByRoleName(String name);
-
-    /**
-     * Retrieves the permissions for a specific user.
-     *
-     * @param id The ID of the user.
-     * @return A collection of roles, which contain permissions.
-     */
-    Collection<Role> getRolesByUserId(Long id);
+    Collection<Role> getAllRoles();
 }

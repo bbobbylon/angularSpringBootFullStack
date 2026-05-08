@@ -92,33 +92,17 @@ export class UserService {
       );
 
   /**
-   * TODO make other javadocs/tsdocs as detailed and as concise as this one!
-   * Here we can define an interface and pass it in, like the other Observables, but we can also pass in the object literal. It must match the backend properties directly i.e., UpdatePasswordForm.java's variables, which would then be the variables that the updatePassword() method uses as parameters for the @RequestBody in the backend of the UserController.java /update/password endpoint. Spring Boot will then go in and use the @Setter or @Data annotation to set those properties and match them together. Spring Boot will try to do the mapping and will fail if these properties don't match. So we have to make sure that the properties in the object literal that we pass in here match the properties in the UpdatePasswordForm.java class in the backend.
-   * @param form
-   */
-  /**
-   * Submits a password change for the authenticated user. On success the
-   * backend returns a fresh token pair (because the old tokens are invalidated
-   * by the passwordChangedAt check), which the tap operator swaps into
-   * localStorage so subsequent requests use the new tokens automatically.
-   *
-   * Field names must match UpdatePasswordForm.java so Spring can bind the
-   * request body and deserialize them. On success, refreshed tokens are saved to localStorage.
    * Submits a password change for the authenticated user.
    *
-   * Flow:
-   * 1) Accepts the form payload from the profile screen.
-   * 2) Sends the payload to POST /user/update/password.
-   * 3) Backend validates current password and confirms new/confirm match.
-   * 4) Backend returns a fresh access + refresh token pair.
-   * 5) tap() replaces localStorage tokens so subsequent API calls stay valid.
-   * Important details:
-   * - Field names must match UpdatePasswordForm.java exactly.
-   * - Token rotation is required because passwordChangedAt invalidates old tokens.
-   * - Errors are normalized through handleError so callers receive a single message.
+   * Field names must exactly match {@code UpdatePasswordForm.java} so Spring's
+   * {@code @RequestBody} binding succeeds. On success the backend returns a fresh
+   * token pair (old tokens are invalidated by the {@code passwordChangedAt} check),
+   * which the {@code tap} operator swaps into localStorage so subsequent requests
+   * use the new credentials automatically.
    *
-   * @param form - currentPassword, newPassword, confirmPassword
-   * @returns Observable of the standard API envelope containing updated tokens
+   * @param form - object literal with {@code currentPassword}, {@code newPassword},
+   *               and {@code confirmPassword} matching the backend form fields
+   * @returns Observable of the standard API envelope containing the updated token pair
    */
   updatePassword$ = (form: {
     currentPassword: string;
@@ -135,16 +119,39 @@ export class UserService {
       catchError(this.handleError),
     );
 
+  /**
+   * Reassigns the authenticated user's role to the given role name.
+   * The backend returns the refreshed user and the full roles list so the
+   * Authorization tab can update its selector without an additional request.
+   *
+   * @param roleName - the target role name (e.g. {@code 'ROLE_ADMIN'})
+   * @returns Observable of the API envelope containing the updated user and roles
+   */
   updateUserRole$ = (roleName: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/role/${roleName}`, {})
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * Persists the enabled and notLocked account-settings flags for the authenticated user.
+   * Field names must match {@code SettingsForm.java} for Spring's {@code @RequestBody}
+   * binding to succeed.
+   *
+   * @param settingsForm - object with {@code enabled} and {@code notLocked} booleans
+   * @returns Observable of the API envelope containing the updated user and roles
+   */
   updateAccountSettings$ = (settingsForm: { enabled: boolean; notLocked: boolean }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/settings`, settingsForm)
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * Flips the authenticated user's MFA (two-factor authentication) flag.
+   * Requires a phone number to be set on the account; the backend throws if one
+   * is missing. The backend introduces a 2-second delay for loading-state testing.
+   *
+   * @returns Observable of the API envelope containing the updated user and roles
+   */
   toggleMFA$ = (): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/togglemfa`, {})

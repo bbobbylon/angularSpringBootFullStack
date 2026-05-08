@@ -38,4 +38,12 @@ public class RoleQuery {
      * response, allowing the frontend Authorization tab to populate its role selector
      * without a separate request.
      */
+    public static final String SELECT_ALL_ROLES_QUERY = "SELECT * FROM roles ORDER BY id";
+
+    /**
+     * Updates the role assigned to a user in the junction table.
+     * Replaces the existing role assignment with the new role.
+     * Parameters: roleId, userId
+     */
+    public static final String UPDATE_USER_ROLE_QUERY = "UPDATE userroles SET role_id = :roleId WHERE user_id = :userId";
 }

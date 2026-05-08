@@ -215,10 +215,16 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Not yet implemented; no-op. Role reassignment is not exposed yet.
+     * Reassigns the given user to a new role by name.
+     * <p>
+     * Looks up the target role by name using
+     * {@link com.bob.angularspringbootfullstack.query.RoleQuery#SELECT_ROLE_BY_NAME_QUERY},
+     * then updates the {@code userroles} junction table entry for the user with
+     * {@link com.bob.angularspringbootfullstack.query.RoleQuery#UPDATE_USER_ROLE_QUERY}.
      *
-     * @param userId   the user whose role should change
-     * @param roleName the new role name
+     * @param userId   the ID of the user whose role should change
+     * @param roleName the name of the new role (e.g. "ROLE_ADMIN")
+     * @throws ApiException if the role name is not found, or if any database error occurs
      */
     @Override
     public void updateUserRole(Long userId, String roleName) {
