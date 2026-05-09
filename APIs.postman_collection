@@ -1,0 +1,1186 @@
+{
+  "info": {
+    "_postman_id": "bd5fb0dc-5dcf-409f-be58-7ba1bcf83aa4",
+    "name": "angularSpringBootFullStackApplicationCapita Copy",
+    "description": "This collection is for an Angular Spring Boot Full-stack application for user management.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "53211107",
+    "_collection_link": "https://go.postman.co/collection/53211107-bd5fb0dc-5dcf-409f-be58-7ba1bcf83aa4?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "User API's",
+      "item": [
+        {
+          "name": "userLoginNoMFA",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobnomfa@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register User",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"firstName\": \"bob1\",\r\n    \"lastName\": \"oliver1\",\r\n    \"email\": \"bobnewaccount@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/register",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Account",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/user/verify/account/{{verifyAccountKey}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "verify",
+                "account",
+                "{{verifyAccountKey}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "userLoginWithMFA",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobbylon1@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "verifyCodeEndpoint",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/verify/code/{{email}}/{{code}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "verify",
+                "code",
+                "{{email}}",
+                "{{code}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{refresh_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/user/refresh/token",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "refresh",
+                "token"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User Profile",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobnomfa@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/profile",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "profile"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User Profile with MFA",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobby@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/profile",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "profile"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobnomfa@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/resetpassword/bob@yopmail.com",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "resetpassword",
+                "bob@yopmail.com"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set New Password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/user/resetpassword/{{verifyPasswordKey}}/1234567/1234567",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "resetpassword",
+                "{{verifyPasswordKey}}",
+                "1234567",
+                "1234567"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Password",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/user/verify/password/{{verifyPasswordKey}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "verify",
+                "password",
+                "{{verifyPasswordKey}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Details",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"id\": \"7\",\r\n    \"email\": \"bobnomfa@yopmail.com\",\r\n    \"firstName\": \"bobbylons\",\r\n    \"lastName\": \"olivers\",\r\n    \"address\": \"123 Any Street\",\r\n    \"phoneNumber\": \"1234567890\",\r\n    \"title\": \"Boss\",\r\n    \"bio\": \"A Cool guy\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/update",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "update"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Password",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"currentPassword\": \"12345678902\",\r\n    \"newPassword\": \"1234567\",\r\n    \"confirmPassword\": \"1234567\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/update/password",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "update",
+                "password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Roles",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/user/update/role/{{roleName}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "update",
+                "role",
+                "{{roleName}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User's MFA",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/user/update/togglemfa",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "update",
+                "togglemfa"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User's Locked/Unlocked Status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"enabled\": \"true\",\r\n    \"notLocked\": \"true\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/update/settings",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "update",
+                "settings"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User's Image",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "uuid": "32b3ed98-4268-4532-aefe-be9ff35c7247",
+                  "src": "/C:/Users/bobby/Desktop/38UJBwith2Runes.png"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/update/image",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "update",
+                "image"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch User's Profile Image",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "uuid": "32b3ed98-4268-4532-aefe-be9ff35c7247",
+                  "src": "/C:/Users/bobby/Desktop/38UJBwith2Runes.png"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:8080/user/update/image",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "user",
+                "update",
+                "image"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customer API's",
+      "item": [
+        {
+          "name": "Customer List",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobbylon1@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/customer/list",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "customer",
+                "list"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Customer",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"phoneNumber\":1,\r\n    \"name\": \"Robert Oliver\",\r\n    \"imageUrl\": \"image URL\",\r\n    \"email\": \"bobbytest@yopmail.com\",\r\n    \"status\": \"ACTIVE\",\r\n    \"type\":\"INDIVIDUAL\",\r\n    \"address\" : \"1234 Any Street, Kauai, HI, 96716\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/customer/create",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "customer",
+                "create"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Customer",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"phoneNumber\":1234,\r\n    \"name\": \"Robert Oliver\",\r\n    \"imageUrl\": \"image URL\",\r\n    \"email\": \"bobbytest@yopmail.com\",\r\n    \"status\": \"ACTIVE\",\r\n    \"type\":\"INDIVIDUAL\",\r\n    \"address\" : \"1234 Any Street, Kauai, HI, 96716\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/customer/update/{{customer_id}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "customer",
+                "update",
+                "{{customer_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get A Customer",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobbylon1@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/customer/get/{{customer_id}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "customer",
+                "get",
+                "{{customer_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Invoice API's",
+      "item": [
+        {
+          "name": "Invoice List",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobbylon1@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/customer/invoice/list",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "customer",
+                "invoice",
+                "list"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Specific Invoice",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobbylon1@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/customer/invoice/get/{{invoice_id}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "customer",
+                "invoice",
+                "get",
+                "{{invoice_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "UI Endpoint to reach the Invoice page",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"bobbylon1@yopmail.com\",\r\n    \"password\": \"1234567\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/customer/invoice/new",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "customer",
+                "invoice",
+                "new"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create a New Invoice",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n      \"amount\": 2.0,\r\n      \"invoiceDate\": \"1997-01-01\",\r\n      \"status\": \"ACTIVE\",\r\n      \"totalAmount\": 222222.00\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/customer/invoice/create",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "customer",
+                "invoice",
+                "create"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Invoice To Customer",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjozMWI5NjM1MC0zMmU4LTQyZTgtYjU5Ny0yMThlM2U0MjdkODkw",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n      \"amount\": 12341.0,\r\n      \"invoiceDate\": \"1997-01-01\",\r\n      \"status\": \"ACTIVE\",\r\n      \"totalAmount\": 123444.00\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/customer/invoice/addtocustomer/{{customer_id}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "customer",
+                "invoice",
+                "addtocustomer",
+                "{{customer_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "email",
+      "value": ""
+    },
+    {
+      "key": "verifyPasswordKey",
+      "value": ""
+    },
+    {
+      "key": "verifyPasswordKey",
+      "value": ""
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "code",
+      "value": ""
+    },
+    {
+      "key": "verifyAccountKey",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "value": ""
+    },
+    {
+      "key": "roleName",
+      "value": ""
+    },
+    {
+      "key": "customer_id",
+      "value": ""
+    }
+  ]
+}
