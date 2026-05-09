@@ -62,30 +62,11 @@ export class ProfileComponent implements OnInit {
   protected readonly showLogs = signal(true);
   /** A signal holding the list of permissions for the currently selected role. */
   protected readonly permissions = signal<string[]>([]);
-  /** A signal containing dummy data for user activity events, used for display until the real data is available. */
-  protected readonly dummyEvents = signal<ActivityEvent[]>([
-    {
-      device: 'Chrome on Windows',
-      ipAddress: '192.168.1.10',
-      createdAt: '2026-05-04T09:15:00Z',
-      type: EventType.LOGIN_ATTEMPT_SUCCESS,
-      description: 'Successful login from trusted device',
-    },
-    {
-      device: 'Firefox on macOS',
-      ipAddress: '10.0.0.42',
-      createdAt: '2026-05-03T18:42:00Z',
-      type: EventType.PROFILE_UPDATE,
-      description: 'Updated profile information',
-    },
-    {
-      device: 'Safari on iPhone',
-      ipAddress: '172.16.5.7',
-      createdAt: '2026-05-02T07:20:00Z',
-      type: EventType.LOGIN_ATTEMPT_FAILURE,
-      description: 'Failed login attempt — wrong password',
-    },
-  ]);
+  /** The column currently used to sort the activity log. Defaults to newest-first by date. */
+  protected readonly sortColumn = signal<string>('createdAt');
+  /** The current sort direction for the activity log. */
+  protected readonly sortDirection = signal<'asc' | 'desc'>('desc');
+
   /** Injected `UserService` to interact with the backend for user-related operations. */
   private readonly userService = inject(UserService);
   /** A BehaviorSubject to hold and manage the raw profile data fetched from the server. */
@@ -192,6 +173,7 @@ export class ProfileComponent implements OnInit {
       this.profileState$ = this.userService.updatePassword$(passwordForm.value).pipe(
         map(response => {
           console.log('Profile updated successfully:', response);
+          this.dataSubject.next({ ...response, data: response.data });
           passwordForm.reset();
           this.isLoadingSubject.next(false);
           return { dataState: DataState.LOADED, appData: this.dataSubject.value };
@@ -319,6 +301,38 @@ export class ProfileComponent implements OnInit {
   protected toggleLogs(): void {
     this.showLogs.update(v => !v);
   }
+
+  /**
+   * Sorts the activity log by the given column.
+   *
+   * Clicking the same column again flips the direction; clicking a new column
+   * sets it as the active sort and resets direction to ascending. The sorted
+   * array is pushed back into {@code dataSubject} and {@code profileState$} is
+   * reassigned so the async pipe re-renders without a network request.
+   *
+   * @param column - a key of {@link ActivityEvent} matching the clicked header
+   */
+  /*  protected sortBy(column: string): void {
+    if (this.sortColumn() === column) {
+      this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortColumn.set(column);
+      this.sortDirection.set('asc');
+    }
+    const current = this.dataSubject.value;
+    if (!current?.data?.events) return;
+    const dir = this.sortDirection() === 'asc' ? 1 : -1;
+    const col = column as keyof ActivityEvent;
+    const sorted = [...current.data.events].sort((a: ActivityEvent, b: ActivityEvent) => {
+      // TODO(human): compare a[col] and b[col] and return a number that reflects the sort order
+      if (a[col] < b[col]) return -1 * dir;
+      if (a[col] > b[col]) return 1 * dir;
+      return 0;
+    });
+    const updated = { ...current, data: { ...current.data, events: sorted } };
+    this.dataSubject.next(updated);
+    this.profileState$ = of({ dataState: DataState.LOADED, appData: updated });
+  }*/
 
   /**
    * Handles a file-input change event triggered when the user picks a new profile image.

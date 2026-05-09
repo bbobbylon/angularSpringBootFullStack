@@ -551,14 +551,14 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
 
     /**
      * Builds the public URL for a user's profile image.
-     * The URL points to {@code GET /user/image/{email}.png} — the controller endpoint
-     * that reads the file from disk and returns its bytes, not the file path itself.
+     * The URL points to the public {@code GET /user/image/{email}.png} controller endpoint
+     * which reads the file from disk and returns its bytes — not the raw filesystem path.
      *
      * @param email the user's email address, used as the image filename
      * @return the fully-qualified URL the browser can use to load the image
      */
     private String setUserImageUrl(String email) {
-        return ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/profile/image/" + email + ".png").toUriString();
+        return ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/image/" + email + ".png").toUriString();
     }
 
     /**

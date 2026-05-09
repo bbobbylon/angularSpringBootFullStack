@@ -1,4 +1,12 @@
-// In this class, we must map the variables properly and use the same names as in the backend otherwise, we will get an error when we try to use the data from the backend. We must also make sure that the types of the variables are correct, otherwise we will get an error when we try to use the data from the backend. We must also make sure that we import this interface in the components where we want to use it.
+/**
+ * Shape of the user object returned by the backend's {@code UserDTO}.
+ *
+ * Field names must exactly match the JSON keys Jackson serialises — a mismatch
+ * means the field will always be {@code undefined} in Angular.  One non-obvious
+ * case: Lombok generates {@code isNotLocked()} for a {@code boolean isNotLocked}
+ * field, and Jackson strips the {@code is} prefix from boolean getters, so the
+ * JSON key is {@code "notLocked"} (not {@code "isNotLocked"}).
+ */
 export interface UserInterface {
   id: number;
   username: string;
@@ -11,7 +19,7 @@ export interface UserInterface {
   bio?: string;
   imageUrl?: string;
   enabled: boolean;
-  isNotLocked: boolean;
+  notLocked: boolean;
   using2FA: boolean;
   createdAt: Date;
   roleName: string;
