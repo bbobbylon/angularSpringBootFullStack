@@ -1,6 +1,8 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.EventType;
+import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.LoginForm;
 import com.bob.angularspringbootfullstack.form.SettingsForm;
@@ -9,6 +11,7 @@ import com.bob.angularspringbootfullstack.form.UpdatePasswordForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
+import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import com.bob.angularspringbootfullstack.tokenprovider.TokenProvider;
@@ -17,6 +20,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
@@ -27,9 +31,10 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.concurrent.TimeUnit;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.*;
+import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getLoggedInUser;
 import static java.time.LocalTime.now;
@@ -82,6 +87,8 @@ public class UserController {
     private final TokenProvider tokenProvider;
     private final HttpServletRequest request;
     private final HttpServletResponse response;
+    private final ApplicationEventPublisher eventPublisher;
+    private final EventService eventService;
 
     /**
      * Registers a new user. Validates the payload, creates the user via
@@ -125,15 +132,21 @@ public class UserController {
      */
     @GetMapping("/verify/code/{email}/{code}")
     public ResponseEntity<HttpResponse> verifyCode(@PathVariable("email") String email, @PathVariable("code") String code) {
-        UserDTO userDTO = userService.verifyCode(email, code);
-        return ResponseEntity.ok(
-                HttpResponse.builder()
-                        .timeStamp(now().toString())
-                        .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
-                        .message("Login successful!")
-                        .status(OK)
-                        .statusCode(OK.value())
-                        .build());
+        try {
+            UserDTO userDTO = userService.verifyCode(email, code);
+            eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), LOGIN_ATTEMPT_SUCCESS));
+            return ResponseEntity.ok(
+                    HttpResponse.builder()
+                            .timeStamp(now().toString())
+                            .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
+                            .message("Login successful!")
+                            .status(OK)
+                            .statusCode(OK.value())
+                            .build());
+        } catch (Exception e) {
+            eventPublisher.publishEvent(new NewUserEvent(email, LOGIN_ATTEMPT_FAILURE));
+            throw e;
+        }
     }
 
     /**
@@ -185,10 +198,13 @@ public class UserController {
         if (!authUser.getId().equals(dbUser.getId()))
             throw new ApiException("Unauthorized request.");
         userService.updatePassword(dbUser.getId(), updatePasswordForm.getCurrentPassword(), updatePasswordForm.getNewPassword(), updatePasswordForm.getConfirmPassword());
+        eventPublisher.publishEvent(new NewUserEvent(authUser.getEmail(), PASSWORD_UPDATE));
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", dbUser,
+                                "roles", roleService.getAllRoles(),
+                                "events", eventService.getEventsByUserId(dbUser.getId()),
                                 "access_token", tokenProvider.createAccessToken(getUserPrincipal(dbUser)),
                                 "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(dbUser))))
                         .message("Your password has been updated successfully!")
@@ -211,10 +227,11 @@ public class UserController {
     public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication, @PathVariable("roleName") String roleName) {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateUserRole(userDTO.getId(), roleName);
+        eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), ROLE_UPDATE));
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userService.getUserById(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .data(of("user", userService.getUserById(userDTO.getId()), "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
                         .message("Your role has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -234,10 +251,11 @@ public class UserController {
     public ResponseEntity<HttpResponse> updateAccountSettings(Authentication authentication, @RequestBody @Valid SettingsForm settingsForm) {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateAccountSettings(userDTO.getId(), settingsForm.getEnabled(), settingsForm.getNotLocked());
+        eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), ACCOUNT_SETTINGS_UPDATE));
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userService.getUserById(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .data(of("user", userService.getUserById(userDTO.getId()), "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
                         .message("Your account settings have been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -256,12 +274,13 @@ public class UserController {
      */
     @PatchMapping("/update/togglemfa")
     public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) throws InterruptedException {
-        TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+        //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
         UserDTO userDTO = userService.toggleMFA(getAuthenticatedUser(authentication).getEmail());
+        eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), MFA_UPDATE));
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userDTO, "roles", roleService.getAllRoles()))
+                        .data(of("user", userDTO, "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
                         .message("Multi-Factor authentication setting has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -294,10 +313,11 @@ public class UserController {
         //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateProfileImage(userDTO, image);
+        eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), PROFILE_PICTURE_UPDATE));
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userService.getUserById(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .data(of("user", userService.getUserById(userDTO.getId()), "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
                         .message("Profile image has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -309,7 +329,7 @@ public class UserController {
      * <p>
      * Reads the file at {@code ~/Downloads/images/{fileName}} and returns the raw
      * bytes with {@code Content-Type: image/png} so the browser renders it inline.
-     * The URL pattern {@code /user/image/**} is listed in {@link SecurityConfig}
+     * The URL pattern {@code /user/image/**} is listed in {@code SecurityConfig.java}
      * {@code PUBLIC_URLS}, so no authentication token is required — the browser's
      * {@code <img>} tag can load it directly.
      *
@@ -398,7 +418,7 @@ public class UserController {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userDTO, "roles", roleService.getAllRoles()))
+                        .data(of("user", userDTO, "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
                         .message("We have fetched your profile for you!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -417,12 +437,13 @@ public class UserController {
     public ResponseEntity<HttpResponse> updateUser(Authentication authentication, @RequestBody @Valid UpdateForm user) throws InterruptedException {
         //UserDTO authenticatedUser = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
         //user.setId(authenticatedUser.getId());
-        TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+        //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
         UserDTO updatedUser = userService.updateUserDTO(user);
+        eventPublisher.publishEvent(new NewUserEvent(updatedUser.getEmail(), PROFILE_UPDATE));
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", updatedUser))
+                        .data(of("user", updatedUser, "events", eventService.getEventsByUserId(updatedUser.getId()), "roles", roleService.getAllRoles()))
                         .message("Your profile has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -532,8 +553,8 @@ public class UserController {
      */
     @PostMapping("/login")
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
-        Authentication authentication = authenticate(loginForm.getEmail(), loginForm.getPassword());
-        UserDTO userDTO = getLoggedInUser(authentication);
+        UserDTO userDTO = authenticate(loginForm.getEmail(), loginForm.getPassword());
+        //UserDTO userDTO = getLoggedInUser(authentication);
         return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
     }
 
@@ -546,13 +567,23 @@ public class UserController {
      * @param password the submitted password
      * @return the resulting authenticated Authentication
      */
-    private Authentication authenticate(String email, String password) {
+    private UserDTO authenticate(String email, String password) {
         try {
-            return authenticationManager.authenticate(unauthenticated(email, password));
+            if (null != userService.getUserByEmail(email)) {
+                eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT));
+            }
+            Authentication authentication = authenticationManager.authenticate(unauthenticated(email, password));
+            UserDTO loggedInUser = getLoggedInUser(authentication);
+            if (!loggedInUser.isUsing2FA()) {
+                eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_SUCCESS));
+            }
+            return loggedInUser;
         } catch (Exception e) {
+            eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_FAILURE));
             // After running our front end, we are seeing that processError is preventing from the actual backend error message to show up on the front end error message (in the alert), so we have commented this out. The reason behind this is that the processError is writing the response to the HttpServletResponse, which is not compatible with our current front end error handling approach. By commenting this out, we allow the ApiException to be thrown and handled by our GlobalExceptionHandler, which will return a structured JSON response that our front end can easily parse and display the error message in an alert. If we were to keep processError, it would interfere with the normal flow of exception handling and prevent our front end from receiving the expected error response format.
-            // processError(request, response, e);
+            processError(request, response, e);
             throw new ApiException(e.getMessage());
+
         }
     }
 

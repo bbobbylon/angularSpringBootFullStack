@@ -22,8 +22,8 @@
               <span style="position: relative">
                 <img [alt]="state?.appData?.data?.user.firstName" [src]="state?.appData?.data?.user.imageUrl"
                      class="shadow" />
-                <button (click)="fileInput.click()" class="bi bi-camera-fill right-position visually-hidden"
-                        type="button">Upload your image</button>
+                <button (click)="fileInput.click()" class="bi bi-camera-fill right-position "
+                        type="button"></button>
               </span>
             </div>
             <h4
@@ -51,6 +51,21 @@
                data-bs-toggle="pill" id="notification" role="tab">
               <i class="bi bi-lock-fill" style="margin-right: 12px;"></i> Authentication
             </a>
+            <div class="list-group-item p-3">
+              <div class="row align-items-center">
+                <div class="col">
+                  <strong class="mb-2">Activity Logs</strong>
+                  <p class="text-muted mb-0">Show the latest activities on your account.</p>
+                </div>
+                <div class="col-auto">
+                  <div class="form-check form-switch">
+                    <input (change)="toggleLogs()" [checked]="showLogs()" [disabled]="(isLoading$ | async)"
+                           class="form-check-input" id="activityLog" role="switch" type="checkbox">
+                    <label class="form-check-label" for="activityLog"></label>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -252,9 +267,9 @@
                       <label class="form-check-label" for="enabled">Account Active</label>
                     </div>
                     <div class="form-check">
-                      <input [checked]="state?.appData?.data?.user.isNotLocked"
+                      <input [checked]="state?.appData?.data?.user.notLocked"
                              [disabled]="!hasPermission('CREATE:USER') || (isLoading$ | async)"
-                             [ngModel]="state?.appData?.data?.user.isNotLocked"
+                             [ngModel]="state?.appData?.data?.user.notLocked"
                              class="form-check-input" id="isNotLocked" name="notLocked" type="checkbox">
                       <label class="form-check-label" for="isNotLocked">Account Unlocked</label>
                     </div>
@@ -309,21 +324,7 @@
                   </div>
                 </div>
               </div>
-              <div class="list-group-item">
-                <div class="row align-items-center">
-                  <div class="col">
-                    <strong class="mb-2">Activity Logs</strong>
-                    <p class="text-muted mb-0">Show the latest activities on your account.</p>
-                  </div>
-                  <div class="col-auto">
-                    <div class="form-check form-switch">
-                      <input (change)="toggleLogs()" [checked]="showLogs()" [disabled]="(isLoading$ | async)"
-                             class="form-check-input" id="activityLog" role="switch" type="checkbox">
-                      <label class="form-check-label" for="activityLog"></label>
-                    </div>
-                  </div>
-                </div>
-              </div>
+
             </div>
           </div>
         </div>
@@ -351,7 +352,7 @@
                   <tbody>
                   <!--       @for (event of state?.appData?.data?.event
                       -s; track event.createdAt) {   -->
-                    @for (event of dummyEvents(); track event.createdAt) {
+                    @for (event of state?.appData?.data?.events; track event.createdAt) {
                       <tr>
                         <td>{{ event.device }}</td>
                         <td>{{ event.ipAddress }}</td>
@@ -362,16 +363,20 @@
                                                  || event.type === EventType.MFA_UPDATE"
                                 [class.bg-primary]="event.type === EventType.PROFILE_UPDATE
                                                     || event.type === EventType.PROFILE_PICTURE_UPDATE"
-                                [class.bg-success]="event.type === EventType.LOGIN_ATTEMPT_SUCCESS"
-                                [class.bg-warning]="event.type === EventType.LOGIN_ATTEMPT
-                                                    || event.type === EventType.ACCOUNT_SETTINGS_UPDATE
+                                [class.bg-success]="event.type === EventType.LOGIN_ATTEMPT_SUCCESS
                                                     || event.type === EventType.PASSWORD_UPDATE"
+                                [class.bg-warning]="event.type === EventType.LOGIN_ATTEMPT || event.type === EventType.ACCOUNT_SETTINGS_UPDATE "
                                 class="badge pill">
                             {{ event.type }}
                           </span>
                         </td>
                         <td>{{ event.description }}</td>
                         <td>
+                          <!-- TODO(report-event): Wire up the Report button.
+                               On click, POST to a new backend endpoint (e.g. POST /user/events/{eventId}/report)
+                               that inserts a row into a `reported_events` table recording who reported it,
+                               which event was flagged, and a timestamp. The button should be disabled after
+                               a successful report so the same event cannot be submitted twice in one session. -->
                           <button class="btn btn-sm" style="background-color: #fd5d0d; font-weight: 450;" type="button">
                             Report
                           </button>

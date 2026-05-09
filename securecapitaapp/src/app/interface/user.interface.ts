@@ -11,7 +11,7 @@ export interface UserInterface {
   bio?: string;
   imageUrl?: string;
   enabled: boolean;
-  isNotLocked: boolean;
+  notLocked: boolean;
   using2FA: boolean;
   createdAt: Date;
   roleName: string;
