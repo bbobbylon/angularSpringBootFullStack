@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { UserService } from '../../service/user.service';
 
 /** Minimal user shape the navbar needs to render the avatar and greeting. */
@@ -23,10 +23,10 @@ interface NavUser {
   styleUrl: './navbar.component.css',
 })
 export class NavbarComponent implements OnInit {
-  private readonly userService = inject(UserService);
-
   /** The currently authenticated user's display data, or null before load / on error. */
   protected readonly user = signal<NavUser | null>(null);
+  private readonly userService = inject(UserService);
+  private readonly router = inject(Router);
 
   /**
    * Loads the current user's profile and populates the user signal.
@@ -54,8 +54,7 @@ export class NavbarComponent implements OnInit {
    * effectively ending the user's session and redirecting to the login screen.
    */
   protected logOut(): void {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    window.location.reload();
+    this.userService.logOut();
+    this.router.navigate(['/login']);
   }
 }
