@@ -25,8 +25,13 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
@@ -36,6 +41,7 @@ import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.enumeration.VerificationType.ACCOUNT;
 import static com.bob.angularspringbootfullstack.enumeration.VerificationType.PASSWORD;
 import static com.bob.angularspringbootfullstack.query.UserQuery.*;
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.util.Map.of;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
@@ -53,6 +59,38 @@ import static org.apache.commons.lang3.time.DateUtils.addDays;
  *   <li>2FA code generation/verification</li>
  *   <li>Password reset and account verification URL workflows</li>
  * </ul>
+ *
+ * <p>-----------------------------------------------------------------------
+ * TODO(refactor-architecture): This class violates the Single Responsibility
+ * Principle. The repository layer should only be responsible for data
+ * persistence (CRUD SQL operations). All business logic currently living here
+ * should be extracted to {@link com.bob.angularspringbootfullstack.service.serviceimpl.UserServiceImpl}.
+ * -----------------------------------------------------------------------
+ *
+ * <p><b>Business logic to move to UserServiceImpl:</b>
+ * <ul>
+ *   <li>Email uniqueness check ({@code getEmailCount}) — service should call repo,
+ *       then throw if count > 0, not the other way around.</li>
+ *   <li>Password encoding ({@code BCryptPasswordEncoder}) — encoding is a
+ *       business rule, not a persistence concern. The repo should receive an
+ *       already-encoded password.</li>
+ *   <li>Verification URL generation ({@code getVerificationURL}, UUID creation)
+ *       — URL construction and UUID minting are application logic, not SQL.</li>
+ *   <li>2FA code generation ({@code randomAlphanumeric}, expiry calculation)
+ *       — should be generated in the service and passed to the repo to persist.</li>
+ *   <li>Password match validation ({@code updatePassword} new/confirm check)
+ *       — field-level validation belongs in the service or form layer.</li>
+ *   <li>Phone number presence guard in {@code toggleMFA} — a business rule,
+ *       not a data access concern.</li>
+ * </ul>
+ *
+ * <p><b>What should remain here after refactor:</b>
+ * <ul>
+ *   <li>All {@code jdbcTemplate} calls (INSERT, UPDATE, SELECT, DELETE)</li>
+ *   <li>Row mapping via {@link com.bob.angularspringbootfullstack.rowmapper.UserRowMapper}</li>
+ *   <li>{@link UserDetailsService#loadUserByUsername} (Spring Security contract)</li>
+ * </ul>
+ * -----------------------------------------------------------------------
  */
 @Repository
 @RequiredArgsConstructor
@@ -61,8 +99,8 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     /**
      * Standard MySQL-compatible timestamp format used when persisting expiration timestamps.
      */
+    //HERE WE ARE ADDING SOME BEANZ
     private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
-    // here we are injecting some BEANS
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final RoleRepo<Role> roleRepository;
     private final BCryptPasswordEncoder passwordEncoder;
@@ -488,6 +526,68 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             throw new ApiException("Unable to update 2FA/MFA setting at this time. Please try again.");
         }
 
+    }
+
+    /**
+     * Saves a new profile image to disk, constructs the public URL where it can be fetched,
+     * and updates the user's {@code image_url} column in the database.
+     * <p>
+     * The three steps must succeed together: if the file saves but the DB update fails,
+     * the stored URL would be out of sync. A future improvement would wrap this in a
+     * transaction with rollback-on-failure.
+     *
+     * @param userDTO the authenticated user whose image is being changed; its
+     *                {@code imageUrl} field is updated in-place so the caller
+     *                sees the new URL without a second DB fetch
+     * @param image   the uploaded image file from the multipart request
+     */
+    @Override
+    public void updateProfileImage(UserDTO userDTO, MultipartFile image) {
+        String userImageURL = setUserImageUrl(userDTO.getEmail());
+        userDTO.setImageUrl(userImageURL);
+        saveImage(userDTO.getEmail(), image);
+        jdbcTemplate.update(UPDATE_USER_IMAGE_URL_QUERY, of("imageUrl", userImageURL, "userId", userDTO.getId()));
+    }
+
+    /**
+     * Builds the public URL for a user's profile image.
+     * The URL points to {@code GET /user/image/{email}.png} — the controller endpoint
+     * that reads the file from disk and returns its bytes, not the file path itself.
+     *
+     * @param email the user's email address, used as the image filename
+     * @return the fully-qualified URL the browser can use to load the image
+     */
+    private String setUserImageUrl(String email) {
+        return ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/profile/image/" + email + ".png").toUriString();
+    }
+
+    /**
+     * Writes the uploaded image file to {@code ~/Downloads/images/{email}.png}.
+     * Creates the target directory if it does not already exist.
+     * If a previous image exists for this user it is overwritten ({@code REPLACE_EXISTING}).
+     *
+     * @param email the user's email address, used as the filename on disk
+     * @param image the uploaded image file from the multipart request
+     * @throws ApiException if the directory cannot be created or the file cannot be written
+     */
+    private void saveImage(String email, MultipartFile image) {
+        Path fileStorageLocation = Paths.get(System.getProperty("user.home") + "/Downloads/images").toAbsolutePath().normalize();
+        if (!Files.exists(fileStorageLocation)) {
+            try {
+                Files.createDirectories(fileStorageLocation);
+            } catch (Exception e) {
+                log.error("Could not create the directory where the uploaded files will be stored.", e);
+                throw new ApiException("Could not create the directory where the uploaded files will be stored..An error occurred while saving the image. Please try again.");
+            }
+            log.info("Created directory for profile images at: {}", fileStorageLocation);
+        }
+        try {
+            Files.copy(image.getInputStream(), fileStorageLocation.resolve(email + ".png"), REPLACE_EXISTING);
+            log.info("Profile image saved successfully for user with email: {}", email);
+        } catch (IOException e) {
+            log.error("An error occurred while saving the profile image for user with email '{}': {}", email, e.getMessage(), e);
+            throw new ApiException(e.getMessage());
+        }
     }
 
     /**

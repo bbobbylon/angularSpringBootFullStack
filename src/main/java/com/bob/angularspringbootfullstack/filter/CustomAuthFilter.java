@@ -51,7 +51,7 @@ public class CustomAuthFilter extends OncePerRequestFilter {
     /**
      * Public endpoints that do not require authentication.
      */
-    private static final String[] PUBLIC_ROUTES = {"/user/login", "/user/verify/code", "/user/register", "/actuator", "/user/refresh/token"};
+    private static final String[] PUBLIC_ROUTES = {"/user/login", "/user/verify/code", "/user/register", "/actuator", "/user/refresh/token", "/user/image"};
     private final TokenProvider tokenProvider;
 
     /**

@@ -21,9 +21,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
@@ -33,12 +36,39 @@ import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpStatus.*;
+import static org.springframework.http.MediaType.IMAGE_PNG_VALUE;
 import static org.springframework.security.authentication.UsernamePasswordAuthenticationToken.unauthenticated;
 
 /**
  * REST endpoints for user registration, login, 2FA, account/password
  * verification, and token refresh. Wraps every response in HttpResponse for a
  * consistent JSON shape.
+ *
+ * <p>-----------------------------------------------------------------------
+ * TODO(refactor-user-fetch): Standardize how the authenticated user is
+ * resolved across all endpoints. Currently three inconsistent patterns exist:
+ * -----------------------------------------------------------------------
+ *
+ * <ol>
+ *   <li><b>Re-fetch by email</b> — {@code getProfile} and {@code toggleMFA}
+ *       call {@code getAuthenticatedUser(authentication).getEmail()} then do a
+ *       secondary DB lookup by email.</li>
+ *   <li><b>Re-fetch by ID</b> — {@code updateUserPassword}, {@code updateUserRole},
+ *       and {@code updateAccountSettings} call
+ *       {@code getAuthenticatedUser(authentication).getId()} then do a secondary
+ *       DB lookup by ID.</li>
+ *   <li><b>ID directly from token</b> — {@code refreshToken} skips
+ *       {@code getAuthenticatedUser} entirely and reads the subject straight from
+ *       the token via {@code tokenProvider.getSubject(...)}.</li>
+ * </ol>
+ *
+ * <p><b>Recommended approach:</b> standardize on ID-based lookups for all
+ * secondary DB fetches (primary key = fastest lookup), and only perform a
+ * secondary DB fetch when fresh data is actually needed after a mutation.
+ * For passing context to a service call, {@code getAuthenticatedUser(authentication)}
+ * already returns a {@link com.bob.angularspringbootfullstack.dto.UserDTO} from
+ * the JWT — no extra DB round-trip is needed.
+ * -----------------------------------------------------------------------
  */
 @RestController
 @RequestMapping(path = "/user")
@@ -236,6 +266,68 @@ public class UserController {
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
+    }
+
+
+    /**
+     * Uploads and persists a new profile image for the authenticated user.
+     * <p>
+     * Saves the uploaded file to the local filesystem under
+     * {@code ~/Downloads/images/{email}.png}, constructs a URL pointing to
+     * {@code GET /user/image/{email}.png}, and updates the user's
+     * {@code image_url} column in the database via {@code UserService.updateProfileImage}.
+     *
+     * <p>-----------------------------------------------------------------------
+     * TODO(dev-only): The save path is hardcoded to the developer's home directory
+     * and will not work in Docker or CI/CD. Replace with a configurable base path
+     * (e.g. an {@code @Value}-injected property) or migrate image storage to a
+     * cloud provider such as AWS S3.
+     * -----------------------------------------------------------------------
+     *
+     * @param authentication the current Spring Security authentication
+     * @param image          the uploaded PNG file sent as {@code multipart/form-data}
+     *                       under the key {@code "image"}
+     * @return 200 OK with the updated user and the full roles list
+     */
+    @PatchMapping("/update/image")
+    public ResponseEntity<HttpResponse> updateProfileImage(Authentication authentication, @RequestParam("image") MultipartFile image) throws InterruptedException {
+        //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+        UserDTO userDTO = getAuthenticatedUser(authentication);
+        userService.updateProfileImage(userDTO, image);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserById(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .message("Profile image has been updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Serves a profile image file from the local filesystem.
+     * <p>
+     * Reads the file at {@code ~/Downloads/images/{fileName}} and returns the raw
+     * bytes with {@code Content-Type: image/png} so the browser renders it inline.
+     * The URL pattern {@code /user/image/**} is listed in {@link SecurityConfig}
+     * {@code PUBLIC_URLS}, so no authentication token is required — the browser's
+     * {@code <img>} tag can load it directly.
+     *
+     * <p>-----------------------------------------------------------------------
+     * TODO(dev-only): The file path is hardcoded to the developer's home directory.
+     * For deployment, replace with a configurable base path or serve images from
+     * a cloud provider. Also consider returning {@code 404} when the file does not
+     * exist rather than propagating the raw {@code IOException}.
+     * -----------------------------------------------------------------------
+     *
+     * @param fileName the image filename (e.g. {@code user@example.com.png})
+     *                 taken from the URL path variable
+     * @return the raw PNG bytes with {@code Content-Type: image/png}
+     * @throws Exception if the file cannot be read from disk
+     */
+    @GetMapping(value = "/image/{fileName}", produces = IMAGE_PNG_VALUE)
+    public byte[] getProfileImage(@PathVariable("fileName") String fileName) throws Exception {
+        return Files.readAllBytes(Paths.get(System.getProperty("user.home") + "/Downloads/images/" + fileName));
     }
 
     /**

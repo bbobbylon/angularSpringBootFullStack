@@ -146,6 +146,21 @@ export class UserService {
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**
+   * Uploads a new profile image for the authenticated user.
+   * Wraps the file in a {@code FormData} object under the key {@code "image"}
+   * to match the {@code @RequestParam("image") MultipartFile} parameter on the
+   * backend {@code PATCH /user/update/image} endpoint. On success the response
+   * contains the updated user with the new {@code imageUrl}.
+   *
+   * @param formData - FormData containing the image file under the key "image"
+   * @returns Observable of the API envelope containing the updated user and roles
+   */
+  updateProfileImage$ = (formData: FormData): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/image`, formData)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
    * Flips the authenticated user's MFA (two-factor authentication) flag.
    * Requires a phone number to be set on the account; the backend throws if one
    * is missing. The backend introduces a 2-second delay for loading-state testing.
