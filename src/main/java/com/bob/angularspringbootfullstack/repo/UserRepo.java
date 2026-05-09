@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.repo;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.User;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Collection;
 
@@ -133,8 +134,33 @@ public interface UserRepo<T extends User> {
      */
     void updatePassword(Long userID, String currentPassword, String newPassword, String confirmPassword);
 
+    /**
+     * Persists the {@code enabled} and {@code notLocked} flags for the given user.
+     * Both control whether the account is usable: {@code enabled = false} blocks login
+     * entirely; {@code notLocked = false} locks the account (e.g. after suspicious activity).
+     *
+     * @param userID    the ID of the user to update
+     * @param enabled   {@code true} to allow login, {@code false} to block it
+     * @param notLocked {@code true} to unlock the account, {@code false} to lock it
+     */
     void updateAccountSettings(Long userID, Boolean enabled, Boolean notLocked);
 
+    /**
+     * Flips the user's MFA (two-factor authentication) flag on or off.
+     * A phone number must be present on the account — MFA codes are delivered via SMS.
+     *
+     * @param email the email address of the user toggling MFA
+     * @return the updated user entity with the new MFA state reflected
+     */
     T toggleMFA(String email);
+
+    /**
+     * Saves a new profile image to disk and updates the {@code image_url} column
+     * in the database with the URL where the image can be fetched.
+     *
+     * @param userDTO the authenticated user whose image is being changed
+     * @param image   the uploaded image file from the multipart request
+     */
+    void updateProfileImage(UserDTO userDTO, MultipartFile image);
 }
 

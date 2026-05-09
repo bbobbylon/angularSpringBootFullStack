@@ -179,7 +179,7 @@ export class ProfileComponent implements OnInit {
    * or logging an error and showing an error notification if the update fails.
    * After the operation, the form is reset.
    *
-   * @param {NgForm} updatePasswordForm - The form containing the user's current and new passwords.
+   * @param {NgForm} passwordForm - The form containing the user's current and new passwords.
    */
   updatePassword(passwordForm: NgForm): void {
     this.isLoadingSubject.next(true);
@@ -321,14 +321,42 @@ export class ProfileComponent implements OnInit {
   }
 
   /**
-   * Handles selection of a new avatar image (stub).
+   * Handles a file-input change event triggered when the user picks a new profile image.
+   * <p>
+   * Extracts the selected {@link File} from the DOM event, wraps it in a
+   * {@code FormData} object (required for multipart upload), and sends it to
+   * {@code PATCH /user/update/image}. On success the response contains the updated
+   * user with a cache-busted image URL so the browser reloads the new image immediately.
    *
-   * Extracts the chosen file for future upload handling.
+   * @param event - the DOM {@code change} event fired by the hidden file input
    */
   protected updatePicture(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    console.log('updatePicture', file.name);
+    const image = (event.target as HTMLInputElement).files?.[0];
+    if (image) {
+      this.isLoadingSubject.next(true);
+      this.profileState$ = this.userService.updateProfileImage$(this.getFormData(image)).pipe(
+        map(response => {
+          console.log('MFA Settings updated successfully:', response);
+          this.dataSubject.next({
+            ...response,
+            data: { ...response.data, user: { ...response.data.user, imageUrl: `${response.data.user.imageUrl}?time=${new Date().getTime()}` } },
+          });
+
+          this.isLoadingSubject.next(false);
+          return { dataState: DataState.LOADED, appData: this.dataSubject.value };
+        }),
+        startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
+        catchError((error: string) => {
+          this.isLoadingSubject.next(false);
+          return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+        }),
+      );
+    }
+  }
+
+  private getFormData(image: File): FormData {
+    const formData = new FormData();
+    formData.append('image', image);
+    return formData;
   }
 }

@@ -107,17 +107,31 @@ public class UserQuery {
     /**
      * Selects all fields for a user by their primary key. Parameter: id.
      */
-    /**
-     * Selects all fields for a user by their primary key. Parameter: id.
-     */
     public static final String SELECT_USER_BY_ID_QUERY = "SELECT * FROM users WHERE id = :id";
     /**
      * Updates a user's password and stamps password_changed_at to NOW() to
      * invalidate any tokens issued before this moment. Parameters: password, userId.
      */
     public static final String UPDATE_USER_PASSWORD_BY_ID_QUERY = "UPDATE users SET password = :password, password_changed_at = NOW() WHERE id = :userId";
+    /**
+     * Updates the account-level flags that control whether a user can log in.
+     * {@code enabled = false} blocks all login attempts; {@code non_locked = false}
+     * locks the account (typically after suspicious activity).
+     * Parameters: enabled, notLocked, userId.
+     */
     public static final String UPDATE_USER_SETTINGS_QUERY = "UPDATE users SET enabled = :enabled, non_locked = :notLocked WHERE id = :userId";
+    /**
+     * Flips the {@code using_mfa} column for a user — if MFA was on, this turns it off,
+     * and vice-versa. Invoked when the user toggles two-factor authentication from their settings.
+     * Parameters: using2FA, email.
+     */
     public static final String TOGGLE_USER_2FA_QUERY = "UPDATE users SET using_mfa = :using2FA WHERE email = :email";
+    /**
+     * Stores the URL where the user's profile image can be fetched.
+     * The URL points to the backend image-serving endpoint ({@code /user/image/{email}.png}),
+     * not the raw file path on disk. Parameters: imageUrl, userId.
+     */
+    public static final String UPDATE_USER_IMAGE_URL_QUERY = "UPDATE users SET image_url = :imageUrl WHERE id = :userId";
 
 
 }

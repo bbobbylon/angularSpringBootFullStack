@@ -45,7 +45,7 @@
              id="navbarDropdownProfile"
              role="button">
             @if (user(); as u) {
-              <img [alt]="u.firstName" [src]="u.imageUrl" class="user-avatar-md rounded-circle" style="max-width: 40px">
+              <img [alt]="u.firstName" [src]="u.imageUrl" class="user-avatar-md" style="max-width: 60px">
             } @else {
               <i class="bi bi-person-circle" style="font-size: 1.5rem;"></i>
             }

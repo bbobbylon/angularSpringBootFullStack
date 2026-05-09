@@ -22,7 +22,8 @@
               <span style="position: relative">
                 <img [alt]="state?.appData?.data?.user.firstName" [src]="state?.appData?.data?.user.imageUrl"
                      class="shadow" />
-                <i (click)="fileInput.click()" class="bi bi-camera-fill right-position"></i>
+                <button (click)="fileInput.click()" class="bi bi-camera-fill right-position visually-hidden"
+                        type="button">Upload your image</button>
               </span>
             </div>
             <h4
@@ -391,5 +392,5 @@
 <!-- profile image change form -->
 <form enctype="multipart/form-data" style="display:none;">
   <input #fileInput (change)="updatePicture($event)" accept="image/*" id="image" name="image"
-         ngModel placeholder="file" type="file" />
+         placeholder="file" type="file" />
 </form>

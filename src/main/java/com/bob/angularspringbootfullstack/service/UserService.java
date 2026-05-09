@@ -5,6 +5,7 @@ import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.User;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * UserService defines the business logic contract for user-related operations.
@@ -134,6 +135,14 @@ public interface UserService {
      * @return The updated UserDTO.
      */
     UserDTO toggleMFA(String email);
+
+    /**
+     * Saves a new profile image for the user and records the updated image URL in the database.
+     *
+     * @param userDTO the authenticated user whose image is being changed
+     * @param image   the uploaded image file from the multipart request
+     */
+    void updateProfileImage(UserDTO userDTO, MultipartFile image);
 }
 
 

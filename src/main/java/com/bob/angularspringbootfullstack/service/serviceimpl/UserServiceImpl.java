@@ -9,6 +9,7 @@ import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 
@@ -188,6 +189,18 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDTO toggleMFA(String email) {
         return mapToUserDTO(userRepo.toggleMFA(email));
+    }
+
+    /**
+     * Delegates saving the uploaded profile image to disk and recording its URL
+     * in the database to the repository layer.
+     *
+     * @param userDTO the authenticated user whose image is being changed
+     * @param image   the uploaded image file from the multipart request
+     */
+    @Override
+    public void updateProfileImage(UserDTO userDTO, MultipartFile image) {
+        userRepo.updateProfileImage(userDTO, image);
     }
 
     /**
