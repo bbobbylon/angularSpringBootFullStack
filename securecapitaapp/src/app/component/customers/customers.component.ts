@@ -180,6 +180,12 @@ export class CustomersComponent implements OnInit {
     );
   }
 
+  /**
+   * Advances or retreats one page in the customer list, preserving the current search term.
+   *
+   * @param direction - {@code 'forward'} to increment the page, {@code 'backward'} to decrement
+   * @param name - optional search term passed from the template to keep search state in sync
+   */
   goToNextOrPreviousPage(direction: string, name?: string): void {
     this.currentSearchSubject.next(name ?? '');
     const step = direction === 'forward' ? 1 : -1;

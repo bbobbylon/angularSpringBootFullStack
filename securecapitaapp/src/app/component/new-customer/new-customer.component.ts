@@ -33,7 +33,6 @@ import { catchError } from 'rxjs/operators';
 export class NewCustomerComponent implements OnInit {
   /** Exposes {@link DataState} to the template for switch-case rendering. */
   readonly DataState = DataState;
-  newCustomerState1$: Observable<GlobalStateInterface<CustomHttpResponseInterface<any>>>;
 
   /**
    * Drives the template — emits loading, loaded, or error states for the creation
