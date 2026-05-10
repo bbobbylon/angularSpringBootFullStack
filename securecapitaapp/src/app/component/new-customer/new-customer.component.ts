@@ -13,10 +13,15 @@ import { CustomerService } from '../../service/customer.service';
 import { catchError } from 'rxjs/operators';
 
 /**
- * New customer creation form.
+ * New customer creation form component.
  *
- * Stub implementation — real submission will POST to /customer/create
- * once the full customer creation backend integration is complete.
+ * On init, fetches the authenticated user via {@link CustomerService#customers$} so
+ * the navbar can display the current user. On submit, POSTs the form values to
+ * {@code POST /customer/create} via {@link CustomerService#newCustomer$} and resets
+ * the form to its default values on success.
+ *
+ * TODO: Replace the {@code customers$()} init call with a lighter user-only endpoint
+ * once one exists — we only need the {@code user} field for the navbar.
  */
 @Component({
   selector: 'app-new-customer',
@@ -30,16 +35,63 @@ export class NewCustomerComponent implements OnInit {
   readonly DataState = DataState;
   newCustomerState1$: Observable<GlobalStateInterface<CustomHttpResponseInterface<any>>>;
 
+  /**
+   * Drives the template — emits loading, loaded, or error states for the creation
+   * flow, including the navbar user on every resolved state.
+   */
   newCustomerState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListData>>>;
+
+  /**
+   * The currently authenticated user, passed in when this component is used in an
+   * embedded context. Falls back to the API-fetched user when used as a routed page.
+   */
   @Input() user: UserInterface;
+
+  /**
+   * Application title signal — retained for potential future page-title binding.
+   */
   readonly title = signal('securecapitaapp');
+
+  /**
+   * Placeholder for the current user's permission set.
+   *
+   * Reserved for future role-based UI gating on this form (e.g., hiding admin-only fields).
+   */
   protected readonly permissions = signal<string[]>([]);
+
+  /**
+   * Injected service used to fetch the initial user data and POST new customers.
+   */
   protected readonly customerService = inject(CustomerService);
+
+  /**
+   * Caches the most recent API response so the template can remain in
+   * {@code DataState.LOADED} as the {@code startWith} value while a create
+   * request is in flight.
+   */
   private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListData>>(null);
+
+  /**
+   * Controls the submit button's disabled state and spinner visibility
+   * while a create request is in flight.
+   */
   private isLoadingSubject = new BehaviorSubject<boolean>(false);
+
+  /**
+   * Observable of the current submission-in-progress state, consumed by the template
+   * to show the spinner and disable the submit button.
+   */
   protected isLoading$ = this.isLoadingSubject.asObservable();
 
   //TODO change functinoality to just get the user data instead of calling the customerService and fetching all customers, we just need the user data to prefill the form and then submit the form to create a new customer
+  /**
+   * Fetches the authenticated user's data on component init to populate the navbar.
+   *
+   * Uses {@link CustomerService#customers$} as a temporary approach — only the
+   * {@code user} field of the response is needed; the customer page data is discarded.
+   *
+   * TODO: Replace with a lighter user-only endpoint once available.
+   */
   ngOnInit(): void {
     this.newCustomerState$ = this.customerService.customers$().pipe(
       map(response => {
@@ -51,6 +103,16 @@ export class NewCustomerComponent implements OnInit {
       catchError((error: string) => of({ dataState: DataState.ERROR, error })),
     );
   }
+
+  /**
+   * Submits the new customer form to {@code POST /customer/create}.
+   *
+   * Sets the loading flag while the request is in flight, resets the form to its
+   * default values ({@code type: 'INDIVIDUAL', status: 'ACTIVE'}) on success, and
+   * remains in {@code DataState.LOADED} with an error message on failure.
+   *
+   * @param newCustomerForm - the Angular template-driven form containing the customer fields
+   */
   createNewCustomer(newCustomerForm: NgForm): void {
     this.isLoadingSubject.next(true);
     this.newCustomerState$ = this.customerService.newCustomer$(newCustomerForm.value).pipe(
@@ -63,10 +125,5 @@ export class NewCustomerComponent implements OnInit {
       startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
       catchError((error: string) => of({ dataState: DataState.LOADED, error })),
     );
-  }
-
-  /** Stub — will POST the new customer to /customer/create. */
-  createCustomer(form: NgForm): void {
-    console.log('createCustomer stub:', form.value);
   }
 }

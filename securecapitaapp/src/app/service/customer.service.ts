@@ -48,11 +48,29 @@ export class CustomerService {
       .get<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/list?page=${page}&size=${size}`)
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * POSTs a new customer record to the backend.
+   *
+   * @param customer - the customer data to create; all required fields must be populated
+   * @returns Observable emitting a {@link CustomerListData} response containing
+   *          the authenticated user and the newly created customer
+   */
   newCustomer$ = (customer: CustomerInterface): Observable<CustomHttpResponseInterface<CustomerListData>> =>
     this.http
       .post<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/create`, customer)
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * Searches for customers whose name contains the given term via GET /customer/search.
+   *
+   * The search term is URI-encoded before being appended to the query string.
+   * Results are paginated identically to {@link customers$}.
+   *
+   * @param name - the substring to match against customer names
+   * @param page - zero-based page index (defaults to 0)
+   * @param size - number of records per page (defaults to 20)
+   * @returns Observable emitting a {@link CustomerListData} response containing the matching page
+   */
   searchCustomers$ = (name: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListData>> =>
     this.http
       .get<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/search?name=${encodeURIComponent(name)}&page=${page}&size=${size}`)

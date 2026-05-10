@@ -29,14 +29,62 @@ import { ExtractArrayValuePipe } from '../../pipe/extract-array-value.pipe';
 export class CustomersComponent implements OnInit {
   /** Exposes {@link DataState} to the template for switch-case rendering. */
   readonly DataState = DataState;
+
+  /**
+   * Last-resort fallback avatar used when a customer's {@code imageUrl} is absent or fails to load.
+   *
+   * Bound via {@code [src]="customer.imageUrl || defaultImage"} and the {@code (error)} handler
+   * so that neither a missing nor a broken URL results in a broken-image icon.
+   */
   readonly defaultImage = 'https://www.gravatar.com/avatar/?d=mp';
+
+  /**
+   * Drives the entire template — emits a new {@link GlobalStateInterface} snapshot
+   * whenever the page index or search term changes.
+   *
+   * Switches between {@code /customer/list} and {@code /customer/search} depending
+   * on whether {@link currentSearchSubject} holds a non-empty term.
+   */
   customersState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListData>>>;
 
   private readonly customerService = inject(CustomerService);
+
+  /**
+   * Caches the most recent successful API response so that pagination and search
+   * updates can return {@code DataState.LOADED} immediately as the {@code startWith}
+   * value while the next request is in flight.
+   */
   private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListData>>(null);
+
+  /**
+   * Tracks the current 0-based page index.
+   *
+   * Emitting a new value triggers {@link customersState$} to re-fetch
+   * via {@link combineLatest}.
+   */
   private currentPageSubject = new BehaviorSubject<number>(0);
+
+  /**
+   * Public observable of the current 0-based page index.
+   *
+   * Consumed by the template's pagination controls to highlight the active page button.
+   */
   currentPage$ = this.currentPageSubject.asObservable();
+
+  /**
+   * Tracks the active search term entered by the user.
+   *
+   * An empty string means no search is active — {@link customersState$} will call
+   * {@code /customer/list}. A non-empty string routes to {@code /customer/search}.
+   */
   private currentSearchSubject = new BehaviorSubject<string>('');
+
+  /**
+   * Pool of local asset images used as deterministic fallback avatars.
+   *
+   * The image for a given customer is selected by {@code id % localDefaultImages.length},
+   * ensuring the same customer always gets the same placeholder across renders.
+   */
   private readonly localDefaultImages = [
     'assets/images/ali-lokhandwala-KUr51Y4dOyo-unsplash.jpg',
     'assets/images/anders-jilden-cYrMQA7a3Wc-unsplash.jpg',
@@ -81,6 +129,14 @@ export class CustomersComponent implements OnInit {
     'assets/images/viktor-mogilat-Ap8Ga6uWBmE-unsplash.jpg',
     'assets/images/yu-ko-gcCw9aiZTzQ-unsplash.jpg',
   ];
+
+  /**
+   * Wires {@link customersState$} to react to changes in both page index and search term.
+   *
+   * {@link combineLatest} ensures a new fetch fires whenever either subject emits.
+   * {@link switchMap} cancels any in-flight request when a new emission arrives,
+   * preventing stale responses from overwriting newer results.
+   */
   ngOnInit(): void {
     this.customersState$ = combineLatest([this.currentPageSubject, this.currentSearchSubject]).pipe(
       switchMap(([page, name]) =>
@@ -96,6 +152,12 @@ export class CustomersComponent implements OnInit {
     );
   }
 
+  /**
+   * Handles search form submission by updating the active search term and resetting
+   * to the first page, which triggers {@link customersState$} to re-fetch automatically.
+   *
+   * @param form - the submitted search form containing a {@code name} field
+   */
   searchCustomers(form: NgForm): void {
     this.currentSearchSubject.next(form.value.name ?? '');
     this.currentPageSubject.next(0);
@@ -124,10 +186,26 @@ export class CustomersComponent implements OnInit {
     this.currentPageSubject.next(this.currentPageSubject.value + step);
   }
 
+  /**
+   * Jumps directly to a specific page index, preserving the current search term.
+   *
+   * @param pageIndex - the 0-based index of the target page
+   * @param name - optional search term passed from the template to keep search state in sync
+   */
   goToPage(pageIndex: number, name?: string): void {
     this.currentSearchSubject.next(name ?? '');
     this.currentPageSubject.next(pageIndex);
   }
+
+  /**
+   * Returns a deterministic local fallback image path for the given customer ID.
+   *
+   * Uses modulo arithmetic against {@link localDefaultImages} so that each customer
+   * always receives the same placeholder regardless of render order or page.
+   *
+   * @param id - the customer's numeric ID used to index into the image pool
+   * @returns a relative path to an asset image under {@code assets/images/}
+   */
   protected getDefaultImageC(id: number): string {
     return this.localDefaultImages[id % this.localDefaultImages.length];
   }

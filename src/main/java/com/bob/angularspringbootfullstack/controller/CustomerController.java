@@ -107,6 +107,7 @@ public class CustomerController {
      * @param page zero-based page index (defaults to 0)
      * @param size number of records per page (defaults to 20)
      * @return 200 OK with the authenticated user and a page of matching customers
+     * @throws InterruptedException if the thread is interrupted during the artificial delay
      */
     @GetMapping("/search")
     public ResponseEntity<HttpResponse> searchCustomer(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> name, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) throws InterruptedException {
