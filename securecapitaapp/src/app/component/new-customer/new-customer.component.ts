@@ -7,10 +7,10 @@ import { Component, signal } from '@angular/core';
  */
 @Component({
   selector: 'app-customer',
-  templateUrl: './customer.component.html',
-  styleUrls: ['./customer.component.css'],
+  templateUrl: './new-customer.component.html',
+  styleUrls: ['./new-customer.component.css'],
 })
-export class CustomerComponent {
+export class NewCustomerComponent {
   /** Temporary title used by the placeholder template. */
   protected readonly title = signal('securecapitaapp');
 }

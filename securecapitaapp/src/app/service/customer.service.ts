@@ -24,6 +24,12 @@ export class CustomerService {
   /**
    * Fetches aggregated dashboard statistics: total customers, invoices, and billed amount.
    *
+   * Currently unused — stats are fetched alongside the customer list via {@code customers$}
+   * and passed to {@link StatsComponent} via {@code @Input}.
+   *
+   * TODO: Wire this method into {@link StatsComponent} once the rest of the application is
+   *  complete, so the stats panel fetches and refreshes independently of the customer list.
+   *
    * @returns Observable emitting a {@link StatsData} response containing the system-wide totals
    */
   stats$ = (): Observable<CustomHttpResponseInterface<StatsData>> =>
