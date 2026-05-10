@@ -2,6 +2,7 @@ package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.Invoice;
+import com.bob.angularspringbootfullstack.model.Stats;
 import org.springframework.data.domain.Page;
 
 /**
@@ -105,4 +106,12 @@ public interface CustomerService {
      * @throws com.bob.angularspringbootfullstack.exception.ApiException if no invoice with the given ID exists
      */
     Invoice getInvoice(Long invoiceId);
+
+    /**
+     * Returns aggregated dashboard statistics: total customers, total invoices,
+     * and the sum of all invoice {@code totalAmount} values.
+     *
+     * @return a {@link Stats} record with the current system-wide counts and totals
+     */
+    Stats getStats();
 }

@@ -1,0 +1,76 @@
+import { inject, Injectable } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, throwError } from 'rxjs';
+import { catchError, tap } from 'rxjs/operators';
+import { CustomerListData, StatsData } from '../interface/appstates.interface';
+import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
+import { Key } from '../enumeration/key.enumeration';
+
+/**
+ * Central HTTP service for all user-related API calls.
+ *
+ * Each method returns a typed Observable wrapping the server's standard
+ * CustomHttpResponseInterface envelope. Errors are normalised by handleError
+ * into a single Error observable so callers can handle failures uniformly.
+ * Token storage side-effects (reading/writing localStorage) live here rather
+ * than in components so the interceptor and components share one source of truth.
+ */
+@Injectable({
+  providedIn: 'root',
+})
+export class CustomerService {
+  private http = inject(HttpClient);
+  private readonly server: string = 'http://localhost:8080';
+
+  /**
+   * Authenticates the user with email and password.
+   * On success the response contains the access and refresh tokens.
+   *
+   * @param email    - the user's email address
+   * @param password - the user's plain-text password
+   * @returns Observable emitting a ProfileInterface response containing tokens
+   */
+  stats$ = (): Observable<CustomHttpResponseInterface<StatsData>> =>
+    this.http
+      .get<CustomHttpResponseInterface<StatsData>>(`${this.server}/customer/stats`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  customers$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListData>> =>
+    //TODO allow sorting, filtering, and infinite scrolling later
+    this.http
+      .get<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/list?page=${page}&size=${size}`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  logOut() {
+    localStorage.removeItem(Key.TOKEN);
+    localStorage.removeItem(Key.REFRESH_TOKEN);
+  }
+
+  /**
+   * Normalises HTTP errors into a single Observable<never> so all callers
+   * receive a consistent Error instance regardless of whether the failure
+   * was a client-side network event or a structured server error response.
+   *
+   * @param error - the HttpErrorResponse from Angular's HttpClient
+   * @returns Observable that immediately errors with a human-readable message
+   */
+  private handleError(error: HttpErrorResponse): Observable<never> {
+    let errorMessage: string;
+
+    if (error.error instanceof ErrorEvent) {
+      errorMessage = `An error occurred: ${error.error.message}`;
+    } else {
+      if (error.error?.reason) {
+        errorMessage = error.error.reason as string;
+        console.log(error.error);
+        console.log(errorMessage);
+        console.log(error);
+      } else {
+        errorMessage = `Server returned code: ${error.status}, error message is: ${error.message}`;
+      }
+    }
+    console.error(errorMessage);
+
+    return throwError(() => new Error(errorMessage));
+  }
+}

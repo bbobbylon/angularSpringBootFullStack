@@ -1,4 +1,4 @@
-@if (stats(); as s) {
+@if (stats) {
   <div class="row g-3">
     <div class="col-md-4 col-sm-6 col-xs-12">
       <div class="mini-stat clearfix bg-facebook rounded">
@@ -6,7 +6,7 @@
           <i class="bi bi-people-fill fg-facebook"></i>
         </span>
         <div class="mini-stat-info text-end">
-          <span>{{ s.totalCustomers }}</span>
+          <span>{{ stats.totalCustomers }}</span>
           Total Customers
         </div>
       </div>
@@ -17,7 +17,7 @@
           <i class="bi bi-receipt-cutoff fg-googleplus"></i>
         </span>
         <div class="mini-stat-info text-end">
-          <span>{{ s.totalInvoices }}</span>
+          <span>{{ stats.totalInvoices }}</span>
           Total Invoices
         </div>
       </div>
@@ -28,7 +28,7 @@
           <i class="bi bi-currency-dollar fg-twitter"></i>
         </span>
         <div class="mini-stat-info text-end">
-          <span>${{ s.totalBilled }}</span>
+          <span>${{ stats.totalBilled | number: '1.2-2' }}</span>
           Total Billed
         </div>
       </div>

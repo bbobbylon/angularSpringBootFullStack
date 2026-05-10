@@ -44,14 +44,14 @@
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
              id="navbarDropdownProfile"
              role="button">
-            @if (user(); as u) {
+            @if (user; as u) {
               <img [alt]="u.firstName" [src]="u.imageUrl" class="user-avatar-md" style="max-width: 60px">
             } @else {
               <i class="bi bi-person-circle" style="font-size: 1.5rem;"></i>
             }
           </a>
           <ul aria-labelledby="navbarDropdownProfile" class="dropdown-menu dropdown-menu-end">
-            @if (user(); as u) {
+            @if (user; as u) {
               <li><a [routerLink]="['/profile']" class="dropdown-item"><i class="bi bi-person-circle"
                                                                           style="padding-right: 8px;"></i>{{ u.firstName }} {{ u.lastName }}</a>
               </li>

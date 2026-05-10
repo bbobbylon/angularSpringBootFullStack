@@ -37,6 +37,26 @@ public class CustomerController {
     private final UserService userService;
 
     /**
+     * Returns aggregated dashboard statistics: total customers, total invoices,
+     * and the sum of all invoice totalAmount values.
+     *
+     * @param user the authenticated user making the request
+     * @return 200 OK with the authenticated user and a {@code Stats} object
+     */
+    @GetMapping("/stats")
+    public ResponseEntity<HttpResponse> getStats(@AuthenticationPrincipal UserDTO user) {
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "stats", customerService.getStats()))
+                        .message("Stats retrieved successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
      * Returns a paginated list of all customers.
      *
      * @param user the authenticated user making the request
@@ -50,7 +70,8 @@ public class CustomerController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "customers", customerService.getCustomers(page.orElse(0), size.orElse(20))))
+                                "page", customerService.getCustomers(page.orElse(0), size.orElse(20)),
+                                "stats", customerService.getStats()))
                         .message("Customers retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())

@@ -3,17 +3,22 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.Invoice;
+import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.repo.CustomerRepo;
 import com.bob.angularspringbootfullstack.repo.InvoiceRepo;
+import com.bob.angularspringbootfullstack.rowmapper.StatsRowMapper;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.Map;
 
+import static com.bob.angularspringbootfullstack.query.CustomerQuery.STATS_QUERY;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
 import static org.springframework.data.domain.PageRequest.of;
 
@@ -35,6 +40,7 @@ import static org.springframework.data.domain.PageRequest.of;
 public class CustomerServiceImpl implements CustomerService {
     private final CustomerRepo customerRepo;
     private final InvoiceRepo invoiceRepo;
+    private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
      * {@inheritDoc}
@@ -66,19 +72,25 @@ public class CustomerServiceImpl implements CustomerService {
         return customerRepo.save(existingCustomer);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Page<Customer> getCustomers(int page, int size) {
         return customerRepo.findAll(of(page, size));
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Iterable<Customer> getCustomers() {
         return customerRepo.findAll();
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Customer getCustomer(Long customerId) {
         return customerRepo.findById(customerId)
@@ -95,7 +107,9 @@ public class CustomerServiceImpl implements CustomerService {
         return invoiceRepo.save(invoice);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Page<Invoice> getInvoices(int page, int size) {
         return invoiceRepo.findAll(of(page, size));
@@ -115,17 +129,29 @@ public class CustomerServiceImpl implements CustomerService {
         invoiceRepo.save(invoice);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Page<Customer> searchCustomers(String name, int page, int size) {
         return customerRepo.findByNameContaining(name, of(page, size));
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Invoice getInvoice(Long invoiceId) {
         return invoiceRepo.findById(invoiceId)
                 .orElseThrow(() -> new ApiException("Invoice not found"));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Stats getStats() {
+        return jdbcTemplate.queryForObject(STATS_QUERY, Map.of(), new StatsRowMapper());
     }
 
 }
