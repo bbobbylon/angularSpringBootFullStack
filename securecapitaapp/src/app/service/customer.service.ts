@@ -4,7 +4,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { CustomerListData, StatsData } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
-import { Key } from '../enumeration/key.enumeration';
+import { CustomerInterface } from '../interface/customer.interface';
 
 /**
  * Central HTTP service for all customer and invoice API calls.
@@ -33,9 +33,7 @@ export class CustomerService {
    * @returns Observable emitting a {@link StatsData} response containing the system-wide totals
    */
   stats$ = (): Observable<CustomHttpResponseInterface<StatsData>> =>
-    this.http
-      .get<CustomHttpResponseInterface<StatsData>>(`${this.server}/customer/stats`)
-      .pipe(tap(console.log), catchError(this.handleError));
+    this.http.get<CustomHttpResponseInterface<StatsData>>(`${this.server}/customer/stats`).pipe(tap(console.log), catchError(this.handleError));
 
   /**
    * Fetches a paginated page of customers.
@@ -50,13 +48,15 @@ export class CustomerService {
       .get<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/list?page=${page}&size=${size}`)
       .pipe(tap(console.log), catchError(this.handleError));
 
-  /**
-   * Clears the access and refresh tokens from localStorage, ending the user's session.
-   */
-  logOut() {
-    localStorage.removeItem(Key.TOKEN);
-    localStorage.removeItem(Key.REFRESH_TOKEN);
-  }
+  newCustomer$ = (customer: CustomerInterface): Observable<CustomHttpResponseInterface<CustomerListData>> =>
+    this.http
+      .post<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/create`, customer)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  searchCustomers$ = (name: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListData>> =>
+    this.http
+      .get<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/search?name=${encodeURIComponent(name)}&page=${page}&size=${size}`)
+      .pipe(tap(console.log), catchError(this.handleError));
 
   /**
    * Normalises HTTP errors into a single Observable<never> so all callers

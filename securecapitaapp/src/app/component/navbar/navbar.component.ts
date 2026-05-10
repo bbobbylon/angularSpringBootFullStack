@@ -6,9 +6,18 @@ import { UserInterface } from '../../interface/user.interface';
 /**
  * Top navigation bar component.
  *
- * Receives the authenticated user via @Input from the parent and displays
+ * Receives the authenticated user via {@code @Input} from the parent and displays
  * their name and avatar. Provides a logout action that clears tokens and
  * navigates to the login screen.
+ *
+ * TODO: Decouple user data from the customer list response. Currently the parent (HomeComponent)
+ *  passes the user down from {@code data.user} inside the {@code GET /customer/list} response.
+ *  Instead, inject {@link UserService} here and call {@code userService.profile$()} on init
+ *  so the navbar fetches the user independently from {@code GET /user/profile} ({@code data.user}).
+ *  This removes the dependency on the customer list endpoint having loaded before the navbar
+ *  can display user info, and keeps user identity concerns out of the customer list response.
+ *  When making this change: remove {@code @Input() user}, restore {@code ngOnInit},
+ *  and remove the {@code [user]} binding from every parent template.
  */
 @Component({
   selector: 'app-navbar',

@@ -35,9 +35,9 @@ export interface PageInterface {
 
 export interface CustomerListData {
   user: UserInterface;
-  page: PageInterface;
-  stats: StatsInterface;
-  statsData: StatsData;
+  page?: PageInterface;
+  stats?: StatsInterface;
+  statsData?: StatsData;
 }
 
 export interface StatsData {

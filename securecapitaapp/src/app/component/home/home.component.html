@@ -1,3 +1,10 @@
+<!-- TODO: Add a loading spinner for DataState.LOADING state. Currently the template renders nothing
+     while the observable is loading (the outer @if is false until the first emission). The fix is to
+     restructure each page template to have three branches:
+       @if (state.dataState === DataState.LOADING) { <spinner> }
+       @if (state.dataState === DataState.LOADED)  { <content> }
+       @if (state.dataState === DataState.ERROR)   { <error message> }
+     Apply this same pattern to all routed page components (customers, invoices, customer-details, etc.). -->
 @if (homeState$ | async; as state) {
   <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
   <app-stats [stats]="state?.appData?.data?.stats"></app-stats>
