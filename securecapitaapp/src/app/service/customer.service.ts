@@ -7,13 +7,12 @@ import { CustomHttpResponseInterface } from '../interface/customhttpresponse.int
 import { Key } from '../enumeration/key.enumeration';
 
 /**
- * Central HTTP service for all user-related API calls.
+ * Central HTTP service for all customer and invoice API calls.
  *
  * Each method returns a typed Observable wrapping the server's standard
- * CustomHttpResponseInterface envelope. Errors are normalised by handleError
- * into a single Error observable so callers can handle failures uniformly.
- * Token storage side-effects (reading/writing localStorage) live here rather
- * than in components so the interceptor and components share one source of truth.
+ * {@link CustomHttpResponseInterface} envelope. Errors are normalised by
+ * {@link handleError} into a single error Observable so callers can handle
+ * failures uniformly via {@code catchError}.
  */
 @Injectable({
   providedIn: 'root',
@@ -23,24 +22,31 @@ export class CustomerService {
   private readonly server: string = 'http://localhost:8080';
 
   /**
-   * Authenticates the user with email and password.
-   * On success the response contains the access and refresh tokens.
+   * Fetches aggregated dashboard statistics: total customers, invoices, and billed amount.
    *
-   * @param email    - the user's email address
-   * @param password - the user's plain-text password
-   * @returns Observable emitting a ProfileInterface response containing tokens
+   * @returns Observable emitting a {@link StatsData} response containing the system-wide totals
    */
   stats$ = (): Observable<CustomHttpResponseInterface<StatsData>> =>
     this.http
       .get<CustomHttpResponseInterface<StatsData>>(`${this.server}/customer/stats`)
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * Fetches a paginated page of customers.
+   *
+   * @param page - zero-based page index (defaults to 0)
+   * @param size - number of records per page (defaults to 20)
+   * @returns Observable emitting a {@link CustomerListData} response containing the page and stats
+   */
   customers$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListData>> =>
     //TODO allow sorting, filtering, and infinite scrolling later
     this.http
       .get<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/list?page=${page}&size=${size}`)
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * Clears the access and refresh tokens from localStorage, ending the user's session.
+   */
   logOut() {
     localStorage.removeItem(Key.TOKEN);
     localStorage.removeItem(Key.REFRESH_TOKEN);

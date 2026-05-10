@@ -6,24 +6,28 @@ import org.springframework.jdbc.core.RowMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+/**
+ * Maps a single JDBC result row from {@link com.bob.angularspringbootfullstack.query.CustomerQuery#STATS_QUERY}
+ * to a {@link Stats} object.
+ * <p>
+ * Spring JDBC calls this once per row; the stats query always returns exactly one row.
+ */
 public class StatsRowMapper implements RowMapper<Stats> {
+
     /**
-     * Maps a single database row to a Role object.
-     * <p>
-     * This method is called by Spring JDBC for each row in the query result.
-     * It extracts values from the ResultSet and builds a Role object using
-     * the builder pattern provided by Lombok's @SuperBuilder annotation.
+     * Maps the current result-set row to a {@link Stats} instance.
      * <p>
      * Column mappings:
-     * - Database: Java field
-     * - id → id
-     * - name → name
-     * - permission → permission
+     * <ul>
+     *   <li>{@code total_customers} → {@link Stats#getTotalCustomers()}</li>
+     *   <li>{@code total_invoices}  → {@link Stats#getTotalInvoices()}</li>
+     *   <li>{@code total_billed}    → {@link Stats#getTotalBilled()}</li>
+     * </ul>
      *
      * @param resultSet the SQL result set positioned at the current row
-     * @param rowNum    the row number (0-indexed)
-     * @return a fully initialized Role object
-     * @throws SQLException if database access error occurs
+     * @param rowNum    the 0-based index of the current row
+     * @return a fully populated {@link Stats} object
+     * @throws SQLException if any column cannot be read from the result set
      */
     @Override
     public Stats mapRow(ResultSet resultSet, int rowNum) throws SQLException {

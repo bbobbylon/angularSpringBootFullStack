@@ -17,6 +17,7 @@ import { UserInterface } from '../../interface/user.interface';
   styleUrl: './navbar.component.css',
 })
 export class NavbarComponent {
+  /** The authenticated user passed down from the parent; controls avatar and name display. */
   @Input() user: UserInterface;
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);

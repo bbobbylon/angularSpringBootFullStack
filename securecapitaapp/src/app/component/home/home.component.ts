@@ -95,8 +95,10 @@ export class HomeComponent implements OnInit {
     'assets/images/yu-ko-gcCw9aiZTzQ-unsplash.jpg',
   ];
   private currentPageSubject = new BehaviorSubject<number>(0);
+  /** Observable of the current 0-based page index, used by the template to highlight the active page. */
   currentPage$ = this.currentPageSubject.asObservable();
   private pageSizeSubject = new BehaviorSubject<number>(20);
+  /** Observable of the current page size, used by the template to mark the active dropdown option. */
   pageSize$ = this.pageSizeSubject.asObservable();
   private readonly userService = inject(UserService);
   private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListData>>(null);
@@ -104,14 +106,11 @@ export class HomeComponent implements OnInit {
   protected isLoading$ = this.isLoadingSubject.asObservable();
 
   /**
-   * Initializes the component by fetching the user's profile information.
-   * This method is an Angular lifecycle hook that is called after the component's
-   * data-bound properties have been initialized. It retrieves the user data from
-   * the application state, which is managed by a BehaviorSubject in the UserService.
-   * It subscribes to the user$ observable to get the latest user data and updates
-   * the component's state. This ensures that the profile information is always
-   * current. The method also sets the initial data state to LOADING and then
-   * updates it to LOADED or ERROR based on the outcome of the data fetch operation.
+   * Wires the home state observable to the combined page/size stream.
+   *
+   * Uses {@code combineLatest} so that a change to either the current page or the
+   * page size triggers a new request. {@code switchMap} automatically cancels any
+   * in-flight request when a new emission arrives, preventing stale responses.
    */
   ngOnInit(): void {
     this.homeState$ = combineLatest([this.currentPageSubject, this.pageSizeSubject]).pipe(
@@ -165,21 +164,6 @@ export class HomeComponent implements OnInit {
     this.pageSizeSubject.next(size);
     this.currentPageSubject.next(0); // Reset to first page when page size changes
   }
-  gotopage1(pageIndex?: number): void {
-    this.homeState$ = this.customerService.customers$(pageIndex).pipe(
-      map(response => {
-        console.log('Fetched customer data:', response);
-        this.dataSubject.next(response);
-        this.currentPageSubject.next(pageIndex);
-        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-      }),
-      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-      catchError((error: string) => {
-        return of({ dataState: DataState.ERROR, error });
-      }),
-    );
-  }
-
   protected getDefaultImageB(id: number, name: string): string {
     const color = this.avatarColors[id % this.avatarColors.length];
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${color}&color=fff&size=128&rounded=true`;

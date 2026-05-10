@@ -9,11 +9,11 @@ import lombok.experimental.SuperBuilder;
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT;
 
 /**
- * Aggregated dashboard statistics returned by {@code GET /customer/stats}.
- *
- * @param totalCustomers total number of customer records in the system
- * @param totalInvoices  total number of invoices across all customers
- * @param totalBilled    sum of all invoice {@code totalAmount} values
+ * Aggregated dashboard statistics returned by {@code GET /customer/stats}
+ * and embedded in the {@code GET /customer/list} response.
+ * <p>
+ * All values are system-wide totals across all customers and invoices,
+ * computed by {@link com.bob.angularspringbootfullstack.service.CustomerService#getStats()}.
  */
 @Data
 @SuperBuilder
@@ -21,8 +21,11 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT;
 @AllArgsConstructor
 @JsonInclude(NON_DEFAULT)
 public class Stats {
+    /** Total number of customer records in the system. */
     private int totalCustomers;
+    /** Total number of invoices across all customers. */
     private int totalInvoices;
+    /** Sum of all invoice {@code totalAmount} values, rounded to the nearest whole number. */
     private double totalBilled;
 
 }
