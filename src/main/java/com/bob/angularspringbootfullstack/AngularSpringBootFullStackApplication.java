@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.data.web.config.EnableSpringDataWebSupport;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -10,6 +11,8 @@ import org.springframework.web.filter.CorsFilter;
 
 import java.util.Arrays;
 import java.util.List;
+
+import static org.springframework.data.web.config.EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO;
 
 /**
  * AngularSpringBootFullStackApplication is the main entry point for the Spring Boot application.
@@ -25,6 +28,7 @@ import java.util.List;
  * - Enables auto-configuration for Spring Boot features
  */
 @SpringBootApplication
+@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)
 public class AngularSpringBootFullStackApplication {
     /**
      * BCrypt strength level for password hashing (higher = more secure but slower)

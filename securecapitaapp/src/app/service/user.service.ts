@@ -6,6 +6,7 @@ import { ProfileInterface } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { UserInterface } from '../interface/user.interface';
 import { Key } from '../enumeration/key.enumeration';
+import { JwtHelperService } from '@auth0/angular-jwt';
 
 /**
  * Central HTTP service for all user-related API calls.
@@ -21,6 +22,7 @@ import { Key } from '../enumeration/key.enumeration';
 })
 export class UserService {
   private http = inject(HttpClient);
+  private jwtHelper = new JwtHelperService();
   private readonly server: string = 'http://localhost:8080';
 
   /**
@@ -171,6 +173,14 @@ export class UserService {
     this.http
       .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/togglemfa`, {})
       .pipe(tap(console.log), catchError(this.handleError));
+
+  isAuthenticated = (): boolean =>
+    this.jwtHelper.decodeToken<string>(localStorage.getItem(Key.TOKEN)) && !this.jwtHelper.isTokenExpired(localStorage.getItem(Key.TOKEN));
+
+  logOut() {
+    localStorage.removeItem(Key.TOKEN);
+    localStorage.removeItem(Key.REFRESH_TOKEN);
+  }
 
   /**
    * Normalises HTTP errors into a single Observable<never> so all callers

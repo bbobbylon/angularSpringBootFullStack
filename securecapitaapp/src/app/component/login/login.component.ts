@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { DataState } from '../../enumeration/datastate.enum';
@@ -21,7 +21,7 @@ import { Key } from '../../enumeration/key.enumeration';
   styleUrls: ['./login.component.css'],
   imports: [RouterModule, CommonModule, FormsModule],
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   /** Template access to the DataState enum for UI state rendering. */
   readonly DataState = DataState;
   loginState$: Observable<LoginStateInterface> = of({
@@ -40,6 +40,14 @@ export class LoginComponent {
   private readonly router = inject(Router);
   private phoneSubject = new BehaviorSubject<string | null>(null);
   private emailSubject = new BehaviorSubject<string | null>(null);
+
+  ngOnInit(): void {
+    if (this.userService.isAuthenticated()) {
+      this.router.navigate(['/']);
+    } else {
+      this.router.navigate(['/login']);
+    }
+  }
 
   /**
    * Submits the MFA verification code once the backend has requested 2FA.

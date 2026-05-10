@@ -15,23 +15,6 @@ import { RolesInterface } from '../../interface/roles.interface';
 // TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
 
 /**
- * Represents a single user activity event for display in the audit log.
- * This interface defines the structure for events like logins, profile updates, etc.
- */
-interface ActivityEvent {
-  /** The device and browser from which the event originated. */
-  device: string;
-  /** The IP address associated with the event. */
-  ipAddress: string;
-  /** The timestamp when the event occurred, in ISO 8601 format. */
-  createdAt: string;
-  /** The type of the event, categorized using the `EventType` enum. */
-  type: EventType;
-  /** A human-readable description of the event. */
-  description: string;
-}
-
-/**
  * Profile view for authenticated users.
  *
  * Loads profile data, supports profile updates and password changes,

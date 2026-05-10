@@ -1,20 +1,14 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, inject, Input } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import { UserService } from '../../service/user.service';
-
-/** Minimal user shape the navbar needs to render the avatar and greeting. */
-interface NavUser {
-  firstName: string;
-  lastName: string;
-  imageUrl: string;
-}
+import { UserInterface } from '../../interface/user.interface';
 
 /**
  * Top navigation bar component.
  *
- * Fetches the authenticated user's profile on init and displays their name
- * and avatar. Falls back to a Gravatar default if no imageUrl is set.
- * Provides a logout action that clears tokens and reloads the page.
+ * Receives the authenticated user via @Input from the parent and displays
+ * their name and avatar. Provides a logout action that clears tokens and
+ * navigates to the login screen.
  */
 @Component({
   selector: 'app-navbar',
@@ -22,40 +16,18 @@ interface NavUser {
   templateUrl: './navbar.component.html',
   styleUrl: './navbar.component.css',
 })
-export class NavbarComponent implements OnInit {
+export class NavbarComponent {
+  /** The authenticated user passed down from the parent; controls avatar and name display. */
+  @Input() user: UserInterface;
   private readonly userService = inject(UserService);
-
-  /** The currently authenticated user's display data, or null before load / on error. */
-  protected readonly user = signal<NavUser | null>(null);
+  private readonly router = inject(Router);
 
   /**
-   * Loads the current user's profile and populates the user signal.
-   * On error (e.g. 401 after token expiry) the signal is set to null
-   * so the template can hide user-specific elements gracefully.
-   */
-  ngOnInit(): void {
-    this.userService.profile$().subscribe({
-      next: response => {
-        const u = response.data?.user;
-        if (u) {
-          this.user.set({
-            firstName: u.firstName,
-            lastName: u.lastName,
-            imageUrl: u.imageUrl ?? 'https://www.gravatar.com/avatar/?d=mp',
-          });
-        }
-      },
-      error: () => this.user.set(null),
-    });
-  }
-
-  /**
-   * Clears both JWT tokens from localStorage and reloads the page,
-   * effectively ending the user's session and redirecting to the login screen.
+   * Clears both JWT tokens from localStorage and navigates to the login screen,
+   * effectively ending the user's session.
    */
   protected logOut(): void {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    window.location.reload();
+    this.userService.logOut();
+    this.router.navigate(['/login']);
   }
 }

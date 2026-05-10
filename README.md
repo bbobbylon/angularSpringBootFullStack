@@ -603,3 +603,5 @@ PostgreSQL
     - Use PostgreSQL to create a new database for your application.
     - Create tables and insert sample data as needed for your application.
 
+I DON'T OWN ANY OF THE IMAGES IN THIS PROJECT. ALL IMAGES ARE OWNED BY THEIR RESPECTIVE COPYRIGHT HOLDERS. THIS PROJECT
+IS FOR EDUCATIONAL PURPOSES ONLY AND NOT FOR COMMERCIAL USE. IMAGES WERE TAKEN FROM UNSPLASH.COM. THANK YOU
