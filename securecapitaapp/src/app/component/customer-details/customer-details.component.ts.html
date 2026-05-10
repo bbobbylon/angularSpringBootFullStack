@@ -1,194 +1,235 @@
-<ng-container *ngIf="(customerState$ | async) as state" [ngSwitch]="state.dataState">
-  <ng-container *ngSwitchCase="DataState.LOADED">
-    <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-    <section>
-      <div class="container">
-        <nav aria-label="breadcrumb" style="margin-top: 8px;">
-          <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
-            <li class="breadcrumb-item"><a [routerLink]="['/customers']">Customers</a></li>
-            <li aria-current="page" class="breadcrumb-item active">{{ state?.appData?.data?.customer.name }}</li>
-          </ol>
-        </nav>
-        <div class="row">
-          <div class="col-xl-4">
-            <div class="card">
-              <div class="card-body">
-                <div class="d-flex align-items-start">
-                  <img [src]="state?.appData?.data?.customer.imageUrl" alt="profile-image"
-                       class="rounded-circle avatar-lg img-thumbnail" style="position: relative">
-                  <div class="w-100 ms-4">
-                    <h4 class="my-0">{{ state?.appData?.data?.customer.name }}</h4>
-                    <p class="" style="font-size: 13px;">{{ state?.appData?.data?.customer.email }}</p>
-                    <span [ngClass]="[
-                                    state?.appData?.data?.customer.status === 'ACTIVE' ? ' bg-success' : '',
-                                    state?.appData?.data?.customer.status === 'PENDING' ? ' bg-primary' : '',
-                                    state?.appData?.data?.customer.status === 'BANNED' ? ' bg-danger' : '',
-                                    state?.appData?.data?.customer.status === 'INACTIVE' ? ' bg-info' : ''
-                                    ]"
-                          class="badge"
-                          style="position: absolute;bottom:60px;left: 113px; top: 70px;font-size: 11px; height: 18px;">
-                                 {{ state?.appData?.data?.customer.status }}
-                         </span>
+@if (customerState$ | async; as state) {
+  @switch (state.dataState) {
+    @case (DataState.LOADED) {
+      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <section>
+        <div class="container">
+          <nav aria-label="breadcrumb" style="margin-top: 8px">
+            <ol class="breadcrumb">
+              <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
+              <li class="breadcrumb-item"><a [routerLink]="['/customers']">Customers</a></li>
+              <li aria-current="page" class="breadcrumb-item active">{{ state?.appData?.data?.customer.name }}</li>
+            </ol>
+          </nav>
+          <div class="row">
+            <div class="col-xl-4">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex align-items-start">
+                    <img
+                      [src]="state?.appData?.data?.customer.imageUrl"
+                      alt="profile-image"
+                      class="rounded-circle avatar-lg img-thumbnail"
+                      style="position: relative" />
+                    <div class="w-100 ms-4">
+                      <h4 class="my-0">{{ state?.appData?.data?.customer.name }}</h4>
+                      <p class="" style="font-size: 13px">{{ state?.appData?.data?.customer.email }}</p>
+                      <span
+                        [ngClass]="[
+                          state?.appData?.data?.customer.status === 'ACTIVE' ? ' bg-success' : '',
+                          state?.appData?.data?.customer.status === 'PENDING' ? ' bg-primary' : '',
+                          state?.appData?.data?.customer.status === 'BANNED' ? ' bg-danger' : '',
+                          state?.appData?.data?.customer.status === 'INACTIVE' ? ' bg-info' : '',
+                        ]"
+                        class="badge"
+                        style="position: absolute; bottom: 60px; left: 113px; top: 70px; font-size: 11px; height: 18px">
+                        {{ state?.appData?.data?.customer.status }}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div class="card">
-              <div class="card-body">
-                <h5 class="card-title">Total Invoices</h5>
-                <h6 class="card-subtitle mb-2 text-muted">Customer Total Invoices</h6>
-                <ul class="list-group">
-                  <li class="list-group-item d-flex justify-content-between align-items-center"
-                      style="font-size: 20px;">
-                    Total Current Invoices
-                    <span class="" style="font-size: 20px;">
-                              {{ state?.appData?.data?.customer.invoices.length }}
-                            </span>
-                  </li>
-                </ul>
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Total Invoices</h5>
+                  <h6 class="card-subtitle mb-2 text-muted">Customer Total Invoices</h6>
+                  <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between align-items-center" style="font-size: 20px">
+                      Total Current Invoices
+                      <span class="" style="font-size: 20px">
+                        {{ state?.appData?.data?.customer.invoices.length }}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Total Billed</h5>
+                  <h6 class="card-subtitle mb-2 text-muted">Customer Total Billed</h6>
+                  <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between align-items-center" style="font-size: 20px">
+                      Total Billed
+                      <span class="badge bg-success" style="font-size: 20px">
+                        $ {{ state?.appData?.data?.customer.invoices | ExtractArrayValue: 'array' }}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
-            <div class="card">
-              <div class="card-body">
-                <h5 class="card-title">Total Billed</h5>
-                <h6 class="card-subtitle mb-2 text-muted">Customer Total Billed</h6>
-                <ul class="list-group">
-                  <li class="list-group-item d-flex justify-content-between align-items-center"
-                      style="font-size: 20px;">
-                    Total Billed
-                    <span class="badge bg-success" style="font-size: 20px;">
-                               $ {{ state?.appData?.data?.customer.invoices | ExtractArrayValue: 'invoices' }}
-                            </span>
-                  </li>
-                </ul>
+            <div class="col-xl-8">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Profile Details</h5>
+                  <form #customerForm="ngForm" (ngSubmit)="updateCustomer(customerForm)">
+                    <input
+                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                      [ngModel]="state?.appData?.data?.customer.id"
+                      name="id"
+                      type="hidden" />
+                    <input
+                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                      [ngModel]="state?.appData?.data?.customer.createdAt"
+                      name="createdAt"
+                      type="hidden" />
+                    <div class="row mb-3">
+                      <label class="col-sm-3 col-form-label" for="name">First Name</label>
+                      <div class="col-sm-9">
+                        <input
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [ngModel]="state?.appData?.data?.customer.name"
+                          class="form-control"
+                          name="name"
+                          type="text" />
+                      </div>
+                    </div>
+                    <div class="row mb-3">
+                      <label class="col-sm-3 col-form-label" for="email">Email</label>
+                      <div class="col-sm-9">
+                        <input
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [ngModel]="state?.appData?.data?.customer.email"
+                          class="form-control"
+                          name="email"
+                          type="text" />
+                      </div>
+                    </div>
+                    <div class="row mb-3">
+                      <label class="col-sm-3 col-form-label" for="type">Type</label>
+                      <div class="col-sm-9">
+                        <input
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [ngModel]="state?.appData?.data?.customer.type"
+                          class="form-control"
+                          name="type"
+                          type="text" />
+                      </div>
+                    </div>
+                    <div class="row mb-3">
+                      <label class="col-sm-3 col-form-label" for="status">Status</label>
+                      <div class="col-sm-9">
+                        <input
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [ngModel]="state?.appData?.data?.customer.status"
+                          class="form-control"
+                          name="status"
+                          type="text" />
+                      </div>
+                    </div>
+                    <div class="row mb-3">
+                      <label class="col-sm-3 col-form-label" for="address">Address</label>
+                      <div class="col-sm-9">
+                        <input
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [ngModel]="state?.appData?.data?.customer.address"
+                          class="form-control"
+                          name="address"
+                          type="text" />
+                      </div>
+                    </div>
+                    <div class="row mb-3">
+                      <label class="col-sm-3 col-form-label" for="phone">Phone</label>
+                      <div class="col-sm-9">
+                        <input
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [ngModel]="state?.appData?.data?.customer.phone"
+                          class="form-control"
+                          name="phone"
+                          type="text" />
+                      </div>
+                    </div>
+                    <div class="row mb-3">
+                      <label class="col-sm-3 col-form-label" for="imageurl">Image URL</label>
+                      <div class="col-sm-9">
+                        <input
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [ngModel]="state?.appData?.data?.customer.imageUrl"
+                          class="form-control"
+                          name="imageUrl"
+                          type="text" />
+                      </div>
+                    </div>
+                    <button
+                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                      class="btn btn-primary float-end"
+                      type="submit">
+                      @if (isLoading$ | async) {
+                        <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px"></span>
+                      }
+                      @if (isLoading$ | async) {
+                        <span>Loading...</span>
+                      }
+                      @if (!(isLoading$ | async)) {
+                        <span>Update</span>
+                      }
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
           </div>
-          <div class="col-xl-8">
-            <div class="card">
-              <div class="card-body">
-                <h5 class="card-title">Profile Details</h5>
-                <form #customerForm="ngForm" (ngSubmit)="updateCustomer(customerForm)">
-                  <input [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)" [ngModel]="state?.appData?.data?.customer.id" name="id"
-                         type="hidden">
-                  <input [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)" [ngModel]="state?.appData?.data?.customer.createdAt" name="createdAt"
-                         type="hidden">
-                  <div class="row mb-3">
-                    <label class="col-sm-3 col-form-label" for="name">First Name</label>
-                    <div class="col-sm-9">
-                      <input [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)" [ngModel]="state?.appData?.data?.customer.name" class="form-control"
-                             name="name"
-                             type="text">
-                    </div>
-                  </div>
-                  <div class="row mb-3">
-                    <label class="col-sm-3 col-form-label" for="email">Email</label>
-                    <div class="col-sm-9">
-                      <input [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)" [ngModel]="state?.appData?.data?.customer.email" class="form-control"
-                             name="email"
-                             type="text">
-                    </div>
-                  </div>
-                  <div class="row mb-3">
-                    <label class="col-sm-3 col-form-label" for="type">Type</label>
-                    <div class="col-sm-9">
-                      <input [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)" [ngModel]="state?.appData?.data?.customer.type" class="form-control"
-                             name="type"
-                             type="text">
-                    </div>
-                  </div>
-                  <div class="row mb-3">
-                    <label class="col-sm-3 col-form-label" for="status">Status</label>
-                    <div class="col-sm-9">
-                      <input [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)" [ngModel]="state?.appData?.data?.customer.status" class="form-control"
-                             name="status"
-                             type="text">
-                    </div>
-                  </div>
-                  <div class="row mb-3">
-                    <label class="col-sm-3 col-form-label" for="address">Address</label>
-                    <div class="col-sm-9">
-                      <input [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)" [ngModel]="state?.appData?.data?.customer.address" class="form-control"
-                             name="address"
-                             type="text">
-                    </div>
-                  </div>
-                  <div class="row mb-3">
-                    <label class="col-sm-3 col-form-label" for="phone">Phone</label>
-                    <div class="col-sm-9">
-                      <input [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)" [ngModel]="state?.appData?.data?.customer.phone" class="form-control"
-                             name="phone"
-                             type="text">
-                    </div>
-                  </div>
-                  <div class="row mb-3">
-                    <label class="col-sm-3 col-form-label" for="imageurl">Image URL</label>
-                    <div class="col-sm-9">
-                      <input [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)" [ngModel]="state?.appData?.data?.customer.imageUrl" class="form-control"
-                             name="imageUrl"
-                             type="text">
-                    </div>
-                  </div>
-                  <button [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                          class="btn btn-primary float-end" type="submit">
-                    <span *ngIf="isLoading$ | async" aria-hidden="true" class="spinner-border spinner-border-sm"
-                          role="status" style="margin-right: 5px;"></span>
-                    <span *ngIf="isLoading$ | async">Loading...</span>
-                    <span *ngIf="!(isLoading$ | async)">Update</span>
-                  </button>
-                </form>
+          <div class="row">
+            <div class="col-xl-12">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">Invoices</h5>
+                  <h6 class="card-subtitle mb-2 text-muted">Customer Invoices</h6>
+                  <table class="table table-hover">
+                    <thead class="table-dark">
+                      <tr>
+                        <th scope="col">Invoice Number</th>
+                        <th scope="col">Service</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Total</th>
+                        <th scope="col">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (invoice of state?.appData?.data?.customer.invoices; track invoice) {
+                        <tr>
+                          <td>{{ invoice.invoiceNumber }}</td>
+                          <td>{{ invoice.services }}</td>
+                          <td>
+                            <span
+                              [ngClass]="[
+                                invoice.status === 'PAID' ? ' bg-success' : '',
+                                invoice.status === 'PENDING' ? ' bg-primary' : '',
+                                invoice.status === 'OVERDUE' ? ' bg-warning' : '',
+                                invoice.status === 'CANCELED' ? ' bg-danger' : '',
+                              ]"
+                              class="badge">
+                              {{ invoice.status }}
+                            </span>
+                          </td>
+                          <td>{{ invoice.date | date: 'mediumDate' }}</td>
+                          <td>${{ invoice.total }}</td>
+                          <td>
+                            <button [routerLink]="['/invoices', invoice.id, invoice.invoiceNumber]" class="btn btn-info btn-sm" type="button">
+                              Print
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <div class="row">
-          <div class="col-xl-12">
-            <div class="card">
-              <div class="card-body">
-                <h5 class="card-title">Invoices</h5>
-                <h6 class="card-subtitle mb-2 text-muted">Customer Invoices</h6>
-                <table class="table table-hover">
-                  <thead class="table-dark">
-                  <tr>
-                    <th scope="col">Invoice Number</th>
-                    <th scope="col">Service</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Date</th>
-                    <th scope="col">Total</th>
-                    <th scope="col">Action</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                  <tr *ngFor="let invoice of state?.appData?.data?.customer.invoices">
-                    <td>{{ invoice.invoiceNumber }}</td>
-                    <td>{{ invoice.services }}</td>
-                    <td>
-                                  <span [ngClass]="[
-                                    invoice.status === 'PAID' ? ' bg-success' : '',
-                                    invoice.status === 'PENDING' ? ' bg-primary' : '',
-                                    invoice.status === 'OVERDUE' ? ' bg-warning' : '',
-                                    invoice.status === 'CANCELED' ? ' bg-danger' : ''
-                                    ]"
-                                        class="badge">
-                                     {{ invoice.status }}
-                                  </span>
-                    </td>
-                    <td>{{ invoice.date | date: 'mediumDate' }}</td>
-                    <td>${{ invoice.total }}</td>
-                    <td>
-                      <button [routerLink]="['/invoices', invoice.id, invoice.invoiceNumber]" class="btn btn-info btn-sm"
-                              type="button">Print
-                      </button>
-                    </td>
-                  </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  </ng-container>
-</ng-container>
+      </section>
+    }
+  }
+}
