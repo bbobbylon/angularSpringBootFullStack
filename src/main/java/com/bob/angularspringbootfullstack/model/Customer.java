@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -56,8 +57,14 @@ public class Customer {
     private Long id;
     /**
      * Full name or business name of the customer.
+     * <p>
+     * Mapped explicitly to {@code customer_name} because {@code globally_quoted_identifiers: true}
+     * in application-dev.yml suppresses Hibernate's default camelCase → snake_case naming strategy,
+     * causing Hibernate to create/read a literal {@code "customerName"} column instead of the
+     * existing {@code customer_name} column that holds the actual data.
      */
-    private String name;
+    @Column(name = "customer_name")
+    private String customerName;
     /**
      * Customer category (e.g., "Individual", "Business").
      */

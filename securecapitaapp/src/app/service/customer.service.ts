@@ -71,9 +71,11 @@ export class CustomerService {
    * @param size - number of records per page (defaults to 20)
    * @returns Observable emitting a {@link CustomerListData} response containing the matching page
    */
-  searchCustomers$ = (name: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListData>> =>
+  searchCustomers$ = (customerName: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListData>> =>
     this.http
-      .get<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/search?name=${encodeURIComponent(name)}&page=${page}&size=${size}`)
+      .get<
+        CustomHttpResponseInterface<CustomerListData>
+      >(`${this.server}/customer/search?name=${encodeURIComponent(customerName)}&page=${page}&size=${size}`)
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**

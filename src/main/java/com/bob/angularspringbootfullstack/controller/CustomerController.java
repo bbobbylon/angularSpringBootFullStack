@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
@@ -111,7 +110,7 @@ public class CustomerController {
      */
     @GetMapping("/search")
     public ResponseEntity<HttpResponse> searchCustomer(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> name, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) throws InterruptedException {
-        TimeUnit.SECONDS.sleep(2); // Artificial delay to simulate real-world search latency
+        //TimeUnit.SECONDS.sleep(2); // Artificial delay to simulate real-world search latency
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())

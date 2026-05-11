@@ -10,7 +10,7 @@ export interface CustomerInterface {
   /** Auto-generated unique identifier. */
   id: number;
   /** Full name or business name of the customer. */
-  name: string;
+  customerName: string;
   /** Primary contact email address. */
   email: string;
   /** Physical or mailing address. */

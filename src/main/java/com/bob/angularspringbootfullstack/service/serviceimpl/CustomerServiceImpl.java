@@ -62,7 +62,7 @@ public class CustomerServiceImpl implements CustomerService {
     public Customer updateCustomer(Long customerId, Customer customer) {
         Customer existingCustomer = customerRepo.findById(customerId)
                 .orElseThrow(() -> new ApiException("Customer not found"));
-        existingCustomer.setName(customer.getName());
+        existingCustomer.setCustomerName(customer.getCustomerName());
         existingCustomer.setType(customer.getType());
         existingCustomer.setEmail(customer.getEmail());
         existingCustomer.setPhoneNumber(customer.getPhoneNumber());
@@ -133,8 +133,8 @@ public class CustomerServiceImpl implements CustomerService {
      * {@inheritDoc}
      */
     @Override
-    public Page<Customer> searchCustomers(String name, int page, int size) {
-        return customerRepo.findByNameContaining(name, of(page, size));
+    public Page<Customer> searchCustomers(String customerName, int page, int size) {
+        return customerRepo.findByCustomerNameContaining(customerName, of(page, size));
     }
 
     /**

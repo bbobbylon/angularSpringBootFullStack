@@ -18,9 +18,9 @@ public interface CustomerRepo extends PagingAndSortingRepository<Customer, Long>
      * Returns a paginated list of customers whose name contains the given string,
      * case-insensitively depending on the database collation.
      *
-     * @param name     the substring to search for within customer names
-     * @param pageable pagination and sorting parameters
+     * @param customerName the substring to search for within customer names
+     * @param pageable     pagination and sorting parameters
      * @return a page of matching customers
      */
-    Page<Customer> findByNameContaining(String name, Pageable pageable);
+    Page<Customer> findByCustomerNameContaining(String customerName, Pageable pageable);
 }

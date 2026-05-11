@@ -1,9 +1,8 @@
-import { Component, inject, OnInit } from '@angular/core';
-import { AsyncPipe, NgClass } from '@angular/common';
-import { FormsModule, NgForm } from '@angular/forms';
+import { Component, DestroyRef, inject, OnInit } from '@angular/core';
+import { AsyncPipe, NgClass, NgOptimizedImage } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { BehaviorSubject, combineLatest, map, Observable, of, startWith, switchMap } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { BehaviorSubject, combineLatest, debounceTime, map, Observable, of, startWith, Subject, switchMap } from 'rxjs';
+import { catchError, filter } from 'rxjs/operators';
 import { NavbarComponent } from '../navbar/navbar.component';
 import { DataState } from '../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../interface/global-state.interface';
@@ -11,6 +10,7 @@ import { CustomHttpResponseInterface } from '../../interface/customhttpresponse.
 import { CustomerListData } from '../../interface/appstates.interface';
 import { CustomerService } from '../../service/customer.service';
 import { ExtractArrayValuePipe } from '../../pipe/extract-array-value.pipe';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 /**
  * All-customers list view with search and pagination.
@@ -21,7 +21,7 @@ import { ExtractArrayValuePipe } from '../../pipe/extract-array-value.pipe';
  */
 @Component({
   selector: 'app-customers',
-  imports: [AsyncPipe, NgClass, RouterModule, FormsModule, NavbarComponent, ExtractArrayValuePipe],
+  imports: [AsyncPipe, NgClass, NgOptimizedImage, RouterModule, NavbarComponent, ExtractArrayValuePipe],
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.css',
   standalone: true,
@@ -78,6 +78,14 @@ export class CustomersComponent implements OnInit {
    * {@code /customer/list}. A non-empty string routes to {@code /customer/search}.
    */
   private currentSearchSubject = new BehaviorSubject<string>('');
+
+  private readonly destroyRef = inject(DestroyRef);
+
+  /**
+   * Raw keystrokes from the search input are pushed here.
+   * The debounced subscription in {@link ngOnInit} gates what actually reaches {@link currentSearchSubject}.
+   */
+  private readonly searchInput$ = new Subject<string>();
 
   /**
    * Pool of local asset images used as deterministic fallback avatars.
@@ -138,6 +146,21 @@ export class CustomersComponent implements OnInit {
    * preventing stale responses from overwriting newer results.
    */
   ngOnInit(): void {
+    // TODO(human): Wire searchInput$ into currentSearchSubject.
+    // Pipe searchInput$ through debounceTime(300), filter (length === 0 || length >= 3),
+    // and takeUntilDestroyed(this.destroyRef). In the subscribe callback, push the term
+    // into currentSearchSubject and reset currentPageSubject to 0.
+    this.searchInput$
+      .pipe(
+        debounceTime(300),
+        filter(term => term.length === 0 || term.length >= 3),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(term => {
+        this.currentSearchSubject.next(term);
+        this.currentPageSubject.next(0);
+      });
+
     this.customersState$ = combineLatest([this.currentPageSubject, this.currentSearchSubject]).pipe(
       switchMap(([page, name]) =>
         (name ? this.customerService.searchCustomers$(name, page) : this.customerService.customers$(page)).pipe(
@@ -153,53 +176,35 @@ export class CustomersComponent implements OnInit {
   }
 
   /**
-   * Handles search form submission by updating the active search term and resetting
-   * to the first page, which triggers {@link customersState$} to re-fetch automatically.
+   * Called on every keystroke in the search input. Pushes the raw term into
+   * {@link searchInput$}, which the debounced subscription in {@link ngOnInit} gates.
    *
-   * @param form - the submitted search form containing a {@code name} field
+   * @param term - the current value of the search input
    */
-  searchCustomers(form: NgForm): void {
-    this.currentSearchSubject.next(form.value.name ?? '');
-    this.currentPageSubject.next(0);
-  }
-
-  searchCustomers1(searchForm: NgForm): void {
-    this.currentPageSubject.next(0);
-    this.customersState$ = this.customerService.searchCustomers$(searchForm.value.name).pipe(
-      map(response => {
-        //this.notification.onDefault(response.message);
-        console.log(response);
-        this.dataSubject.next(response);
-        return { dataState: DataState.LOADED, appData: response };
-      }),
-      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-      catchError((error: string) => {
-        //this.notification.onError(error);
-        return of({ dataState: DataState.ERROR, error });
-      }),
-    );
+  onSearchInput(term: string): void {
+    this.searchInput$.next(term);
   }
 
   /**
-   * Advances or retreats one page in the customer list, preserving the current search term.
+   * Advances or retreats one page. The active search term is preserved automatically
+   * because {@link currentSearchSubject} already holds it and {@link customersState$}
+   * reads from both subjects via {@code combineLatest}.
    *
    * @param direction - {@code 'forward'} to increment the page, {@code 'backward'} to decrement
-   * @param name - optional search term passed from the template to keep search state in sync
    */
-  goToNextOrPreviousPage(direction: string, name?: string): void {
-    this.currentSearchSubject.next(name ?? '');
+  goToNextOrPreviousPage(direction: string): void {
     const step = direction === 'forward' ? 1 : -1;
     this.currentPageSubject.next(this.currentPageSubject.value + step);
   }
 
   /**
-   * Jumps directly to a specific page index, preserving the current search term.
+   * Jumps directly to a specific page index. The active search term is preserved automatically
+   * because {@link currentSearchSubject} already holds it and {@link customersState$}
+   * reads from both subjects via {@code combineLatest}.
    *
    * @param pageIndex - the 0-based index of the target page
-   * @param name - optional search term passed from the template to keep search state in sync
    */
-  goToPage(pageIndex: number, name?: string): void {
-    this.currentSearchSubject.next(name ?? '');
+  goToPage(pageIndex: number): void {
     this.currentPageSubject.next(pageIndex);
   }
 

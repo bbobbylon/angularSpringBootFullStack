@@ -52,11 +52,11 @@
                   <td>
                     <!-- Option C: [src]="customer.imageUrl || getDefaultImageC(customer.id)" -->
                     <img (error)="$any($event.target).src = defaultImage"
-                         [alt]="customer.name"
+                         [alt]="customer.customerName"
                          [src]="customer.imageUrl || getDefaultImageC(customer.id)"
                          class="rounded-circle" height="42" width="42">
                   </td>
-                  <td>{{ customer.name }}</td>
+                  <td>{{ customer.customerName }}</td>
                   <td>{{ customer.email }}</td>
                   <td>{{ customer.phoneNumber }}</td>
                   <td>

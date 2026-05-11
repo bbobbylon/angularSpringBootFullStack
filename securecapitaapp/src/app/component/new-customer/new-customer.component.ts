@@ -117,9 +117,9 @@ export class NewCustomerComponent implements OnInit {
     this.newCustomerState$ = this.customerService.newCustomer$(newCustomerForm.value).pipe(
       map(response => {
         console.log('Fetched customer data:', response);
-        newCustomerForm.reset({ type: "INDIVIDUAL", status: "ACTIVE" });
+        newCustomerForm.reset({ type: 'INDIVIDUAL', status: 'ACTIVE' });
         this.isLoadingSubject.next(false);
-        return { dataState: DataState.LOADED, appData: this.dataSubject.value  };
+        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
       }),
       startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
       catchError((error: string) => of({ dataState: DataState.LOADED, error })),

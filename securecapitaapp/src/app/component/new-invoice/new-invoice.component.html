@@ -52,7 +52,7 @@
                         <select [ngModel]="" class="form-control select-cl" name="customerId" required>
                           @for (customer of state?.appData?.data?.customers; track customer) {
                             <option [disabled]="" [ngValue]="customer.id" [selected]=""
-                                    class="select-cl">{{ customer.name }}
+                                    class="select-cl">{{ customer.customerName }}
                             </option>
                           }
                         </select>
