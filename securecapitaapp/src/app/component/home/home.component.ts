@@ -11,6 +11,7 @@ import { UserService } from '../../service/user.service';
 import { DataState } from '../../enumeration/datastate.enum';
 import { CustomerService } from '../../service/customer.service';
 import { ExtractArrayValuePipe } from '../../pipe/extract-array-value.pipe';
+import { UserInterface } from '../../interface/user.interface';
 
 /**
  * Main dashboard component displayed after login.
@@ -28,7 +29,7 @@ import { ExtractArrayValuePipe } from '../../pipe/extract-array-value.pipe';
   styleUrls: ['./home.component.css'],
 })
 export class HomeComponent implements OnInit {
-  @Input() user: any;
+  @Input() user: UserInterface;
   /** Exposes the `DataState` enum to the template for asynchronous data handling. */
   readonly DataState = DataState;
   /** Last-resort fallback used by the (error) handler if all other image sources fail. */

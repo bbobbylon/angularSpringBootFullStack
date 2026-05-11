@@ -1,0 +1,105 @@
+@if (newInvoiceState$ | async; as state) {
+  @switch (state.dataState) {
+    @case (DataState.LOADED) {
+      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <section>
+        <div class="container">
+          <nav aria-label="breadcrumb" style="margin-top: 8px">
+            <ol class="breadcrumb">
+              <li class="breadcrumb-item">
+                <a [routerLink]="['/']">Home</a>
+              </li>
+              <li class="breadcrumb-item"><a [routerLink]="['/invoices']">Invoices</a></li>
+              <li aria-current="page" class="breadcrumb-item active">New</li>
+            </ol>
+          </nav>
+          <div class="row justify-content-center">
+            <div class="col-md-12">
+              <div class="card">
+                <div class="card-body">
+                  <div class="text-center">
+                    <h2>
+                      <i class="bi bi-receipt" style="margin-right: 5px"></i>
+                      New Invoice
+                    </h2>
+                  </div>
+                  @if (state.error) {
+                    <div class="alert alert-danger bg-danger text-light border-0 alert-dismissible fade show"
+                         role="alert">
+                      {{ state.error }}
+                      <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
+                              type="button"></button>
+                    </div>
+                  }
+                  @if (state.appData.message) {
+                    <div class="alert alert-success bg-success text-light border-0 alert-dismissible fade show"
+                         role="alert">
+                      {{ state.appData.message }}
+                      <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
+                              type="button"></button>
+                    </div>
+                  }
+                  <form #invoiceForm="ngForm" (ngSubmit)="newInvoice(invoiceForm)">
+                    <div class="row">
+                      <div class="col-md-12" style="margin-bottom: 15px">
+                        <div class="form-group">
+                          <label>Services</label>
+                          <input class="form-control" name="services" ngModel required type="text" />
+                        </div>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <label>Customer</label>
+                        <select [ngModel]="" class="form-control select-cl" name="customerId" required>
+                          @for (customer of state?.appData?.data?.customers; track customer) {
+                            <option [disabled]="" [ngValue]="customer.id" [selected]=""
+                                    class="select-cl">{{ customer.customerName }}
+                            </option>
+                          }
+                        </select>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <div class="form-group">
+                          <label>Total</label>
+                          <input class="form-control" name="total" ngModel required type="total" />
+                        </div>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <div class="form-group">
+                          <label>Date</label>
+                          <input class="form-control" name="date" ngModel required type="date" />
+                        </div>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <label>Status</label>
+                        <select class="form-control" name="status" ngModel="PENDING" required>
+                          <option value="PENDING">PENDING</option>
+                          <option value="PAID">PAID</option>
+                          <option value="CANCELED">CANCELED</option>
+                          <option value="OVERDUE">OVERDUE</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <button
+                        [disabled]=" invoiceForm.invalid || invoiceForm.pristine || (isLaoding$ | async)"
+                        class="btn btn-primary mt-5"
+                        type="submit">
+                        @if (isLaoding$ | async) {
+                          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
+                                style="margin-right: 5px"></span>
+                        }
+                        @if (isLaoding$ | async) {
+                          <span>Saving...</span>
+                        }
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    }
+  }
+}

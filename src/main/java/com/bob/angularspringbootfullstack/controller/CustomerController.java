@@ -106,14 +106,16 @@ public class CustomerController {
      * @param page zero-based page index (defaults to 0)
      * @param size number of records per page (defaults to 20)
      * @return 200 OK with the authenticated user and a page of matching customers
+     * @throws InterruptedException if the thread is interrupted during the artificial delay
      */
-    @GetMapping("/search/{customerId}")
-    public ResponseEntity<HttpResponse> searchCustomer(@AuthenticationPrincipal UserDTO user, Optional<String> name, Optional<Integer> page, @RequestParam Optional<Integer> size) {
+    @GetMapping("/search")
+    public ResponseEntity<HttpResponse> searchCustomer(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> name, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) throws InterruptedException {
+        //TimeUnit.SECONDS.sleep(2); // Artificial delay to simulate real-world search latency
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "customers", customerService.searchCustomers(name.orElse(""), page.orElse(0), size.orElse(20))))
+                                "page", customerService.searchCustomers(name.orElse(""), page.orElse(0), size.orElse(20))))
                         .message("Customers found!")
                         .status(OK)
                         .statusCode(OK.value())

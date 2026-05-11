@@ -1,1 +1,123 @@
-<p>customers works!</p>,
+@if (customersState$ | async; as state) {
+  @switch (state.dataState) {
+    @case (DataState.LOADED) {
+      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <section>
+        <div class="container">
+          <nav aria-label="breadcrumb" style="margin-top: 8px">
+            <ol class="breadcrumb">
+              <li class="breadcrumb-item">
+                <a [routerLink]="['/']">Home</a>
+              </li>
+              <li class="breadcrumb-item active">Customers</li>
+            </ol>
+          </nav>
+          <div class="row mt-3">
+            <div class="col">
+              <h4 class="fw-bold text-start">Customers</h4>
+            </div>
+            <div class="col">
+              <h4 class="fw-bold text-end"><i class="bi bi-file-earmark-excel"
+                                              style="cursor: pointer; color: green; font-size: 30px"></i></h4>
+            </div>
+            <div class="col-xm-12">
+              <form class="row g-3 float-end">
+                <div class="col-auto">
+                  <label class="visually-hidden" for="customerName"></label>
+                  <input #searchForm (input)="onSearchInput(searchForm.value)"
+                         class="form-control" id="customerName" placeholder="Customer Name" type="text" />
+                </div>
+              </form>
+            </div>
+            <div class="col-xm-12">
+              <table class="table table-hover">
+                <thead>
+                <tr>
+                  <th class="text-center" scope="col">ID</th>
+                  <th scope="col">Photo</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Email</th>
+                  <th scope="col">Phone</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Action</th>
+                </tr>
+                </thead>
+                <tbody class="table-body">
+                  @for (customer of (state?.appData?.data?.page?.content ?? []); track customer.id) {
+                    <tr class="cell-1">
+                      <th class="text-center">{{ customer.id }}</th>
+                      <td>
+                        <div class="rounded-circle overflow-hidden"
+                             style="position: relative; width: 42px; height: 42px;">
+                          <img (error)="$any($event.target).src = defaultImage"
+                               [alt]="customer.customerName"
+                               [ngSrc]="customer.imageUrl || getDefaultImageC(customer.id)"
+                               fill
+                               style="object-fit: cover">
+                        </div>
+                      </td>
+                      <td>{{ customer.customerName }}</td>
+                      <td>{{ customer.email }}</td>
+                      <td>{{ customer.phoneNumber }}</td>
+                      <td>
+                        <span
+                          [ngClass]="[
+                            customer.status === 'ACTIVE' ? ' bg-success' : '',
+                            customer.status === 'PENDING' ? ' bg-primary' : '',
+                            customer.status === 'BANNED' ? ' bg-danger' : '',
+                            customer.status === 'INACTIVE' ? ' bg-info' : '',
+                          ]"
+                          class="badge">
+                          {{ customer.status }}
+                        </span>
+                      </td>
+                      <td>{{ customer.type }}</td>
+                      <td>
+                        <button [routerLink]="['/customers', customer.id]" class="btn btn-info" type="button">View
+                        </button>
+                        <!-- <button type="button" (click)="selectCustomer(customer)" class="btn btn-info">View</button> -->
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td class="text-center text-muted" colspan="8">No results found.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if (state?.appData?.data?.page.content.length > 0) {
+                <nav aria-label="Page navigation example">
+                  <ul class="pagination justify-content-end">
+                    <li [ngClass]="0 === (currentPage$ | async) ? ' disabled' : ''" class="page-item">
+                      <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; Prev</button>
+                    </li>
+                    @for (pageNumber of state?.appData?.data?.page.page.totalPages | ExtractArrayValue: 'number'; track i; let i = $index) {
+                      <li class="page-item">
+                        <button (click)="goToPage(i)"
+                                [ngClass]="i === (currentPage$ | async) ? ' active' : ''"
+                                class="page-link">{{ i + 1 }}
+                        </button>
+                      </li>
+                    }
+                    <li
+                      [ngClass]="state?.appData?.data?.page.page.totalPages - 1 === (currentPage$ | async) ? ' disabled' : ''"
+                      class="page-item">
+                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">Next &raquo;</button>
+                    </li>
+                  </ul>
+                </nav>
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+    }
+    @case (DataState.LOADING) {
+      <div>Loading...</div>
+    }
+    @case (DataState.ERROR) {
+      <div>{{ state.error }}</div>
+    }
+  }
+}

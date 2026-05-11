@@ -4,7 +4,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { CustomerListData, StatsData } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
-import { Key } from '../enumeration/key.enumeration';
+import { CustomerInterface } from '../interface/customer.interface';
 
 /**
  * Central HTTP service for all customer and invoice API calls.
@@ -24,12 +24,16 @@ export class CustomerService {
   /**
    * Fetches aggregated dashboard statistics: total customers, invoices, and billed amount.
    *
+   * Currently unused — stats are fetched alongside the customer list via {@code customers$}
+   * and passed to {@link StatsComponent} via {@code @Input}.
+   *
+   * TODO: Wire this method into {@link StatsComponent} once the rest of the application is
+   *  complete, so the stats panel fetches and refreshes independently of the customer list.
+   *
    * @returns Observable emitting a {@link StatsData} response containing the system-wide totals
    */
   stats$ = (): Observable<CustomHttpResponseInterface<StatsData>> =>
-    this.http
-      .get<CustomHttpResponseInterface<StatsData>>(`${this.server}/customer/stats`)
-      .pipe(tap(console.log), catchError(this.handleError));
+    this.http.get<CustomHttpResponseInterface<StatsData>>(`${this.server}/customer/stats`).pipe(tap(console.log), catchError(this.handleError));
 
   /**
    * Fetches a paginated page of customers.
@@ -45,12 +49,34 @@ export class CustomerService {
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**
-   * Clears the access and refresh tokens from localStorage, ending the user's session.
+   * POSTs a new customer record to the backend.
+   *
+   * @param customer - the customer data to create; all required fields must be populated
+   * @returns Observable emitting a {@link CustomerListData} response containing
+   *          the authenticated user and the newly created customer
    */
-  logOut() {
-    localStorage.removeItem(Key.TOKEN);
-    localStorage.removeItem(Key.REFRESH_TOKEN);
-  }
+  newCustomer$ = (customer: CustomerInterface): Observable<CustomHttpResponseInterface<CustomerListData>> =>
+    this.http
+      .post<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/create`, customer)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Searches for customers whose name contains the given term via GET /customer/search.
+   *
+   * The search term is URI-encoded before being appended to the query string.
+   * Results are paginated identically to {@link customers$}.
+   *
+   * @param name - the substring to match against customer names
+   * @param page - zero-based page index (defaults to 0)
+   * @param size - number of records per page (defaults to 20)
+   * @returns Observable emitting a {@link CustomerListData} response containing the matching page
+   */
+  searchCustomers$ = (customerName: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListData>> =>
+    this.http
+      .get<
+        CustomHttpResponseInterface<CustomerListData>
+      >(`${this.server}/customer/search?name=${encodeURIComponent(customerName)}&page=${page}&size=${size}`)
+      .pipe(tap(console.log), catchError(this.handleError));
 
   /**
    * Normalises HTTP errors into a single Observable<never> so all callers

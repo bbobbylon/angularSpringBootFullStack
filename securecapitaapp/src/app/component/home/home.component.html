@@ -1,3 +1,10 @@
+<!-- TODO: Add a loading spinner for DataState.LOADING state. Currently the template renders nothing
+     while the observable is loading (the outer @if is false until the first emission). The fix is to
+     restructure each page template to have three branches:
+       @if (state.dataState === DataState.LOADING) { <spinner> }
+       @if (state.dataState === DataState.LOADED)  { <content> }
+       @if (state.dataState === DataState.ERROR)   { <error message> }
+     Apply this same pattern to all routed page components (customers, invoices, customer-details, etc.). -->
 @if (homeState$ | async; as state) {
   <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
   <app-stats [stats]="state?.appData?.data?.stats"></app-stats>
@@ -45,11 +52,11 @@
                   <td>
                     <!-- Option C: [src]="customer.imageUrl || getDefaultImageC(customer.id)" -->
                     <img (error)="$any($event.target).src = defaultImage"
-                         [alt]="customer.name"
+                         [alt]="customer.customerName"
                          [src]="customer.imageUrl || getDefaultImageC(customer.id)"
                          class="rounded-circle" height="42" width="42">
                   </td>
-                  <td>{{ customer.name }}</td>
+                  <td>{{ customer.customerName }}</td>
                   <td>{{ customer.email }}</td>
                   <td>{{ customer.phoneNumber }}</td>
                   <td>
@@ -65,7 +72,9 @@
                   </td>
                   <td>{{ customer.type }}</td>
                   <td>
-                    <button [routerLink]="['/customers', customer.id]" class="btn btn-info" type="button">View</button>
+                    <button [routerLink]="['/customer/', customer.id]" class="btn btn-info" type="button">
+                      View
+                    </button>
                     <!-- <button type="button" (click)="selectCustomer(customer)" class="btn btn-info">View</button> -->
                   </td>
                 </tr>
@@ -77,35 +86,35 @@
             <div class="d-flex align-items-center justify-content-between mt-2">
               <div class="d-flex align-items-center gap-2">
                 <label class="form-label mb-0 small text-muted">Rows per page:</label>
-                <select class="form-select form-select-sm w-auto"
-                        (change)="changePageSize(+$any($event.target).value)">
+                <select (change)="changePageSize(+$any($event.target).value)"
+                        class="form-select form-select-sm w-auto">
                   @for (option of pageSizeOptions; track option) {
                     <option [selected]="option === (pageSize$ | async)" [value]="option">{{ option }}</option>
                   }
                 </select>
               </div>
-            <nav aria-label="Page navigation">
-              <ul class="pagination justify-content-end mb-0">
-                <li [ngClass]="0 === (currentPage$ | async) ? 'disabled' : ''"
-                    class="page-item pointer">
-                  <a (click)="changePage('backward')" class="page-link">&laquo; Prev</a>
-                </li>
-                @for (_page of state?.appData?.data?.page?.page?.totalPages | ExtractArrayValue: 'number'; track $index; let i = $index) {
-                  <li class="page-item pointer">
-                    <a (click)="goToPage(i)"
-                       [ngClass]="i === (currentPage$ | async) ? 'active' : ''"
-                       class="page-link">
-                      {{ i + 1 }}
-                    </a>
+              <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-end mb-0">
+                  <li [ngClass]="0 === (currentPage$ | async) ? 'disabled' : ''"
+                      class="page-item pointer">
+                    <a (click)="changePage('backward')" class="page-link">&laquo; Prev</a>
                   </li>
-                }
-                <li
-                  [ngClass]="(state?.appData?.data?.page?.page?.totalPages - 1) === (currentPage$ | async) ? 'disabled' : ''"
-                  class="page-item pointer">
-                  <a (click)="changePage('forward')" class="page-link">Next &raquo;</a>
-                </li>
-              </ul>
-            </nav>
+                  @for (_page of state?.appData?.data?.page?.page?.totalPages | ExtractArrayValue: 'number'; track $index; let i = $index) {
+                    <li class="page-item pointer">
+                      <a (click)="goToPage(i)"
+                         [ngClass]="i === (currentPage$ | async) ? 'active' : ''"
+                         class="page-link">
+                        {{ i + 1 }}
+                      </a>
+                    </li>
+                  }
+                  <li
+                    [ngClass]="(state?.appData?.data?.page?.page?.totalPages - 1) === (currentPage$ | async) ? 'disabled' : ''"
+                    class="page-item pointer">
+                    <a (click)="changePage('forward')" class="page-link">Next &raquo;</a>
+                  </li>
+                </ul>
+              </nav>
             </div>
           }
         </div>

@@ -3,6 +3,7 @@
 Angular standalone application that powers the SecureCapita UI. It integrates with the Spring Boot backend for authentication, profile management, and future customer/invoice features.
 
 TODO - add admin access to allow specific users to view all users in the server/system/database.
+TODO - spruce up the UI with Angular Material or Tailwind CSS for a more polished look, maybe utilize the stat database table to show some cool charts on the dashboard.
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.3.
 
 - Standalone Angular components (no AppModule)

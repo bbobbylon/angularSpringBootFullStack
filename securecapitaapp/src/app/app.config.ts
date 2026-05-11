@@ -1,4 +1,5 @@
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { IMAGE_CONFIG } from '@angular/common';
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routing-module';
@@ -41,5 +42,7 @@ export const appConfig: ApplicationConfig = {
      * to protected endpoints and forwards public endpoints unchanged.
      */
     provideHttpClient(withInterceptors([tokenInterceptor])),
+
+    { provide: IMAGE_CONFIG, useValue: { disableImageSizeWarning: true } },
   ]
 };
