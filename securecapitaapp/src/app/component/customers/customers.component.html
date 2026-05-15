@@ -76,7 +76,8 @@
                       <td>
                         <button [routerLink]="['/customers', customer.id]" class="btn btn-info" type="button">View
                         </button>
-                        <!-- <button type="button" (click)="selectCustomer(customer)" class="btn btn-info">View</button> -->
+                        <button (click)="goToCustomerDetails1(customer.id)" class="btn btn-info" type="button">View
+                        </button>
                       </td>
                     </tr>
                   } @empty {

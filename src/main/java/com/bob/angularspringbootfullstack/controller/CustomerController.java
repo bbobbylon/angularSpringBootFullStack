@@ -138,7 +138,7 @@ public class CustomerController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "customer", customerService.updateCustomer(customerId, customer)))
+                                "customers", customerService.updateCustomer(customerId, customer)))
                         .message("Customer updated!")
                         .status(OK)
                         .statusCode(OK.value())

@@ -1,6 +1,6 @@
 import { Component, inject, Input, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { BehaviorSubject, catchError, combineLatest, map, Observable, of, startWith, switchMap } from 'rxjs';
 import { NavbarComponent } from '../navbar/navbar.component';
 import { StatsComponent } from '../stats/stats.component';
@@ -12,6 +12,7 @@ import { DataState } from '../../enumeration/datastate.enum';
 import { CustomerService } from '../../service/customer.service';
 import { ExtractArrayValuePipe } from '../../pipe/extract-array-value.pipe';
 import { UserInterface } from '../../interface/user.interface';
+import { CustomerInterface } from '../../interface/customer.interface';
 
 /**
  * Main dashboard component displayed after login.
@@ -35,14 +36,18 @@ export class HomeComponent implements OnInit {
   /** Last-resort fallback used by the (error) handler if all other image sources fail. */
   readonly defaultImage = 'https://www.gravatar.com/avatar/?d=mp';
   /**
-   * Observable state for the profile view.
-   * It holds the global state, including the current data state (e.g., LOADING, LOADED, ERROR),
-   * application data, and any errors that may occur during data fetching.
+   * Drives the home dashboard template — emits a new snapshot whenever the page index
+   * or page size changes.
+   *
+   * Wired in {@link ngOnInit} via a combined {@link currentPageSubject}/{@link pageSizeSubject}
+   * stream. {@code switchMap} cancels any in-flight request when pagination controls
+   * change before the previous response arrives, so the template never shows stale data.
    */
   homeState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListData>>>;
   readonly title = signal('securecapitaapp');
   fileStatus$: Observable<{ percent: number; type: string } | null> = of({ percent: 0, type: 'idle' });
   readonly pageSizeOptions = [10, 20, 50, 100] as const;
+  protected readonly router = inject(Router);
   protected readonly showLogs = signal(true);
   protected readonly permissions = signal<string[]>([]);
   protected readonly sortColumn = signal<string>('createdAt');
@@ -165,11 +170,57 @@ export class HomeComponent implements OnInit {
     this.pageSizeSubject.next(size);
     this.currentPageSubject.next(0); // Reset to first page when page size changes
   }
+
+  /**
+   * Navigates to the customer detail page.
+   *
+   * Note: the parameter type is {@link CustomerInterface} rather than a numeric ID.
+   * Angular's router will serialize the entire object into the URL segment, which is
+   * almost certainly unintended — use {@link goToCustomerDetails1} instead until this
+   * is corrected to accept a numeric ID.
+   *
+   * @param customerId - the customer object (should be a numeric ID; see note above)
+   */
+  goToCustomerDetails(customerId: CustomerInterface): void {
+    this.router.navigate(['/customers/', customerId]);
+  }
+
+  /**
+   * Navigates to the detail page for the given customer ID.
+   *
+   * Routes to {@code /customers/:id} using Angular's {@link Router}.
+   *
+   * @param customerId - the numeric ID of the customer whose detail page to open
+   */
+  goToCustomerDetails1(customerId: number): void {
+    this.router.navigate(['/customers/', customerId]);
+  }
+
+  /**
+   * Generates a deterministic avatar URL via the UI Avatars API for the given customer.
+   *
+   * The background colour is chosen by {@code id % avatarColors.length}, so the same
+   * customer always gets the same colour regardless of render order or page. The name
+   * is URI-encoded so spaces and special characters produce valid initials.
+   *
+   * @param id - the customer's numeric ID used to pick a colour from {@code avatarColors}
+   * @param name - the customer's display name, used to generate initials
+   * @returns a fully-qualified URL to a 128×128 rounded avatar image
+   */
   protected getDefaultImageB(id: number, name: string): string {
     const color = this.avatarColors[id % this.avatarColors.length];
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${color}&color=fff&size=128&rounded=true`;
   }
 
+  /**
+   * Returns a deterministic local fallback image path for the given customer ID.
+   *
+   * Uses modulo arithmetic against {@code localDefaultImages} so that each customer
+   * always receives the same placeholder regardless of render order or page.
+   *
+   * @param id - the customer's numeric ID used to index into the image pool
+   * @returns a relative path to an asset image under {@code assets/images/}
+   */
   protected getDefaultImageC(id: number): string {
     return this.localDefaultImages[id % this.localDefaultImages.length];
   }
