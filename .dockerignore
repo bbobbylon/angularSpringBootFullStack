@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+.vscode
+.mvn
+documentation
+node_modules
+securecapitaapp/node_modules
+securecapitaapp/dist
+target
+*.md

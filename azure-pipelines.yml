@@ -1,6 +1,31 @@
-# Docker
-# Build a Docker image
-# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+# Azure Pipelines — SecureCapita Full Stack
+# ─────────────────────────────────────────────────────────────────────────────
+# ONE-TIME SETUP (Azure Portal + Azure DevOps) before running this pipeline:
+#
+# 1. Create an Azure Container Registry (ACR)
+#    Portal > Create Resource > Container Registry
+#    Note the "Login server" value (e.g. securecapita.azurecr.io)
+#
+# 2. Create an Azure App Service (Linux, Docker Container)
+#    Portal > Create Resource > Web App
+#    Publish: Docker Container | OS: Linux | Region: your choice
+#
+# 3. Create an Azure Database for MySQL Flexible Server
+#    Portal > Create Resource > Azure Database for MySQL
+#    Note the server hostname, create a database named "securecapita"
+#
+# 4. Add App Service Application Settings (Portal > App Service > Configuration):
+#    SPRING_DATASOURCE_URL      = jdbc:mysql://<host>:3306/securecapita?useSSL=true
+#    SPRING_DATASOURCE_USERNAME = <db-username>
+#    SPRING_DATASOURCE_PASSWORD = <db-password>
+#
+# 5. Create two Service Connections in Azure DevOps
+#    Project Settings > Service Connections:
+#    a) Type: Docker Registry  → Azure Container Registry → name: securecapita-acr
+#    b) Type: Azure Resource Manager → Subscription scope → name: securecapita-azure-rm
+#
+# 6. Update the four variables below to match your Azure resource names
+# ─────────────────────────────────────────────────────────────────────────────
 
 trigger:
 - master
@@ -9,21 +34,51 @@ resources:
 - repo: self
 
 variables:
+  dockerfilePath: 'Dockerfile'
+  imageRepository: 'securecapita'
   tag: '$(Build.BuildId)'
+  acrServiceConnection: 'bobsDockerRegistryServiceConnection'  # step 5a above
+  acrLoginServer: 'bobsangularapp-cnh8fzfxasa6feav.azurecr.io'  # step 1 above — ACR Login server
+  azureSubscription: 'bobsAzureServiceConnection'   # step 5b above
+  appServiceName: 'angularSpringBootFullStack'      # step 2 above — App Service name
 
 stages:
 - stage: Build
-  displayName: Build image
+  displayName: Build and Push to ACR
   jobs:
-  - job: Build
-    displayName: Build
+  - job: DockerBuildPush
+    displayName: Build and Push
     pool:
       vmImage: ubuntu-latest
     steps:
     - task: Docker@2
-      displayName: Build an image
+      displayName: Build and push image to ACR
       inputs:
-        command: build
-        dockerfile: '**/Dockerfile'
+        command: buildAndPush
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(acrServiceConnection)
         tags: |
           $(tag)
+          latest
+
+- stage: Deploy
+  displayName: Deploy to App Service
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - deployment: DeployContainer
+    displayName: Deploy to App Service
+    pool:
+      vmImage: ubuntu-latest
+    environment: production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureWebAppContainer@1
+            displayName: Deploy container image
+            inputs:
+              azureSubscription: $(azureSubscription)
+              appName: $(appServiceName)
+              containers: $(acrLoginServer)/$(imageRepository):$(tag)
