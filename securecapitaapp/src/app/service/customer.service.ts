@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
-import { CustomerListData, StatsData } from '../interface/appstates.interface';
+import { CustomerListData, CustomerStateInterface, StatsData } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { CustomerInterface } from '../interface/customer.interface';
 
@@ -46,6 +46,38 @@ export class CustomerService {
     //TODO allow sorting, filtering, and infinite scrolling later
     this.http
       .get<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/list?page=${page}&size=${size}`)
+      .pipe(tap(console.log), catchError(this.handleError));
+  /**
+   * Fetches a single customer's complete record by numeric ID.
+   *
+   * Calls GET /customers/:id and returns the customer and the authenticated user wrapped
+   * in the standard {@link CustomHttpResponseInterface} envelope. Used by
+   * {@link CustomerDetailsComponent} to populate the detail view when navigating to
+   * {@code /customers/:id}.
+   *
+   * @param customerId - the numeric ID of the customer to retrieve
+   * @returns Observable emitting a {@link CustomerStateInterface} response containing
+   *          the customer record and the currently authenticated user
+   */
+  customerId$ = (customerId: number): Observable<CustomHttpResponseInterface<CustomerStateInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<CustomerStateInterface>>(`${this.server}/customer/get/${customerId}`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Sends updated customer fields to the backend via PUT /customer/update/:id.
+   *
+   * The customer ID is taken from the {@code id} field on the customer object and
+   * placed in the URL path — the backend extracts it as a {@code @PathVariable} and
+   * ignores any ID in the request body. Requires {@code UPDATE:CUSTOMER} or
+   * {@code UPDATE:USER} authority; Spring Security will return 403 otherwise.
+   *
+   * @param customer - the full customer object with updated field values; must include {@code id}
+   * @returns Observable emitting a {@link CustomerStateInterface} response with the updated record
+   */
+  updateCustomer$ = (customer: CustomerInterface): Observable<CustomHttpResponseInterface<CustomerStateInterface>> =>
+    this.http
+      .put<CustomHttpResponseInterface<CustomerStateInterface>>(`${this.server}/customer/update/${customer.id}`, customer)
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**

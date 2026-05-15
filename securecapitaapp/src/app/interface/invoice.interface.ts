@@ -9,12 +9,26 @@ export interface InvoiceInterface {
   id: number;
   /** Human-readable invoice reference code (e.g., 'A3F9KQ2B'). */
   invoiceNumber: string;
-  /** Name of the service this invoice covers. */
+  /**
+   * Name of the service this invoice covers, returned as a flat string by the API.
+   *
+   * Although the backend {@code Invoice} entity holds a {@code @ManyToOne} to a
+   * {@code Services} record, the API response maps just the service name here
+   * rather than nesting the full object.
+   */
   services: string;
   /** Payment state (e.g., 'Pending', 'Paid', 'Overdue'). */
   status: string;
-  /** Final billed amount after any adjustments or taxes. */
-  total: number;
-  /** Date the invoice was issued. */
-  createdAt: Date;
+  /**
+   * Final total amount after any adjustments, discounts, or taxes.
+   *
+   * Maps to {@code totalAmount} on the Java {@code Invoice} entity.
+   */
+  totalAmount: number;
+  /**
+   * Date the invoice was issued to the customer.
+   *
+   * Maps to {@code invoiceDate} on the Java {@code Invoice} entity.
+   */
+  invoiceDate: Date;
 }

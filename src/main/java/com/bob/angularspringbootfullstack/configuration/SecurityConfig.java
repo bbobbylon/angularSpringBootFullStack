@@ -47,7 +47,13 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 @EnableMethodSecurity
 class SecurityConfig {
     private static final Logger securityLogger = LoggerFactory.getLogger(SecurityConfig.class);
-    private static final String[] PUBLIC_URLS = {"/user/login/**", "/user/verify/code/**", "/user/register/**", "/actuator/**", "/user/resetpassword/**", "/user/verify/password/**", "/user/verify/account/**", "/user/refresh/token/**", "/user/profile/image/**", "/user/image/**"};
+    private static final String[] PUBLIC_URLS = 
+    {   "/user/login/**", 
+        "/user/verify/code/**", "/user/register/**", "/actuator/**",
+        "/user/resetpassword/**", "/user/verify/password/**",
+        "/user/verify/account/**", "/user/refresh/token/**",
+        "/user/profile/image/**", "/user/image/**", 
+};
     private final CustomAuthFilter customAuthFilter;
     private final BCryptPasswordEncoder passwordEncoder;
     private final CustomAccessDeniedHandler customAccessDeniedHandler;

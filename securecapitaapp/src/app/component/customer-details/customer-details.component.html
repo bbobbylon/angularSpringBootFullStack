@@ -8,8 +8,7 @@
             <ol class="breadcrumb">
               <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
               <li class="breadcrumb-item"><a [routerLink]="['/customers']">Customers</a></li>
-              <li aria-current="page" class="breadcrumb-item active">{{ state?.appData?.data?.customer.customerName }}
-              </li>
+              <li aria-current="page" class="breadcrumb-item active">{{ state?.appData?.data?.customers.customerName }}</li>
             </ol>
           </nav>
           <div class="row">
@@ -18,23 +17,23 @@
                 <div class="card-body">
                   <div class="d-flex align-items-start">
                     <img
-                      [src]="state?.appData?.data?.customer.imageUrl"
+                      [src]="state?.appData?.data?.customers.imageUrl"
                       alt="profile-image"
                       class="rounded-circle avatar-lg img-thumbnail"
                       style="position: relative" />
                     <div class="w-100 ms-4">
-                      <h4 class="my-0">{{ state?.appData?.data?.customer.customerName }}</h4>
-                      <p class="" style="font-size: 13px">{{ state?.appData?.data?.customer.email }}</p>
+                      <h4 class="my-0">{{ state?.appData?.data?.customers.customerName }}</h4>
+                      <p class="" style="font-size: 13px">{{ state?.appData?.data?.customers.email }}</p>
                       <span
                         [ngClass]="[
-                          state?.appData?.data?.customer.status === 'ACTIVE' ? ' bg-success' : '',
-                          state?.appData?.data?.customer.status === 'PENDING' ? ' bg-primary' : '',
-                          state?.appData?.data?.customer.status === 'BANNED' ? ' bg-danger' : '',
-                          state?.appData?.data?.customer.status === 'INACTIVE' ? ' bg-info' : '',
+                          state?.appData?.data?.customers.status === 'ACTIVE' ? ' bg-success' : '',
+                          state?.appData?.data?.customers.status === 'PENDING' ? ' bg-primary' : '',
+                          state?.appData?.data?.customers.status === 'BANNED' ? ' bg-danger' : '',
+                          state?.appData?.data?.customers.status === 'INACTIVE' ? ' bg-info' : '',
                         ]"
                         class="badge"
                         style="position: absolute; bottom: 60px; left: 113px; top: 70px; font-size: 11px; height: 18px">
-                        {{ state?.appData?.data?.customer.status }}
+                        {{ state?.appData?.data?.customers.status }}
                       </span>
                     </div>
                   </div>
@@ -45,11 +44,10 @@
                   <h5 class="card-title">Total Invoices</h5>
                   <h6 class="card-subtitle mb-2 text-muted">Customer Total Invoices</h6>
                   <ul class="list-group">
-                    <li class="list-group-item d-flex justify-content-between align-items-center"
-                        style="font-size: 20px">
+                    <li class="list-group-item d-flex justify-content-between align-items-center" style="font-size: 20px">
                       Total Current Invoices
                       <span class="" style="font-size: 20px">
-                        {{ state?.appData?.data?.customer.invoices.length }}
+                        {{ state?.appData?.data?.customers.invoices.length }}
                       </span>
                     </li>
                   </ul>
@@ -60,11 +58,10 @@
                   <h5 class="card-title">Total Billed</h5>
                   <h6 class="card-subtitle mb-2 text-muted">Customer Total Billed</h6>
                   <ul class="list-group">
-                    <li class="list-group-item d-flex justify-content-between align-items-center"
-                        style="font-size: 20px">
+                    <li class="list-group-item d-flex justify-content-between align-items-center" style="font-size: 20px">
                       Total Billed
                       <span class="badge bg-success" style="font-size: 20px">
-                        $ {{ state?.appData?.data?.customer.invoices | ExtractArrayValue: 'array' }}
+                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'sum': 'totalAmount' }}
                       </span>
                     </li>
                   </ul>
@@ -75,15 +72,15 @@
               <div class="card">
                 <div class="card-body">
                   <h5 class="card-title">Profile Details</h5>
-                  <form #customerForm="ngForm" (ngSubmit)="updateCustomer(customerForm)">
+                  <form #customerForm="ngForm" (ngSubmit)="update(customerForm)">
                     <input
                       [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                      [ngModel]="state?.appData?.data?.customer.id"
+                      [ngModel]="state?.appData?.data?.customers.id"
                       name="id"
                       type="hidden" />
                     <input
                       [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                      [ngModel]="state?.appData?.data?.customer.createdAt"
+                      [ngModel]="state?.appData?.data?.customers.createdAt"
                       name="createdAt"
                       type="hidden" />
                     <div class="row mb-3">
@@ -91,7 +88,7 @@
                       <div class="col-sm-9">
                         <input
                           [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                          [ngModel]="state?.appData?.data?.customer.customerName"
+                          [ngModel]="state?.appData?.data?.customers.customerName"
                           class="form-control"
                           name="customerName"
                           type="text" />
@@ -102,7 +99,7 @@
                       <div class="col-sm-9">
                         <input
                           [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                          [ngModel]="state?.appData?.data?.customer.email"
+                          [ngModel]="state?.appData?.data?.customers.email"
                           class="form-control"
                           name="email"
                           type="text" />
@@ -113,7 +110,7 @@
                       <div class="col-sm-9">
                         <input
                           [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                          [ngModel]="state?.appData?.data?.customer.type"
+                          [ngModel]="state?.appData?.data?.customers.type"
                           class="form-control"
                           name="type"
                           type="text" />
@@ -124,7 +121,7 @@
                       <div class="col-sm-9">
                         <input
                           [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                          [ngModel]="state?.appData?.data?.customer.status"
+                          [ngModel]="state?.appData?.data?.customers.status"
                           class="form-control"
                           name="status"
                           type="text" />
@@ -135,20 +132,20 @@
                       <div class="col-sm-9">
                         <input
                           [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                          [ngModel]="state?.appData?.data?.customer.address"
+                          [ngModel]="state?.appData?.data?.customers.address"
                           class="form-control"
                           name="address"
                           type="text" />
                       </div>
                     </div>
                     <div class="row mb-3">
-                      <label class="col-sm-3 col-form-label" for="phone">Phone</label>
+                      <label class="col-sm-3 col-form-label" for="phoneNumber">phoneNumber</label>
                       <div class="col-sm-9">
                         <input
                           [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                          [ngModel]="state?.appData?.data?.customer.phone"
+                          [ngModel]="state?.appData?.data?.customers.phoneNumber"
                           class="form-control"
-                          name="phone"
+                          name="phoneNumber"
                           type="text" />
                       </div>
                     </div>
@@ -157,24 +154,21 @@
                       <div class="col-sm-9">
                         <input
                           [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
-                          [ngModel]="state?.appData?.data?.customer.imageUrl"
+                          [ngModel]="state?.appData?.data?.customers.imageUrl"
                           class="form-control"
                           name="imageUrl"
                           type="text" />
                       </div>
                     </div>
                     <button
-                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                      [hidden]="state?.appData?.data?.user.roleName === 'ROLE_USER'"
+                      [disabled]="isLoading$ | async"
                       class="btn btn-primary float-end"
                       type="submit">
                       @if (isLoading$ | async) {
-                        <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                              style="margin-right: 5px"></span>
-                      }
-                      @if (isLoading$ | async) {
+                        <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px"></span>
                         <span>Loading...</span>
-                      }
-                      @if (!(isLoading$ | async)) {
+                      } @else {
                         <span>Update</span>
                       }
                     </button>
@@ -191,17 +185,17 @@
                   <h6 class="card-subtitle mb-2 text-muted">Customer Invoices</h6>
                   <table class="table table-hover">
                     <thead class="table-dark">
-                    <tr>
-                      <th scope="col">Invoice Number</th>
-                      <th scope="col">Service</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Date</th>
-                      <th scope="col">Total</th>
-                      <th scope="col">Action</th>
-                    </tr>
+                      <tr>
+                        <th scope="col">Invoice Number</th>
+                        <th scope="col">Service</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Total</th>
+                        <th scope="col">Action</th>
+                      </tr>
                     </thead>
                     <tbody>
-                      @for (invoice of state?.appData?.data?.customer.invoices; track invoice) {
+                      @for (invoice of state?.appData?.data?.customers?.invoices; track invoice) {
                         <tr>
                           <td>{{ invoice.invoiceNumber }}</td>
                           <td>{{ invoice.services }}</td>
@@ -217,11 +211,10 @@
                               {{ invoice.status }}
                             </span>
                           </td>
-                          <td>{{ invoice.date | date: 'mediumDate' }}</td>
-                          <td>${{ invoice.total }}</td>
+                          <td>{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
+                          <td>${{ invoice.totalAmount }}</td>
                           <td>
-                            <button [routerLink]="['/invoices', invoice.id, invoice.invoiceNumber]"
-                                    class="btn btn-info btn-sm" type="button">
+                            <button [routerLink]="['/invoices', invoice.id, invoice.invoiceNumber]" class="btn btn-info btn-sm" type="button">
                               Print
                             </button>
                           </td>
@@ -235,6 +228,12 @@
           </div>
         </div>
       </section>
+    }
+    @case (DataState.LOADING) {
+      <div>Loading...</div>
+    }
+    @case (DataState.ERROR) {
+      <div>{{ state.error }}</div>
     }
   }
 }

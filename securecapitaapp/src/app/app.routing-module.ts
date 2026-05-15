@@ -7,10 +7,10 @@ import { RegisterComponent } from './component/register/register.component';
 import { NewCustomerComponent } from './component/new-customer/new-customer.component';
 import { CustomersComponent } from './component/customers/customers.component';
 import { authenticationGuard } from './guard/authentication.guard';
-import { InvoicesComponent } from './component/invoices/invoices.component.ts';
-import { InvoiceDetailComponent } from './component/invoice-detail/invoice-detail.component.ts';
+import { InvoicesComponent } from './component/invoices/invoices.component';
+import { InvoiceDetailComponent } from './component/invoice-detail/invoice-detail.component';
 import { NewInvoiceComponent } from './component/new-invoice/new-invoice.component';
-import { CustomerDetailsComponent } from './component/customer-details/customer-details.component.ts';
+import { CustomerDetailsComponent } from './component/customer-details/customer-details.component';
 import { ProfileComponent } from './component/profile/profile.component';
 
 /**
@@ -32,7 +32,7 @@ export const routes: Routes = [
   { path: 'invoice/new', component: NewInvoiceComponent, canActivate: [authenticationGuard] },
   { path: 'invoices', component: InvoicesComponent, canActivate: [authenticationGuard] },
   { path: 'profile', component: ProfileComponent, canActivate: [authenticationGuard] },
-  { path: 'customer/:id', component: CustomerDetailsComponent, canActivate: [authenticationGuard] },
+  { path: 'customers/:id', component: CustomerDetailsComponent, canActivate: [authenticationGuard] },
   { path: 'invoice/:id/:invoiceNumber', component: InvoiceDetailComponent, canActivate: [authenticationGuard] },
   { path: '**', redirectTo: '' },
 ];

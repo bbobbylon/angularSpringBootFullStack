@@ -72,10 +72,11 @@
                   </td>
                   <td>{{ customer.type }}</td>
                   <td>
-                    <button [routerLink]="['/customer/', customer.id]" class="btn btn-info" type="button">
+                    <button [routerLink]="['/customers/', customer.id]" class="btn btn-info" type="button">
                       View
                     </button>
-                    <!-- <button type="button" (click)="selectCustomer(customer)" class="btn btn-info">View</button> -->
+                    <button (click)="goToCustomerDetails(customer)" class="btn btn-info" type="button">View via Router
+                    </button>
                   </td>
                 </tr>
               }

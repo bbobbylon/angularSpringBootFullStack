@@ -1,6 +1,6 @@
 import { Component, DestroyRef, inject, OnInit } from '@angular/core';
 import { AsyncPipe, NgClass, NgOptimizedImage } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { BehaviorSubject, combineLatest, debounceTime, map, Observable, of, startWith, Subject, switchMap } from 'rxjs';
 import { catchError, filter } from 'rxjs/operators';
 import { NavbarComponent } from '../navbar/navbar.component';
@@ -29,7 +29,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 export class CustomersComponent implements OnInit {
   /** Exposes {@link DataState} to the template for switch-case rendering. */
   readonly DataState = DataState;
-
   /**
    * Last-resort fallback avatar used when a customer's {@code imageUrl} is absent or fails to load.
    *
@@ -37,7 +36,6 @@ export class CustomersComponent implements OnInit {
    * so that neither a missing nor a broken URL results in a broken-image icon.
    */
   readonly defaultImage = 'https://www.gravatar.com/avatar/?d=mp';
-
   /**
    * Drives the entire template — emits a new {@link GlobalStateInterface} snapshot
    * whenever the page index or search term changes.
@@ -46,8 +44,9 @@ export class CustomersComponent implements OnInit {
    * on whether {@link currentSearchSubject} holds a non-empty term.
    */
   customersState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListData>>>;
-
+  protected readonly router = inject(Router);
   private readonly customerService = inject(CustomerService);
+  private readonly activatedRoute = inject(ActivatedRoute);
 
   /**
    * Caches the most recent successful API response so that pagination and search
@@ -153,7 +152,7 @@ export class CustomersComponent implements OnInit {
     this.searchInput$
       .pipe(
         debounceTime(300),
-        filter(term => term.length === 0 || term.length >= 3),
+        filter(term => term.length === 0 || term.length >= 1),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(term => {
@@ -206,6 +205,19 @@ export class CustomersComponent implements OnInit {
    */
   goToPage(pageIndex: number): void {
     this.currentPageSubject.next(pageIndex);
+  }
+
+  /**
+   * Navigates to the detail page for the given customer.
+   *
+   * Routes to {@code /customers/:id} using Angular's {@link Router}. The {@code .then}
+   * callback logs the navigation result, which is useful for diagnosing guard failures
+   * (e.g. the {@code authenticationGuard} returning false before the route resolves).
+   *
+   * @param customerId - the numeric ID of the customer whose detail page to open
+   */
+  goToCustomerDetails1(customerId: number): void {
+    this.router.navigate(['/customers/', customerId]).then(r => console.log('Navigation result:', r));
   }
 
   /**
