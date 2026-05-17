@@ -5,6 +5,7 @@ import { RolesInterface } from './roles.interface';
 import { CustomerInterface } from './customer.interface';
 import { StatsInterface } from './stats.interface';
 import { InvoiceInterface } from './invoice.interface';
+import { ServicesInterface } from './services.interface';
 
 /**
  * Represents the reactive state of the login flow.
@@ -99,12 +100,14 @@ export interface CustomerStateInterface {
 /**
  * The data payload returned by {@code GET /customer/invoice/new}.
  *
- * Returns the authenticated user alongside the full (unpaginated) customer list
- * so the new-invoice form can populate its customer dropdown.
+ * Returns the authenticated user, the full unpaginated customer list (for the
+ * customer dropdown), and the full services catalog (for the service line-item
+ * dropdown) so the new-invoice form can be fully populated from a single request.
  */
 export interface NewInvoiceDataInterface {
   user: UserInterface;
   customers?: CustomerInterface[];
+  availableServices?: ServicesInterface[];
 }
 
 /**
@@ -115,4 +118,17 @@ export interface NewInvoiceDataInterface {
 export interface InvoiceListDataInterface {
   user: UserInterface;
   invoices?: PageInterface<InvoiceInterface>;
+}
+
+/**
+ * The data payload returned by {@code GET /customer/invoice/get/:id}.
+ *
+ * Contains the authenticated user, the matching invoice, and the customer the
+ * invoice belongs to — all three are returned in a single response so the
+ * invoice detail view can render without a second API call.
+ */
+export interface CustomerInvoiceUserInterface {
+  user: UserInterface;
+  invoice: InvoiceInterface;
+  customer: CustomerInterface;
 }

@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import {
+  CustomerInvoiceUserInterface,
   CustomerListDataInterface,
   CustomerStateInterface,
   InvoiceListDataInterface,
@@ -110,6 +111,22 @@ export class CustomerService {
   invoices$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<InvoiceListDataInterface>>(`${this.server}/customer/invoice/list?page=${page}&size=${size}`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Fetches a single invoice and its associated customer by invoice ID.
+   *
+   * Calls {@code GET /customer/invoice/get/:id}. The backend resolves the invoice
+   * once and returns the authenticated user, the invoice, and the linked customer
+   * in a single response — no second round-trip is needed.
+   *
+   * @param invoiceId - the numeric ID of the invoice to retrieve
+   * @returns Observable emitting a {@link CustomerInvoiceUserInterface} response containing
+   *          the invoice, its customer, and the authenticated user
+   */
+  invoice$ = (invoiceId: number): Observable<CustomHttpResponseInterface<CustomerInvoiceUserInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(`${this.server}/customer/invoice/get/${invoiceId} `)
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**

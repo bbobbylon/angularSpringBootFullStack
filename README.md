@@ -119,7 +119,7 @@ spring:
 .\mvnw.cmd clean package
 ```
 
-Or skip tests for faster build:
+Or skip tests for a faster build:
 
 ```powershell
 .\mvnw.cmd clean package -DskipTests
@@ -153,7 +153,8 @@ Frontend lives under `securecapitaapp/`.
 
 ## ☁️ Azure Deployment
 
-The app is deployed as a single Docker container to Azure App Service. The Angular frontend is embedded inside the Spring Boot JAR (served from `static/`), so one container handles everything on port 8080.
+The app is deployed as a single Docker container to Azure App Service. The Angular frontend is embedded inside the
+Spring Boot JAR (served from `static/`), so one container handles everything on port 8080.
 
 **Live URL:** `https://angularspringbootfullstack-ehd6dkevc3edgxer.centralus-01.azurewebsites.net`
 
@@ -161,11 +162,11 @@ The app is deployed as a single Docker container to Azure App Service. The Angul
 
 ### Azure Resources (all under `bobsresourcegroup`, subscription `Azure subscription 1`)
 
-| Resource | Name | Purpose |
-|---|---|---|
-| Container Registry | `bobsAngularApp` | Stores Docker images |
-| App Service | `angularSpringBootFullStack` | Runs the container |
-| App Service Plan | (auto-created) | Compute for App Service |
+| Resource           | Name                         | Purpose                 |
+|--------------------|------------------------------|-------------------------|
+| Container Registry | `bobsAngularApp`             | Stores Docker images    |
+| App Service        | `angularSpringBootFullStack` | Runs the container      |
+| App Service Plan   | (auto-created)               | Compute for App Service |
 
 **ACR Login Server:** `bobsangularapp-cnh8fzfxasa6feav.azurecr.io`
 
@@ -180,7 +181,8 @@ Tables are in a schema called `db2` on Aiven's free MySQL instance.
 - **Schema:** `db2`
 - **User:** `avnadmin`
 
-To recreate the schema from scratch, run `src/main/resources/schema.sql` via MySQL Workbench connected to Aiven. The seed data (roles + events) is included in that file.
+To recreate the schema from scratch, run `src/main/resources/schema.sql` via MySQL Workbench connected to Aiven. The
+seed data (roles + events) is included in that file.
 
 ---
 
@@ -188,15 +190,16 @@ To recreate the schema from scratch, run `src/main/resources/schema.sql` via MyS
 
 Triggers automatically on every push to `master`. Two stages:
 
-1. **Build and Push to ACR** — Docker multi-stage build (Node 25 → Maven 21 → JRE alpine), pushes image tagged with build ID + `latest`
+1. **Build and Push to ACR** — Docker multi-stage build (Node 25 → Maven 21 → JRE alpine), pushes image tagged with
+   build ID + `latest`
 2. **Deploy to App Service** — Pulls the new image from ACR and restarts the App Service
 
 **Service Connections (Azure DevOps > Project Settings > Service Connections):**
 
-| Name | Type | Points to |
-|---|---|---|
-| `bobsDockerRegistryServiceConnection` | Docker Registry | `bobsAngularApp` ACR |
-| `bobsAzureServiceConnection` | Azure Resource Manager | `Azure subscription 1` |
+| Name                                  | Type                   | Points to              |
+|---------------------------------------|------------------------|------------------------|
+| `bobsDockerRegistryServiceConnection` | Docker Registry        | `bobsAngularApp` ACR   |
+| `bobsAzureServiceConnection`          | Azure Resource Manager | `Azure subscription 1` |
 
 ---
 
@@ -204,11 +207,11 @@ Triggers automatically on every push to `master`. Two stages:
 
 Set in **Portal > App Service > Configuration > Environment Variables > App Settings:**
 
-| Name | Value |
-|---|---|
-| `SPRING_DATASOURCE_URL` | `jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/db2?useSSL=true&requireSSL=true` |
-| `SPRING_DATASOURCE_USERNAME` | `avnadmin` |
-| `SPRING_DATASOURCE_PASSWORD` | *(your Aiven password)* |
+| Name                         | Value                                                                                      |
+|------------------------------|--------------------------------------------------------------------------------------------|
+| `SPRING_DATASOURCE_URL`      | `jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/db2?useSSL=true&requireSSL=true` |
+| `SPRING_DATASOURCE_USERNAME` | `avnadmin`                                                                                 |
+| `SPRING_DATASOURCE_PASSWORD` | *(your Aiven password)*                                                                    |
 
 ---
 
@@ -228,12 +231,13 @@ Watch the run at: **Azure DevOps > Pipelines**
 
 ### Docker Files
 
-| File | Purpose |
-|---|---|
-| `Dockerfile` | Multi-stage build: Angular → Spring Boot JAR → JRE runtime |
+| File            | Purpose                                                         |
+|-----------------|-----------------------------------------------------------------|
+| `Dockerfile`    | Multi-stage build: Angular → Spring Boot JAR → JRE runtime      |
 | `.dockerignore` | Excludes `node_modules/`, `target/`, `.git/` from build context |
 
 The Dockerfile stages:
+
 1. `node:25-alpine` — builds Angular, outputs to `dist/securecapitaapp/browser/`
 2. `maven:3.9-eclipse-temurin-21` — copies Angular dist into `src/main/resources/static/`, packages JAR with `-Pprod`
 3. `eclipse-temurin:21-jre-alpine` — runs the JAR as a non-root user on port 8080
@@ -383,7 +387,7 @@ curl -X GET http://localhost:8080/user/refresh/token \
   "timeStamp": "12:32:00.123456",
   "data": {
     "user": {
-      ...
+      "...": "same user info as before"
     },
     "access_token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9...",
     "refresh_token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9..."
@@ -693,4 +697,6 @@ PostgreSQL
     - Create tables and insert sample data as needed for your application.
 
 I DON'T OWN ANY OF THE IMAGES IN THIS PROJECT. ALL IMAGES ARE OWNED BY THEIR RESPECTIVE COPYRIGHT HOLDERS. THIS PROJECT
-IS FOR EDUCATIONAL PURPOSES ONLY AND NOT FOR COMMERCIAL USE. IMAGES WERE TAKEN FROM UNSPLASH.COM. THANK YOU
+IS FOR EDUCATIONAL PURPOSES ONLY AND NOT FOR COMMERCIAL USE. IMAGES WERE TAKEN FROM UNSPLASH.COM. THIS PROJECT FOLLOWS
+THE "Full Stack Spring Boot API with Angular(ADVANCED)" COURSE ON Udemy by instructor Junior from GetArrays. HE MAY ALSO
+USE SNIPPETS FROM OTHER LOCATIONS, SUCH AS 'bootdey.com/snippets/view/bs4-invoice'. THANK YOU!

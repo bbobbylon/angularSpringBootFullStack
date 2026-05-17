@@ -38,7 +38,7 @@ import static java.util.stream.Collectors.toList;
  * subject, and expire in 30 minutes; refresh tokens carry only the subject
  * (user ID) and expire in 5 days. Both are signed
  * with HMAC512 using the secret from application properties. Verification
- * intentionally does not require the "authorities" claim so refresh tokens
+ * intentionally does not require the "authorities" claim, so refresh tokens
  * remain valid; CustomAuthFilter then refuses to authenticate any token that
  * lacks authorities.
  */
@@ -80,7 +80,7 @@ public class TokenProvider {
      * Flattens the principal's authorities into a String array suitable for
      * embedding as the "authorities" JWT claim.
      *
-     * @param userPrincipal the authenticated user
+     * @param userPrincipal an authenticated user
      * @return the authority names (e.g. "READ:USER")
      */
     private String[] getClaimsFromUser(UserPrincipal userPrincipal) {
@@ -126,7 +126,7 @@ public class TokenProvider {
     /**
      * Verifies the token and returns its "authorities" claim as a String array.
      * <p>
-     * Returns an empty array when the claim is missing or null so refresh
+     * Returns an empty array when the claim is missing or null, so refresh
      * tokens (which intentionally omit authorities) verify without throwing;
      * the caller decides whether to authenticate based on the array being
      * non-empty.
@@ -205,7 +205,7 @@ public class TokenProvider {
             // Reject tokens that were issued before the last password change.
             LocalDateTime issuedAt = verifier.verify(token).getIssuedAt()
                     .toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-            if (!issuedAt.isAfter(passwordChangedAt)) return false;
+            return issuedAt.isAfter(passwordChangedAt);
         }
         return true;
     }

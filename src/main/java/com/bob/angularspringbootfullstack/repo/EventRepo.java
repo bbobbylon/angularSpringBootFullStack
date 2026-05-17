@@ -38,7 +38,7 @@ public interface EventRepo {
     /**
      * Records a new audit entry for the user identified by their primary key.
      *
-     * <p>Prefer this overload when the user ID is already available (e.g. from a
+     * <p>Prefer this overload when the user ID is already available (e.g., from a
      * JWT claim) to avoid the extra database subquery that the email-based variant
      * performs.
      *

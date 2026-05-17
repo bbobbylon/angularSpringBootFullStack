@@ -3,7 +3,7 @@ package com.bob.angularspringbootfullstack.query;
 /**
  * RoleQuery contains all SQL query constants for role-related database operations.
  * <p>
- * These queries use named parameters (`:paramName`) instead of positional parameters (`?`)
+ * These queries use named parameters (`: paramName`) instead of positional parameters (`?`)
  * to work with Spring's NamedParameterJdbcTemplate. Named parameters are set in the
  * MapSqlParameterSource using .addValue() method calls.
  * <p>

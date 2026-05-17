@@ -34,7 +34,11 @@
                   @for (invoice of state?.appData?.data?.invoices?.content; track invoice.id) {
                     <tr class="cell-1">
                       <td>{{ invoice.invoiceNumber }}</td>
-                      <td>{{ invoice.services }}</td>
+                      <td>
+                        @for (svc of invoice.services; track svc.name; let last = $last) {
+                          {{ svc.name }}@if (!last) {, }
+                        }
+                      </td>
                       <td>
                         <span
                           [ngClass]="[
@@ -51,7 +55,7 @@
                       <td>{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
                       <td>${{ invoice.totalAmount }}</td>
                       <td>
-                        <button [routerLink]="['/invoices', invoice.id, invoice.invoiceNumber]"
+                        <button [routerLink]="['/invoice', invoice.id, invoice.invoiceNumber]"
                                 class="btn btn-info btn-sm" type="button">
                           Print
                         </button>

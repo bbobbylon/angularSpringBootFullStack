@@ -21,7 +21,7 @@ public class UserDTOMapper {
     /**
      * Converts a User entity to a UserDTO object.
      * <p>
-     * Uses Spring's BeanUtils.copyProperties which performs a shallow copy
+     * Uses Spring's BeanUtils.copyProperties, which performs a shallow copy
      * of all matching property names from User to UserDTO. Since UserDTO
      * doesn't have a password field, the password is automatically excluded.
      *

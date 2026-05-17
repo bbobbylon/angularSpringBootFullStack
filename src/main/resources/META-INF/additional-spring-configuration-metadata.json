@@ -1,0 +1,19 @@
+{
+  "properties": [
+    {
+      "name": "application.title",
+      "type": "java.lang.String",
+      "description": "Display name of the application, used for documentation and logging."
+    },
+    {
+      "name": "application.version",
+      "type": "java.lang.String",
+      "description": "Current version of the application."
+    },
+    {
+      "name": "application.pattern.console",
+      "type": "java.lang.String",
+      "description": "Log pattern used for console output formatting."
+    }
+  ]
+}

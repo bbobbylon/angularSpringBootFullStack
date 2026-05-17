@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.exception;
 import com.auth0.jwt.exceptions.JWTDecodeException;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.webmvc.error.ErrorController;
 import org.springframework.dao.DataAccessException;
@@ -45,14 +46,14 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
      * Translates @Valid bean-validation failures into an HttpResponse whose
      * reason field is the comma-joined list of field-error messages.
      *
-     * @param exception the validation failure thrown by Spring MVC
-     * @param headers   response headers chosen by the framework
-     * @param statusCode the HTTP status the framework selected
-     * @param request   the current request
+     * @param exception  the validation failure thrown by Spring MVC
+     * @param headers    response headers chosen by the framework
+     * @param statusCode the HTTP status of the framework selected
+     * @param request    the current request
      * @return an HttpResponse-bodied ResponseEntity with the validation messages
      */
     @Override
-    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException exception, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException exception, @NonNull HttpHeaders headers, @NonNull HttpStatusCode statusCode, @NonNull WebRequest request) {
         log.error(exception.getMessage());
         List<FieldError> fieldErrors = exception.getBindingResult().getFieldErrors();
         String fieldMessage = fieldErrors.stream().map(FieldError::getDefaultMessage).collect(Collectors.joining(", "));
@@ -79,7 +80,7 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
      * @return a ResponseEntity carrying an HttpResponse
      */
     @Override
-    protected ResponseEntity<Object> handleExceptionInternal(Exception exception, @Nullable Object body, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
+    protected ResponseEntity<Object> handleExceptionInternal(Exception exception, @Nullable Object body, @NonNull HttpHeaders headers, @NonNull HttpStatusCode statusCode, @NonNull WebRequest request) {
         log.error(exception.getMessage());
         return new ResponseEntity<>(HttpResponse.builder()
                 .timeStamp(now().toString())
@@ -93,7 +94,7 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
 
     /**
      * Returns 400 for SQL integrity-constraint violations. When the underlying
-     * message is a "Duplicate entry" the reason is collapsed to a friendlier
+     * message is a "Duplicate entry," the reason is collapsed to a friendlier
      * string; otherwise the raw message is passed through.
      *
      * @param exception the SQL violation
@@ -116,8 +117,8 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
 
     /**
      * Returns 400 for BadCredentialsException, which covers both wrong
-     * email/password and malformed JWTs. When the message indicates a decode
-     * failure (raised by TokenProvider#getSubject) the reason is replaced
+     * email/password and malformed JWTs. When the message indicates a decoded
+     * failure (raised by TokenProvider#getSubject), the reason is replaced
      * with a clean client-facing string; otherwise the standard "Incorrect
      * email or password" suffix is appended.
      *
@@ -128,7 +129,7 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
     public ResponseEntity<HttpResponse> badCredentialsException(BadCredentialsException exception) {
         log.error(exception.getMessage());
         // NEW (May 2026): BadCredentialsException now represents two scenarios:
-        // 1. Login failure: User provided wrong email/password
+        // 1. Login failure: User provided the wrong email /password
         // 2. Malformed token: Token cannot be decoded as Base64 JWT (from TokenProvider.getSubject())
         // The exception message from TokenProvider will contain "Could not decode the token..."
         String reason = exception.getMessage();
@@ -189,20 +190,6 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                         .build(), FORBIDDEN);
     }
 
-/*
-    @ExceptionHandler(UsernameNotFoundException.class)
-    public ResponseEntity<HttpResponse> usernameNotFoundException(UsernameNotFoundException exception) {
-        log.error(exception.getMessage());
-        return new ResponseEntity<>(
-                HttpResponse.builder()
-                        .timeStamp(now().toString())
-                        .reason(exception.getMessage())
-                        .devMessage(exception.getMessage())
-                        .status(BAD_REQUEST)
-                        .statusCode(BAD_REQUEST.value())
-                        .build(), BAD_REQUEST);
-    }
-*/
 
     /**
      * Catch-all for any exception not handled more specifically. Maps to 500
@@ -234,7 +221,7 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
      * the JWT library fails to parse a token. The original message is logged
      * but not returned to the client.
      *
-     * @param exception the decode failure
+     * @param exception the decoded failure
      * @return 500 INTERNAL_SERVER_ERROR
      */
     @ExceptionHandler(JWTDecodeException.class)
@@ -252,7 +239,7 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
 
     /**
      * Returns 400 when a JdbcTemplate "queryForObject" finds no row.
-     * "expected 1, actual 0" messages are rewritten to "Record not found".
+     * "Expected 1, actual 0" messages are rewritten to "Record not found".
      *
      * @param exception the empty-result failure
      * @return 400 BAD_REQUEST
@@ -314,7 +301,7 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
 
     /**
      * Returns 400 for any Spring DataAccessException, with the message
-     * cleaned up by {@link #processErrorMessage(String)} (e.g. duplicate
+     * cleaned up by {@link #processErrorMessage(String)} (e.g., duplicate
      * account/password verification rows get friendly messages).
      *
      * @param exception the data-access failure

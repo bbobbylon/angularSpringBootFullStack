@@ -11,7 +11,7 @@ package com.bob.angularspringbootfullstack.query;
  */
 public class EventQuery {
     /**
-     * Fetches every audit entry for a given user, newest first.
+     * Fetches every audit entry for a given user with the newest user being first.
      *
      * <p>JOINs {@code userevents → events → users} so the result includes the
      * human-readable {@code type} and {@code description} from the reference

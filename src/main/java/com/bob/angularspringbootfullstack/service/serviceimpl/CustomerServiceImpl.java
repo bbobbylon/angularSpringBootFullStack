@@ -3,9 +3,11 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.Invoice;
+import com.bob.angularspringbootfullstack.model.Services;
 import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.repo.CustomerRepo;
 import com.bob.angularspringbootfullstack.repo.InvoiceRepo;
+import com.bob.angularspringbootfullstack.repo.ServicesRepo;
 import com.bob.angularspringbootfullstack.rowmapper.StatsRowMapper;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import jakarta.transaction.Transactional;
@@ -26,7 +28,7 @@ import static org.springframework.data.domain.PageRequest.of;
  * CustomerServiceImpl is the primary implementation of {@link CustomerService}.
  * <p>
  * Delegates all persistence operations to {@link CustomerRepo} and {@link InvoiceRepo}.
- * Invoice numbers are generated automatically using an 10-character random alphanumeric
+ * Invoice numbers are generated automatically using a 10-character random alphanumeric
  * string to ensure uniqueness across the system.
  * <p>
  * All methods that look up by ID throw {@link com.bob.angularspringbootfullstack.exception.ApiException}
@@ -49,6 +51,13 @@ public class CustomerServiceImpl implements CustomerService {
      * Injected by Lombok's {@code @RequiredArgsConstructor}.
      */
     private final InvoiceRepo invoiceRepo;
+
+    /**
+     * JPA repository for {@link Services} catalog entries.
+     * Used to populate the service dropdown on the new-invoice form.
+     * Injected by Lombok's {@code @RequiredArgsConstructor}.
+     */
+    private final ServicesRepo servicesRepo;
 
     /**
      * Named-parameter JDBC template used for the aggregated stats query.
@@ -161,6 +170,14 @@ public class CustomerServiceImpl implements CustomerService {
     public Invoice getInvoice(Long invoiceId) {
         return invoiceRepo.findById(invoiceId)
                 .orElseThrow(() -> new ApiException("Invoice not found"));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Iterable<Services> getServices() {
+        return servicesRepo.findAll();
     }
 
     /**

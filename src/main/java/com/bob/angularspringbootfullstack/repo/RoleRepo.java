@@ -66,7 +66,7 @@ public interface RoleRepo<T extends Role> {
      *
      * @param userId   the ID of the user to assign the role to
      * @param roleName the name of the role to assign
-     * @throws ApiException if the role name is not found
+     *                 //@throws ApiException if the role name is not found
      */
     void addRoleToUser(Long userId, String roleName);
 
@@ -75,7 +75,7 @@ public interface RoleRepo<T extends Role> {
      *
      * @param userId the ID of the user
      * @return the role assigned to the user
-     * @throws ApiException if user has no role assigned
+     * //@throws ApiException if the user has no role assigned
      */
     Role getRoleByUserId(Long userId);
 
@@ -85,6 +85,7 @@ public interface RoleRepo<T extends Role> {
      * @param email the user's email address
      * @return the role assigned to the user with the specified email
      */
+    @SuppressWarnings("unused")
     Role getRoleByUserEmail(String email);
 
     /**

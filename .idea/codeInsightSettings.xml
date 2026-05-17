@@ -3,6 +3,7 @@
   <component name="JavaProjectCodeInsightSettings">
     <included-static-names>
       <name>java.util.Map.of</name>
+      <name>org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric</name>
     </included-static-names>
   </component>
 </project>

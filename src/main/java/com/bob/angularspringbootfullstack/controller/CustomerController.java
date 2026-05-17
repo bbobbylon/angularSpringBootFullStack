@@ -95,7 +95,7 @@ public class CustomerController {
      * @return 200 OK with the authenticated user and the matching customer
      */
     @GetMapping("/get/{customerId}")
-    public ResponseEntity<HttpResponse> getCustomer(@AuthenticationPrincipal UserDTO user, @PathVariable("customerId") Long customerId) {
+    public ResponseEntity<HttpResponse> getCustomer(@AuthenticationPrincipal UserDTO user, @PathVariable Long customerId) {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -115,10 +115,10 @@ public class CustomerController {
      * @param page zero-based page index (defaults to 0)
      * @param size number of records per page (defaults to 20)
      * @return 200 OK with the authenticated user and a page of matching customers
-     * @throws InterruptedException if the thread is interrupted during the artificial delay
+     * // @throws InterruptedException if the thread is interrupted during the artificial delay
      */
     @GetMapping("/search")
-    public ResponseEntity<HttpResponse> searchCustomer(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> name, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) throws InterruptedException {
+    public ResponseEntity<HttpResponse> searchCustomer(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> name, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) { //throws InterruptedException {
         //TimeUnit.SECONDS.sleep(2); // Artificial delay to simulate real-world search latency
         return ResponseEntity.ok(
                 HttpResponse.builder()
@@ -221,12 +221,14 @@ public class CustomerController {
     }
 
     /**
-     * Returns all customers needed to populate the new-invoice creation form in the UI.
-     * This endpoint is hit when the user navigates to the "New Invoice" page, providing
-     * the customer list required to assign an invoice to a customer.
+     * Returns all data needed to populate the new-invoice creation form in the UI.
+     * <p>
+     * Returns the authenticated user, the full unpaginated customer list (for the
+     * customer dropdown), and the full services catalog (for the service line-item
+     * dropdown). All three are needed before the user can fill in the form.
      *
      * @param user the authenticated user making the request
-     * @return 200 OK with the authenticated user and all customers (unpaginated)
+     * @return 200 OK with {@code "user"}, {@code "customers"}, and {@code "availableServices"}
      */
     @GetMapping("/invoice/new")
     public ResponseEntity<HttpResponse> newInvoice(@AuthenticationPrincipal UserDTO user) {
@@ -234,7 +236,8 @@ public class CustomerController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "customers", customerService.getCustomers()))
+                                "customers", customerService.getCustomers(),
+                                "availableServices", customerService.getServices()))
                         .message("New invoice page reached and Customers have been retrieved!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -242,19 +245,27 @@ public class CustomerController {
     }
 
     /**
-     * Returns a single invoice by its ID.
+     * Returns a single invoice and its associated customer by invoice ID.
+     * <p>
+     * The invoice is fetched once and reused for both the {@code "invoice"} payload
+     * and the {@code "customer"} payload via {@link Invoice#getCustomer()}, avoiding
+     * a redundant second database round-trip.
      *
      * @param user      the authenticated user making the request
      * @param invoiceId the ID of the invoice to retrieve
-     * @return 200 OK with the authenticated user and the matching invoice
+     * @return 200 OK with three data keys: {@code "user"} (authenticated principal),
+     * {@code "invoice"} (the matching invoice), and {@code "customer"}
+     * (the customer the invoice belongs to)
      */
     @GetMapping("/invoice/get/{invoiceId}")
-    public ResponseEntity<HttpResponse> getInvoice(@AuthenticationPrincipal UserDTO user, @PathVariable("invoiceId") Long invoiceId) {
+    public ResponseEntity<HttpResponse> getInvoice(@AuthenticationPrincipal UserDTO user, @PathVariable Long invoiceId) {
+        Invoice invoice = customerService.getInvoice(invoiceId);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "invoice", customerService.getInvoice(invoiceId)))
+                                "invoice", invoice,
+                                "customer", invoice.getCustomer()))
                         .message("Invoice retrieved!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -270,7 +281,7 @@ public class CustomerController {
      * @return 200 OK with the authenticated user and all customers (for UI refresh)
      */
     @PostMapping("/invoice/addtocustomer/{customerId}")
-    public ResponseEntity<HttpResponse> addInvoiceToCustomer(@AuthenticationPrincipal UserDTO user, @PathVariable("customerId") Long customerId, @RequestBody Invoice invoice) {
+    public ResponseEntity<HttpResponse> addInvoiceToCustomer(@AuthenticationPrincipal UserDTO user, @PathVariable Long customerId, @RequestBody Invoice invoice) {
         customerService.addInvoiceToCustomer(customerId, invoice);
         return ResponseEntity.ok(
                 HttpResponse.builder()

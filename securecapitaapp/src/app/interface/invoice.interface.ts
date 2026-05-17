@@ -1,8 +1,22 @@
 /**
+ * A single line item on an invoice, mirroring the backend {@code InvoiceLineItem} embeddable.
+ *
+ * Stored in the {@code invoiceserviceitems} table and returned as a nested array
+ * inside each {@link InvoiceInterface}.
+ */
+export interface InvoiceLineItemInterface {
+  /** Human-readable name of the service rendered (e.g., 'Web Development'). */
+  name: string;
+  /** Price charged for this line item in the application's default currency. */
+  price: number;
+}
+
+/**
  * Represents an invoice record as returned by the backend API.
  *
- * Mirrors the {@code Invoice} JPA entity. Returned nested inside a
- * {@code CustomerInterface} when the full customer detail is fetched.
+ * Mirrors the {@code Invoice} JPA entity. {@code services} is a proper array of
+ * {@link InvoiceLineItemInterface} objects stored in a separate collection table,
+ * not a flat comma-separated string.
  */
 export interface InvoiceInterface {
   /** Auto-generated unique identifier. */
@@ -10,14 +24,13 @@ export interface InvoiceInterface {
   /** Human-readable invoice reference code (e.g., 'A3F9KQ2B'). */
   invoiceNumber: string;
   /**
-   * Name of the service this invoice covers, returned as a flat string by the API.
+   * The line items on this invoice — each represents one service rendered.
    *
-   * Although the backend {@code Invoice} entity holds a {@code @ManyToOne} to a
-   * {@code Services} record, the API response maps just the service name here
-   * rather than nesting the full object.
+   * Fetched eagerly from the {@code invoiceserviceitems} table by the backend
+   * and serialized as a JSON array so the frontend receives proper objects.
    */
-  services: string;
-  /** Payment state (e.g., 'Pending', 'Paid', 'Overdue'). */
+  services: InvoiceLineItemInterface[];
+  /** Payment state (e.g., 'PENDING', 'PAID', 'OVERDUE'). */
   status: string;
   /**
    * Final total amount after any adjustments, discounts, or taxes.

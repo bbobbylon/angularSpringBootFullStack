@@ -1,7 +1,6 @@
 package com.bob.angularspringbootfullstack.repo;
 
 import com.bob.angularspringbootfullstack.model.Invoice;
-import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.ListCrudRepository;
 import org.springframework.data.repository.PagingAndSortingRepository;
 

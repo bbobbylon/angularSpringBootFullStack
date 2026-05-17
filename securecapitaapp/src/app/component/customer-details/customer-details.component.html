@@ -156,7 +156,7 @@
                       </div>
                     </div>
                     <div class="row mb-3">
-                      <label class="col-sm-3 col-form-label" for="imageurl">Image URL</label>
+                      <label class="col-sm-3 col-form-label" for="imageUrl">Image URL</label>
                       <div class="col-sm-9">
                         <input
                           [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
@@ -205,11 +205,16 @@
                       @for (invoice of state?.appData?.data?.customers?.invoices; track invoice) {
                         <tr>
                           <td>{{ invoice.invoiceNumber }}</td>
-                          <td>{{ invoice.services }}</td>
+                          <td>
+                            @for (svc of invoice.services; track svc.name; let last = $last) {
+                              {{ svc.name }}@if (!last) {, }
+                            }
+                          </td>
                           <td>
                             <span
                               [ngClass]="[
                                 invoice.status === 'PAID' ? ' bg-success' : '',
+                                invoice.status === 'ACTIVE' ? ' bg-success' : '',
                                 invoice.status === 'PENDING' ? ' bg-primary' : '',
                                 invoice.status === 'OVERDUE' ? ' bg-warning' : '',
                                 invoice.status === 'CANCELED' ? ' bg-danger' : '',
@@ -221,7 +226,7 @@
                           <td>{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
                           <td>${{ invoice.totalAmount }}</td>
                           <td>
-                            <button [routerLink]="['/invoices', invoice.id, invoice.invoiceNumber]"
+                            <button [routerLink]="['/invoice/', invoice.id, invoice.invoiceNumber]"
                                     class="btn btn-info btn-sm" type="button">
                               Print
                             </button>

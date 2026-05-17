@@ -12,6 +12,7 @@ import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NullMarked;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -92,6 +93,7 @@ import static org.apache.commons.lang3.time.DateUtils.addDays;
  * </ul>
  * -----------------------------------------------------------------------
  */
+@NullMarked
 @Repository
 @RequiredArgsConstructor
 @Slf4j
@@ -157,12 +159,13 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * @param email the email address to check
      * @return the count of users with the specified email (0 if unique, >0 if duplicate)
      */
-    private Integer getEmailCount(String email) {
-        return jdbcTemplate.queryForObject(COUNT_USER_EMAIL_QUERY, of("email", email), Integer.class);
+    private int getEmailCount(String email) {
+        Integer count = jdbcTemplate.queryForObject(COUNT_USER_EMAIL_QUERY, of("email", email), Integer.class);
+        return count != null ? count : 0;
     }
 
     /**
-     * Maps a User entity to SQL parameter source for database insert operations.
+     * Maps a User entity to an SQL parameter source for database insert operations.
      * Handles password encoding using BCryptPasswordEncoder and email normalization.
      *
      * @param user the user entity to be mapped
@@ -230,7 +233,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      */
     @Override
     public User update(Long id, User data) {
-        return null;
+        throw new UnsupportedOperationException("Use updateUserDetails(UpdateForm) instead.");
     }
 
     /**
@@ -324,7 +327,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             log.error("Invalid 2FA code verification attempt for email: {}", email);
             throw ex;
         } catch (EmptyResultDataAccessException e) {
-            log.error("User not found in our database: {}", email);
+            log.error("The User is not found in our database: {}", email);
             throw new UsernameNotFoundException("User not found in our database: " + email);
         } catch (Exception exception) {
             log.error("Unexpected error during 2FA code verification for email '{}': {}", email, exception.getMessage(), exception);
@@ -366,10 +369,9 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         if (isLinkExpired(key, PASSWORD))
             throw new ApiException("This link is not valid. Please request a new password reset link.");
         try {
-            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("url", getVerificationURL(key, PASSWORD.getType())), new UserRowMapper());
             // Delete the password verification row by user_id. Use the existing constant for deleting by user id
             // jdbcTemplate.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", user.getId())); // remove the verification record for this user
-            return user;
+            return jdbcTemplate.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("url", getVerificationURL(key, PASSWORD.getType())), new UserRowMapper());
         } catch (EmptyResultDataAccessException e) {
             log.error(e.getMessage());
             throw new ApiException("This link is not valid. Please request a new password reset link.");
@@ -391,11 +393,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         if (isLinkExpired(key, PASSWORD))
             throw new ApiException("This link is not valid. Please request a new password reset link.");
         try {
-            // Resolve the full verification URL once and look up the user tied to it so we can log the email
+            // Resolve the full verification URL at once and look up the user tied to it so we can log the email
             String url = getVerificationURL(key, PASSWORD.getType());
             User user = jdbcTemplate.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("url", url), new UserRowMapper());
 
-            jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_URL_QUERY, of("password", passwordEncoder.encode(newPassword), "url", url));
+            jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_URL_QUERY, of("password", requireNonNull(passwordEncoder.encode(newPassword)), "url", url));
             jdbcTemplate.update(DELETE_VERIFICATION_BY_URL_QUERY, of("url", url));
 
             // Log the actual user's email for auditing (safe because password is not logged)
@@ -421,7 +423,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             log.info("Account successfully verified for user with email: {}", user.getEmail());
             return user;
         } catch (EmptyResultDataAccessException e) {
-            log.error("This code is not valid. Please attempt to login again.");
+            log.error("This code is not valid. Please retry your login attempt.");
             throw new UsernameNotFoundException("This code is not valid. Please attempt to login again.");
         } catch (Exception exception) {
             log.error("Unexpected error during 2FA code verification for email '{}'", exception.getMessage(), exception);
@@ -466,7 +468,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         User user = get(userID);
         if (passwordEncoder.matches(currentPassword, user.getPassword())) {
             try {
-                jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY, of("userId", userID, "password", passwordEncoder.encode(newPassword)));
+                jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY, of("userId", userID, "password", requireNonNull(passwordEncoder.encode(newPassword))));
             } catch (Exception exception) {
                 throw new ApiException("An unexpected error occurred. Please try again.");
             }
@@ -555,7 +557,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * which reads the file from disk and returns its bytes — not the raw filesystem path.
      *
      * @param email the user's email address, used as the image filename
-     * @return the fully-qualified URL the browser can use to load the image
+     * @return the fully qualified URL the browser can use to load the image
      */
     private String setUserImageUrl(String email) {
         return ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/image/" + email + ".png").toUriString();
@@ -564,7 +566,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     /**
      * Writes the uploaded image file to {@code ~/Downloads/images/{email}.png}.
      * Creates the target directory if it does not already exist.
-     * If a previous image exists for this user it is overwritten ({@code REPLACE_EXISTING}).
+     * If a previous image exists for this user, it is overwritten ({@code REPLACE_EXISTING}).
      *
      * @param email the user's email address, used as the filename on disk
      * @param image the uploaded image file from the multipart request
@@ -621,7 +623,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      */
     private boolean isLinkExpired(String key, VerificationType password) {
         try {
-            return jdbcTemplate.queryForObject(SELECT_EXPIRATION_BY_URL, of("url", getVerificationURL(key, password.getType())), Boolean.class);
+            return Boolean.TRUE.equals(jdbcTemplate.queryForObject(SELECT_EXPIRATION_BY_URL, of("url", getVerificationURL(key, password.getType())), Boolean.class));
         } catch (EmptyResultDataAccessException e) {
             log.error(e.getMessage());
             throw new ApiException("This link is not valid. Please request a new password reset link.");
@@ -637,9 +639,9 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * @param code verification code
      * @return {@code true} if expired
      */
-    private Boolean isVerificationCodeExpired(String code) {
+    private boolean isVerificationCodeExpired(String code) {
         try {
-            return jdbcTemplate.queryForObject(CHECK_2FA_CODE_EXPIRE_DATE, of("code", code), Boolean.class);
+            return Boolean.TRUE.equals(jdbcTemplate.queryForObject(CHECK_2FA_CODE_EXPIRE_DATE, of("code", code), Boolean.class));
         } catch (EmptyResultDataAccessException e) {
             log.error("This code is not valid. Please attempt to login again.");
             throw new UsernameNotFoundException("This code is not valid. Please attempt to login again.");
@@ -658,21 +660,15 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         log.debug("Spring Security is attempting to load user by email: {}", email);
-        User user = null;
         try {
-            user = getUserByEmail(email);
-        } catch (ApiException e) {
-            log.warn("User lookup failed for email '{}': {}", email, e.getMessage());
-            throw new UsernameNotFoundException("User not found in our database: " + email);
-        }
-        if (user == null) {
-            log.error("User not found in our database. Are you searching for the right person? Entered email: {}", email);
-            throw new UsernameNotFoundException("User not found in our database: " + email);
-        } else {
+            User user = getUserByEmail(email);
             log.info("We have found this user in our database with the following address: {} ", email);
             log.debug("Building UserPrincipal for user with email: {} and id: {}", email, user.getId());
             log.info("User with email '{}' has 2FA/MFA enabled: {}", email, user.isUsing2FA());
             return new UserPrincipal(user, roleRepository.getRoleByUserId(user.getId()));
+        } catch (ApiException e) {
+            log.warn("User lookup failed for email '{}': {}", email, e.getMessage());
+            throw new UsernameNotFoundException("User not found in our database: " + email);
         }
     }
 }

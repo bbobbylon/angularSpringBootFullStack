@@ -2,18 +2,17 @@ package com.bob.angularspringbootfullstack.filter;
 
 import com.bob.angularspringbootfullstack.tokenprovider.TokenProvider;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
 import java.util.List;
 
 import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
@@ -26,10 +25,10 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
  * Per-request JWT authentication filter.
  * <p>
  * Skips public routes and OPTIONS preflights, otherwise pulls the bearer token
- * off the Authorization header and asks TokenProvider to validate it. When the
- * token has authorities (an access token) the filter installs an Authentication
+ * off the Authorization header. Then asks TokenProvider to validate it. When the
+ * token has authorities (an access token), the filter installs an Authentication
  * in the SecurityContext; when it has none (a refresh token, only valid at
- * /user/refresh/token) the context is cleared so it can't be used to satisfy
+ * /user/refresh/token), the context is cleared so it can't be used to satisfy
  * authority checks. The filter chain always continues so SecurityConfig's
  * authorization rules and entry point can produce the right response.
  */
@@ -37,8 +36,10 @@ import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 @RequiredArgsConstructor
 @Slf4j
 public class CustomAuthFilter extends OncePerRequestFilter {
-    /**
-     * Key for storing JWT token in the request values map, no longer needed since we are now getting the user ID directly from the token instead of the email, but retained for reference in case we need to revert back to the previous implementation.
+    /*
+     * Key for storing JWT token in the request values map.
+     * It is no longer necessary since we are now getting the user ID directly from the token instead of the email.
+     * Retained for reference in case we need to revert back to the previous implementation.
      */
     // protected static final String TOKEN_KEY = "token";
     /**
@@ -68,7 +69,7 @@ public class CustomAuthFilter extends OncePerRequestFilter {
      * @return {@code true} to skip filtering; {@code false} to run {@link #doFilterInternal}
      */
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+    protected boolean shouldNotFilter(HttpServletRequest request) {
 
         return request.getHeader(AUTHORIZATION) == null || !request.getHeader(AUTHORIZATION).startsWith(TOKEN_PREFIX) || request.getMethod().equalsIgnoreCase(HTTP_METHOD_OPTIONS) || asList(PUBLIC_ROUTES).contains(request.getRequestURI());
     }
@@ -89,11 +90,11 @@ public class CustomAuthFilter extends OncePerRequestFilter {
      * @param request     the current HTTP request
      * @param response    the current HTTP response
      * @param filterChain the rest of the filter chain
-     * @throws ServletException if a downstream filter throws
-     * @throws IOException      if writing to the response fails
+     *                    //@throws ServletException if a downstream filter throws
+     *                    //@throws IOException if writing to the response fails
      */
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain) {
         try {
             // no longer needed since we retired the getValuesRequest Map<String, String> values = getRequestValues(request);
             String token = getToken(request);
@@ -119,16 +120,17 @@ public class CustomAuthFilter extends OncePerRequestFilter {
         }
     }
 
-    // getRequestValues is no longer used, since we are getting the user ID instead of the user email.
-    /**
-     * Extracts the email and token from the request for downstream processing.
-     *
-     * @param request HTTP request
+
+    /*
+      getRequestValues is no longer used, since we are getting the user ID instead of the user email.
+      Extracts the email and token from the request for downstream processing.
+
+      @param request HTTP request
      * @return Map with keys EMAIL_KEY and TOKEN_KEY
+    private Map<String, String> getRequestValues(HttpServletRequest request) {
+    return of(EMAIL_KEY, tokenProvider.getSubject(getToken(request), request), TOKEN_KEY, getToken(request));
+    }
      */
-/*    private Map<String, String> getRequestValues(HttpServletRequest request) {
-        return of(EMAIL_KEY, tokenProvider.getSubject(getToken(request), request), TOKEN_KEY, getToken(request));
-    }*/
 
     /**
      * Retrieves the JWT token from the Authorization header.
@@ -139,7 +141,7 @@ public class CustomAuthFilter extends OncePerRequestFilter {
     private String getToken(HttpServletRequest request) {
         return ofNullable(request.getHeader(AUTHORIZATION))
                 .filter(header -> header.startsWith(TOKEN_PREFIX))
-                .map(token -> token.replace(TOKEN_PREFIX, EMPTY)).get();
+                .map(token -> token.replace(TOKEN_PREFIX, EMPTY)).orElse(EMPTY);
     }
 
     /**

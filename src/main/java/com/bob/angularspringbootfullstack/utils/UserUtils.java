@@ -4,6 +4,8 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import org.springframework.security.core.Authentication;
 
+import java.util.Objects;
+
 /**
  * Extracts the {@link UserDTO} for the current user from a Spring Security
  * {@link Authentication}.
@@ -41,7 +43,7 @@ import org.springframework.security.core.Authentication;
  * That returned the entire Lombok-generated DTO toString (e.g.
  * {@code "UserDTO(id=1, firstName=Bob, email=..., ...)"}), which then failed the
  * email lookup with "no user found with email: UserDTO(id=1, ...)". Splitting into
- * two explicit, type-safe extractors prevents that whole class of mistake — each
+ * two explicit, type-safe extractors prevents that whole class of mistakes — each
  * call site declares which auth path it expects, and the cast fails fast if the
  * principal is the wrong type.
  *
@@ -70,7 +72,7 @@ public class UserUtils {
      *
      * @param authentication the current {@code Authentication} pulled from the
      *                       SecurityContext; must have a {@link UserDTO} principal
-     *                       (i.e. produced by {@code CustomAuthFilter}, not by
+     *                       (i.e., produced by {@code CustomAuthFilter}, not by
      *                       {@code AuthenticationManager})
      * @return the {@link UserDTO} stored as the principal
      * @throws ClassCastException if the principal is not a {@code UserDTO}, which
@@ -95,7 +97,7 @@ public class UserUtils {
      * only needs the inner {@code UserDTO} to decide whether to send a 2FA code or
      * issue tokens — this method extracts it in one step.
      *
-     * <p>This method is only correct on a freshly-authenticated login
+     * <p>This method is only correct on a freshly authenticated login
      * {@code Authentication}. Authenticated requests served via
      * {@code CustomAuthFilter} use a different principal type
      * ({@code UserDTO} directly) and require
@@ -111,6 +113,6 @@ public class UserUtils {
      *                            instead
      */
     public static UserDTO getLoggedInUser(Authentication authentication) {
-        return ((UserPrincipal) authentication.getPrincipal()).getUser();
+        return ((UserPrincipal) Objects.requireNonNull(authentication.getPrincipal())).getUser();
     }
 }

@@ -42,10 +42,33 @@
                   <form #invoiceForm="ngForm" (ngSubmit)="createNewInvoice(invoiceForm)">
                     <div class="row">
                       <div class="col-md-12" style="margin-bottom: 15px">
-                        <div class="form-group">
-                          <label for="services">Services</label>
-                          <input class="form-control" id="services" name="services" ngModel required type="text" />
-                        </div>
+                        <label>Services</label>
+                        @for (line of serviceLines; track $index; let i = $index) {
+                          <div class="d-flex gap-2 mb-2">
+                            <select
+                              (change)="onServiceSelected(i, $any($event.target).value)"
+                              [ngModelOptions]="{ standalone: true }"
+                              [ngModel]="null"
+                              class="form-control"
+                              required>
+                              <option [ngValue]="null" disabled>Select a service...</option>
+                              @for (svc of state?.appData?.data?.availableServices; track svc.id) {
+                                <option [value]="svc.id">{{ svc.name }}</option>
+                              }
+                            </select>
+                            <input
+                              [(ngModel)]="serviceLines[i].price"
+                              [ngModelOptions]="{ standalone: true }"
+                              class="form-control"
+                              placeholder="Price"
+                              style="max-width: 130px"
+                              type="number" />
+                            @if (serviceLines.length > 1) {
+                              <button (click)="removeServiceLine(i)" class="btn btn-outline-danger btn-sm" type="button">✕</button>
+                            }
+                          </div>
+                        }
+                        <button (click)="addServiceLine()" class="btn btn-outline-secondary btn-sm" type="button">+ Add service</button>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <label for="customerId">Customer</label>

@@ -68,7 +68,7 @@ import static org.springframework.security.authentication.UsernamePasswordAuthen
  * </ol>
  *
  * <p><b>Recommended approach:</b> standardize on ID-based lookups for all
- * secondary DB fetches (primary key = fastest lookup), and only perform a
+ * secondary DB fetches (primary key = fastest lookup) and only perform a
  * secondary DB fetch when fresh data is actually needed after a mutation.
  * For passing context to a service call, {@code getAuthenticatedUser(authentication)}
  * already returns a {@link com.bob.angularspringbootfullstack.dto.UserDTO} from
@@ -80,6 +80,7 @@ import static org.springframework.security.authentication.UsernamePasswordAuthen
 @RequiredArgsConstructor
 @Slf4j
 public class UserController {
+    // there is a space after Bearer to split the header into two parts and extract the token more easily; this is a standard convention for Authorization headers and is required for the substring operation in refreshToken to work correctly
     private static final String TOKEN_PREFIX = "Bearer ";
     private final UserService userService;
     private final RoleService roleService;
@@ -131,7 +132,7 @@ public class UserController {
      * @return 200 OK with user and tokens
      */
     @GetMapping("/verify/code/{email}/{code}")
-    public ResponseEntity<HttpResponse> verifyCode(@PathVariable("email") String email, @PathVariable("code") String code) {
+    public ResponseEntity<HttpResponse> verifyCode(@PathVariable String email, @PathVariable String code) {
         try {
             UserDTO userDTO = userService.verifyCode(email, code);
             eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), LOGIN_ATTEMPT_SUCCESS));
@@ -165,16 +166,16 @@ public class UserController {
      * Activates a newly registered account using the UUID key embedded in the
      * verification email link.
      *
-     * @param key the activation key from the URL
+     * @param yeet the activation key from the URL
      * @return 200 OK with a message indicating whether the account was newly
      * verified or already verified
      */
     @GetMapping("/verify/account/{key}")
-    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String key) {
+    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String yeet) {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .message(userService.verifyAccount(key).isEnabled() ? "Your account is already verified. Please log in." : "Account verified successfully! You can now log in.")
+                        .message(userService.verifyAccount(yeet).isEnabled() ? "Your account is already verified. Please log in." : "Account verified successfully! You can now log in.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
@@ -224,7 +225,7 @@ public class UserController {
      * @return 200 OK with the updated user and the full roles list
      */
     @PatchMapping("/update/role/{roleName}")
-    public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication, @PathVariable("roleName") String roleName) {
+    public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication, @PathVariable String roleName) {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateUserRole(userDTO.getId(), roleName);
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), ROLE_UPDATE));
@@ -270,10 +271,10 @@ public class UserController {
      *
      * @param authentication the current Spring Security authentication
      * @return 200 OK with the updated user and the full roles list
-     * @throws InterruptedException if the sleep is interrupted
+     * //@throws InterruptedException if the sleep is interrupted
      */
     @PatchMapping("/update/togglemfa")
-    public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) throws InterruptedException {
+    public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) { // throws InterruptedException {
         //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
         UserDTO userDTO = userService.toggleMFA(getAuthenticatedUser(authentication).getEmail());
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), MFA_UPDATE));
@@ -309,7 +310,7 @@ public class UserController {
      * @return 200 OK with the updated user and the full roles list
      */
     @PatchMapping("/update/image")
-    public ResponseEntity<HttpResponse> updateProfileImage(Authentication authentication, @RequestParam("image") MultipartFile image) throws InterruptedException {
+    public ResponseEntity<HttpResponse> updateProfileImage(Authentication authentication, @RequestParam("image") MultipartFile image) { //throws InterruptedException
         //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateProfileImage(userDTO, image);
@@ -346,7 +347,7 @@ public class UserController {
      * @throws Exception if the file cannot be read from disk
      */
     @GetMapping(value = "/image/{fileName}", produces = IMAGE_PNG_VALUE)
-    public byte[] getProfileImage(@PathVariable("fileName") String fileName) throws Exception {
+    public byte[] getProfileImage(@PathVariable String fileName) throws Exception {
         return Files.readAllBytes(Paths.get(System.getProperty("user.home") + "/Downloads/images/" + fileName));
     }
 
@@ -355,7 +356,7 @@ public class UserController {
      * Authorization header, extracts the subject, and returns a new
      * access token alongside the same refresh token; otherwise returns 400.
      *
-     * @param request the HTTP request, expected to carry "Authorization: Bearer &lt;refresh&gt;"
+     * @param request the HTTP request, expected to carry "Authorization: Bearer &lt;refresh&gt";
      * @return 200 OK with the new access token, or 400 when the header/token is invalid
      */
     @GetMapping("/refresh/token")
@@ -384,7 +385,7 @@ public class UserController {
     }
 
     /**
-     * Returns true when the request carries a "Bearer " Authorization header
+     * Returns true when the request carries a "Bearer" Authorization header
      * whose token verifies and matches its subject.
      *
      * @param request the HTTP request to inspect
@@ -406,7 +407,7 @@ public class UserController {
      * {@link com.bob.angularspringbootfullstack.utils.UserUtils#getAuthenticatedUser(Authentication)}
      * casts it back so we can read the email and reload the full profile — this avoids
      * {@code Authentication#getName()}, which would fall back to {@code UserDTO#toString()}.
-     * The full roles list is included so the frontend can populate the role selector in
+     * The full roles list is included, so the frontend can populate the role selector in
      * the Authorization tab without a separate request.
      *
      * @param authentication the current Authentication injected by Spring Security
@@ -428,13 +429,14 @@ public class UserController {
     /**
      * Updates the authenticated user's profile with the supplied form data.
      * The user ID is always sourced from the authenticated principal — the client-supplied value is ignored.
+     * <p>
+     * //@param authentication the current authentication injected by Spring Security
      *
-     * @param authentication the current authentication injected by Spring Security
-     * @param user           the validated update payload
+     * @param user the validated update payload
      * @return 200 OK with the updated user as a DTO
      */
     @PatchMapping("/update")
-    public ResponseEntity<HttpResponse> updateUser(Authentication authentication, @RequestBody @Valid UpdateForm user) throws InterruptedException {
+    public ResponseEntity<HttpResponse> updateUser(/*Authentication authentication, */@RequestBody @Valid UpdateForm user) { //throws InterruptedException {
         //UserDTO authenticatedUser = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
         //user.setId(authenticatedUser.getId());
         //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
@@ -467,7 +469,7 @@ public class UserController {
      * @return 200 OK with a message advising the user to check their inbox
      */
     @GetMapping("/resetpassword/{email}")
-    public ResponseEntity<HttpResponse> resetPassword(@PathVariable("email") String email) {
+    public ResponseEntity<HttpResponse> resetPassword(@PathVariable String email) {
         userService.resetPassword(email);
         return ResponseEntity.ok(
                 HttpResponse.builder()
@@ -486,7 +488,7 @@ public class UserController {
      * @return 200 OK with the user awaiting a new password
      */
     @GetMapping("/verify/password/{key}")
-    public ResponseEntity<HttpResponse> verifyPasswordURL(@PathVariable("key") String key) {
+    public ResponseEntity<HttpResponse> verifyPasswordURL(@PathVariable String key) {
         UserDTO userDTO = userService.verifyPasswordKey(key);
         return ResponseEntity.ok(
                 HttpResponse.builder()
@@ -509,7 +511,7 @@ public class UserController {
      * @return 200 OK on success
      */
     @PostMapping("/resetpassword/{key}/{newPassword}/{confirmPassword}")
-    public ResponseEntity<HttpResponse> setNewPassword(@PathVariable("key") String key, @PathVariable("newPassword") String newPassword, @PathVariable("confirmPassword") String confirmPassword) {
+    public ResponseEntity<HttpResponse> setNewPassword(@PathVariable String key, @PathVariable String newPassword, @PathVariable String confirmPassword) {
         userService.setNewPassword(key, newPassword, confirmPassword);
         return ResponseEntity.ok(
                 HttpResponse.builder()
@@ -545,7 +547,7 @@ public class UserController {
      * <p>{@code AuthenticationManager} returns an {@link Authentication} whose principal is a
      * {@link UserPrincipal}, so we unwrap it with
      * {@link com.bob.angularspringbootfullstack.utils.UserUtils#getLoggedInUser(Authentication)}.
-     * When 2FA is enabled the response only signals that a verification code was sent; otherwise
+     * When 2FA is enabled, the response only signals that a verification code was sent; otherwise
      * it returns the user along with a fresh access and refresh token pair.
      *
      * @param loginForm validated email and password
@@ -561,7 +563,7 @@ public class UserController {
     /**
      * Delegates to the AuthenticationManager. Catches any failure, hands it
      * to ExceptionUtils#processError so the client gets a JSON error, and
-     * rethrows as ApiException so the caller stops processing.
+     * rethrows as ApiException, so the caller stops processing.
      *
      * @param email    the submitted email
      * @param password the submitted password

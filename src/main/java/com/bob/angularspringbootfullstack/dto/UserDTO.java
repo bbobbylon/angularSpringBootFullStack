@@ -32,17 +32,17 @@ import java.time.LocalDateTime;
  * <b>Usage:</b>
  * <pre>
  * // Backend: Create DTO from User entity
- * User user = userRepo.getUserByEmail(email);
+ * User = userRepo.getUserByEmail(email);
  * UserDTO dto = userDTOMapper.fromUser(user, role);
  *
- * // Return to client (JSON serialized):
+ * // Return to a client (JSON serialized):
  * {
  *   "id": 1,
  *   "firstName": "John",
  *   "lastName": "Doe",
  *   "email": "john@example.com",
  *   "roleName": "ROLE_USER",
- *   "permissions": "READ:USER,UPDATE:USER",
+ *   "permissions": "READ:USER, UPDATE:USER",
  *   // ... other fields
  *   // NOTE: password is NOT here!
  * }
@@ -50,7 +50,7 @@ import java.time.LocalDateTime;
  * <p>
  * <b>toString() Safety:</b> Since this DTO has no password field, the auto-generated @ToString
  * is safe to use. Logging userDTO will show all fields without exposing passwords.
- * Example: UserDTO logs to server console as readable output with all user properties visible.
+ * Example: UserDTO logs to the server console as readable output with all user properties visible.
  */
 @Data
 @AllArgsConstructor
@@ -93,15 +93,15 @@ public class UserDTO {
      */
     private String title;
     /**
-     * Flag indicating if user account is enabled
+     * Flag indicating if a user account is enabled
      */
     private boolean enabled;
     /**
-     * Flag indicating if user account is not locked
+     * Flag indicating if a user account is not locked
      */
     private boolean isNotLocked;
     /**
-     * Flag indicating if user has 2-factor authentication enabled
+     * Flag indicating if a user has 2-factor authentication enabled
      */
     private boolean isUsing2FA;
     /**
@@ -117,7 +117,7 @@ public class UserDTO {
      */
     private String permissions;
     /**
-     * Mirrors {@link com.bob.angularspringbootfullstack.model.User#passwordChangedAt}.
+     * Mirrors {@link com.bob.angularspringbootfullstack.model.User #passwordChangedAt}.
      * <p>
      * Carried on the DTO so {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider}
      * can compare a token's {@code issuedAt} against the last password change without

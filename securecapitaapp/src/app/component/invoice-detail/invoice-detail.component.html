@@ -34,7 +34,7 @@
                       <address class="m-t-5 m-b-5">
                         <strong class="text-inverse">SecureCapita, Inc.</strong>
                         <br />
-                        123 Main Steet
+                        123 Main Street
                         <br />
                         Philadelphia, Pennsylvania 15886
                         <br />
@@ -52,18 +52,26 @@
                         <br />
                         Email: {{ state?.appData?.data?.customer.email }}
                         <br />
-                        Phone: {{ state?.appData?.data?.customer.phone }}
+                        Phone: {{ state?.appData?.data?.customer.phoneNumber }}
                         <br />
                         Status:
-                        <span class="badge bg-success">
-                          {{ state?.appData?.data?.invoice.status }}
+                        <span
+                          [ngClass]="[
+                            state?.appData?.data?.invoice?.status === 'PAID' ? 'bg-success' : '',
+                            state?.appData?.data?.invoice?.status === 'ACTIVE' ? 'bg-success' : '',
+                            state?.appData?.data?.invoice?.status === 'PENDING' ? 'bg-primary' : '',
+                            state?.appData?.data?.invoice?.status === 'OVERDUE' ? 'bg-warning' : '',
+                            state?.appData?.data?.invoice?.status === 'CANCELED' ? 'bg-danger' : '',
+                          ]"
+                          class="badge">
+                          {{ state?.appData?.data?.invoice?.status }}
                         </span>
                       </address>
                     </div>
                     <div class="invoice-date">
                       <small>Invoice Number: #{{ state?.appData?.data?.invoice.invoiceNumber }}</small>
                       <div class="date text-inverse m-t-5">Invoice
-                        Date: {{ state?.appData?.data?.invoice.date | date: 'mediumDate' }}
+                        Date: {{ state?.appData?.data?.invoice.invoiceDate | date: 'mediumDate' }}
                       </div>
                       <div class="invoice-detail">Due Date: 30 Days from Invoice Date</div>
                     </div>
@@ -74,22 +82,20 @@
                         <thead>
                         <tr>
                           <th class="text-center" width="10%">#</th>
-                          <th>Provided Servives</th>
+                          <th>Provided Services</th>
                           <th class="text-center" width="10%">RATE</th>
                           <th class="text-right" width="20%">TOTAL</th>
                         </tr>
                         </thead>
                         <tbody>
-                          @for (service of state?.appData?.data?.invoice.services.split(','); track service) {
+                          @for (service of (state?.appData?.data?.invoice?.services ?? []); track service.name; let i = $index) {
                             <tr>
-                              <td class="text-center">{{ service.split(' ')[0] }}</td>
+                              <td class="text-center">{{ i + 1 }}</td>
                               <td>
-                                <span
-                                  class="text-inverse">{{ service.split(' ')[1] }} {{ service.split(' ')[2] }}</span>
-                                <br />
+                                <span class="text-inverse">{{ service.name }}</span>
                               </td>
                               <td class="text-center">1</td>
-                              <td class="text-right">{{ service.split(' ')[3] }}</td>
+                              <td class="text-end">${{ service.price }}</td>
                             </tr>
                           }
                         </tbody>
@@ -100,7 +106,7 @@
                         <div class="invoice-price-row">
                           <div class="sub-price">
                             <small>SUBTOTAL</small>
-                            <span class="text-inverse">${{ state?.appData?.data?.invoice.total }}</span>
+                            <span class="text-inverse">${{ state?.appData?.data?.invoice.totalAmount }}</span>
                           </div>
                           <div class="sub-price">
                             <i class="fa fa-plus text-muted"></i>
@@ -108,14 +114,14 @@
                           <div class="sub-price">
                             <small>TAX (5.4%)</small>
                             <span
-                              class="text-inverse">${{ state?.appData?.data?.invoice.total * (5.4 / 100) | number: '.2-2' }}</span>
+                              class="text-inverse">${{ state?.appData?.data?.invoice.totalAmount * (5.4 / 100) | number: '.2-2' }}</span>
                           </div>
                         </div>
                       </div>
                       <div class="invoice-price-right">
                         <small>TOTAL</small>
                         <span class="f-w-600">
-                          ${{ state?.appData?.data?.invoice.total * (5.4 / 100) + state?.appData?.data?.invoice.total | number: '.2-2' }}
+                          ${{ state?.appData?.data?.invoice.totalAmount * (5.4 / 100) + state?.appData?.data?.invoice.totalAmount | number: '.2-2' }}
                         </span>
                       </div>
                     </div>

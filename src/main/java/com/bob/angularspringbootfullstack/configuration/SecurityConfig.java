@@ -4,6 +4,7 @@ import com.bob.angularspringbootfullstack.filter.CustomAuthFilter;
 import com.bob.angularspringbootfullstack.handler.CustomAccessDeniedHandler;
 import com.bob.angularspringbootfullstack.handler.CustomAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -11,10 +12,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -45,6 +48,7 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 @EnableWebSecurity
 @RequiredArgsConstructor
 @EnableMethodSecurity
+@Slf4j
 class SecurityConfig {
     /**
      * Logger for security configuration events and filter chain diagnostics.
@@ -60,12 +64,12 @@ class SecurityConfig {
      * valid JWT and the appropriate authority.
      */
     private static final String[] PUBLIC_URLS =
-    {   "/user/login/**",
-        "/user/verify/code/**", "/user/register/**", "/actuator/**",
-        "/user/resetpassword/**", "/user/verify/password/**",
-        "/user/verify/account/**", "/user/refresh/token/**",
-        "/user/profile/image/**", "/user/image/**",
-    };
+            {"/user/login/**",
+                    "/user/verify/code/**", "/user/register/**", "/actuator/**",
+                    "/user/resetpassword/**", "/user/verify/password/**",
+                    "/user/verify/account/**", "/user/refresh/token/**",
+                    "/user/profile/image/**", "/user/image/**",
+            };
 
     /**
      * JWT validation filter inserted before {@link UsernamePasswordAuthenticationFilter}.
@@ -105,36 +109,49 @@ class SecurityConfig {
      *
      * @param http HttpSecurity builder provided by Spring Security
      * @return the configured SecurityFilterChain bean
-     * @throws Exception if HttpSecurity configuration fails
+     * @throws Exception if an error occurs during configuration
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         securityLogger.debug("Configuring SecurityFilterChain: CSRF, CORS, session management, authorization rules");
 
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(configure -> configure.configurationSource(corsConfigurationSource()))
-                .httpBasic(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(POST, "/user/register").permitAll()
-                        .requestMatchers(POST, "/user/login").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers(PUBLIC_URLS).permitAll()
-                        .requestMatchers(DELETE, "/user/delete/**").hasAnyAuthority("DELETE:USER")
-                        .requestMatchers(DELETE, "/customer/delete/**").hasAnyAuthority("DELETE:CUSTOMER")
-                        .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
-                        .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
-                        .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")
-                        .anyRequest().authenticated()
-                )
-                .addFilterBefore(customAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .exceptionHandling(ex -> ex
-                        .accessDeniedHandler(customAccessDeniedHandler)
-                        .authenticationEntryPoint(customAuthenticationEntryPoint)
-                );
+        try {
+            http
+                    //this section is for customizing our HTTP security headers.
+                    .headers(headers -> headers
+                            .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
+                            .contentTypeOptions(Customizer.withDefaults())
+                            .httpStrictTransportSecurity(hsts -> hsts
+                                    .includeSubDomains(true)
+                                    .maxAgeInSeconds(31536000))
+                    )
+                    .csrf(AbstractHttpConfigurer::disable)
+                    .cors(configure -> configure.configurationSource(corsConfigurationSource()))
+                    .httpBasic(AbstractHttpConfigurer::disable)
+                    .sessionManagement(session -> session.sessionCreationPolicy(STATELESS))
+                    .authorizeHttpRequests(auth -> auth
+                            .requestMatchers(POST, "/user/register").permitAll()
+                            .requestMatchers(POST, "/user/login").permitAll()
+                            .requestMatchers("/actuator/**").permitAll()
+                            .requestMatchers(PUBLIC_URLS).permitAll()
+                            .requestMatchers(DELETE, "/user/delete/**").hasAnyAuthority("DELETE:USER")
+                            .requestMatchers(DELETE, "/customer/delete/**").hasAnyAuthority("DELETE:CUSTOMER")
+                            .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
+                            .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
+                            .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")
+                            .anyRequest().authenticated()
+                    )
+                    .addFilterBefore(customAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                    .exceptionHandling(ex -> ex
+                            .accessDeniedHandler(customAccessDeniedHandler)
+                            .authenticationEntryPoint(customAuthenticationEntryPoint)
+                    );
 
-        return http.build();
+            return http.build();
+        } catch (Exception e) {
+            log.info("Error configuring SecurityFilterChain: {}", e.getMessage());
+            throw new Exception(e);
+        }
     }
 
     /**
@@ -155,8 +172,7 @@ class SecurityConfig {
         corsConfiguration.setAllowedOrigins(List.of(
                 "http://localhost:4200",
                 "http://localhost:3000",
-                "http://angularsecureapp.org",
-                "192.168.1.164"
+                "https://angularsecureapp.org"
         ));
         corsConfiguration.setAllowedHeaders(Arrays.asList(
                 "Origin",

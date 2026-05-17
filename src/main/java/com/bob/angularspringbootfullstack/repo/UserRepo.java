@@ -137,7 +137,7 @@ public interface UserRepo<T extends User> {
     /**
      * Persists the {@code enabled} and {@code notLocked} flags for the given user.
      * Both control whether the account is usable: {@code enabled = false} blocks login
-     * entirely; {@code notLocked = false} locks the account (e.g. after suspicious activity).
+     * entirely; {@code notLocked = false} locks the account (e.g., after suspicious activity).
      *
      * @param userID    the ID of the user to update
      * @param enabled   {@code true} to allow login, {@code false} to block it

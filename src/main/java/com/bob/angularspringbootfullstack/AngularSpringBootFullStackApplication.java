@@ -19,13 +19,13 @@ import static org.springframework.data.web.config.EnableSpringDataWebSupport.Pag
  * <p>
  * This class is annotated with @SpringBootApplication, which is a convenience annotation that
  * combines @Configuration, @EnableAutoConfiguration, and @ComponentScan. It enables Spring Boot
- * to auto-configure the application context based on classpath dependencies and other settings.
+ * to autoconfigure the application context based on classpath dependencies and other settings.
  * <p>
  * Responsibilities:
  * - Starts the Spring Boot application context
  * - Defines application-wide beans (like password encoder)
  * - Triggers component scanning from this package downward
- * - Enables auto-configuration for Spring Boot features
+ * - Enables autoconfiguration for Spring Boot features
  */
 @SpringBootApplication
 @EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)
@@ -70,7 +70,7 @@ public class AngularSpringBootFullStackApplication {
         UrlBasedCorsConfigurationSource urlBasedCorsConfigurationSource = new UrlBasedCorsConfigurationSource();
         CorsConfiguration corsConfiguration = new CorsConfiguration();
         corsConfiguration.setAllowCredentials(true);
-        corsConfiguration.setAllowedOrigins(List.of("http://localhost:4200", "http://localhost:3000", "http://securecapita.org"));
+        corsConfiguration.setAllowedOrigins(List.of("http://localhost:4200", "http://localhost:3000", "https://securecapita.org"));
         //corsConfiguration.setAllowedOrigins(Arrays.asList("*"));
         corsConfiguration.setAllowedHeaders(Arrays.asList("Origin", "Access-Control-Allow-Origin", "Content-Type",
                 "Accept", "Jwt-Token", "Authorization", "Origin", "Accept", "X-Requested-With",

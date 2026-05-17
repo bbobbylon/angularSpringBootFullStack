@@ -10,7 +10,7 @@ import java.sql.SQLException;
  * Maps a single JDBC result row from {@link com.bob.angularspringbootfullstack.query.CustomerQuery#STATS_QUERY}
  * to a {@link Stats} object.
  * <p>
- * Spring JDBC calls this once per row; the stats query always returns exactly one row.
+ * Spring JDBC calls this once per row; the Stats query always returns exactly one row.
  */
 public class StatsRowMapper implements RowMapper<Stats> {
 

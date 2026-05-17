@@ -2,11 +2,12 @@ package com.bob.angularspringbootfullstack.event;
 
 import com.bob.angularspringbootfullstack.enumeration.EventType;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.springframework.context.ApplicationEvent;
 
 /**
  * A Spring application event that signals something noteworthy just happened
- * on a user account.
+ * on a user account. Added another Spring annotation @EqualsAndHashCode to remove a warning
  *
  * <p>Controllers publish this via {@link org.springframework.context.ApplicationEventPublisher}
  * after every meaningful user action (login, password change, etc.).
@@ -17,6 +18,7 @@ import org.springframework.context.ApplicationEvent;
  * Spring to route it through the application event bus — without that, the
  * listener's {@code @EventListener} method would never fire.
  */
+@EqualsAndHashCode(callSuper = true)
 @Data
 public class NewUserEvent extends ApplicationEvent {
     private final EventType eventType;
