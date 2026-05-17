@@ -131,7 +131,7 @@ public class UserController {
      * @return 200 OK with user and tokens
      */
     @GetMapping("/verify/code/{email}/{code}")
-    public ResponseEntity<HttpResponse> verifyCode(@PathVariable("email") String email, @PathVariable("code") String code) {
+    public ResponseEntity<HttpResponse> verifyCode(@PathVariable String email, @PathVariable String code) {
         try {
             UserDTO userDTO = userService.verifyCode(email, code);
             eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), LOGIN_ATTEMPT_SUCCESS));
@@ -165,16 +165,16 @@ public class UserController {
      * Activates a newly registered account using the UUID key embedded in the
      * verification email link.
      *
-     * @param key the activation key from the URL
+     * @param yeet the activation key from the URL
      * @return 200 OK with a message indicating whether the account was newly
      * verified or already verified
      */
     @GetMapping("/verify/account/{key}")
-    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String key) {
+    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String yeet) {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .message(userService.verifyAccount(key).isEnabled() ? "Your account is already verified. Please log in." : "Account verified successfully! You can now log in.")
+                        .message(userService.verifyAccount(yeet).isEnabled() ? "Your account is already verified. Please log in." : "Account verified successfully! You can now log in.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

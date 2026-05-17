@@ -19,13 +19,13 @@ import static org.springframework.data.web.config.EnableSpringDataWebSupport.Pag
  * <p>
  * This class is annotated with @SpringBootApplication, which is a convenience annotation that
  * combines @Configuration, @EnableAutoConfiguration, and @ComponentScan. It enables Spring Boot
- * to auto-configure the application context based on classpath dependencies and other settings.
+ * to autoconfigure the application context based on classpath dependencies and other settings.
  * <p>
  * Responsibilities:
  * - Starts the Spring Boot application context
  * - Defines application-wide beans (like password encoder)
  * - Triggers component scanning from this package downward
- * - Enables auto-configuration for Spring Boot features
+ * - Enables autoconfiguration for Spring Boot features
  */
 @SpringBootApplication
 @EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)
