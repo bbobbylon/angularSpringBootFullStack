@@ -126,7 +126,7 @@ export class CustomerService {
    */
   invoice$ = (invoiceId: number): Observable<CustomHttpResponseInterface<CustomerInvoiceUserInterface>> =>
     this.http
-      .get<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(`${this.server}/customer/invoice/get/${invoiceId} `)
+      .get<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(`${this.server}/customer/invoice/get/${invoiceId}`)
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**
