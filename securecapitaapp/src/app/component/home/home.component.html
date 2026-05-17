@@ -26,8 +26,10 @@
           <h4 class="fw-bold text-start">Customers</h4>
         </div>
         <div class="col">
-          <h4 (click)="report()" class="fw-bold text-end">
-            <i class="bi bi-file-earmark-excel" style="cursor: pointer; color: green; font-size: 30px;"></i>
+          <h4 class="fw-bold text-end">
+            <button (click)="report()" class="btn btn-link p-0 border-0">
+              <i class="bi bi-file-earmark-excel" style="color: green; font-size: 30px;"></i>
+            </button>
           </h4>
         </div>
 
@@ -98,21 +100,21 @@
                 <ul class="pagination justify-content-end mb-0">
                   <li [ngClass]="0 === (currentPage$ | async) ? 'disabled' : ''"
                       class="page-item pointer">
-                    <a (click)="changePage('backward')" class="page-link">&laquo; Prev</a>
+                    <button (click)="changePage('backward')" class="page-link">&laquo; Prev</button>
                   </li>
                   @for (_page of state?.appData?.data?.page?.page?.totalPages | ExtractArrayValue: 'number'; track $index; let i = $index) {
                     <li class="page-item pointer">
-                      <a (click)="goToPage(i)"
-                         [ngClass]="i === (currentPage$ | async) ? 'active' : ''"
-                         class="page-link">
+                      <button (click)="goToPage(i)"
+                              [ngClass]="i === (currentPage$ | async) ? 'active' : ''"
+                              class="page-link">
                         {{ i + 1 }}
-                      </a>
+                      </button>
                     </li>
                   }
                   <li
                     [ngClass]="(state?.appData?.data?.page?.page?.totalPages - 1) === (currentPage$ | async) ? 'disabled' : ''"
                     class="page-item pointer">
-                    <a (click)="changePage('forward')" class="page-link">Next &raquo;</a>
+                    <button (click)="changePage('forward')" class="page-link">Next &raquo;</button>
                   </li>
                 </ul>
               </nav>

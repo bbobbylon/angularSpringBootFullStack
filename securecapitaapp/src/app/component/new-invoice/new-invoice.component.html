@@ -31,7 +31,7 @@
                               type="button"></button>
                     </div>
                   }
-                  @if (state.appData.message) {
+                  @if (state.appData?.message) {
                     <div class="alert alert-success bg-success text-light border-0 alert-dismissible fade show"
                          role="alert">
                       {{ state.appData.message }}
@@ -39,19 +39,20 @@
                               type="button"></button>
                     </div>
                   }
-                  <form #invoiceForm="ngForm" (ngSubmit)="newInvoice(invoiceForm)">
+                  <form #invoiceForm="ngForm" (ngSubmit)="createNewInvoice(invoiceForm)">
                     <div class="row">
                       <div class="col-md-12" style="margin-bottom: 15px">
                         <div class="form-group">
-                          <label>Services</label>
-                          <input class="form-control" name="services" ngModel required type="text" />
+                          <label for="services">Services</label>
+                          <input class="form-control" id="services" name="services" ngModel required type="text" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
-                        <label>Customer</label>
-                        <select [ngModel]="" class="form-control select-cl" name="customerId" required>
-                          @for (customer of state?.appData?.data?.customers; track customer) {
-                            <option [disabled]="" [ngValue]="customer.id" [selected]=""
+                        <label for="customerId">Customer</label>
+                        <select [ngModel]="null" class="form-control select-cl" id="customerId" name="customerId"
+                                required>
+                          @for (customer of state?.appData?.data?.customers; track customer.id) {
+                            <option [disabled]="false" [ngValue]="customer.id" [selected]="false"
                                     class="select-cl">{{ customer.customerName }}
                             </option>
                           }
@@ -59,37 +60,40 @@
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
-                          <label>Total</label>
-                          <input class="form-control" name="total" ngModel required type="total" />
+                          <label for="totalAmount">Total</label>
+                          <input class="form-control" id="totalAmount" name="totalAmount" ngModel required
+                                 type="number" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
-                          <label>Date</label>
-                          <input class="form-control" name="date" ngModel required type="date" />
+                          <label for="invoiceDate">Date</label>
+                          <input class="form-control" id="invoiceDate" name="invoiceDate" ngModel required
+                                 type="date" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
-                        <label>Status</label>
-                        <select class="form-control" name="status" ngModel="PENDING" required>
+                        <label for="status">Status</label>
+                        <select class="form-control" id="status" name="status" ngModel="PENDING" required>
                           <option value="PENDING">PENDING</option>
                           <option value="PAID">PAID</option>
                           <option value="CANCELED">CANCELED</option>
                           <option value="OVERDUE">OVERDUE</option>
+                          <option value="ACTIVE">ACTIVE</option>
                         </select>
                       </div>
                     </div>
                     <div>
                       <button
-                        [disabled]=" invoiceForm.invalid || invoiceForm.pristine || (isLaoding$ | async)"
+                        [disabled]="invoiceForm.invalid || invoiceForm.pristine || (isLoading$ | async)"
                         class="btn btn-primary mt-5"
                         type="submit">
-                        @if (isLaoding$ | async) {
+                        @if (isLoading$ | async) {
                           <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                                 style="margin-right: 5px"></span>
-                        }
-                        @if (isLaoding$ | async) {
                           <span>Saving...</span>
+                        } @else {
+                          Save
                         }
                       </button>
                     </div>

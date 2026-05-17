@@ -6,7 +6,7 @@ import { NavbarComponent } from '../navbar/navbar.component';
 import { StatsComponent } from '../stats/stats.component';
 import { GlobalStateInterface } from '../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../interface/customhttpresponse.interface';
-import { CustomerListData } from '../../interface/appstates.interface';
+import { CustomerListDataInterface } from '../../interface/appstates.interface';
 import { UserService } from '../../service/user.service';
 import { DataState } from '../../enumeration/datastate.enum';
 import { CustomerService } from '../../service/customer.service';
@@ -43,7 +43,7 @@ export class HomeComponent implements OnInit {
    * stream. {@code switchMap} cancels any in-flight request when pagination controls
    * change before the previous response arrives, so the template never shows stale data.
    */
-  homeState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListData>>>;
+  homeState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListDataInterface>>>;
   readonly title = signal('securecapitaapp');
   fileStatus$: Observable<{ percent: number; type: string } | null> = of({ percent: 0, type: 'idle' });
   readonly pageSizeOptions = [10, 20, 50, 100] as const;
@@ -107,7 +107,7 @@ export class HomeComponent implements OnInit {
   /** Observable of the current page size, used by the template to mark the active dropdown option. */
   pageSize$ = this.pageSizeSubject.asObservable();
   private readonly userService = inject(UserService);
-  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListData>>(null);
+  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListDataInterface>>(null);
   private isLoadingSubject = new BehaviorSubject<boolean>(false);
   protected isLoading$ = this.isLoadingSubject.asObservable();
 
@@ -122,7 +122,7 @@ export class HomeComponent implements OnInit {
     this.homeState$ = combineLatest([this.currentPageSubject, this.pageSizeSubject]).pipe(
       switchMap(([page, size]) =>
         this.customerService.customers$(page, size).pipe(
-          map(response => {
+          map((response) => {
             console.log('Fetched customer data:', response);
             this.dataSubject.next(response);
             return { dataState: DataState.LOADED, appData: response };

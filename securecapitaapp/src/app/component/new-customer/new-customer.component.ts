@@ -8,7 +8,7 @@ import { DataState } from '../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../interface/customhttpresponse.interface';
 import { UserInterface } from '../../interface/user.interface';
-import { CustomerListData } from '../../interface/appstates.interface';
+import { CustomerListDataInterface } from '../../interface/appstates.interface';
 import { CustomerService } from '../../service/customer.service';
 import { catchError } from 'rxjs/operators';
 
@@ -38,7 +38,7 @@ export class NewCustomerComponent implements OnInit {
    * Drives the template — emits loading, loaded, or error states for the creation
    * flow, including the navbar user on every resolved state.
    */
-  newCustomerState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListData>>>;
+  newCustomerState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListDataInterface>>>;
 
   /**
    * The currently authenticated user, passed in when this component is used in an
@@ -68,7 +68,7 @@ export class NewCustomerComponent implements OnInit {
    * {@code DataState.LOADED} as the {@code startWith} value while a create
    * request is in flight.
    */
-  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListData>>(null);
+  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListDataInterface>>(null);
 
   /**
    * Controls the submit button's disabled state and spinner visibility
@@ -93,7 +93,7 @@ export class NewCustomerComponent implements OnInit {
    */
   ngOnInit(): void {
     this.newCustomerState$ = this.customerService.customers$().pipe(
-      map(response => {
+      map((response) => {
         console.log('Fetched New customer data:', response);
         this.dataSubject.next(response);
         return { dataState: DataState.LOADED, appData: response };
@@ -115,7 +115,7 @@ export class NewCustomerComponent implements OnInit {
   createNewCustomer(newCustomerForm: NgForm): void {
     this.isLoadingSubject.next(true);
     this.newCustomerState$ = this.customerService.newCustomer$(newCustomerForm.value).pipe(
-      map(response => {
+      map((response) => {
         console.log('Fetched customer data:', response);
         newCustomerForm.reset({ type: 'INDIVIDUAL', status: 'ACTIVE' });
         this.isLoadingSubject.next(false);

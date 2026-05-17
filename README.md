@@ -151,6 +151,95 @@ Frontend lives under `securecapitaapp/`.
 
 ---
 
+## ☁️ Azure Deployment
+
+The app is deployed as a single Docker container to Azure App Service. The Angular frontend is embedded inside the Spring Boot JAR (served from `static/`), so one container handles everything on port 8080.
+
+**Live URL:** `https://angularspringbootfullstack-ehd6dkevc3edgxer.centralus-01.azurewebsites.net`
+
+---
+
+### Azure Resources (all under `bobsresourcegroup`, subscription `Azure subscription 1`)
+
+| Resource | Name | Purpose |
+|---|---|---|
+| Container Registry | `bobsAngularApp` | Stores Docker images |
+| App Service | `angularSpringBootFullStack` | Runs the container |
+| App Service Plan | (auto-created) | Compute for App Service |
+
+**ACR Login Server:** `bobsangularapp-cnh8fzfxasa6feav.azurecr.io`
+
+---
+
+### Database (Aiven MySQL — Free Tier)
+
+Tables are in a schema called `db2` on Aiven's free MySQL instance.
+
+- **Host:** `bobbylonsdb-bobbylon.a.aivencloud.com`
+- **Port:** `11275`
+- **Schema:** `db2`
+- **User:** `avnadmin`
+
+To recreate the schema from scratch, run `src/main/resources/schema.sql` via MySQL Workbench connected to Aiven. The seed data (roles + events) is included in that file.
+
+---
+
+### Azure DevOps Pipeline (`azure-pipelines.yml`)
+
+Triggers automatically on every push to `master`. Two stages:
+
+1. **Build and Push to ACR** — Docker multi-stage build (Node 25 → Maven 21 → JRE alpine), pushes image tagged with build ID + `latest`
+2. **Deploy to App Service** — Pulls the new image from ACR and restarts the App Service
+
+**Service Connections (Azure DevOps > Project Settings > Service Connections):**
+
+| Name | Type | Points to |
+|---|---|---|
+| `bobsDockerRegistryServiceConnection` | Docker Registry | `bobsAngularApp` ACR |
+| `bobsAzureServiceConnection` | Azure Resource Manager | `Azure subscription 1` |
+
+---
+
+### App Service Environment Variables
+
+Set in **Portal > App Service > Configuration > Environment Variables > App Settings:**
+
+| Name | Value |
+|---|---|
+| `SPRING_DATASOURCE_URL` | `jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/db2?useSSL=true&requireSSL=true` |
+| `SPRING_DATASOURCE_USERNAME` | `avnadmin` |
+| `SPRING_DATASOURCE_PASSWORD` | *(your Aiven password)* |
+
+---
+
+### How to Redeploy
+
+Just push to `master` — the pipeline does everything automatically:
+
+```bash
+git add .
+git commit -m "your message"
+git push
+```
+
+Watch the run at: **Azure DevOps > Pipelines**
+
+---
+
+### Docker Files
+
+| File | Purpose |
+|---|---|
+| `Dockerfile` | Multi-stage build: Angular → Spring Boot JAR → JRE runtime |
+| `.dockerignore` | Excludes `node_modules/`, `target/`, `.git/` from build context |
+
+The Dockerfile stages:
+1. `node:25-alpine` — builds Angular, outputs to `dist/securecapitaapp/browser/`
+2. `maven:3.9-eclipse-temurin-21` — copies Angular dist into `src/main/resources/static/`, packages JAR with `-Pprod`
+3. `eclipse-temurin:21-jre-alpine` — runs the JAR as a non-root user on port 8080
+
+---
+
 ## 📚 API Usage Guide
 
 ### 1️⃣ User Registration

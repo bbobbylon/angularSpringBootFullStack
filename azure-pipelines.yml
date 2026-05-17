@@ -15,9 +15,9 @@
 #    Note the server hostname, create a database named "securecapita"
 #
 # 4. Add App Service Application Settings (Portal > App Service > Configuration):
-#    SPRING_DATASOURCE_URL      = jdbc:mysql://<host>:3306/securecapita?useSSL=true
-#    SPRING_DATASOURCE_USERNAME = <db-username>
-#    SPRING_DATASOURCE_PASSWORD = <db-password>
+#    SPRING_DATASOURCE_URL      = jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/defaultdb?useSSL=true&requireSSL=true
+#    SPRING_DATASOURCE_USERNAME = avnadmin
+#    SPRING_DATASOURCE_PASSWORD = <your-password>
 #
 # 5. Create two Service Connections in Azure DevOps
 #    Project Settings > Service Connections:

@@ -46,17 +46,50 @@ import static org.springframework.security.config.http.SessionCreationPolicy.STA
 @RequiredArgsConstructor
 @EnableMethodSecurity
 class SecurityConfig {
+    /**
+     * Logger for security configuration events and filter chain diagnostics.
+     * Scoped to this class so log output is identifiable in multi-module deployments.
+     */
     private static final Logger securityLogger = LoggerFactory.getLogger(SecurityConfig.class);
-    private static final String[] PUBLIC_URLS = 
-    {   "/user/login/**", 
+
+    /**
+     * URL patterns that bypass JWT authentication entirely.
+     * <p>
+     * Includes registration, login, MFA verification, password reset, token refresh,
+     * profile images, and Actuator endpoints. Any path not listed here requires a
+     * valid JWT and the appropriate authority.
+     */
+    private static final String[] PUBLIC_URLS =
+    {   "/user/login/**",
         "/user/verify/code/**", "/user/register/**", "/actuator/**",
         "/user/resetpassword/**", "/user/verify/password/**",
         "/user/verify/account/**", "/user/refresh/token/**",
-        "/user/profile/image/**", "/user/image/**", 
-};
+        "/user/profile/image/**", "/user/image/**",
+    };
+
+    /**
+     * JWT validation filter inserted before {@link UsernamePasswordAuthenticationFilter}.
+     * Parses and validates the Bearer token on every request and populates the
+     * {@code SecurityContext} with the authenticated principal on success.
+     */
     private final CustomAuthFilter customAuthFilter;
+
+    /**
+     * BCrypt password encoder used by the {@link DaoAuthenticationProvider} to
+     * verify stored password hashes during login.
+     */
     private final BCryptPasswordEncoder passwordEncoder;
+
+    /**
+     * Handles {@code 403 Forbidden} responses when an authenticated user lacks
+     * the required authority for the requested resource.
+     */
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
+
+    /**
+     * Handles {@code 401 Unauthorized} responses when a request arrives without
+     * a valid JWT or with an expired token.
+     */
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
     /**

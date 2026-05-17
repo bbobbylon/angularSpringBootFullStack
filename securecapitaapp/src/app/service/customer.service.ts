@@ -2,9 +2,16 @@ import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
-import { CustomerListData, CustomerStateInterface, StatsData } from '../interface/appstates.interface';
+import {
+  CustomerListDataInterface,
+  CustomerStateInterface,
+  InvoiceListDataInterface,
+  NewInvoiceDataInterface,
+  StatsDataInterface,
+} from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { CustomerInterface } from '../interface/customer.interface';
+import { InvoiceInterface } from '../interface/invoice.interface';
 
 /**
  * Central HTTP service for all customer and invoice API calls.
@@ -30,22 +37,24 @@ export class CustomerService {
    * TODO: Wire this method into {@link StatsComponent} once the rest of the application is
    *  complete, so the stats panel fetches and refreshes independently of the customer list.
    *
-   * @returns Observable emitting a {@link StatsData} response containing the system-wide totals
+   * @returns Observable emitting a {@link StatsDataInterface} response containing the system-wide totals
    */
-  stats$ = (): Observable<CustomHttpResponseInterface<StatsData>> =>
-    this.http.get<CustomHttpResponseInterface<StatsData>>(`${this.server}/customer/stats`).pipe(tap(console.log), catchError(this.handleError));
+  stats$ = (): Observable<CustomHttpResponseInterface<StatsDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<StatsDataInterface>>(`${this.server}/customer/stats`)
+      .pipe(tap(console.log), catchError(this.handleError));
 
   /**
    * Fetches a paginated page of customers.
    *
    * @param page - zero-based page index (defaults to 0)
    * @param size - number of records per page (defaults to 20)
-   * @returns Observable emitting a {@link CustomerListData} response containing the page and stats
+   * @returns Observable emitting a {@link CustomerListDataInterface} response containing the page and stats
    */
-  customers$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListData>> =>
+  customers$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
     //TODO allow sorting, filtering, and infinite scrolling later
     this.http
-      .get<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/list?page=${page}&size=${size}`)
+      .get<CustomHttpResponseInterface<CustomerListDataInterface>>(`${this.server}/customer/list?page=${page}&size=${size}`)
       .pipe(tap(console.log), catchError(this.handleError));
   /**
    * Fetches a single customer's complete record by numeric ID.
@@ -84,12 +93,46 @@ export class CustomerService {
    * POSTs a new customer record to the backend.
    *
    * @param customer - the customer data to create; all required fields must be populated
-   * @returns Observable emitting a {@link CustomerListData} response containing
+   * @returns Observable emitting a {@link CustomerListDataInterface} response containing
    *          the authenticated user and the newly created customer
    */
-  newCustomer$ = (customer: CustomerInterface): Observable<CustomHttpResponseInterface<CustomerListData>> =>
+  newCustomer$ = (customer: CustomerInterface): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
     this.http
-      .post<CustomHttpResponseInterface<CustomerListData>>(`${this.server}/customer/create`, customer)
+      .post<CustomHttpResponseInterface<CustomerListDataInterface>>(`${this.server}/customer/create`, customer)
+      .pipe(tap(console.log), catchError(this.handleError));
+  /**
+   * Fetches a paginated page of all invoices.
+   *
+   * @param page - zero-based page index (defaults to 0)
+   * @param size - number of records per page (defaults to 20)
+   * @returns Observable emitting an {@link InvoiceListDataInterface} response containing the page and authenticated user
+   */
+  invoices$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<InvoiceListDataInterface>>(`${this.server}/customer/invoice/list?page=${page}&size=${size}`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Fetches the customer list needed to populate the new-invoice form dropdown.
+   *
+   * @returns Observable emitting a {@link NewInvoiceDataInterface} response with the authenticated user
+   *          and an unpaginated list of all customers
+   */
+  newInvoice$ = (): Observable<CustomHttpResponseInterface<NewInvoiceDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<NewInvoiceDataInterface>>(`${this.server}/customer/invoice/new`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Creates a new invoice and links it to the specified customer.
+   *
+   * @param customerId - ID of the customer to attach the invoice to
+   * @param invoice - invoice fields to persist (services, amount, invoiceDate, status)
+   * @returns Observable emitting a {@link NewInvoiceDataInterface} response with the refreshed customer list
+   */
+  addInvoiceToCustomer$ = (customerId: number, invoice: InvoiceInterface): Observable<CustomHttpResponseInterface<NewInvoiceDataInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<NewInvoiceDataInterface>>(`${this.server}/customer/invoice/addtocustomer/${customerId}`, invoice)
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**
@@ -101,12 +144,12 @@ export class CustomerService {
    * @param name - the substring to match against customer names
    * @param page - zero-based page index (defaults to 0)
    * @param size - number of records per page (defaults to 20)
-   * @returns Observable emitting a {@link CustomerListData} response containing the matching page
+   * @returns Observable emitting a {@link CustomerListDataInterface} response containing the matching page
    */
-  searchCustomers$ = (customerName: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListData>> =>
+  searchCustomers$ = (customerName: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
     this.http
       .get<
-        CustomHttpResponseInterface<CustomerListData>
+        CustomHttpResponseInterface<CustomerListDataInterface>
       >(`${this.server}/customer/search?name=${encodeURIComponent(customerName)}&page=${page}&size=${size}`)
       .pipe(tap(console.log), catchError(this.handleError));
 
