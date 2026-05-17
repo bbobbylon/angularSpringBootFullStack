@@ -29,8 +29,16 @@ export class ExtractArrayValuePipe implements PipeTransform {
    */
   transform(value: any[], type: 'sum', field: string): number;
   transform(value: number | any[], type: 'number' | 'array' | 'sum', field?: string): any[] | number {
-    if (type === 'number') return Array(value as number).fill(0);
-    if (type === 'sum') return (value as any[])?.reduce((acc, item) => acc + (item[field!] ?? 0), 0) ?? 0;
+    // TODO(human): add a console.log inside each branch below before the return
+    if (type === 'number') {
+      console.log(value, type, field);
+      return Array(value as number).fill(0);
+    }
+    if (type === 'sum') {
+      console.log(value, type, field);
+      return (value as any[])?.reduce((acc, item) => acc + (item[field!] ?? 0), 0) ?? 0;
+    }
+    console.log(value, type, field);
     return value as any[];
   }
 }
