@@ -1,11 +1,10 @@
-/*
 package com.bob.angularspringbootfullstack.configuration;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-*/
+
 /**
  * MVC resource handler configuration.
  * <p>
@@ -14,7 +13,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * This allows the browser to load profile images directly via an
  * {@code <img>} src without going through a controller endpoint.
  * <p>
- * The path is also listed in {@link SecurityConfig#PUBLIC_URLS} so Spring
+ * The path is also listed in {@link SecurityConfig #PUBLIC_URLS} so Spring
  * Security permits unauthenticated GET requests to it.
  *
  * <p>-----------------------------------------------------------------------
@@ -27,20 +26,18 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * provider such as AWS S3 so the backend is not responsible for serving
  * files at all.
  * -----------------------------------------------------------------------
- *//*
+ */
 
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
-
-    */
-/**
- * Registers a resource handler that serves profile images from the local
- * filesystem. Files are stored as {@code {email}.png} under
- * {@code ~/Downloads/images/} and are accessible at
- * {@code /user/profile/image/{email}.png}.
- *
- * @param registry the Spring MVC resource handler registry
- *//*
+    /**
+     * Registers a resource handler that serves profile images from the local
+     * filesystem. Files are stored as {@code {email}.png} under
+     * {@code ~/Downloads/images/} and are accessible at
+     * {@code /user/profile/image/{email}.png}.
+     *
+     * @param registry the Spring MVC resource handler registry
+     */
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
@@ -48,4 +45,4 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addResourceLocations("file:" + System.getProperty("user.home") + "/Downloads/images/");
     }
 }
-*/
+

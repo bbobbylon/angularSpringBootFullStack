@@ -22,7 +22,7 @@ public interface UserService {
      * Creates a new user in the system with the provided credentials.
      *
      * @param user the user entity containing registration information
-     * @return a UserDTO representing the created user (without password)
+     * @return a UserDTO representing the created user (without a password)
      */
     UserDTO createUser(User user);
 
@@ -30,7 +30,7 @@ public interface UserService {
      * Retrieves a user by their email address.
      *
      * @param email the email address to search for (must not be empty)
-     * @return a UserDTO if user is found
+     * @return a UserDTO if a user is found
      */
     UserDTO getUserByEmail(@NotEmpty String email);
 
@@ -123,13 +123,13 @@ public interface UserService {
      * Updates a user's account settings.
      *
      * @param id        The ID of the user.
-     * @param enabled   The new enabled status.
+     * @param enabled   The new-enabled status.
      * @param notLocked The new locked status.
      */
     void updateAccountSettings(Long id, Boolean enabled, Boolean notLocked);
 
     /**
-     * Toggles a user's multi-factor authentication status.
+     * Toggles a user's multifactor authentication status.
      *
      * @param email The email of the user.
      * @return The updated UserDTO.

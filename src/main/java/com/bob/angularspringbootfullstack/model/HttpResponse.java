@@ -12,7 +12,7 @@ import java.util.Map;
  * HttpResponse is a custom HTTP response wrapper class.
  * <p>
  * This standardized response object is used for all API endpoints to provide
- * consistent response structure to the client. It includes HTTP status information,
+ * a consistent response structure to the client. It includes HTTP status information,
  * timestamp, messages, and optional data payload.
  * <p>
  * The class uses @JsonInclude(NON_DEFAULT) to exclude null/empty fields from JSON serialization,
@@ -21,11 +21,11 @@ import java.util.Map;
  * Fields:
  * - timeStamp: ISO timestamp of when the response was generated
  * - statusCode: HTTP status code (e.g., 200, 400, 401)
- * - status: Spring's HttpStatus enum value
- * - reason: Brief reason for the status (e.g., "Unauthorized")
- * - message: User-friendly message about the response
+ * - Status: Spring's HttpStatus enum value
+ * - Reason: Brief reason for the status (e.g., "Unauthorized")
+ * - Message: User-friendly message about the response
  * - devMessage: Developer-facing message with technical details
- * - data: Map containing response data payload (can be nested objects)
+ * - Data: Map containing response data payload (can be nested objects)
  */
 @Data
 @SuperBuilder
@@ -48,7 +48,7 @@ public class HttpResponse {
      */
     protected String reason;
     /**
-     * User-friendly message to display on client side
+     * User-friendly message to display on the client side
      */
     protected String message;
     /**

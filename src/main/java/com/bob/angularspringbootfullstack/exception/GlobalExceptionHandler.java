@@ -25,23 +25,11 @@ import java.time.LocalTime;
  * 1. Spring scans for classes annotated with @RestControllerAdvice at startup
  * 2. When an exception is thrown during request handling, Spring checks for matching @ExceptionHandler methods
  * 3. If a match is found, the exception handler method is invoked
- * 4. The handler returns a customized HttpResponse with appropriate status and message
+ * 4. The handler returns a customized HttpResponse with the appropriate status and message
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-    /*    *//**
-     * Handles custom ApiException thrown throughout the application.
-     * Converts the exception to a standardized HTTP 400 Bad Request response.
-     * <p>
-     * This allows business logic to throw descriptive ApiExceptions
-     * which are then automatically converted to proper HTTP responses
-     * without letting raw exceptions leak to the client.
-     *
-     * @param ex the ApiException thrown by application logic
-     * @return ResponseEntity with HttpResponse containing error details and 400 status
-     *//*
-     */
-
+ 
     /**
      * Handles Bean Validation failures from @Valid-annotated controller parameters.
      * Collects all field-level constraint messages and joins them so the client
@@ -49,21 +37,20 @@ public class GlobalExceptionHandler {
      *
      * @param ex the validation exception containing one FieldError per failed constraint
      * @return 400 BAD_REQUEST with all validation messages in the reason field
-     *//*
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<HttpResponse> handleValidationException(MethodArgumentNotValidException ex) {
-        String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .collect(java.util.stream.Collectors.joining(", "));
-        HttpResponse response = HttpResponse.builder()
-                .timeStamp(LocalTime.now().toString())
-                .reason(message)
-                .devMessage(message)
-                .status(HttpStatus.BAD_REQUEST)
-                .statusCode(HttpStatus.BAD_REQUEST.value())
-                .build();
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }*/
+     * @ExceptionHandler(MethodArgumentNotValidException.class) public ResponseEntity<HttpResponse> handleValidationException(MethodArgumentNotValidException ex) {
+     * String message = ex.getBindingResult().getFieldErrors().stream()
+     * .map(error -> error.getField() + ": " + error.getDefaultMessage())
+     * .collect(java.util.stream.Collectors.joining(", "));
+     * HttpResponse response = HttpResponse.builder()
+     * .timeStamp(LocalTime.now().toString())
+     * .reason(message)
+     * .devMessage(message)
+     * .status(HttpStatus.BAD_REQUEST)
+     * .statusCode(HttpStatus.BAD_REQUEST.value())
+     * .build();
+     * return new ResponseEntity <>(response, HttpStatus.BAD_REQUEST);
+     * }
+     */
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<HttpResponse> handleApiException(ApiException ex) {
         HttpResponse response = HttpResponse.builder()

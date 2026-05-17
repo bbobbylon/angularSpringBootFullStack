@@ -100,7 +100,7 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Sets a new password for a user after a successful password reset verification.
+     * Sets a new password for a user after successful password reset verification.
      *
      * @param key             the UUID portion of the reset URL
      * @param newPassword     the new password
@@ -181,7 +181,7 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Toggles a user's multi-factor authentication status.
+     * Toggles a user's multifactor authentication status.
      *
      * @param email the email of the user
      * @return the updated UserDTO
@@ -208,7 +208,7 @@ public class UserServiceImpl implements UserService {
      * with roleName and permissions populated.
      *
      * @param user the persisted user entity
-     * @return the DTO view of the user including role and permissions
+     * @return the DTO view of the user including a role and permissions
      */
     private UserDTO mapToUserDTO(User user) {
         return fromUser(user, roleRepo.getRoleByUserId(user.getId()));

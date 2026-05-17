@@ -1,8 +1,8 @@
 package com.bob.angularspringbootfullstack.model;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -16,29 +16,29 @@ import static java.util.stream.Collectors.toList;
 
 /**
  * Spring Security UserDetails adapter for the application's User entity.
- *
+ * <p>
  * Wraps a User and its Role so Spring Security can verify credentials, read
  * granted authorities, and check account status flags. Constructed by
  * UserRepoImpl#loadUserByUsername during authentication and stored as the
  * principal of the SecurityContext Authentication for the duration of a request.
  * Authorities come from the comma-separated permission string on the Role
- * (e.g. "READ:USER,UPDATE:USER,DELETE:USER"), each segment becoming a
+ * (e.g. "READ:USER, UPDATE:USER, DELETE:USER"), each segment becoming a
  * SimpleGrantedAuthority.
  */
+@NullMarked
 @RequiredArgsConstructor
 public class UserPrincipal implements UserDetails {
-    @Getter
     private final User user;
     private final Role role;
 
     /**
      * Splits the role's comma-separated permission string into one
      * SimpleGrantedAuthority per entry, trimming whitespace.
-     *
+     * <p>
      * Spring Security calls this to evaluate hasAnyAuthority(...) rules and
-     * @PreAuthorize expressions against the current user.
      *
      * @return the user's granted authorities
+     * @PreAuthorize expressions against the current user.
      */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

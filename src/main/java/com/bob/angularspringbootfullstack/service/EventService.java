@@ -32,6 +32,7 @@ public interface EventService {
      * @param device    the OS/browser/device string parsed from the User-Agent header
      * @param ipAddress the originating IP address
      */
+    @SuppressWarnings("unused")
     void addUserEvent(Long userId, EventType eventType, String device, String ipAddress);
 
     /**

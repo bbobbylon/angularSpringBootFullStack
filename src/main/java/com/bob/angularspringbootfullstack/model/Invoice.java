@@ -7,7 +7,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT;
 import static jakarta.persistence.GenerationType.IDENTITY;
@@ -15,22 +17,14 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 /**
  * Invoice is a JPA entity representing a billing record issued to a customer.
  * <p>
- * Each invoice is linked to a {@link Customer} via a {@code @ManyToOne} relationship
- * and to a {@link Services} record describing what was performed. The {@code customer}
- * field is the JPA-managed foreign key and is excluded from JSON output to prevent
- * circular serialization; the {@code customerId} field is a separate denormalized
- * column for direct queries that do not need the full customer object.
+ * Each invoice owns a list of {@link InvoiceLineItem} records stored via
+ * {@code @ElementCollection} in the {@code invoiceserviceitems} table. Line items
+ * are embedded value objects — they have no independent identity and are always
+ * fetched and deleted with their owning invoice.
  * <p>
- * Fields:
- * - id: auto-generated primary key
- * - invoiceNumber: unique human-readable identifier (e.g., "A3F9KQ2B")
- * - service: the type of service this invoice is for
- * - amount: the billed amount for this invoice
- * - status: payment state (e.g., "Pending", "Paid")
- * - customerId: denormalized foreign key for direct lookups
- * - invoiceDate: date the invoice was issued
- * - totalAmount: final amount after any adjustments or taxes
- * - customer: JPA relationship to the owning Customer (hidden from JSON)
+ * The {@code customer} field is the JPA-managed foreign key and is excluded from
+ * JSON output to prevent circular serialization; {@code customerId} is a separate
+ * denormalized column for direct queries.
  */
 @Data
 @AllArgsConstructor
@@ -50,15 +44,14 @@ public class Invoice {
      */
     private String invoiceNumber;
     /**
-     * The type of service this invoice covers, referenced from the Services table.
+     * The line items on this invoice — each represents one service rendered with a name and price.
+     * <p>
+     * Stored in a separate {@code invoiceserviceitems} table via {@code @ElementCollection}.
+     * Fetched eagerly, so the list is always available when the invoice is serialized to JSON.
      */
-    @ManyToOne
-    @JoinColumn(name = "services_id")
-    private Services service;
-    /**
-     * Free-text description of the service provided, submitted directly from the invoice form.
-     */
-    private String services;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "invoiceserviceitems", joinColumns = @JoinColumn(name = "invoice_id"))
+    private List<InvoiceLineItem> services = new ArrayList<>();
     /**
      * The billed amount for this invoice in the application's default currency.
      */

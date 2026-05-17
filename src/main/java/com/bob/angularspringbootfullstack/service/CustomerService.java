@@ -2,6 +2,7 @@ package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.Invoice;
+import com.bob.angularspringbootfullstack.model.Services;
 import com.bob.angularspringbootfullstack.model.Stats;
 import org.springframework.data.domain.Page;
 
@@ -106,6 +107,16 @@ public interface CustomerService {
      * @throws com.bob.angularspringbootfullstack.exception.ApiException if no invoice with the given ID exists
      */
     Invoice getInvoice(Long invoiceId);
+
+    /**
+     * Returns all entries from the {@link Services} catalog.
+     * <p>
+     * Used to populate the service dropdown on the new-invoice form so users
+     * can select from predefined offerings rather than entering free text.
+     *
+     * @return all service catalog entries, unpaginated
+     */
+    Iterable<Services> getServices();
 
     /**
      * Returns aggregated dashboard statistics: total customers, total invoices,

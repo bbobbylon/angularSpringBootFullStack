@@ -25,7 +25,7 @@ import static org.springframework.http.HttpStatus.*;
  * known auth/security exceptions into structured HTTP responses:
  * JWTVerificationException (including expired tokens) → 401,
  * ApiException/DisabledException/LockedException/BadCredentialsException → 400,
- * anything else → generic 500 so internal details are not leaked to the client.
+ * anything else → generic 500, so internal details are not leaked to the client.
  */
 @Slf4j
 public class ExceptionUtils {
@@ -63,7 +63,7 @@ public class ExceptionUtils {
      * field for debugging.
      *
      * @param request    the current request (read for getRequestURI)
-     * @param response   the response to mutate (status + content type)
+     * @param response   the response to mutate (status and content type)
      * @param message    the reason field placed on the body
      * @param httpStatus the HTTP status to set
      * @return the HttpResponse ready to serialize
@@ -99,7 +99,6 @@ public class ExceptionUtils {
             out.flush();
         } catch (Exception e) {
             log.error("Error writing response", e);
-            e.printStackTrace();
         }
 
     }

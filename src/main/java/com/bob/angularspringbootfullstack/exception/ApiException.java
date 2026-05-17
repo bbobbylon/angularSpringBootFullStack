@@ -2,17 +2,17 @@ package com.bob.angularspringbootfullstack.exception;
 
 /**
  * ApiException is a custom unchecked exception used throughout the application.
- *
+ * <p>
  * This exception is thrown when business logic encounters an error condition
  * that should be communicated back to the API client with a meaningful error message.
- *
+ * <p>
  * By extending RuntimeException, it's an unchecked exception that doesn't require
- * explicit catch/throw declarations, making code cleaner. The GlobalExceptionHandler
+ * explicit catch/throw declarations, making the code cleaner. The GlobalExceptionHandler
  * intercepts these exceptions and converts them to proper HTTP error responses.
- *
+ * <p>
  * Usage:
- *   throw new ApiException("User with email already exists");
- *   throw new ApiException("Invalid verification code");
+ * throw new ApiException("User with email already exists");
+ * throw new ApiException("Invalid verification code");
  */
 public class ApiException extends RuntimeException {
     /**

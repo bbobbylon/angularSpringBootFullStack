@@ -13,7 +13,7 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT;
 import static jakarta.persistence.GenerationType.IDENTITY;
 
 /**
- * Services represents a type of service that can be associated with an invoice.
+ * Services represent a type of service that can be associated with an invoice.
  * <p>
  * This entity acts as a reference table of available service offerings. Rather than
  * storing a raw string on each invoice, invoices hold a foreign key to this entity,
@@ -24,10 +24,10 @@ import static jakarta.persistence.GenerationType.IDENTITY;
  * (e.g., Product, Procedure, Subscription).
  * <p>
  * Fields:
- * - id: auto-generated primary key
- * - name: canonical display name of the service (e.g., "Web Development")
- * - description: human-readable summary of what the service entails
- * - price: standard base price for the service
+ * - Id: auto-generated primary key
+ * - Name: canonical display name of the service (e.g., "Web Development")
+ * - Description: human-readable summary of what the service entails
+ * - Price: standard base price for the service
  */
 @Data
 @SuperBuilder

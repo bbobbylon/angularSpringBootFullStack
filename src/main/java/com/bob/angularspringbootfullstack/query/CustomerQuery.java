@@ -3,7 +3,7 @@ package com.bob.angularspringbootfullstack.query;
 /**
  * Holds native SQL query constants used by the customer feature.
  * <p>
- * Queries are defined here rather than inline in service classes so they
+ * Queries are defined here rather than inline in service classes, so they
  * can be read and maintained without opening the service implementation.
  */
 public class CustomerQuery {

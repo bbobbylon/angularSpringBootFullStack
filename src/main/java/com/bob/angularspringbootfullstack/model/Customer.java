@@ -1,11 +1,7 @@
 package com.bob.angularspringbootfullstack.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -22,21 +18,21 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 /**
  * Customer is a JPA entity representing a business customer in the system.
  * <p>
- * Each customer can own zero or more invoices, modelled as a bidirectional
+ * Each customer can own zero or more invoices, modeled as a bidirectional
  * {@code @OneToMany} relationship. Invoices are loaded eagerly so that a
  * single fetch always returns the customer with their full invoice history.
  * <p>
  * Fields:
- * - id: auto-generated primary key
- * - name: full name or business name of the customer
- * - type: customer category (e.g., "Individual", "Business")
- * - email: primary contact email address
+ * - Id: auto-generated primary key
+ * - Name: full name or business name of the customer
+ * - Type: customer category (e.g., "Individual", "Business")
+ * - Email: primary contact email address
  * - phoneNumber: primary contact phone number
- * - address: physical or mailing address
- * - status: account standing (e.g., "Active", "Inactive")
+ * - Address: physical or mailing address
+ * - Status: account standing (e.g., "Active", "Inactive")
  * - imageUrl: URL to the customer's profile or logo image
  * - createdAt: timestamp of when the customer record was created
- * - invoices: all invoices associated with this customer
+ * - Invoices: all invoices associated with this customer
  */
 @Data
 @SuperBuilder
@@ -91,7 +87,7 @@ public class Customer {
     private String imageUrl;
     /**
      * All invoices associated with this customer.
-     * Loaded eagerly so the full invoice history is always available with the customer.
+     * Loaded eagerly, so the full invoice history is always available with the customer.
      */
     @OneToMany(mappedBy = "customer", fetch = EAGER, cascade = ALL)
     private Collection<Invoice> invoices;

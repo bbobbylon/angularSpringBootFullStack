@@ -32,10 +32,10 @@ import static java.util.Objects.requireNonNull;
  *     slug        VARCHAR UNIQUE NOT NULL   -- URL-safe identifier
  *     created_at  TIMESTAMP DEFAULT NOW()
  *
- *   user_organizations                       -- many-to-many junction
- *     user_id     BIGINT FK -> users.id
- *     org_id      BIGINT FK -> organizations.id
- *     org_role    VARCHAR NOT NULL           -- e.g. ORG_ADMIN, ORG_MEMBER, ORG_VIEWER
+ *   user_organizations -- many-to-many junction
+ *     user_id BIGINT FK -> 'users.id'
+ *     org_id BIGINT FK -> 'organizations.id'
+ *     org_role    VARCHAR NOT NULL           -- e.g., ORG_ADMIN, ORG_MEMBER, ORG_VIEWER
  *     status      VARCHAR DEFAULT 'ACTIVE'   -- ACTIVE | SUSPENDED | PENDING_INVITE
  *     joined_at   TIMESTAMP DEFAULT NOW()
  *     PRIMARY KEY (user_id, org_id)
@@ -64,7 +64,7 @@ import static java.util.Objects.requireNonNull;
  * <pre>
  *   SELECT COUNT(*) FROM user_organizations a
  *   JOIN user_organizations b ON a.org_id = b.org_id
- *   WHERE a.user_id = :adminId AND b.user_id = :targetUserId
+ *   WHERE a.user_id =: adminId AND b.user_id =: targetUserId
  *   AND a.org_role IN ('ORG_ADMIN') AND a.status = 'ACTIVE'
  * </pre>
  * If count == 0 AND admin is not SUPER_ADMIN → throw 403 Forbidden.
@@ -181,12 +181,12 @@ public class RoleRepoImpl implements RoleRepo<Role> {
 
     /**
      * Retrieves the role assigned to a user by their user ID.
-     * Queries the database using a join between users, user_roles, and roles tables
+     * Queries the database using a join between users, user_roles, and role tables
      * to fetch the role information for a specific user.
      *
      * @param userId the ID of the user whose role should be retrieved
      * @return the Role object containing id, name, and permissions
-     * @throws ApiException if the user has no role assigned or any database operation fails
+     * @throws ApiException if the user has no role assigned, or any database operation fails
      */
     @Override
     public Role getRoleByUserId(Long userId) {

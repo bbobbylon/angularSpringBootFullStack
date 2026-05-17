@@ -3,7 +3,7 @@ package com.bob.angularspringbootfullstack.query;
 /**
  * UserQuery contains all SQL query constants for user-related database operations.
  * <p>
- * These queries use named parameters (`:paramName`) instead of positional parameters (`?`)
+ * These queries use named parameters (`: paramName`) instead of positional parameters (`?`)
  * to work with Spring's NamedParameterJdbcTemplate. Named parameters are set in the
  * MapSqlParameterSource using .addValue() method calls.
  * <p>
@@ -12,7 +12,7 @@ package com.bob.angularspringbootfullstack.query;
  */
 public class UserQuery {
     /**
-     * Inserts a new user into the users table.
+     * Inserts a new user into the user's table.
      * Parameters: firstName, lastName, email, password
      * The database auto-generates the id field.
      */
@@ -71,7 +71,7 @@ public class UserQuery {
      */
     public static final String DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY = "DELETE FROM resetpasswordverifications WHERE user_id = :userId";
     /**
-     * Inserts a password reset verification URL with expiration timestamp. Parameters: userId, url, expirationDate.
+     * Inserts a password reset verification URL with the expiration timestamp. Parameters: userId, url, expirationDate.
      */
     public static final String INSERT_PASSWORD_VERIFICATION_QUERY = "INSERT INTO resetpasswordverifications (user_id, url, expiration_date) VALUES (:userId, :url, :expirationDate)";
     /**
@@ -101,7 +101,7 @@ public class UserQuery {
     public static final String UPDATE_USER_ENABLED_QUERY = "UPDATE users SET enabled = :enabled WHERE id = :id";
     /**
      * Updates a user's editable profile fields. Parameters: firstName, lastName, email, imageUrl, address, phoneNumber, bio, title, id.
-     * image_url uses COALESCE so a null :imageUrl preserves the existing value rather than overwriting it.
+     * image_url uses COALESCE, so a null: imageUrl preserves the existing value rather than overwriting it.
      */
     public static final String UPDATE_USER_DETAILS_QUERY = "UPDATE users SET first_name = :firstName, last_name = :lastName, email = :email, image_url = COALESCE(:imageUrl, image_url), address = :address, phone = :phoneNumber, bio = :bio, title = :title WHERE id = :id";
     /**
@@ -109,8 +109,8 @@ public class UserQuery {
      */
     public static final String SELECT_USER_BY_ID_QUERY = "SELECT * FROM users WHERE id = :id";
     /**
-     * Updates a user's password and stamps password_changed_at to NOW() to
-     * invalidate any tokens issued before this moment. Parameters: password, userId.
+     * Updates a user's password and stamps password_changed_at NOW() to
+     * invalidate any tokens issued this moment ago. Parameters: password, userId.
      */
     public static final String UPDATE_USER_PASSWORD_BY_ID_QUERY = "UPDATE users SET password = :password, password_changed_at = NOW() WHERE id = :userId";
     /**
@@ -122,7 +122,7 @@ public class UserQuery {
     public static final String UPDATE_USER_SETTINGS_QUERY = "UPDATE users SET enabled = :enabled, non_locked = :notLocked WHERE id = :userId";
     /**
      * Flips the {@code using_mfa} column for a user — if MFA was on, this turns it off,
-     * and vice-versa. Invoked when the user toggles two-factor authentication from their settings.
+     * and vice versa. Invoked when the user toggles two-factor authentication from their settings.
      * Parameters: using2FA, email.
      */
     public static final String TOGGLE_USER_2FA_QUERY = "UPDATE users SET using_mfa = :using2FA WHERE email = :email";
