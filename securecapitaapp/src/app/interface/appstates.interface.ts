@@ -4,12 +4,13 @@ import { UserEventsInterface } from './user-events.interface';
 import { RolesInterface } from './roles.interface';
 import { CustomerInterface } from './customer.interface';
 import { StatsInterface } from './stats.interface';
+import { InvoiceInterface } from './invoice.interface';
 
 /**
  * Represents the reactive state of the login flow.
  *
  * Each field is optional because only a subset is populated depending on the current
- * {@link DataState}: on success {@code loginSuccess} is set; on MFA challenge only
+ * {@link DataState}: on success {@code loginSuccess} is set; on an MFA challenge only
  * {@code isUsingMfa} and {@code phone} are populated; on error only {@code error} is set.
  */
 export interface LoginStateInterface {
@@ -40,11 +41,11 @@ export interface ProfileInterface {
  * Mirrors the Spring Boot 3.3+ {@code Page<T>} JSON structure.
  *
  * In Spring Boot 3.3+, pagination metadata was moved into a nested {@code page} sub-object
- * rather than being top-level fields. This interface matches that serialized shape so
+ * rather than being top-level fields. This interface matches that serialized shape, so
  * Angular's HTTP client can deserialize paginated responses without a custom converter.
  */
-export interface PageInterface {
-  content: CustomerInterface[];
+export interface PageInterface<T> {
+  content: T[];
   page: {
     size: number;
     number: number;
@@ -54,18 +55,18 @@ export interface PageInterface {
 }
 
 /**
- * The data payload carried by most customer list API responses.
+ * The data payload carried by most customer lists API responses.
  *
  * Bundles the authenticated {@link UserInterface} with an optional paginated
  * {@link PageInterface} and optional statistics. Not every endpoint populates all
  * fields — for example, the create-customer endpoint returns {@code user} and a
  * single customer but no {@code page} or stats.
  */
-export interface CustomerListData {
+export interface CustomerListDataInterface {
   user: UserInterface;
-  page?: PageInterface;
+  page?: PageInterface<CustomerInterface>;
   stats?: StatsInterface;
-  statsData?: StatsData;
+  statsData?: StatsDataInterface;
 }
 
 /**
@@ -75,7 +76,7 @@ export interface CustomerListData {
  * alongside the authenticated user. Consumed by {@link StatsComponent} to render the
  * summary panel at the top of the dashboard.
  */
-export interface StatsData {
+export interface StatsDataInterface {
   user: UserInterface;
   stats: StatsInterface;
 }
@@ -93,4 +94,25 @@ export interface StatsData {
 export interface CustomerStateInterface {
   user: UserInterface;
   customers: CustomerInterface;
+}
+
+/**
+ * The data payload returned by {@code GET /customer/invoice/new}.
+ *
+ * Returns the authenticated user alongside the full (unpaginated) customer list
+ * so the new-invoice form can populate its customer dropdown.
+ */
+export interface NewInvoiceDataInterface {
+  user: UserInterface;
+  customers?: CustomerInterface[];
+}
+
+/**
+ * The data payload returned by {@code GET /customer/invoice/list}.
+ *
+ * Bundles the authenticated user with a paginated page of invoices.
+ */
+export interface InvoiceListDataInterface {
+  user: UserInterface;
+  invoices?: PageInterface<InvoiceInterface>;
 }

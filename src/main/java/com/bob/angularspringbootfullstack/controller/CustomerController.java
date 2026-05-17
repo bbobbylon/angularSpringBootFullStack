@@ -204,8 +204,8 @@ public class CustomerController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "invoices", customerService.getCustomers(page.orElse(0), size.orElse(20))))
-                        .message("Invoice retrieved successfully!")
+                                "invoices", customerService.getInvoices(page.orElse(0), size.orElse(20))))
+                        .message("All Invoices retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
@@ -219,7 +219,7 @@ public class CustomerController {
      * @param user the authenticated user making the request
      * @return 200 OK with the authenticated user and all customers (unpaginated)
      */
-    @PostMapping("/invoice/new")
+    @GetMapping("/invoice/new")
     public ResponseEntity<HttpResponse> newInvoice(@AuthenticationPrincipal UserDTO user) {
         return ResponseEntity.ok(
                 HttpResponse.builder()
@@ -268,7 +268,7 @@ public class CustomerController {
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
                                 "customers", customerService.getCustomers()))
-                        .message("Invoice added to customer!")
+                        .message(String.format("Invoice added to customer for Customer with ID: %s!", customerId))
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

@@ -8,7 +8,9 @@
             <ol class="breadcrumb">
               <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
               <li class="breadcrumb-item"><a [routerLink]="['/customers']">Customers</a></li>
-              <li aria-current="page" class="breadcrumb-item active">{{ state?.appData?.data?.customers.customerName }}</li>
+              <li aria-current="page"
+                  class="breadcrumb-item active">{{ state?.appData?.data?.customers.customerName }}
+              </li>
             </ol>
           </nav>
           <div class="row">
@@ -16,11 +18,13 @@
               <div class="card">
                 <div class="card-body">
                   <div class="d-flex align-items-start">
-                    <img
-                      [src]="state?.appData?.data?.customers.imageUrl"
-                      alt="profile-image"
-                      class="rounded-circle avatar-lg img-thumbnail"
-                      style="position: relative" />
+                    <td>
+                      <!-- Option C: [src]="customer.imageUrl || getDefaultImageC(customer.id)" -->
+                      <img (error)="$any($event.target).src = defaultImage"
+                           [alt]="state?.appData?.data?.customers.customerName"
+                           [src]="state?.appData?.data?.customers.imageUrl || getDefaultImageC(state?.appData?.data?.customers.id)"
+                           class="rounded-circle" height="42" width="42">
+                    </td>
                     <div class="w-100 ms-4">
                       <h4 class="my-0">{{ state?.appData?.data?.customers.customerName }}</h4>
                       <p class="" style="font-size: 13px">{{ state?.appData?.data?.customers.email }}</p>
@@ -44,7 +48,8 @@
                   <h5 class="card-title">Total Invoices</h5>
                   <h6 class="card-subtitle mb-2 text-muted">Customer Total Invoices</h6>
                   <ul class="list-group">
-                    <li class="list-group-item d-flex justify-content-between align-items-center" style="font-size: 20px">
+                    <li class="list-group-item d-flex justify-content-between align-items-center"
+                        style="font-size: 20px">
                       Total Current Invoices
                       <span class="" style="font-size: 20px">
                         {{ state?.appData?.data?.customers.invoices.length }}
@@ -58,7 +63,8 @@
                   <h5 class="card-title">Total Billed</h5>
                   <h6 class="card-subtitle mb-2 text-muted">Customer Total Billed</h6>
                   <ul class="list-group">
-                    <li class="list-group-item d-flex justify-content-between align-items-center" style="font-size: 20px">
+                    <li class="list-group-item d-flex justify-content-between align-items-center"
+                        style="font-size: 20px">
                       Total Billed
                       <span class="badge bg-success" style="font-size: 20px">
                         $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'sum': 'totalAmount' }}
@@ -161,12 +167,13 @@
                       </div>
                     </div>
                     <button
-                      [hidden]="state?.appData?.data?.user.roleName === 'ROLE_USER'"
                       [disabled]="isLoading$ | async"
+                      [hidden]="state?.appData?.data?.user.roleName === 'ROLE_USER'"
                       class="btn btn-primary float-end"
                       type="submit">
                       @if (isLoading$ | async) {
-                        <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px"></span>
+                        <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
+                              style="margin-right: 5px"></span>
                         <span>Loading...</span>
                       } @else {
                         <span>Update</span>
@@ -185,14 +192,14 @@
                   <h6 class="card-subtitle mb-2 text-muted">Customer Invoices</h6>
                   <table class="table table-hover">
                     <thead class="table-dark">
-                      <tr>
-                        <th scope="col">Invoice Number</th>
-                        <th scope="col">Service</th>
-                        <th scope="col">Status</th>
-                        <th scope="col">Date</th>
-                        <th scope="col">Total</th>
-                        <th scope="col">Action</th>
-                      </tr>
+                    <tr>
+                      <th scope="col">Invoice Number</th>
+                      <th scope="col">Service</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Date</th>
+                      <th scope="col">Total</th>
+                      <th scope="col">Action</th>
+                    </tr>
                     </thead>
                     <tbody>
                       @for (invoice of state?.appData?.data?.customers?.invoices; track invoice) {
@@ -214,7 +221,8 @@
                           <td>{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
                           <td>${{ invoice.totalAmount }}</td>
                           <td>
-                            <button [routerLink]="['/invoices', invoice.id, invoice.invoiceNumber]" class="btn btn-info btn-sm" type="button">
+                            <button [routerLink]="['/invoices', invoice.id, invoice.invoiceNumber]"
+                                    class="btn btn-info btn-sm" type="button">
                               Print
                             </button>
                           </td>

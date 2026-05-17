@@ -56,6 +56,10 @@ public class Invoice {
     @JoinColumn(name = "services_id")
     private Services service;
     /**
+     * Free-text description of the service provided, submitted directly from the invoice form.
+     */
+    private String services;
+    /**
      * The billed amount for this invoice in the application's default currency.
      */
     private Double amount;

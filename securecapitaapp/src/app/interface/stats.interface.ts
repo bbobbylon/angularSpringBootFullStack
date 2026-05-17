@@ -4,7 +4,7 @@
  *
  * All values are system-wide totals across all customers and invoices.
  *
- * @see StatsData
+ * @see StatsDataInterface
  */
 export interface StatsInterface {
   /** Total number of customer records in the system. */

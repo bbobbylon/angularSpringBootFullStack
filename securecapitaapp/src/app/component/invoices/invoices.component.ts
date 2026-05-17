@@ -1,67 +1,94 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { RouterModule } from '@angular/router';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { Router, RouterModule } from '@angular/router';
+import { BehaviorSubject, map, Observable, of, startWith } from 'rxjs';
 import { NavbarComponent } from '../navbar/navbar.component';
 import { DataState } from '../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../interface/customhttpresponse.interface';
+import { CustomerService } from '../../service/customer.service';
+import { InvoiceListDataInterface } from '../../interface/appstates.interface';
+import { catchError } from 'rxjs/operators';
 
 /**
  * All-invoices list view with pagination.
  *
- * Stub implementation — real data will be wired to GET /customer/invoice/list
- * once the full invoice list backend integration is complete.
+ * Fetches a paginated list of invoices from {@code GET /customer/invoice/list}
+ * and renders them in a table with status badges and a Print action per row.
  */
 @Component({
   selector: 'app-invoices',
   imports: [CommonModule, RouterModule, NavbarComponent, DatePipe],
   templateUrl: './invoices.component.html',
   styleUrl: './invoices.component.css',
+  standalone: true,
 })
 export class InvoicesComponent implements OnInit {
   /** Exposes {@link DataState} to the template for switch-case rendering. */
   readonly DataState = DataState;
+
   /**
-   * Drives the invoices list template — emits a new snapshot on page navigation.
-   *
-   * Currently seeded with stub data. Will be replaced by a live stream from
-   * {@code GET /customer/invoice/list} once the invoice list integration is complete.
+   * Drives the entire template — emits a new {@link GlobalStateInterface} snapshot
+   * whenever the page index changes.
    */
-  invoicesState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<any>>>;
+  invoiceState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>>;
+
+  protected readonly router = inject(Router);
+  private readonly customerService = inject(CustomerService);
+
+  /**
+   * Caches the most recent successful API response so pagination updates can return
+   * {@code DataState.LOADED} immediately as the {@code startWith} value while the next
+   * request is in flight.
+   */
+  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<InvoiceListDataInterface>>(null);
+
+  /**
+   * Tracks the current 0-based page index.
+   * Emitting a new value triggers a new fetch in {@link goToPage}.
+   */
   private currentPageSubject = new BehaviorSubject<number>(0);
+
   /** Observable of the current 0-based page index, used by the template to highlight the active page. */
   currentPage$ = this.currentPageSubject.asObservable();
 
-  /**
-   * Seeds {@link invoicesState$} with stub data so the template renders without a backend call.
-   *
-   * Will be replaced by a {@code combineLatest} + {@code switchMap} stream wired to
-   * {@code GET /customer/invoice/list} once the invoice list backend integration is complete.
-   */
   ngOnInit(): void {
-    this.invoicesState$ = of({
-      dataState: DataState.LOADED,
-      appData: {
-        statusCode: 200,
-        message: '',
-        timestamp: new Date(),
-        status: 'OK',
-        data: {
-          user: { firstName: 'Test', lastName: 'User', roleName: 'ROLE_ADMIN', email: 'test@test.com' },
-          page: { content: [], totalPages: 0 },
-        },
-      },
-    });
+    this.loadPage(0);
   }
 
-  /** Stub — will navigate to the next or previous invoice page. */
+  /**
+   * Advances or retreats one page.
+   *
+   * @param direction - {@code 'forward'} to increment the page, {@code 'backward'} to decrement
+   */
   goToNextOrPreviousPage(direction: string): void {
-    console.log('goToNextOrPreviousPage stub:', direction);
+    const step = direction === 'forward' ? 1 : -1;
+    this.loadPage(this.currentPageSubject.value + step);
   }
 
-  /** Stub — will jump directly to the given invoice page index. */
+  /**
+   * Jumps directly to a specific page index.
+   *
+   * @param pageIndex - the 0-based index of the target page
+   */
   goToPage(pageIndex: number): void {
-    this.currentPageSubject.next(pageIndex);
+    this.loadPage(pageIndex);
+  }
+
+  /**
+   * Fetches a specific page of invoices and updates {@link invoiceState$}.
+   *
+   * @param page - zero-based page index to fetch
+   */
+  private loadPage(page: number): void {
+    this.invoiceState$ = this.customerService.invoices$(page).pipe(
+      map((response) => {
+        this.dataSubject.next(response);
+        this.currentPageSubject.next(page);
+        return { dataState: DataState.LOADED, appData: response };
+      }),
+      startWith({ dataState: DataState.LOADING }),
+      catchError((error: string) => of({ dataState: DataState.ERROR, error })),
+    );
   }
 }

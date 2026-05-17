@@ -7,7 +7,7 @@ import { NavbarComponent } from '../navbar/navbar.component';
 import { DataState } from '../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../interface/customhttpresponse.interface';
-import { CustomerListData } from '../../interface/appstates.interface';
+import { CustomerListDataInterface } from '../../interface/appstates.interface';
 import { CustomerService } from '../../service/customer.service';
 import { ExtractArrayValuePipe } from '../../pipe/extract-array-value.pipe';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -43,7 +43,7 @@ export class CustomersComponent implements OnInit {
    * Switches between {@code /customer/list} and {@code /customer/search} depending
    * on whether {@link currentSearchSubject} holds a non-empty term.
    */
-  customersState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListData>>>;
+  customersState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListDataInterface>>>;
   protected readonly router = inject(Router);
   private readonly customerService = inject(CustomerService);
   private readonly activatedRoute = inject(ActivatedRoute);
@@ -53,7 +53,7 @@ export class CustomersComponent implements OnInit {
    * updates can return {@code DataState.LOADED} immediately as the {@code startWith}
    * value while the next request is in flight.
    */
-  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListData>>(null);
+  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListDataInterface>>(null);
 
   /**
    * Tracks the current 0-based page index.
@@ -152,10 +152,10 @@ export class CustomersComponent implements OnInit {
     this.searchInput$
       .pipe(
         debounceTime(300),
-        filter(term => term.length === 0 || term.length >= 1),
+        filter((term) => term.length === 0 || term.length >= 1),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(term => {
+      .subscribe((term) => {
         this.currentSearchSubject.next(term);
         this.currentPageSubject.next(0);
       });
@@ -163,7 +163,7 @@ export class CustomersComponent implements OnInit {
     this.customersState$ = combineLatest([this.currentPageSubject, this.currentSearchSubject]).pipe(
       switchMap(([page, name]) =>
         (name ? this.customerService.searchCustomers$(name, page) : this.customerService.customers$(page)).pipe(
-          map(response => {
+          map((response) => {
             this.dataSubject.next(response);
             return { dataState: DataState.LOADED, appData: response };
           }),
@@ -217,7 +217,7 @@ export class CustomersComponent implements OnInit {
    * @param customerId - the numeric ID of the customer whose detail page to open
    */
   goToCustomerDetails1(customerId: number): void {
-    this.router.navigate(['/customers/', customerId]).then(r => console.log('Navigation result:', r));
+    this.router.navigate(['/customers/', customerId]).then((r) => console.log('Navigation result:', r));
   }
 
   /**
