@@ -11,7 +11,7 @@ import { InvoiceListDataInterface } from '../../interface/appstates.interface';
 import { catchError } from 'rxjs/operators';
 
 /**
- * All-invoices list view with pagination.
+ * All-invoice list view with pagination.
  *
  * Fetches a paginated list of invoices from {@code GET /customer/invoice/list}
  * and renders them in a table with status badges and a Print action per row.
