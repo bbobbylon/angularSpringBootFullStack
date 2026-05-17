@@ -33,7 +33,16 @@ import static org.springframework.http.HttpStatus.OK;
 @RequestMapping(path = "/customer")
 @RequiredArgsConstructor
 public class CustomerController {
+    /**
+     * Service layer for all customer and invoice persistence operations.
+     * Injected by Lombok's {@code @RequiredArgsConstructor}.
+     */
     private final CustomerService customerService;
+
+    /**
+     * Service layer for user profile lookups.
+     * Used to embed the authenticated user in every response envelope.
+     */
     private final UserService userService;
 
     /**

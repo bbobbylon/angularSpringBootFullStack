@@ -38,8 +38,25 @@ import static org.springframework.data.domain.PageRequest.of;
 @RequiredArgsConstructor
 @Slf4j
 public class CustomerServiceImpl implements CustomerService {
+    /**
+     * JPA repository for {@link Customer} persistence operations.
+     * Injected by Lombok's {@code @RequiredArgsConstructor}.
+     */
     private final CustomerRepo customerRepo;
+
+    /**
+     * JPA repository for {@link Invoice} persistence operations.
+     * Injected by Lombok's {@code @RequiredArgsConstructor}.
+     */
     private final InvoiceRepo invoiceRepo;
+
+    /**
+     * Named-parameter JDBC template used for the aggregated stats query.
+     * <p>
+     * Used instead of JPA because {@link com.bob.angularspringbootfullstack.model.Stats}
+     * is not a managed entity — its values are computed by a raw SQL query
+     * defined in {@link com.bob.angularspringbootfullstack.query.CustomerQuery#STATS_QUERY}.
+     */
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
