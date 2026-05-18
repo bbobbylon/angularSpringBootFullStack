@@ -80,7 +80,7 @@ angularSpringBootFullStack/
 ├── service/
 │   └── user.service.ts # Auth, profile, refresh token API calls
 ├── interceptor/
-│   └── token-interceptor.ts
+│   └── token.interceptor.ts
 ├── enumeration/        # DataState, Key, EventType
 └── interface/          # API response and UI state contracts
 ```

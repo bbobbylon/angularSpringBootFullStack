@@ -155,9 +155,22 @@ export class HomeComponent implements OnInit {
   /**
    * Jumps directly to a specific page index in the customer list.
    *
+   * Guards against out-of-bounds indices on both ends. A negative index is
+   * rejected immediately — Spring Boot's {@code PageRequest.of(page, size)}
+   * throws {@code IllegalArgumentException} if {@code page < 0}. An index
+   * beyond the last page is also rejected using the total page count from the
+   * last known response stored in {@link dataSubject}.
+   *
+   * This is the second line of defence: the primary guard is the {@code [disabled]}
+   * binding on the navigation buttons in the template, which prevents click events
+   * from firing at the boundaries. This guard catches any event that slips through
+   * (e.g. rapid double-click before the disabled state propagates to the DOM).
+   *
    * @param pageIndex - the 0-based index of the page to navigate to
    */
   goToPage(pageIndex: number): void {
+    const totalPages = this.dataSubject.value?.data?.page?.page?.totalPages ?? Infinity;
+    if (pageIndex < 0 || pageIndex >= totalPages) return;
     this.currentPageSubject.next(pageIndex);
   }
 

@@ -98,7 +98,9 @@
                 <ul class="pagination justify-content-end mb-0">
                   <li [ngClass]="0 === (currentPage$ | async) ? 'disabled' : ''"
                       class="page-item pointer">
-                    <button (click)="changePage('backward')" class="page-link">&laquo; Prev</button>
+                    <button (click)="changePage('backward')"
+                            [disabled]="0 === (currentPage$ | async)"
+                            class="page-link">&laquo; Prev</button>
                   </li>
                   @for (_page of state?.appData?.data?.page?.page?.totalPages | ExtractArrayValue: 'number'; track $index; let i = $index) {
                     <li class="page-item pointer">
@@ -112,7 +114,9 @@
                   <li
                     [ngClass]="(state?.appData?.data?.page?.page?.totalPages - 1) === (currentPage$ | async) ? 'disabled' : ''"
                     class="page-item pointer">
-                    <button (click)="changePage('forward')" class="page-link">Next &raquo;</button>
+                    <button (click)="changePage('forward')"
+                            [disabled]="(state?.appData?.data?.page?.page?.totalPages - 1) === (currentPage$ | async)"
+                            class="page-link">Next &raquo;</button>
                   </li>
                 </ul>
               </nav>

@@ -4,7 +4,8 @@ import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routing-module';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { tokenInterceptor } from './interceptor/token-interceptor';
+import { tokenInterceptor } from './interceptor/token.interceptor';
+import { cacheInterceptor } from './interceptor/cache.interceptor';
 
 /**
  * Root application configuration for the Angular standalone app.
@@ -36,13 +37,15 @@ export const appConfig: ApplicationConfig = {
      * Registers Angular's HttpClient so it can be injected anywhere in the app
      * (services, components, etc.) to make HTTP requests to the backend.
      *
-     * withInterceptors([tokenInterceptor]) plugs the token interceptor into the
-     * HTTP pipeline — every request made via HttpClient will pass through
-     * tokenInterceptor, which automatically attaches the JWT Authorization header
-     * to protected endpoints and forwards public endpoints unchanged.
+     * withInterceptors([cacheInterceptor, tokenInterceptor]) plugs both interceptors
+     * into the HTTP pipeline in order. cacheInterceptor runs first — a cache hit
+     * returns immediately without ever invoking tokenInterceptor, so no Authorization
+     * header is attached to a request that never leaves the browser. On a cache miss,
+     * the request flows through to tokenInterceptor, which attaches the JWT header
+     * before forwarding to the server.
      */
-    provideHttpClient(withInterceptors([tokenInterceptor])),
+    provideHttpClient(withInterceptors([cacheInterceptor, tokenInterceptor])),
 
     { provide: IMAGE_CONFIG, useValue: { disableImageSizeWarning: true } },
-  ]
+  ],
 };

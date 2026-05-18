@@ -44,7 +44,7 @@ securecapitaapp/src/app
 ├── app.component.ts           # Root shell
 ├── app.config.ts              # Standalone providers (router, HttpClient, interceptor)
 ├── app.routing-module.ts      # Route definitions
-├── interceptor/token-interceptor.ts
+├── interceptor/token.interceptor.ts
 ├── service/user.service.ts
 ├── component/
 │   ├── login/                 # Login + MFA flow
