@@ -50,7 +50,7 @@
                   <ul class="list-group">
                     <li class="list-group-item d-flex justify-content-between align-items-center"
                         style="font-size: 20px">
-                      Total Current Invoices
+                      Total Current Invoices:
                       <span class="" style="font-size: 20px">
                         {{ state?.appData?.data?.customers.invoices.length }}
                       </span>
@@ -60,14 +60,43 @@
               </div>
               <div class="card">
                 <div class="card-body">
-                  <h5 class="card-title">Total Billed</h5>
-                  <h6 class="card-subtitle mb-2 text-muted">Customer Total Billed</h6>
+                  <h5 class="card-title">Total Billed:</h5>
                   <ul class="list-group">
                     <li class="list-group-item d-flex justify-content-between align-items-center"
                         style="font-size: 20px">
                       Total Billed
                       <span class="badge bg-success" style="font-size: 20px">
                         $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'sum': 'totalAmount' }}
+                      </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      Paid
+                      <span class="badge bg-success">
+                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'PAID' }}
+                      </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      Active
+                      <span class="badge bg-success">
+                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'ACTIVE' }}
+                      </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      Pending
+                      <span class="badge bg-primary">
+                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'PENDING' }}
+                      </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      Overdue
+                      <span class="badge bg-warning">
+                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'OVERDUE' }}
+                      </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      Canceled
+                      <span class="badge bg-danger">
+                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'CANCELED' }}
                       </span>
                     </li>
                   </ul>
@@ -207,7 +236,9 @@
                           <td>{{ invoice.invoiceNumber }}</td>
                           <td>
                             @for (svc of invoice.services; track svc.name; let last = $last) {
-                              {{ svc.name }}@if (!last) {, }
+                              {{ svc.name }}@if (!last) {
+                                ,
+                              }
                             }
                           </td>
                           <td>
