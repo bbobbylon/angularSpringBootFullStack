@@ -53,10 +53,12 @@
                   <th class="text-center">{{ customer.id }}</th>
                   <td>
                     <!-- Option C: [src]="customer.imageUrl || getDefaultImageC(customer.id)" -->
-                    <img (error)="$any($event.target).src = defaultImage"
-                         [alt]="customer.customerName"
-                         [src]="customer.imageUrl || getDefaultImageC(customer.id)"
-                         class="rounded-circle" height="42" width="42">
+                    <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
+                      <img [alt]="customer.customerName"
+                           [ngSrc]="customer.imageUrl || getDefaultImageC(customer.id)"
+                           fill
+                           style="object-fit: cover;">
+                    </div>
                   </td>
                   <td>{{ customer.customerName }}</td>
                   <td>{{ customer.email }}</td>
@@ -86,7 +88,7 @@
           @if (state?.appData?.data?.page?.content?.length > 0) {
             <div class="d-flex align-items-center justify-content-between mt-2">
               <div class="d-flex align-items-center gap-2">
-                <label class="form-label mb-0 small text-muted">Rows per page:</label>
+                <label class="form-label mb-0 small text-muted" for="pageSize">Rows per page:</label>
                 <select (change)="changePageSize(+$any($event.target).value)"
                         class="form-select form-select-sm w-auto">
                   @for (option of pageSizeOptions; track option) {
@@ -100,7 +102,8 @@
                       class="page-item pointer">
                     <button (click)="changePage('backward')"
                             [disabled]="0 === (currentPage$ | async)"
-                            class="page-link">&laquo; Prev</button>
+                            class="page-link">&laquo; Prev
+                    </button>
                   </li>
                   @for (_page of state?.appData?.data?.page?.page?.totalPages | ExtractArrayValue: 'number'; track $index; let i = $index) {
                     <li class="page-item pointer">
@@ -116,7 +119,8 @@
                     class="page-item pointer">
                     <button (click)="changePage('forward')"
                             [disabled]="(state?.appData?.data?.page?.page?.totalPages - 1) === (currentPage$ | async)"
-                            class="page-link">Next &raquo;</button>
+                            class="page-link">Next &raquo;
+                    </button>
                   </li>
                 </ul>
               </nav>

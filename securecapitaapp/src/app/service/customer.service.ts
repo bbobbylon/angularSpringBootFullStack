@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpEvent } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import {
@@ -150,6 +150,16 @@ export class CustomerService {
   addInvoiceToCustomer$ = (customerId: number, invoice: InvoiceInterface): Observable<CustomHttpResponseInterface<NewInvoiceDataInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<NewInvoiceDataInterface>>(`${this.server}/customer/invoice/addtocustomer/${customerId}`, invoice)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  downloadCustomerReport$ = (): Observable<HttpEvent<Blob>> =>
+    this.http
+      .get<HttpEvent<Blob>>(`${this.server}/customer/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  downloadInvoiceReport$ = (): Observable<HttpEvent<Blob>> =>
+    this.http
+      .get<HttpEvent<Blob>>(`${this.server}/customer/invoice/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**

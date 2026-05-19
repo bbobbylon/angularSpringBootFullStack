@@ -143,6 +143,14 @@ public class CustomerServiceImpl implements CustomerService {
 
     /**
      * {@inheritDoc}
+     */
+    @Override
+    public Iterable<Invoice> getInvoices() {
+        return invoiceRepo.findAll();
+    }
+
+    /**
+     * {@inheritDoc}
      * Generates a 10-character alphanumeric invoice number before associating the invoice
      * with the customer and persisting.
      */
