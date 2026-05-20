@@ -4,20 +4,27 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.Invoice;
+import com.bob.angularspringbootfullstack.report.CustomerReport;
+import com.bob.angularspringbootfullstack.report.InvoiceReport;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpStatus.CREATED;
 import static org.springframework.http.HttpStatus.OK;
+import static org.springframework.http.MediaType.parseMediaType;
 
 /**
  * CustomerController handles all REST endpoints under {@code /customer}.
@@ -292,6 +299,54 @@ public class CustomerController {
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
+    }
+
+    /**
+     * Streams a full customer list as an XLSX file.
+     *
+     * <p>Fetches every customer via {@link CustomerService#getCustomers()} (no-arg, unpaginated),
+     * builds the workbook in {@link CustomerReport}, and returns it as an attachment so the
+     * browser triggers a file-save dialog. The Angular frontend calls this via
+     * {@code CustomerService.downloadCustomerReport$()}.
+     *
+     * @return 200 OK with an XLSX body and {@code Content-Disposition: attachment}
+     */
+    @GetMapping("/download/report")
+    public ResponseEntity<Resource> exportReport() { //throws InterruptedException {
+        //TimeUnit.SECONDS.sleep(2); // Simulate report generation time
+        List<Customer> customers = new ArrayList<>();
+        customerService.getCustomers().iterator().forEachRemaining(customers::add);
+        CustomerReport customerReport = new CustomerReport(customers);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("File-Name", "customer_report.xlsx");
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=customer_report.xlsx");
+        return ResponseEntity.ok()
+                .contentType(parseMediaType("application/vnd.ms-excel"))
+                .headers(headers)
+                .body(customerReport.exportReport());
+    }
+
+    /**
+     * Streams a full invoice list as an XLSX file.
+     *
+     * <p>Fetches every invoice via {@link CustomerService#getInvoices()} (no-arg, unpaginated),
+     * builds the workbook in {@link InvoiceReport}, and returns it as an attachment so the
+     * browser triggers a file-save dialog. The Angular frontend calls this via
+     * {@code CustomerService.downloadInvoiceReport$()}.
+     *
+     * @return 200 OK with an XLSX body and {@code Content-Disposition: attachment}
+     */
+    @GetMapping("/invoice/download/report")
+    public ResponseEntity<Resource> exportInvoiceReport() {
+        List<Invoice> invoices = new ArrayList<>();
+        customerService.getInvoices().iterator().forEachRemaining(invoices::add);
+        InvoiceReport invoiceReport = new InvoiceReport(invoices);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"invoice_report.xlsx\"");
+        return ResponseEntity.ok()
+                .contentType(parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .headers(headers)
+                .body(invoiceReport.exportReport());
     }
 
 }

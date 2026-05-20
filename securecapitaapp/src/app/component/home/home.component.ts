@@ -1,5 +1,5 @@
 import { Component, inject, Input, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, NgOptimizedImage } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { BehaviorSubject, catchError, combineLatest, map, Observable, of, startWith, switchMap } from 'rxjs';
 import { NavbarComponent } from '../navbar/navbar.component';
@@ -13,6 +13,8 @@ import { CustomerService } from '../../service/customer.service';
 import { ExtractArrayValuePipe } from '../../pipe/extract-array-value.pipe';
 import { UserInterface } from '../../interface/user.interface';
 import { CustomerInterface } from '../../interface/customer.interface';
+import { HttpEvent, HttpEventType } from '@angular/common/http';
+import { saveAs } from 'file-saver';
 
 /**
  * Main dashboard component displayed after login.
@@ -25,7 +27,7 @@ import { CustomerInterface } from '../../interface/customer.interface';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [CommonModule, RouterModule, NavbarComponent, StatsComponent, ExtractArrayValuePipe],
+  imports: [CommonModule, RouterModule, NavbarComponent, StatsComponent, ExtractArrayValuePipe, NgOptimizedImage],
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css'],
 })
@@ -45,7 +47,6 @@ export class HomeComponent implements OnInit {
    */
   homeState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerListDataInterface>>>;
   readonly title = signal('securecapitaapp');
-  fileStatus$: Observable<{ percent: number; type: string } | null> = of({ percent: 0, type: 'idle' });
   readonly pageSizeOptions = [10, 20, 50, 100] as const;
   protected readonly router = inject(Router);
   protected readonly showLogs = signal(true);
@@ -110,6 +111,9 @@ export class HomeComponent implements OnInit {
   private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListDataInterface>>(null);
   private isLoadingSubject = new BehaviorSubject<boolean>(false);
   protected isLoading$ = this.isLoadingSubject.asObservable();
+  private fileStatusSubject = new BehaviorSubject<{ status: string; type: string; percent: number }>(undefined);
+  fileStatus$ = this.fileStatusSubject.asObservable();
+  //fileStatus$: Observable<{ percent: number; type: string } | null> = of({ percent: 0, type: 'idle' });
 
   /**
    * Wires the home state observable to the combined page/size stream.
@@ -140,6 +144,15 @@ export class HomeComponent implements OnInit {
    */
   report(): void {
     console.log('report clicked');
+    this.homeState$ = this.customerService.downloadCustomerReport$().pipe(
+      map((response) => {
+        console.log(response);
+        this.reportProgress(response);
+        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
+      }),
+      startWith({ dataState: DataState.LOADING, appData: this.dataSubject.value }),
+      catchError((error: string) => of({ dataState: DataState.ERROR, error, appData: this.dataSubject.value })),
+    );
   }
 
   /**
@@ -236,5 +249,28 @@ export class HomeComponent implements OnInit {
    */
   protected getDefaultImageC(id: number): string {
     return this.localDefaultImages[id % this.localDefaultImages.length];
+  }
+
+  private reportProgress(httpEvent: HttpEvent<string[] | Blob>): void {
+    switch (httpEvent.type) {
+      case HttpEventType.UploadProgress:
+      case HttpEventType.DownloadProgress:
+        this.fileStatusSubject.next({
+          status: 'progress',
+          type: 'Downloading File',
+          percent: Math.round((100 * httpEvent.loaded) / (httpEvent.total ?? httpEvent.loaded)),
+        });
+        break;
+      case HttpEventType.ResponseHeader:
+        console.log('Received Response headers!', httpEvent);
+        break;
+      case HttpEventType.Response:
+        saveAs(new File([httpEvent.body as Blob], 'customer_report.xlsx', { type: `${httpEvent.headers.get('Content-Type')};charset=utf-8` }));
+        this.fileStatusSubject.next(undefined);
+        break;
+      default:
+        console.log(httpEvent);
+        break;
+    }
   }
 }

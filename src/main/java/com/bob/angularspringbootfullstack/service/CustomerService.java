@@ -80,6 +80,13 @@ public interface CustomerService {
     Page<Invoice> getInvoices(int page, int size);
 
     /**
+     * Returns all invoices without pagination, for use in report generation.
+     *
+     * @return an {@link Iterable} of every {@link Invoice} in the system
+     */
+    Iterable<Invoice> getInvoices();
+
+    /**
      * Creates a new invoice and associates it with an existing customer.
      * Generates a unique invoice number automatically.
      *

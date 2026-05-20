@@ -9,6 +9,8 @@ import { CustomHttpResponseInterface } from '../../interface/customhttpresponse.
 import { CustomerService } from '../../service/customer.service';
 import { InvoiceListDataInterface } from '../../interface/appstates.interface';
 import { catchError } from 'rxjs/operators';
+import { HttpEvent, HttpEventType } from '@angular/common/http';
+import { saveAs } from 'file-saver';
 
 /**
  * All-invoice list view with pagination.
@@ -52,6 +54,10 @@ export class InvoicesComponent implements OnInit {
   /** Observable of the current 0-based page index, used by the template to highlight the active page. */
   currentPage$ = this.currentPageSubject.asObservable();
 
+  private fileStatusSubject = new BehaviorSubject<{ status: string; type: string; percent: number }>(undefined);
+  /** Emits download progress state for the progress bar in the template. */
+  fileStatus$ = this.fileStatusSubject.asObservable();
+
   ngOnInit(): void {
     this.loadPage(0);
   }
@@ -90,5 +96,56 @@ export class InvoicesComponent implements OnInit {
       startWith({ dataState: DataState.LOADING }),
       catchError((error: string) => of({ dataState: DataState.ERROR, error })),
     );
+  }
+
+  /**
+   * Triggers the invoice XLSX download from {@code GET /customer/invoice/download/report}.
+   *
+   * Reassigns {@link invoiceState$} to the download stream so the progress bar in the
+   * template reacts to {@link HttpEventType} emissions. Once the download completes,
+   * {@link reportProgres} calls {@code saveAs} and resets the progress bar.
+   */
+  report(): void {
+    this.invoiceState$ = this.customerService.downloadInvoiceReport$().pipe(
+      map((response) => {
+        this.reportProgres(response);
+        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
+      }),
+      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
+      catchError((error: string) => of({ dataState: DataState.ERROR, error, appData: this.dataSubject.value })),
+    );
+  }
+
+  /**
+   * Handles individual {@link HttpEvent} emissions from the download stream.
+   *
+   * Updates {@link fileStatusSubject} with progress percentage during the download,
+   * and triggers {@code saveAs} when the complete {@link HttpEventType.Response} arrives.
+   *
+   * @param httpEvent - an event emitted by Angular's HTTP pipeline during the download
+   */
+  private reportProgres(httpEvent: HttpEvent<string[] | Blob>): void {
+    switch (httpEvent.type) {
+      case HttpEventType.UploadProgress:
+      case HttpEventType.DownloadProgress:
+        this.fileStatusSubject.next({
+          status: 'progress',
+          type: 'Downloading File',
+          percent: Math.round((100 * httpEvent.loaded) / (httpEvent.total ?? httpEvent.loaded)),
+        });
+        break;
+      case HttpEventType.ResponseHeader:
+        console.log('Received Response headers!', httpEvent);
+        break;
+      case HttpEventType.Response:
+        saveAs(
+          new File([httpEvent.body as Blob], 'invoice_report.xlsx', { type: `${httpEvent.headers.get('Content-Type')};charset=utf-8` }),
+        );
+        this.fileStatusSubject.next(undefined);
+        break;
+      default:
+        console.log(httpEvent);
+        break;
+    }
   }
 }

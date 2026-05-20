@@ -1,7 +1,7 @@
 package com.bob.angularspringbootfullstack.report;
 
 import com.bob.angularspringbootfullstack.exception.ApiException;
-import com.bob.angularspringbootfullstack.model.Customer;
+import com.bob.angularspringbootfullstack.model.Invoice;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.time.DateFormatUtils;
 import org.apache.poi.ss.usermodel.Cell;
@@ -15,40 +15,37 @@ import org.springframework.core.io.InputStreamResource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Generates an XLSX report of all customers using Apache POI.
+ * Generates an XLSX report of all invoices using Apache POI.
  *
- * <p>Construction is two-phase: the constructor initialises the {@link XSSFWorkbook},
- * creates a "Customers" sheet, and writes the bold header row via {@link #setHeaders()}.
- * Calling {@link #exportReport()} then writes all data rows and serialises the workbook
- * into a heap-backed {@link InputStreamResource} — no temp files are created or need
- * to be cleaned up.
+ * <p>Mirrors the structure of {@link CustomerReport}: the constructor initialises
+ * the workbook and writes column headers; {@link #exportReport()} triggers the
+ * data rows and returns the finished file as an {@link InputStreamResource} so
+ * Spring MVC can stream it directly to the HTTP response.
  *
- * <p>Used by {@code CustomerController.exportReport()} at
- * {@code GET /customer/download/report}.
- *
- * <p><strong>Note:</strong> instances are single-use. Calling {@link #exportReport()}
- * a second time would append duplicate rows to the same in-memory sheet.
+ * <p>Used by {@code CustomerController.exportInvoiceReport()} at
+ * {@code GET /customer/invoice/download/report}.
  */
 @Slf4j
-public class CustomerReport {
-    private static final String[] HEADERS = {"ID", "Name", "Type", "Email", "Phone Number", "Status", "Address", "Created At"};
-    private final List<Customer> customers;
+public class InvoiceReport {
+    private static final String[] HEADERS = {"ID", "Invoice Number", "Services", "Status", "Date", "Total Amount", "Customer"};
+    private final List<Invoice> invoices;
     private final XSSFWorkbook workbook;
     private final XSSFSheet sheet;
 
     /**
      * Initialises the workbook and writes the header row.
      *
-     * @param customers the full list of customers to include in the report;
-     *                  passed directly to {@link #generateReport()} without filtering
+     * @param invoices the full list of invoices to include in the report;
+     *                 passed directly to {@link #generateReport()} without filtering
      */
-    public CustomerReport(List<Customer> customers) {
-        this.customers = customers;
+    public InvoiceReport(List<Invoice> invoices) {
+        this.invoices = invoices;
         workbook = new XSSFWorkbook();
-        sheet = workbook.createSheet("Customers");
+        sheet = workbook.createSheet("Invoices");
         setHeaders();
     }
 
@@ -83,11 +80,11 @@ public class CustomerReport {
     }
 
     /**
-     * Writes one row per customer and serialises the workbook to a byte array.
+     * Writes one row per invoice and serialises the workbook to a byte array.
      *
-     * <p>The {@code createdAt} date is formatted as {@code yyyy-MM-dd hh:mm:ss};
-     * a null date is written as an empty string to avoid an NPE from
-     * {@link DateFormatUtils#format(java.util.Date, String)}.
+     * <p>The services list is joined as a comma-separated string. The {@code invoiceDate}
+     * is formatted as {@code yyyy-MM-dd}; null dates and null customers are written as
+     * empty strings to avoid NPEs from {@link DateFormatUtils#format(java.util.Date, String)}.
      *
      * @return an {@link InputStreamResource} backed by the in-memory XLSX bytes
      * @throws ApiException if POI fails to write the workbook
@@ -99,24 +96,31 @@ public class CustomerReport {
             font.setFontHeightInPoints((short) 14);
             style.setFont(font);
             int rowIndex = 1;
-            for (Customer customer : customers) {
+            for (Invoice invoice : invoices) {
                 Row row = sheet.createRow(rowIndex++);
-                row.createCell(0).setCellValue(customer.getId());
-                row.createCell(1).setCellValue(customer.getCustomerName());
-                row.createCell(2).setCellValue(customer.getType());
-                row.createCell(3).setCellValue(customer.getEmail());
-                row.createCell(4).setCellValue(customer.getPhoneNumber());
-                row.createCell(5).setCellValue(customer.getStatus());
-                row.createCell(6).setCellValue(customer.getAddress());
-                row.createCell(7).setCellValue(customer.getCreatedAt() != null
-                        ? DateFormatUtils.format(customer.getCreatedAt(), "yyyy-MM-dd hh:mm:ss")
+                row.createCell(0).setCellValue(invoice.getId());
+                row.createCell(1).setCellValue(invoice.getInvoiceNumber());
+                row.createCell(2).setCellValue(
+                        invoice.getServices() != null
+                                ? invoice.getServices().stream()
+                                        .map(s -> s.getName())
+                                        .collect(Collectors.joining(", "))
+                                : ""
+                );
+                row.createCell(3).setCellValue(invoice.getStatus());
+                row.createCell(4).setCellValue(invoice.getInvoiceDate() != null
+                        ? DateFormatUtils.format(invoice.getInvoiceDate(), "yyyy-MM-dd")
+                        : "");
+                row.createCell(5).setCellValue(invoice.getTotalAmount() != null ? invoice.getTotalAmount() : 0.0);
+                row.createCell(6).setCellValue(invoice.getCustomer() != null
+                        ? invoice.getCustomer().getCustomerName()
                         : "");
             }
             workbook.write(outputStream);
             return new InputStreamResource(new ByteArrayInputStream(outputStream.toByteArray()));
         } catch (Exception e) {
-            log.error("Error generating customer report: {}", e.getMessage());
-            throw new ApiException("Failed to generate report");
+            log.error("Error generating invoice report: {}", e.getMessage());
+            throw new ApiException("Failed to generate invoice report");
         }
     }
 }
