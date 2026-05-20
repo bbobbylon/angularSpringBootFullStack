@@ -26,6 +26,16 @@ export class RegisterComponent {
   readonly DataState = DataState;
   protected readonly userService = inject(UserService);
 
+  /**
+   * Submits the registration form to the backend and drives the component state.
+   *
+   * Uses {@code startWith} to immediately enter LOADING state, maps a successful response
+   * to the success screen (resetting the form in the process), and catches errors to display
+   * them inline without breaking the observable chain.
+   *
+   * @param registerForm - the template-driven form reference containing firstName, lastName,
+   *                       email, and password field values
+   */
   register(registerForm: NgForm): void {
     this.registerState$ = this.userService.register$(registerForm.value).pipe(
       map((response) => {

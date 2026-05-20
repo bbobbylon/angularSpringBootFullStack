@@ -132,6 +132,13 @@ export interface CustomerInvoiceUserInterface {
   invoice: InvoiceInterface;
   customer: CustomerInterface;
 }
+/**
+ * Reactive state shape for the user registration flow.
+ *
+ * Drives the {@link RegisterComponent} template: {@code dataState} controls the loading
+ * spinner and error alert; {@code registerSuccess} switches between the form view and the
+ * success confirmation screen; {@code message} carries the server's confirmation text.
+ */
 export interface RegisterStateInterface {
   error?: string;
   dataState: DataState;
@@ -140,10 +147,28 @@ export interface RegisterStateInterface {
   registerError?: boolean;
 }
 
+/**
+ * Reactive state shape for the password reset request flow.
+ *
+ * Drives the {@link ResetPasswordComponent} template: {@code dataState} controls the
+ * loading spinner and error alert; {@code resetPasswordSuccess} switches to the success
+ * confirmation screen; {@code message} carries the server's confirmation text shown after
+ * the reset email is dispatched.
+ */
 export interface ResetPasswordStateInterface {
   error?: string;
   dataState: DataState;
   message?: string;
   resetPasswordSuccess?: boolean;
   resetPasswordError?: boolean;
+}
+export type AccountType = 'account' | 'password';
+
+export interface VerifyStateInterface {
+  dataState: DataState;
+  verifySuccess?: boolean;
+  error?: string;
+  message?: string;
+  title?: string;
+  type?: AccountType;
 }
