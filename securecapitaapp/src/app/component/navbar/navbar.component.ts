@@ -2,6 +2,7 @@ import { Component, inject, Input } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { UserService } from '../../service/user.service';
 import { UserInterface } from '../../interface/user.interface';
+import { NgOptimizedImage } from '@angular/common';
 
 /**
  * Top navigation bar component.
@@ -21,7 +22,7 @@ import { UserInterface } from '../../interface/user.interface';
  */
 @Component({
   selector: 'app-navbar',
-  imports: [RouterLink],
+  imports: [RouterLink, NgOptimizedImage],
   templateUrl: './navbar.component.html',
   styleUrl: './navbar.component.css',
 })

@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { AsyncPipe, DatePipe } from '@angular/common';
+import { AsyncPipe, DatePipe, NgOptimizedImage } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NavbarComponent } from '../navbar/navbar.component';
@@ -23,7 +23,7 @@ import { RolesInterface } from '../../interface/roles.interface';
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [FormsModule, RouterLink, DatePipe, NavbarComponent, AsyncPipe],
+  imports: [FormsModule, RouterLink, DatePipe, NavbarComponent, AsyncPipe, NgOptimizedImage],
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.css',
 })

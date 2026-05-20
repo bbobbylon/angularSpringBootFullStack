@@ -20,10 +20,12 @@
                   <div class="d-flex align-items-start">
                     <td>
                       <!-- Option C: [src]="customer.imageUrl || getDefaultImageC(customer.id)" -->
-                      <img (error)="$any($event.target).src = defaultImage"
-                           [alt]="state?.appData?.data?.customers.customerName"
-                           [src]="state?.appData?.data?.customers.imageUrl || getDefaultImageC(state?.appData?.data?.customers.id)"
-                           class="rounded-circle" height="42" width="42">
+                      <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
+                        <img [alt]="state?.appData?.data?.customers.customerName"
+                             [ngSrc]="state?.appData?.data?.customers.imageUrl || getDefaultImageC(state?.appData?.data?.customers.id)"
+                             fill
+                             style="object-fit: cover;">
+                      </div>
                     </td>
                     <div class="w-100 ms-4">
                       <h4 class="my-0">{{ state?.appData?.data?.customers.customerName }}</h4>

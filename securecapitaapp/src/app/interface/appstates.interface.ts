@@ -139,3 +139,11 @@ export interface RegisterStateInterface {
   registerSuccess?: boolean;
   registerError?: boolean;
 }
+
+export interface ResetPasswordStateInterface {
+  error?: string;
+  dataState: DataState;
+  message?: string;
+  resetPasswordSuccess?: boolean;
+  resetPasswordError?: boolean;
+}

@@ -19,10 +19,14 @@
         <div class="profile-tab-nav border-right">
           <div class="p-4">
             <div class="img-circle text-center mb-3">
-              <span style="position: relative">
-                <img [alt]="state?.appData?.data?.user.firstName" [src]="state?.appData?.data?.user.imageUrl"
-                     class="shadow" />
-                <button (click)="fileInput.click()" class="bi bi-camera-fill right-position "
+              <span style="position: relative; display: inline-block;">
+                <div style="position: relative; width: 100px; height: 100px; border-radius: 50%; overflow: hidden; border: 5px solid #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
+                  <img [alt]="state?.appData?.data?.user.firstName"
+                       [ngSrc]="state?.appData?.data?.user.imageUrl"
+                       fill
+                       style="object-fit: cover;">
+                </div>
+                <button (click)="fileInput.click()" class="bi bi-camera-fill right-position"
                         type="button"></button>
               </span>
             </div>

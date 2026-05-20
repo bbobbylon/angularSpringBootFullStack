@@ -45,7 +45,9 @@
              id="navbarDropdownProfile"
              role="button">
             @if (user; as u) {
-              <img [alt]="u.firstName" [src]="u.imageUrl" class="user-avatar-md" style="max-width: 60px">
+              <div style="position: relative; width: 60px; height: 60px; border-radius: 50%; overflow: hidden;">
+                <img [alt]="u.firstName" [ngSrc]="u.imageUrl" fill style="object-fit: cover;" class="user-avatar-md">
+              </div>
             } @else {
               <i class="bi bi-person-circle" style="font-size: 1.5rem;"></i>
             }

@@ -14,7 +14,6 @@
 
         @if (fileStatus$ | async; as status) {
           <div class="progress">
-            {{ fileStatus$ | async | json }}
             <div [attr.aria-valuenow]="status.percent" [style.width.%]="status.percent" aria-valuemax="100"
                  aria-valuemin="0" class="progress-bar bg-success" role="progressbar">
               {{ status.type }} {{ status.percent }} %

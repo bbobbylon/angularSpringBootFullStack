@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+import { CommonModule, NgOptimizedImage } from '@angular/common';
 import { Component, inject, Input, OnInit } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router, RouterModule } from '@angular/router';
@@ -22,7 +22,7 @@ import { NavbarComponent } from '../navbar/navbar.component';
  */
 @Component({
   selector: 'app-customer-details',
-  imports: [CommonModule, RouterModule, FormsModule, NavbarComponent, ExtractArrayValuePipe],
+  imports: [CommonModule, RouterModule, FormsModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage],
   templateUrl: './customer-details.component.html',
   standalone: true,
   styleUrl: './customer-details.component.css',
