@@ -50,6 +50,11 @@ export class UserService {
       .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/login`, { email, password })
       .pipe(tap(console.log), catchError(this.handleError));
 
+  register$ = (user: UserInterface & { password: string }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/register`, user)
+      .pipe(tap(console.log), catchError(this.handleError));
+
   /**
    * Fetches the currently authenticated user's profile from the backend.
    * The request is automatically decorated with the access token by the token interceptor.
@@ -83,7 +88,7 @@ export class UserService {
         CustomHttpResponseInterface<ProfileInterface>
       >(`${this.server}/user/refresh/token`, { headers: { Authorization: `Bearer ${localStorage.getItem(Key.REFRESH_TOKEN)}` } })
       .pipe(
-        tap(response => {
+        tap((response) => {
           console.log('Received refresh token response:', response);
           localStorage.removeItem(Key.TOKEN);
           localStorage.removeItem(Key.REFRESH_TOKEN);
@@ -112,7 +117,7 @@ export class UserService {
     confirmPassword: string;
   }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http.patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/password`, form).pipe(
-      tap(response => {
+      tap((response) => {
         localStorage.removeItem(Key.TOKEN);
         localStorage.removeItem(Key.REFRESH_TOKEN);
         localStorage.setItem(Key.TOKEN, response.data.access_token);
