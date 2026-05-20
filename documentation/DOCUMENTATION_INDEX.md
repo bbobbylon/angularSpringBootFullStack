@@ -4,6 +4,19 @@
 
 ---
 
+## Deployment & Containerization
+
+This index focuses on the security architecture. For deployment topics see the
+**[root README](../README.md)**:
+
+- **Quick Start (Docker)** — `./deploy.sh` / `.\deploy.ps1`, what gets built, what ports
+- **Architecture diagram** — Browser → Spring Boot (with embedded SPA) → MySQL
+- **Docker Stack Layout** — what's in `docker-compose.yml` and why
+- **Environment Variables** — `.env` reference and Spring profile mapping
+- **Cloud Deployment** — current Azure App Service pipeline + planned AWS path
+
+---
+
 ## 🚀 START HERE - Reading Order
 
 ### For Complete Beginners to Spring Security:

@@ -1,0 +1,97 @@
+# Pull-request CI — runs on every PR and on pushes to non-protected branches.
+# This workflow does NOT push images or deploy. Its job is to catch breakage
+# before code is merged.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches-ignore:
+      - master   # master pushes trigger the deploy workflows instead
+
+# Use concurrency to cancel older runs on the same PR — saves CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Maven + Tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Maven verify (compile + test + dependency-check)
+        # `verify` runs the full lifecycle short of installing — good fit for CI.
+        # We skip the OWASP dependency-check on PRs because it downloads a large
+        # NVD database; enable it on master/scheduled builds instead.
+        run: ./mvnw -B -ntp verify -DskipITs=false -Ddependency-check.skip=true
+
+      - name: Upload surefire reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 7
+
+  frontend:
+    name: Frontend (Angular Lint + Build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: securecapitaapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: securecapitaapp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  docker:
+    name: Docker (Build only, no push)
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build only — no registry login or push. Confirms the Dockerfile is healthy.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: securecapita:ci-${{ github.sha }}
+          # GitHub Actions cache — speeds up rebuilds dramatically when only app
+          # code changes (Maven deps and npm modules stay cached between runs).
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

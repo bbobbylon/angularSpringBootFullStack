@@ -13,6 +13,11 @@ This project was generated using [Angular CLI](https://github.com/angular/angula
 
 To start a local development server, run `npm run start` and navigate to `http://localhost:4200`. The frontend will proxy API requests to the Spring Boot backend at `http://localhost:8080`.
 
+> **Running via Docker?** The whole stack (this Angular SPA + the Spring Boot API + MySQL +
+> Adminer) can be brought up with a single command from the repo root: `./deploy.sh` (or
+> `.\deploy.ps1` on Windows). The SPA is then served by Spring Boot at `http://localhost:8090`.
+> See the [root README](../README.md) for full Docker quickstart and architecture notes.
+
 ## Architecture Snapshot
 
 ```

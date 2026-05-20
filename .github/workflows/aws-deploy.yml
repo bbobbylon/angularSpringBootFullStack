@@ -1,0 +1,77 @@
+# AWS deploy workflow — triggers on push to master.
+#
+# Prerequisites (one-time):
+#   1. Deploy the CloudFormation stack: infrastructure/aws/cloudformation-stack.yaml
+#   2. Set up OIDC trust between GitHub and AWS — gives this workflow short-lived
+#      credentials without storing AWS access keys as GitHub secrets.
+#      Guide: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+#   3. Set these GitHub repository secrets:
+#        AWS_ROLE_ARN     — the IAM role created in step 2
+#        AWS_REGION       — e.g. us-east-1
+#        ECR_REPOSITORY   — usually 'securecapita' (matches CFN stack)
+#
+# App Runner has AutoDeploymentsEnabled=true (from cloudformation-stack.yaml),
+# so pushing a new image to ECR triggers App Runner to pull and redeploy.
+# We still issue an explicit StartDeployment call for predictability.
+
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:   # allow manual trigger from the GitHub UI
+
+permissions:
+  id-token: write     # required for OIDC token exchange
+  contents: read
+
+concurrency:
+  group: aws-deploy
+  cancel-in-progress: false   # let deploys finish, don't cancel mid-deploy
+
+jobs:
+  deploy:
+    name: Build, Push to ECR, Deploy to App Runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.ecr-login.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trigger App Runner deployment
+        # `start-deployment` forces App Runner to pull the new :latest tag and roll
+        # it out, even if AutoDeployments hasn't picked up the change yet.
+        run: |
+          SERVICE_ARN=$(aws apprunner list-services \
+            --query "ServiceSummaryList[?ServiceName=='${{ secrets.ECR_REPOSITORY }}'].ServiceArn | [0]" \
+            --output text)
+          if [ -z "$SERVICE_ARN" ] || [ "$SERVICE_ARN" = "None" ]; then
+            echo "::error::Could not find App Runner service '${{ secrets.ECR_REPOSITORY }}'. Did the CloudFormation stack deploy?"
+            exit 1
+          fi
+          echo "Triggering deployment for $SERVICE_ARN"
+          aws apprunner start-deployment --service-arn "$SERVICE_ARN"

@@ -72,6 +72,25 @@ class SecurityConfig {
             };
 
     /**
+     * GET-only patterns that match Angular's static build output served from
+     * {@code src/main/resources/static/} when the SPA is embedded in the JAR.
+     * <p>
+     * Angular's production build emits hashed bundles at the root (for example
+     * {@code main-AB12CD.js}, {@code styles-AB12CD.css}), and supporting assets
+     * under {@code /assets/**}. These need to load before the user is
+     * authenticated — otherwise the login page itself can't render.
+     */
+    private static final String[] SPA_STATIC_RESOURCES = {
+            "/",
+            "/index.html",
+            "/favicon.ico",
+            "/*.js", "/*.css", "/*.map",
+            "/*.svg", "/*.png", "/*.jpg", "/*.jpeg", "/*.gif", "/*.webp", "/*.avif", "/*.ico",
+            "/*.woff", "/*.woff2", "/*.ttf", "/*.eot",
+            "/assets/**", "/media/**"
+    };
+
+    /**
      * JWT validation filter inserted before {@link UsernamePasswordAuthenticationFilter}.
      * Parses and validates the Bearer token on every request and populates the
      * {@code SecurityContext} with the authenticated principal on success.
@@ -134,6 +153,8 @@ class SecurityConfig {
                             .requestMatchers(POST, "/user/login").permitAll()
                             .requestMatchers("/actuator/**").permitAll()
                             .requestMatchers(PUBLIC_URLS).permitAll()
+                            // SPA bootstrap files must be reachable without auth so login can render.
+                            .requestMatchers(GET, SPA_STATIC_RESOURCES).permitAll()
                             .requestMatchers(DELETE, "/user/delete/**").hasAnyAuthority("DELETE:USER")
                             .requestMatchers(DELETE, "/customer/delete/**").hasAnyAuthority("DELETE:CUSTOMER")
                             .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")

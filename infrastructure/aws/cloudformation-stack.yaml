@@ -1,0 +1,249 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  SecureCapita full-stack app on AWS — ECR repo, RDS MySQL, Secrets Manager,
+  and an App Runner service that pulls the image from ECR.
+
+  Deploy with:
+    aws cloudformation deploy \
+      --template-file infrastructure/aws/cloudformation-stack.yaml \
+      --stack-name securecapita-prod \
+      --capabilities CAPABILITY_NAMED_IAM \
+      --parameter-overrides DBMasterPassword=... JwtSecret=...
+
+  After deploy, push your first image (see infrastructure/aws/README.md) before
+  App Runner can start. Future pushes to the ECR repo auto-deploy.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Parameters — values you supply at deploy time
+# ─────────────────────────────────────────────────────────────────────────────
+Parameters:
+  AppName:
+    Type: String
+    Default: securecapita
+    Description: Prefix for all resource names. Lowercase, no spaces.
+
+  DBMasterUsername:
+    Type: String
+    Default: admin
+    Description: RDS master username. Cannot be 'root' on managed MySQL.
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+
+  DBMasterPassword:
+    Type: String
+    NoEcho: true
+    Description: RDS master password. 8-41 chars, no '/', '@', '"', or spaces.
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[^\s/@"]+'
+
+  DBName:
+    Type: String
+    Default: db2
+    Description: Initial database/schema name. Matches the app's expected schema.
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    Description: RDS instance size. db.t4g.micro is free-tier eligible.
+    AllowedValues:
+      - db.t4g.micro
+      - db.t4g.small
+      - db.t4g.medium
+
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Description: JWT signing key. Use 48+ random bytes (openssl rand -base64 48).
+    MinLength: 32
+
+  AppRunnerCpu:
+    Type: String
+    Default: "1024"
+    Description: App Runner vCPU (256, 512, 1024, 2048, 4096).
+    AllowedValues: ["256", "512", "1024", "2048", "4096"]
+
+  AppRunnerMemory:
+    Type: String
+    Default: "2048"
+    Description: App Runner memory in MB. Must be valid for the CPU value.
+    AllowedValues: ["512", "1024", "2048", "3072", "4096", "6144", "8192"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Resources
+# ─────────────────────────────────────────────────────────────────────────────
+Resources:
+
+  # ── ECR repository for the Docker image ──────────────────────────────────
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref AppName
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: MUTABLE   # so we can re-push `:latest`
+      LifecyclePolicy:
+        # Keep the 10 most recent images, delete the rest to control storage cost.
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Keep only the 10 most recent images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  # ── Secrets Manager — DB password + JWT secret ───────────────────────────
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${AppName}/db-password
+      Description: RDS master password for SecureCapita
+      SecretString: !Ref DBMasterPassword
+
+  JwtSecretSm:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${AppName}/jwt-secret
+      Description: JWT signing key for SecureCapita
+      SecretString: !Ref JwtSecret
+
+  # ── RDS MySQL ────────────────────────────────────────────────────────────
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${AppName} RDS access
+      SecurityGroupIngress:
+        # App Runner connects via the public endpoint; we limit by source SG in step 2.
+        # For initial bring-up, allow MySQL from anywhere (App Runner IP ranges are wide).
+        # Tighten to App Runner VPC connector subnets in the production hardening pass.
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+          Description: MySQL access (tighten after hardening pass)
+
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub ${AppName}-mysql
+      DBName: !Ref DBName
+      Engine: mysql
+      EngineVersion: "8.4"
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: "20"
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterPassword
+      VPCSecurityGroups:
+        - !GetAtt DBSecurityGroup.GroupId
+      PubliclyAccessible: true   # App Runner reaches it via public endpoint
+      BackupRetentionPeriod: 7
+      DeletionProtection: false  # Set true in real production
+      EnablePerformanceInsights: false  # not free tier
+      MultiAZ: false                    # not free tier
+
+  # ── IAM role: App Runner pulls images from ECR ───────────────────────────
+  AppRunnerEcrAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AppName}-apprunner-ecr-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+
+  # ── IAM role: App Runner instances read secrets at runtime ───────────────
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AppName}-apprunner-instance-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SecretsManagerRead
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DBPasswordSecret
+                  - !Ref JwtSecretSm
+
+  # ── App Runner service ───────────────────────────────────────────────────
+  AppRunnerService:
+    Type: AWS::AppRunner::Service
+    DependsOn:
+      - DBInstance
+      - EcrRepository
+    Properties:
+      ServiceName: !Ref AppName
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerEcrAccessRole.Arn
+        AutoDeploymentsEnabled: true   # auto-deploy when a new image is pushed
+        ImageRepository:
+          ImageRepositoryType: ECR
+          ImageIdentifier: !Sub ${EcrRepository.RepositoryUri}:latest
+          ImageConfiguration:
+            Port: "8080"
+            RuntimeEnvironmentVariables:
+              SPRING_PROFILES_ACTIVE: prod
+              SPRING_DATASOURCE_URL: !Sub jdbc:mysql://${DBInstance.Endpoint.Address}:${DBInstance.Endpoint.Port}/${DBName}?useSSL=true&requireSSL=true
+              SPRING_DATASOURCE_USERNAME: !Ref DBMasterUsername
+            RuntimeEnvironmentSecrets:
+              # App Runner pulls secret values from Secrets Manager and injects them as env vars.
+              SPRING_DATASOURCE_PASSWORD: !Ref DBPasswordSecret
+              JWT_SECRET: !Ref JwtSecretSm
+      InstanceConfiguration:
+        Cpu: !Ref AppRunnerCpu
+        Memory: !Ref AppRunnerMemory
+        InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /actuator/health
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 2
+        UnhealthyThreshold: 5
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Outputs — printed by `aws cloudformation describe-stacks`
+# ─────────────────────────────────────────────────────────────────────────────
+Outputs:
+  AppUrl:
+    Description: Public URL of the deployed app
+    Value: !Sub https://${AppRunnerService.ServiceUrl}
+
+  EcrRepositoryUri:
+    Description: Push images to this URI
+    Value: !GetAtt EcrRepository.RepositoryUri
+
+  DBEndpoint:
+    Description: RDS MySQL endpoint
+    Value: !GetAtt DBInstance.Endpoint.Address
+
+  DBJdbcUrl:
+    Description: Full JDBC URL — for local-from-laptop connectivity testing
+    Value: !Sub jdbc:mysql://${DBInstance.Endpoint.Address}:${DBInstance.Endpoint.Port}/${DBName}?useSSL=true&requireSSL=true

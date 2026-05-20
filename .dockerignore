@@ -9,3 +9,12 @@ securecapitaapp/node_modules
 securecapitaapp/dist
 target
 *.md
+.env
+.env.*
+!.env.example
+!.env.cloud.example
+docker-compose*.yml
+deploy.sh
+deploy.ps1
+docker/
+infrastructure/

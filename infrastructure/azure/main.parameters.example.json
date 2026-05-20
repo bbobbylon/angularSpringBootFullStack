@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "_comment": "Copy this file to main.parameters.json and fill in real values. Never commit main.parameters.json.",
+
+    "appName": {
+      "value": "securecapita"
+    },
+    "appServicePlanSku": {
+      "value": "B1"
+    },
+
+    "_comment_dbChoice": "Choose ONE: either createMySql=true (provision a new Azure MySQL) or createMySql=false (point at external like Aiven). The other block's values are ignored.",
+
+    "createMySql": {
+      "value": false
+    },
+
+    "_comment_azureMysql_block": "Used when createMySql=true",
+    "mySqlAdminUsername": {
+      "value": "mysqladmin"
+    },
+    "mySqlAdminPassword": {
+      "value": "REPLACE_STRONG_PASSWORD_8_CHARS_MIXED_CASE_NUMBER_SYMBOL"
+    },
+
+    "_comment_externalMysql_block": "Used when createMySql=false — your existing Aiven / external DB",
+    "externalDatasourceUrl": {
+      "value": "jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/db2?useSSL=true&requireSSL=true"
+    },
+    "externalDatasourceUsername": {
+      "value": "avnadmin"
+    },
+    "externalDatasourcePassword": {
+      "value": "REPLACE_AIVEN_PASSWORD"
+    },
+
+    "jwtSecret": {
+      "value": "REPLACE_WITH_BASE64_48_BYTE_SECRET_FROM_openssl_rand_base64_48"
+    }
+  }
+}

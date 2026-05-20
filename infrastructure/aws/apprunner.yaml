@@ -1,0 +1,40 @@
+# App Runner service configuration.
+#
+# This file is OPTIONAL if you use the CloudFormation template — the same settings
+# are encoded there. Use this file when you're configuring App Runner manually
+# (Console → Create service → Container image → Use a configuration file) or via
+# `aws apprunner create-service --cli-input-yaml file://apprunner.yaml`.
+#
+# See: https://docs.aws.amazon.com/apprunner/latest/dg/config-file.html
+version: 1.0
+runtime: docker
+
+build:
+  # No build step — the image is already built and pushed to ECR.
+  # If you wanted source-based deployment (App Runner builds from your repo),
+  # you'd use `runtime: corretto21` and define commands here.
+  commands:
+    pre-build: []
+
+run:
+  runtime-version: latest
+  command: java -jar /app/app.jar
+  network:
+    port: 8080
+  env:
+    # Public, non-sensitive values. Secrets go through Secrets Manager — see below.
+    - name: SPRING_PROFILES_ACTIVE
+      value: prod
+    - name: SERVER_TOMCAT_MAX_THREADS
+      value: "100"
+  secrets:
+    # Reference the Secrets Manager secrets created by cloudformation-stack.yaml
+    # (or your own, if you provisioned them another way).
+    - name: SPRING_DATASOURCE_URL
+      value-from: arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:securecapita/datasource-url
+    - name: SPRING_DATASOURCE_USERNAME
+      value-from: arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:securecapita/datasource-username
+    - name: SPRING_DATASOURCE_PASSWORD
+      value-from: arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:securecapita/db-password
+    - name: JWT_SECRET
+      value-from: arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:securecapita/jwt-secret

@@ -1,0 +1,90 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Local development & production-like Docker stack.
+#
+# Services:
+#   app      — Spring Boot JAR (with Angular SPA embedded), port 8080
+#   mysql    — MySQL 8.4 LTS, port 3306, persistent volume, auto-runs schema.sql
+#   adminer  — lightweight web DB UI, port 8081 — visit http://localhost:8081
+#
+# Secrets are read from .env (not committed). Copy .env.example to .env first.
+#
+# Usage:
+#   ./deploy.sh         # build, start, wait for healthy, tail logs
+#   docker compose up   # plain start (foreground)
+#   docker compose down # stop and remove containers (volume kept)
+#   docker compose down -v   # also wipe DB volume — fresh slate next start
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: securecapita-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-db2}
+    ports:
+      # Host port 3307 → container port 3306 so a local MySQL on 3306 doesn't conflict.
+      # The app container talks to MySQL on the docker network at `mysql:3306` regardless.
+      # Remove this block entirely in production-like setups where the DB shouldn't be reachable from outside.
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Mounted read-only — runs ONCE when the named volume is empty (first start).
+      # On later starts the volume already exists, so this is skipped automatically.
+      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - app-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: securecapita-app:local
+    container_name: securecapita-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        # Don't start the app until MySQL is actually ready to accept connections —
+        # not just "container started." Avoids the classic boot-race flake.
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-db2}?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      # Host port is configurable via APP_PORT in .env (default 8090) so it doesn't
+      # clash with a native Spring Boot dev server already on 8080. The container
+      # still listens on 8080 internally — matches production exactly.
+      - "${APP_PORT:-8090}:8080"
+    networks:
+      - app-network
+
+  adminer:
+    image: adminer:5
+    container_name: securecapita-adminer
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    name: securecapita-mysql-data

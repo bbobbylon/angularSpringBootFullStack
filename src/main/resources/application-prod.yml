@@ -1,18 +1,107 @@
+# Production profile — used inside the Docker image and in Azure / AWS.
+# All secrets come from environment variables. NEVER commit real values here.
+#
+# Required env vars at runtime:
+#   SPRING_DATASOURCE_URL          (e.g. jdbc:mysql://host:port/db?useSSL=true)
+#   SPRING_DATASOURCE_USERNAME
+#   SPRING_DATASOURCE_PASSWORD
+#   JWT_SECRET                     (48+ random bytes, base64 or hex)
+#
+# Optional env vars (with sensible defaults below):
+#   DB_POOL_MAX_SIZE               default 10  — Hikari max connections
+#   DB_POOL_MIN_IDLE               default 2   — Hikari min idle connections
+#   DB_CONNECTION_TIMEOUT_MS       default 30000
+#   DB_INIT_FAIL_TIMEOUT_MS        default 60000 — wait this long for DB on startup
+#   SERVER_TOMCAT_MAX_THREADS      default 200
+#   LOG_LEVEL_ROOT                 default INFO
+
+jwt:
+  secret: ${JWT_SECRET}
+
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+    # HikariCP is Spring Boot's default pool. Tuned values matter in production —
+    # defaults assume a developer machine, not a managed RDS / Aiven instance.
+    hikari:
+      # initialization-fail-timeout > 0 makes Spring retry the initial connection
+      # instead of crashing the app. Critical when RDS / Aiven cold-starts the DB.
+      initialization-fail-timeout: ${DB_INIT_FAIL_TIMEOUT_MS:60000}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      # max-lifetime should be a few minutes shorter than the DB's wait_timeout
+      # to avoid using stale connections the DB has already silently closed.
+      max-lifetime: 1700000   # 28m 20s (MySQL default wait_timeout is 28800s / 8h, but proxies close earlier)
+      idle-timeout: 600000    # 10m
+      pool-name: SecureCapitaHikariPool
+      # Fail fast on a startup config error rather than hanging forever.
+      validation-timeout: 5000
   jpa:
     show-sql: false
+    open-in-view: false   # avoid the "open session in view" antipattern in REST APIs
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
         globally_quoted_identifiers: true
         format_sql: false
+        # Batch INSERTs / UPDATEs for performance on bulk operations.
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
     generate-ddl: true
   sql:
     init:
       mode: never
       continue-on-error: false
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  web:
+    error:
+      path: /user/error
+      whitelabel:
+        enabled: false
+
+server:
+  # Tomcat-level tuning. Override via env var if your instance size warrants it.
+  tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_MAX_THREADS:200}
+    # Trust X-Forwarded-* headers when running behind a reverse proxy
+    # (Azure App Service, AWS ALB, App Runner all forward these).
+    remoteip:
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+  forward-headers-strategy: native
+  # Graceful shutdown so in-flight requests aren't killed mid-transaction.
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: never
+      # Include readiness/liveness probes so K8s, App Runner, App Service can use them.
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+  # Use a structured pattern that cloud log aggregators can parse easily.
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger{36} - %msg%n"

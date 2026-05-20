@@ -181,6 +181,10 @@
     </profiles>
 
     <build>
+        <!-- Stable, predictable JAR name so the Dockerfile COPY pattern
+             doesn't need to know the version. Without this, the JAR is
+             named "angularSpringBootFullStack-0.0.1-SNAPSHOT.jar". -->
+        <finalName>app</finalName>
         <plugins>
             <plugin>
                 <groupId>org.owasp</groupId>
@@ -205,6 +209,16 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <!-- Optional: build OCI image with Cloud Native Buildpacks
+                         as an alternative to the Dockerfile. Run with:
+                           ./mvnw spring-boot:build-image -Pprod
+                         Produces a layered image at securecapita/app:latest. -->
+                    <image>
+                        <name>securecapita/app:${project.version}</name>
+                        <env>
+                            <BP_JVM_VERSION>21</BP_JVM_VERSION>
+                        </env>
+                    </image>
                 </configuration>
             </plugin>
             <plugin>
