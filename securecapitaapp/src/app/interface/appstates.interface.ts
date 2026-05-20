@@ -132,3 +132,10 @@ export interface CustomerInvoiceUserInterface {
   invoice: InvoiceInterface;
   customer: CustomerInterface;
 }
+export interface RegisterStateInterface {
+  error?: string;
+  dataState: DataState;
+  message?: string;
+  registerSuccess?: boolean;
+  registerError?: boolean;
+}

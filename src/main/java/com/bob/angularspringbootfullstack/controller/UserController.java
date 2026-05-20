@@ -106,7 +106,7 @@ public class UserController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userDTO))
-                        .message("User created successfully!")
+                        .message(String.format("User created successfully for user: " + userDTO.getEmail()))
                         .status(CREATED)
                         .statusCode(CREATED.value())
                         .build());
