@@ -55,6 +55,11 @@ export class UserService {
       .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/register`, user)
       .pipe(tap(console.log), catchError(this.handleError));
 
+  requestPasswordReset$ = (email: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/resetpassword/${email}`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
   /**
    * Fetches the currently authenticated user's profile from the backend.
    * The request is automatically decorated with the access token by the token interceptor.

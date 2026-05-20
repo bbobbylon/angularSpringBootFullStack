@@ -1,4 +1,12 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
+import { map, Observable, of, startWith } from 'rxjs';
+import { ResetPasswordStateInterface } from '../../interface/appstates.interface';
+import { UserService } from '../../service/user.service';
+import { FormsModule, NgForm } from '@angular/forms';
+import { catchError } from 'rxjs/operators';
+import { DataState } from '../../enumeration/datastate.enum';
+import { RouterLink } from '@angular/router';
+import { AsyncPipe } from '@angular/common';
 
 /**
  * Password reset view used after a reset link is verified.
@@ -7,8 +15,27 @@ import { Component } from '@angular/core';
  */
 @Component({
   selector: 'app-resetpassword',
-  imports: [],
+  imports: [RouterLink, FormsModule, AsyncPipe],
   templateUrl: './resetpassword.component.html',
   styleUrl: './resetpassword.component.css',
 })
-export class ResetPasswordComponent {}
+export class ResetPasswordComponent {
+  resetPasswordState$: Observable<ResetPasswordStateInterface> = of({ dataState: DataState.LOADED });
+
+  protected readonly userService = inject(UserService);
+  protected readonly DataState = DataState;
+
+  resetPassword(resetPasswordForm: NgForm): void {
+    this.resetPasswordState$ = this.userService.requestPasswordReset$(resetPasswordForm.value.resetPasswordEmail).pipe(
+      map((response) => {
+        console.log(response);
+        resetPasswordForm.reset();
+        return { dataState: DataState.LOADED, resetPasswordSuccess: true, message: response.message };
+      }),
+      startWith({ dataState: DataState.LOADING, resetPasswordSuccess: false }),
+      catchError((error: string) => {
+        return of({ dataState: DataState.ERROR, resetPasswordError: true, error });
+      }),
+    );
+  }
+}
