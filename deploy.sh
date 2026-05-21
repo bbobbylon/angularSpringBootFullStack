@@ -1,20 +1,31 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# deploy.sh — one-command local deployment.
+# deploy.sh — one-command deployment across local/dev/qa/stage/prod.
 #
 # What it does:
 #   1. Verifies docker + docker compose are installed
-#   2. Verifies .env exists (or creates it from .env.example with a warning)
+#   2. Selects the right .env.<environment> file (or legacy .env)
 #   3. Builds the multi-stage Docker image (Angular → Spring JAR → JRE runtime)
 #   4. Starts the stack (app + mysql + adminer)
 #   5. Waits for the app container to report healthy via Docker healthcheck
 #   6. Prints connection info and a hint to view logs
 #
-# Usage:
-#   ./deploy.sh           # build + start
-#   ./deploy.sh --logs    # build + start, then tail logs
-#   ./deploy.sh --clean   # wipe the DB volume first, then build + start
-#   ./deploy.sh --down    # stop everything (volume preserved)
+# Environment selection:
+#   ./deploy.sh                       # use .env (legacy) if it exists, else .env.local
+#   ./deploy.sh --env local           # use .env.local
+#   ./deploy.sh --env dev             # use .env.dev
+#   ./deploy.sh --env qa              # use .env.qa
+#   ./deploy.sh --env stage           # use .env.stage
+#   ./deploy.sh --env prod            # use .env.prod
+#
+#   Templates ship as .env.<name>.example. First-time setup:
+#       cp .env.local.example .env.local
+#       $EDITOR .env.local       # set MYSQL_ROOT_PASSWORD and JWT_SECRET
+#
+# Lifecycle flags:
+#   ./deploy.sh --logs                # build + start, then tail logs
+#   ./deploy.sh --clean               # wipe the DB volume first, then build + start
+#   ./deploy.sh --down                # stop everything (volume preserved)
 #
 # Cloud subcommands (push the local image to ECR / ACR):
 #   ./deploy.sh --aws-push    # build, tag, push to ECR (uses AWS CLI + .env.cloud)
@@ -40,19 +51,56 @@ warn() { printf '%s!%s   %s\n' "$C_WARN" "$C_RESET" "$*" >&2; }
 die()  { printf '%s✗%s   %s\n' "$C_ERR"  "$C_RESET" "$*" >&2; exit 1; }
 
 # ── Parse args ───────────────────────────────────────────────────────────────
+# --env <name> selects which .env.<name> file to use. Defaults to "local". The
+# old behavior (no flag) still works: if --env is omitted AND a plain .env file
+# exists, the plain .env is used so existing setups don't break. If neither
+# .env.<name> nor .env exists, the script aborts with a clear message.
 MODE="up"; TAIL_LOGS=0; CLEAN=0
+ENV_NAME=""
+NEXT_IS_ENV=0
 for arg in "$@"; do
+  if [[ "$NEXT_IS_ENV" -eq 1 ]]; then
+    ENV_NAME="$arg"; NEXT_IS_ENV=0; continue
+  fi
   case "$arg" in
     --logs)        TAIL_LOGS=1 ;;
     --clean)       CLEAN=1 ;;
     --down)        MODE="down" ;;
+    --env)         NEXT_IS_ENV=1 ;;
+    --env=*)       ENV_NAME="${arg#--env=}" ;;
     --aws-push)    MODE="aws-push" ;;
     --azure-push)  MODE="azure-push" ;;
     -h|--help)
-      sed -n '2,24p' "$0"; exit 0 ;;
+      sed -n '2,30p' "$0"; exit 0 ;;
     *) die "Unknown flag: $arg (try --help)" ;;
   esac
 done
+
+# ── Resolve which env file to use ────────────────────────────────────────────
+# Precedence: explicit --env > .env.local (default for --env-less invocation
+# when no plain .env exists) > legacy plain .env.
+if [[ -n "$ENV_NAME" ]]; then
+  ENV_FILE=".env.${ENV_NAME}"
+elif [[ -f .env ]]; then
+  ENV_FILE=".env"
+else
+  ENV_FILE=".env.local"
+  ENV_NAME="local"
+fi
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  if [[ -f "${ENV_FILE}.example" ]]; then
+    die "$ENV_FILE not found. Bootstrap it with: cp ${ENV_FILE}.example $ENV_FILE && \$EDITOR $ENV_FILE"
+  else
+    die "$ENV_FILE not found and no ${ENV_FILE}.example template exists."
+  fi
+fi
+
+log "Using environment file: ${ENV_FILE}${ENV_NAME:+ (--env $ENV_NAME)}"
+
+# Every `docker compose` invocation in this script is routed through this var
+# so the same env file flows to build, up, down, logs, etc. consistently.
+COMPOSE="docker compose --env-file $ENV_FILE"
 
 # ── Helper: load .env.cloud and require named vars ───────────────────────────
 load_cloud_env() {
@@ -82,7 +130,7 @@ ok "docker + compose available"
 # ── Tear-down mode short-circuits everything else ────────────────────────────
 if [[ "$MODE" == "down" ]]; then
   log "Stopping stack (volume preserved)"
-  docker compose down
+  $COMPOSE down
   ok "Stack stopped. Volume 'securecapita-mysql-data' kept — restart with ./deploy.sh"
   exit 0
 fi
@@ -141,39 +189,29 @@ if [[ "$MODE" == "azure-push" ]]; then
   exit 0
 fi
 
-# ── .env handling ────────────────────────────────────────────────────────────
-if [[ ! -f .env ]]; then
-  if [[ -f .env.example ]]; then
-    warn ".env not found — copying from .env.example."
-    warn "EDIT .env and change MYSQL_ROOT_PASSWORD and JWT_SECRET before exposing this to anything real."
-    cp .env.example .env
-  else
-    die "Neither .env nor .env.example present. Aborting."
-  fi
-fi
-
-# Refuse to deploy with placeholder secrets — easy mistake, painful in prod.
-if grep -qE '^(MYSQL_ROOT_PASSWORD=change-me|JWT_SECRET=replace-with)' .env; then
-  warn "Your .env still has placeholder values from .env.example."
+# ── Placeholder-secret guard ─────────────────────────────────────────────────
+# Refuse to deploy with the bundled example placeholders — easy to forget,
+# painful in prod. Local dev still works with these; the warning is informational.
+if grep -qE '^(MYSQL_ROOT_PASSWORD=change-me|JWT_SECRET=replace-with)' "$ENV_FILE"; then
+  warn "$ENV_FILE still has placeholder values."
   warn "Local dev will work, but DO NOT use these defaults outside your machine."
 fi
-ok ".env present"
 
 # ── Optional clean ───────────────────────────────────────────────────────────
 if [[ "$CLEAN" -eq 1 ]]; then
   log "Wiping previous stack + DB volume (--clean)"
-  docker compose down -v
+  $COMPOSE down -v
   ok "Volume wiped — fresh schema will be applied on next start"
 fi
 
 # ── Build ────────────────────────────────────────────────────────────────────
 log "Building images (this is the slow step — Angular + Maven dependency resolution)"
-docker compose build
+$COMPOSE build
 ok "Images built"
 
 # ── Start ────────────────────────────────────────────────────────────────────
 log "Starting stack in detached mode"
-docker compose up -d
+$COMPOSE up -d
 ok "Containers running"
 
 # ── Health wait ──────────────────────────────────────────────────────────────
@@ -193,7 +231,7 @@ while [[ $(date +%s) -lt $DEADLINE ]]; do
     healthy) break ;;
     unhealthy)
       warn "Container reported unhealthy. Recent logs:"
-      docker compose logs --tail=80 app >&2
+      $COMPOSE logs --tail=80 app >&2
       die "App failed to become healthy."
       ;;
   esac
@@ -208,17 +246,25 @@ fi
 ok "App is healthy"
 
 # ── Done ─────────────────────────────────────────────────────────────────────
+# Resolve the host-side app port the same way compose does: APP_PORT from the
+# active env file, falling back to 8090. Keeps these log lines in lockstep with
+# the actual binding in docker-compose.yml ("${APP_PORT:-8090}:8080") so they
+# can't lie to the user when the env file is swapped.
+APP_PORT="$(grep -E '^APP_PORT=' "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2-)"
+APP_PORT="${APP_PORT:-8090}"
+ENV_LABEL="${ENV_NAME:-default}"
+
 cat <<EOF
 
-${C_OK}Deployment complete.${C_RESET}
+${C_OK}Deployment complete.${C_RESET} (env: ${ENV_LABEL}, file: ${ENV_FILE})
 
-  ${C_INFO}App${C_RESET}      http://localhost:8080
-  ${C_INFO}Health${C_RESET}   http://localhost:8080/actuator/health
-  ${C_INFO}Adminer${C_RESET}  http://localhost:8081   (server: mysql, user: root, db: db2)
+  ${C_INFO}App${C_RESET}      http://localhost:${APP_PORT}   (Angular SPA + REST API — same origin)
+  ${C_INFO}Health${C_RESET}   http://localhost:${APP_PORT}/actuator/health
+  ${C_INFO}Adminer${C_RESET}  http://localhost:8081           (server: mysql, user: root, db: db2)
 
 Useful commands:
-  docker compose logs -f app     # follow app logs
-  docker compose logs -f mysql   # follow db logs
+  $COMPOSE logs -f app     # follow app logs
+  $COMPOSE logs -f mysql   # follow db logs
   docker compose ps              # see service status
   ./deploy.sh --down             # stop stack
   ./deploy.sh --clean            # wipe DB volume and rebuild

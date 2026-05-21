@@ -37,7 +37,7 @@ export class HttpCacheService {
    * The backing store for all cached responses.
    *
    * Keys are caller-defined strings — conventionally the full request URL
-   * (e.g. {@code 'http://localhost:8080/customer/list?page=0'}).
+   * (e.g. {@code '/customer/list?page=0'}).
    * Values are the complete {@link HttpResponse} objects returned by Angular's
    * {@link HttpClient}, stored without modification.
    */

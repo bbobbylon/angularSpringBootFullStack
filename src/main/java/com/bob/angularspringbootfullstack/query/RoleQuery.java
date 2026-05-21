@@ -30,7 +30,11 @@ public class RoleQuery {
      * the complete role information for a user.
      * Parameter: id (user_id)
      */
-    public static final String SELECT_ROLE_BY_ID_QUERY = "SELECT r.id, r.name, r.permission FROM roles r JOIN userroles ur ON ur.role_id = r.id JOIN Users u ON u.id = ur.user_id WHERE u.id = :id";
+    // Note: table name is lowercase `users` to match schema.sql. Windows MySQL is case-insensitive
+    // by default (lower_case_table_names=1), so `Users` worked there — but the Dockerized MySQL
+    // runs on Linux with lower_case_table_names=0 (case-sensitive), where `Users` errors out as
+    // "bad SQL grammar." Keeping all SQL identifiers lowercase makes the app portable across both.
+    public static final String SELECT_ROLE_BY_ID_QUERY = "SELECT r.id, r.name, r.permission FROM roles r JOIN userroles ur ON ur.role_id = r.id JOIN users u ON u.id = ur.user_id WHERE u.id = :id";
     /**
      * Selects every role row ordered by ID.
      * <p>

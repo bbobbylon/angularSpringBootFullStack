@@ -24,10 +24,12 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-db2}
     ports:
-      # Host port 3307 → container port 3306 so a local MySQL on 3306 doesn't conflict.
-      # The app container talks to MySQL on the docker network at `mysql:3306` regardless.
-      # Remove this block entirely in production-like setups where the DB shouldn't be reachable from outside.
-      - "3307:3306"
+      # Host port (configurable via MYSQL_HOST_PORT, default 3307) → container 3306.
+      # Default 3307 so a native MySQL on 3306 can coexist on the developer machine.
+      # The app container always talks to MySQL on the docker network at `mysql:3306`,
+      # regardless of this host-side mapping. Remove this block in production-like
+      # setups where the DB shouldn't be reachable from outside the docker network.
+      - "${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       # Mounted read-only — runs ONCE when the named volume is empty (first start).
@@ -55,10 +57,16 @@ services:
         # not just "container started." Avoids the classic boot-race flake.
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-db2}?useSSL=false&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # All values default to the local-docker configuration but every one is
+      # overridable via .env.<env>, so the same compose file serves local / dev /
+      # qa / stage / prod. See .env.local.example for the full list.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-db2}?useSSL=false&allowPublicKeyRetrieval=true}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-root}
+      # When the app uses the sidecar mysql container, the DB password is
+      # MYSQL_ROOT_PASSWORD; when pointed at an external DB, set this directly
+      # in the .env.<env> file via SPRING_DATASOURCE_PASSWORD and it wins.
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-${MYSQL_ROOT_PASSWORD}}
       JWT_SECRET: ${JWT_SECRET}
     ports:
       # Host port is configurable via APP_PORT in .env (default 8090) so it doesn't

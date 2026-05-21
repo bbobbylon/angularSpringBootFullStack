@@ -27,12 +27,22 @@ public class EventQuery {
     /**
      * Inserts a new audit entry for a user identified by their email address.
      *
-     * <p>Uses correlated subqueries to resolve the user ID and event type ID at
-     * insert time so callers never have to look up those foreign keys themselves.
-     * The {@code :type} parameter must exactly match a {@code type} value in the
-     * {@code events} reference table — a mismatch causes the subquery to return
-     * null, which triggers a NOT NULL constraint violation on {@code event_id}.
+     * <p>Uses an {@code INSERT ... SELECT} so the user and event-type lookups are
+     * filters rather than scalar subqueries. If either lookup misses (unknown
+     * email or unknown event type) the SELECT produces zero rows and the INSERT
+     * is a silent no-op — instead of throwing a NOT NULL constraint violation
+     * the way the older {@code VALUES ((SELECT ...))} form did. This matters most
+     * on failed-login flows, where the email coming in is by definition often
+     * one that does not exist; we don't want auditing to crash the login response.
+     *
+     * <p>{@code CROSS JOIN} is used because the two filter conditions are
+     * independent — we're picking exactly one user row and exactly one event
+     * row, with no relationship between them. The {@code WHERE} clauses make
+     * each side a one-row (or zero-row) lookup, so the cross-product is at
+     * most one row.
      */
     public static final String INSERT_EVENT_BY_USER_ID_QUERY = "INSERT INTO userevents (user_id, event_id, device, ip_address) " +
-            "VALUES ((SELECT id FROM users WHERE email = :email), (SELECT id FROM events WHERE type = :type), :device, :ipAddress)";
+            "SELECT u.id, ev.id, :device, :ipAddress " +
+            "FROM users u CROSS JOIN events ev " +
+            "WHERE u.email = :email AND ev.type = :type";
 }

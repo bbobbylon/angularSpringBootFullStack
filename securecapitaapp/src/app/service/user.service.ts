@@ -23,7 +23,11 @@ import { JwtHelperService } from '@auth0/angular-jwt';
 export class UserService {
   private http = inject(HttpClient);
   private jwtHelper = new JwtHelperService();
-  private readonly server: string = 'http://localhost:8080';
+  // Empty prefix → all requests use relative paths and resolve against the
+  // page origin. In Docker the SPA is served by Spring Boot on the same host:port,
+  // so same-origin calls reach the API directly. In `ng serve` dev mode the paths
+  // are matched by proxy.conf.json and forwarded to the local backend on 8080.
+  private readonly server: string = '';
 
   /**
    * Verifies a user's 2FA code after login.

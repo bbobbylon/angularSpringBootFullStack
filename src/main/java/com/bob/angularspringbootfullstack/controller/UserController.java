@@ -582,10 +582,14 @@ public class UserController {
             return loggedInUser;
         } catch (Exception e) {
             eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_FAILURE));
-            // After running our front end, we are seeing that processError is preventing from the actual backend error message to show up on the front end error message (in the alert), so we have commented this out. The reason behind this is that the processError is writing the response to the HttpServletResponse, which is not compatible with our current front end error handling approach. By commenting this out, we allow the ApiException to be thrown and handled by our GlobalExceptionHandler, which will return a structured JSON response that our front end can easily parse and display the error message in an alert. If we were to keep processError, it would interfere with the normal flow of exception handling and prevent our front end from receiving the expected error response format.
-            processError(request, response, e);
+            // processError(request, response, e) was intentionally removed: it writes
+            // directly to HttpServletResponse, which then collides with the
+            // GlobalExceptionHandler@ExceptionHandler that also tries to render a JSON
+            // body — resulting in "Could not write JSON: The response may not be
+            // written to once it has been closed" and an opaque 500 for the client.
+            // Letting ApiException propagate gives the handler sole ownership of the
+            // response so the SPA receives a clean structured error every time.
             throw new ApiException(e.getMessage());
-
         }
     }
 

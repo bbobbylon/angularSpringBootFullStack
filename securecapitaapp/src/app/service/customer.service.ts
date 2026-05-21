@@ -27,7 +27,9 @@ import { InvoiceInterface } from '../interface/invoice.interface';
 })
 export class CustomerService {
   private http = inject(HttpClient);
-  private readonly server: string = 'http://localhost:8080';
+  // See UserService for the rationale — relative paths so the SPA targets
+  // whichever host:port served it (Spring on 8090 in Docker, proxied via 4200 in dev).
+  private readonly server: string = '';
 
   /**
    * Fetches aggregated dashboard statistics: total customers, invoices, and billed amount.

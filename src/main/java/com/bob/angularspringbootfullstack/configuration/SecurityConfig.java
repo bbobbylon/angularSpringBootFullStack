@@ -69,6 +69,13 @@ class SecurityConfig {
                     "/user/resetpassword/**", "/user/verify/password/**",
                     "/user/verify/account/**", "/user/refresh/token/**",
                     "/user/profile/image/**", "/user/image/**",
+                    // application.yml maps server.error.path to /user/error so the global
+                    // exception handler can render a clean JSON envelope. That path must
+                    // be reachable without auth — otherwise an error dispatched on a public
+                    // endpoint (e.g. failed login for an unknown email) would itself be
+                    // blocked by the security filter, surface as "response already
+                    // committed", and turn into an opaque 500.
+                    "/user/error",
             };
 
     /**

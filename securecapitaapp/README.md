@@ -11,7 +11,7 @@ This project was generated using [Angular CLI](https://github.com/angular/angula
 - HTTP interceptor attaches access tokens and refreshes on 401
 - Template-driven forms for login, profile, and verification flows
 
-To start a local development server, run `npm run start` and navigate to `http://localhost:4200`. The frontend will proxy API requests to the Spring Boot backend at `http://localhost:8080`.
+To start a local development server, run `npm run start` and navigate to `http://localhost:4200`. The frontend issues API calls as **relative paths** (e.g. `/user/login`), and `proxy.conf.json` forwards `/user/**`, `/customer/**`, and `/actuator/**` to the Spring Boot backend at `http://localhost:8080` so the browser sees same-origin requests (no CORS preflight needed).
 
 > **Running via Docker?** The whole stack (this Angular SPA + the Spring Boot API + MySQL +
 > Adminer) can be brought up with a single command from the repo root: `./deploy.sh` (or
@@ -37,7 +37,7 @@ HTTP Interceptor (token-interceptor)
   │  ├─ Adds Authorization: Bearer <access_token>
   │  └─ On 401 → refreshToken$ → retry request
   ▼
-Spring Boot API (http://localhost:8080)
+Spring Boot API (same origin in Docker → localhost:8090 / proxied to localhost:8080 in `ng serve` dev mode)
 ```
 
 ## Key Frontend Files
