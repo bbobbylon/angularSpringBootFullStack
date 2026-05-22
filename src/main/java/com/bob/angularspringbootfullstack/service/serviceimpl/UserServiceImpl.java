@@ -100,15 +100,20 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Sets a new password for a user after successful password reset verification.
+     * Completes the forgot-password reset flow.
+     * <p>
+     * Thin delegation to {@link com.bob.angularspringbootfullstack.repo.UserRepo#setNewPassword(Long, String, String)}.
+     * The userID is supplied by the controller from the {@link com.bob.angularspringbootfullstack.form.NewPasswordForm}
+     * request body, which was populated on the client from the prior
+     * {@link #verifyPasswordKey(String)} response.
      *
-     * @param key             the UUID portion of the reset URL
+     * @param userID          the user whose password is being reset
      * @param newPassword     the new password
      * @param confirmPassword must match {@code newPassword}
      */
     @Override
-    public void setNewPassword(String key, String newPassword, String confirmPassword) {
-        userRepo.setNewPassword(key, newPassword, confirmPassword);
+    public void setNewPassword(Long userID, String newPassword, String confirmPassword) {
+        userRepo.setNewPassword(userID, newPassword, confirmPassword);
     }
 
     /**

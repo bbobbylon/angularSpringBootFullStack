@@ -4,10 +4,7 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.EventType;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.exception.ApiException;
-import com.bob.angularspringbootfullstack.form.LoginForm;
-import com.bob.angularspringbootfullstack.form.SettingsForm;
-import com.bob.angularspringbootfullstack.form.UpdateForm;
-import com.bob.angularspringbootfullstack.form.UpdatePasswordForm;
+import com.bob.angularspringbootfullstack.form.*;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
@@ -31,6 +28,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.*;
@@ -171,7 +169,8 @@ public class UserController {
      * verified or already verified
      */
     @GetMapping("/verify/account/{key}")
-    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String yeet) {
+    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String yeet) throws InterruptedException {
+        TimeUnit.SECONDS.sleep(3); // Simulate a delay for testing the frontend loading state
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -501,18 +500,19 @@ public class UserController {
     }
 
     /**
-     * Completes the password reset flow by setting a new password for the
-     * user identified by the reset key. Confirms the two passwords match
-     * before persisting.
+     * Completes the password reset flow by setting a new password for the user
+     * identified by the {@code userID} in the request body. The caller — the
+     * reset-password page on the frontend — obtained that userID from the prior
+     * {@code GET /user/verify/password/{key}} response, so the URL key (and the
+     * password itself) never has to appear in a query string.
      *
-     * @param key             the UUID portion of the reset URL
-     * @param newPassword     the new password
-     * @param confirmPassword must equal newPassword
+     * @param form validated body containing {@code userID}, {@code newPassword},
+     *             and {@code confirmPassword}
      * @return 200 OK on success
      */
-    @PostMapping("/resetpassword/{key}/{newPassword}/{confirmPassword}")
-    public ResponseEntity<HttpResponse> setNewPassword(@PathVariable String key, @PathVariable String newPassword, @PathVariable String confirmPassword) {
-        userService.setNewPassword(key, newPassword, confirmPassword);
+    @PutMapping("/new/password")
+    public ResponseEntity<HttpResponse> setNewPassword(@RequestBody @Valid NewPasswordForm form) {
+        userService.setNewPassword(form.getUserID(), form.getNewPassword(), form.getConfirmPassword());
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())

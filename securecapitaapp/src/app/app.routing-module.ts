@@ -24,8 +24,11 @@ export const routes: Routes = [
   { path: 'verify', component: VerifyComponent },
   { path: 'resetpassword', component: ResetPasswordComponent },
   { path: 'register', component: RegisterComponent },
+  // Matches the URLs the backend emits in account/password verification emails.
+  // Format: /user/verify/{account|password}/{uuid-key}
+  // See UserRepoImpl#sendAccountVerificationEmail / sendPasswordResetEmail.
   { path: 'user/verify/account/:key', component: VerifyComponent },
-  { path: 'user/reset/password/:key', component: VerifyComponent },
+  { path: 'user/verify/password/:key', component: VerifyComponent },
   { path: '', component: HomeComponent, pathMatch: 'full', canActivate: [authenticationGuard] },
   { path: 'customers', component: CustomersComponent, canActivate: [authenticationGuard] },
   { path: 'customer/new', component: NewCustomerComponent, canActivate: [authenticationGuard] },

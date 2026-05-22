@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
-import { ProfileInterface } from '../interface/appstates.interface';
+import { AccountType, NewPasswordFormInterface, ProfileInterface } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { UserInterface } from '../interface/user.interface';
 import { Key } from '../enumeration/key.enumeration';
@@ -37,6 +37,30 @@ export class UserService {
       .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/code/${email}/${code}`)
       .pipe(tap(console.log), catchError(this.handleError));
 
+  verifyAccount$ = (key: string, type: AccountType): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/${type}/${key}`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Completes the forgot-password reset flow by submitting a new password for the
+   * user identified by {@code form.userID}.
+   *
+   * Called after {@link verifyAccount$} has resolved the reset link and populated
+   * the {@code userSubject} on the verify component — at that point the caller
+   * holds the user's ID, so the new password is sent in the request body rather
+   * than embedded in the URL. Field names in {@link NewPasswordFormInterface} must
+   * match the backend {@code NewPasswordForm.java} exactly so Spring's
+   * {@code @RequestBody @Valid} binding succeeds.
+   *
+   * @param form - userID, newPassword, and confirmPassword for the reset
+   * @returns Observable emitting the standard API envelope on success
+   */
+  setNewPassword$ = (form: NewPasswordFormInterface): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .put<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/new/password`, form)
+      .pipe(tap(console.log), catchError(this.handleError));
+
   /**
    * Authenticates the user with email and password.
    * On success the response contains the access and refresh tokens.
@@ -50,11 +74,31 @@ export class UserService {
       .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/login`, { email, password })
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * Registers a new user account.
+   *
+   * Sends the form values directly as the request body so Spring's {@code @RequestBody @Valid User}
+   * binding can map every field. The intersection type enforces that {@code password} is present
+   * at the call site even though {@link UserInterface} omits it (passwords are never returned by the API).
+   *
+   * @param user - the registration form values including the plain-text password
+   * @returns Observable emitting a ProfileInterface response on success
+   */
   register$ = (user: UserInterface & { password: string }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/register`, user)
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * Initiates a password reset by sending a reset link to the given email address.
+   *
+   * The backend generates a UUID key, stores it in the {@code reset_password_verifications}
+   * table, and emails a link to {@code GET /user/verify/password/{key}}. No authentication
+   * token is required — this endpoint is listed in {@code PUBLIC_URLS}.
+   *
+   * @param email - the email address of the account to reset
+   * @returns Observable emitting the server's confirmation message on success
+   */
   requestPasswordReset$ = (email: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/resetpassword/${email}`)

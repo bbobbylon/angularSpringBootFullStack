@@ -104,13 +104,18 @@ public interface UserRepo<T extends User> {
     T verifyPasswordKey(String key);
 
     /**
-     * Updates a user's password using a valid password reset key.
+     * Completes the forgot-password reset flow for the user identified by {@code userID}.
+     * <p>
+     * Called after {@link #verifyPasswordKey(String)} has already validated the
+     * reset link in the previous step of the flow and returned the user (whose
+     * ID the caller now holds). Persists the new password by ID — no URL key,
+     * no password in the query string — and deletes the single-use reset row.
      *
-     * @param key             URL key portion (UUID) from the reset link
-     * @param newPassword     new password
+     * @param userID          the user whose password is being reset
+     * @param newPassword     new password (encoded by the implementation)
      * @param confirmPassword must match {@code newPassword}
      */
-    void setNewPassword(String key, String newPassword, String confirmPassword);
+    void setNewPassword(Long userID, String newPassword, String confirmPassword);
 
     /**
      * Verifies an account verification key and enables the account.

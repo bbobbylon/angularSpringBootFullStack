@@ -16,7 +16,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.util.List;
 
 import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
-import static java.util.Arrays.asList;
 import static java.util.Optional.ofNullable;
 import static org.apache.commons.lang3.StringUtils.EMPTY;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
@@ -50,10 +49,39 @@ public class CustomAuthFilter extends OncePerRequestFilter {
     private static final String HTTP_METHOD_OPTIONS = "OPTIONS";
     private static final String TOKEN_PREFIX = "Bearer ";
     /**
-     * Public endpoints that do not require authentication.
+     * URI prefixes that do not require authentication.
+     * <p>
+     * Matched with {@code startsWith} (see {@link #isPublicRoute(String)}) so any
+     * path variables tacked onto the end (e.g. {@code /user/verify/account/abc-123})
+     * still resolve as public. Must stay in lockstep with
+     * {@link com.bob.angularspringbootfullstack.configuration.SecurityConfig#PUBLIC_URLS} —
+     * if a route is permitted by the SecurityFilterChain but not skipped here, a
+     * stale {@code Authorization: Bearer} header from the client will cause this
+     * filter to attempt token parsing and fail before the request ever reaches
+     * the public controller.
      */
-    private static final String[] PUBLIC_ROUTES = {"/user/login", "/user/verify/code", "/user/register", "/actuator", "/user/refresh/token", "/user/image", "/user/verify/account"};
+    private static final String[] PUBLIC_ROUTES = {
+            "/user/login", "/user/verify/code", "/user/register", "/actuator",
+            "/user/refresh/token", "/user/image", "/user/verify/account",
+            "/user/verify/password", "/user/resetpassword", "/user/new/password"
+    };
     private final TokenProvider tokenProvider;
+
+    /**
+     * Returns {@code true} if {@code uri} starts with any of the {@link #PUBLIC_ROUTES}.
+     * Used by {@link #shouldNotFilter(HttpServletRequest)} so a request like
+     * {@code GET /user/verify/account/abc-123} resolves to the {@code /user/verify/account}
+     * prefix even though the full URI is not present in the array.
+     *
+     * @param uri the request URI
+     * @return {@code true} if any public-route prefix matches
+     */
+    private static boolean isPublicRoute(String uri) {
+        for (String publicRoute : PUBLIC_ROUTES) {
+            if (uri.startsWith(publicRoute)) return true;
+        }
+        return false;
+    }
 
     /**
      * Determines whether this filter should run for the current request.
@@ -71,7 +99,10 @@ public class CustomAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
 
-        return request.getHeader(AUTHORIZATION) == null || !request.getHeader(AUTHORIZATION).startsWith(TOKEN_PREFIX) || request.getMethod().equalsIgnoreCase(HTTP_METHOD_OPTIONS) || asList(PUBLIC_ROUTES).contains(request.getRequestURI());
+        return request.getHeader(AUTHORIZATION) == null
+                || !request.getHeader(AUTHORIZATION).startsWith(TOKEN_PREFIX)
+                || request.getMethod().equalsIgnoreCase(HTTP_METHOD_OPTIONS)
+                || isPublicRoute(request.getRequestURI());
     }
 
     /**
