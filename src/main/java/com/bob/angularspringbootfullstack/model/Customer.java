@@ -40,9 +40,15 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 @AllArgsConstructor
 @JsonInclude(NON_DEFAULT)
 @Entity
+@Table(name = "customer")
 public class Customer {
     /**
      * Timestamp of when the customer record was first created.
+     * <p>
+     * Java field {@code createdAt} maps to column {@code created_at} via Spring Boot's
+     * default {@code SpringPhysicalNamingStrategy}. No explicit {@code @Column} override
+     * is required — the strategy converts every camelCase property name to snake_case
+     * automatically, matching the schema defined in {@code V1__baseline_schema.sql}.
      */
     public Date createdAt;
     /**
@@ -54,12 +60,8 @@ public class Customer {
     /**
      * Full name or business name of the customer.
      * <p>
-     * Mapped explicitly to {@code customer_name} because {@code globally_quoted_identifiers: true}
-     * in application-dev.yml suppresses Hibernate's default camelCase → snake_case naming strategy,
-     * causing Hibernate to create/read a literal {@code "customerName"} column instead of the
-     * existing {@code customer_name} column that holds the actual data.
+     * Maps to {@code customer_name} via the naming strategy.
      */
-    @Column(name = "customer_name")
     private String customerName;
     /**
      * Customer category (e.g., "Individual", "Business").
@@ -71,6 +73,7 @@ public class Customer {
     private String email;
     /**
      * Primary contact phone number for the customer.
+     * Maps to {@code phone_number} via the naming strategy.
      */
     private String phoneNumber;
     /**
@@ -83,6 +86,7 @@ public class Customer {
     private String status;
     /**
      * URL pointing to the customer's profile picture or business logo.
+     * Maps to {@code image_url} via the naming strategy.
      */
     private String imageUrl;
     /**

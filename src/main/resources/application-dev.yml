@@ -7,24 +7,34 @@ spring:
     url: jdbc:mysql://127.0.0.1:3306/db2
     username: root
     password: password
+  # Flyway is the single source of truth for schema. On startup it scans
+  # classpath:db/migration for V<N>__*.sql files, applies anything not yet
+  # in flyway_schema_history, and then hands the DB over to Hibernate to validate.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # Required for native-MySQL databases that already have tables but no
+    # flyway_schema_history — Flyway records V1 as the baseline and skips it.
+    baseline-on-migrate: true
+    baseline-version: 0
+    # Stop the app from booting if a migration fails — safer than half-migrated DBs.
+    out-of-order: false
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: update
+      # validate: Hibernate compares entity mappings against the live schema and
+      # fails fast on mismatch — it NEVER alters or creates tables. All structure
+      # changes go through Flyway migrations.
+      ddl-auto: validate
     properties:
       hibernate:
-        globally_quoted_identifiers: true
         format_sql: true
-    generate-ddl: true
+    # generate-ddl removed: paired with ddl-auto: validate it is a no-op, and
+    # leaving it true is misleading to future readers.
   sql:
     init:
-      # "never" means schema.sql is NOT run on startup — existing DB is used as-is.
-      # To apply schema changes (new columns, tables, etc.), either:
-      #   1. Run ALTER TABLE manually in your DB client, OR
-      #   2. Temporarily set the mode to "always", restart, then set back to "never".
-      # WARNING: "always" drops and recreates all tables, wiping all existing data.
+      # never: schema.sql/data.sql are not used. Flyway owns initialization.
       mode: never
-      continue-on-error: true
   servlet:
     multipart:
       max-file-size: 10MB

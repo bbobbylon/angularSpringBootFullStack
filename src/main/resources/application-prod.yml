@@ -39,21 +39,33 @@ spring:
       pool-name: SecureCapitaHikariPool
       # Fail fast on a startup config error rather than hanging forever.
       validation-timeout: 5000
+  # Flyway runs before Hibernate validates, applying any pending V<N>__*.sql
+  # migrations from classpath:db/migration. With baseline-on-migrate=true an
+  # already-populated production DB is recorded as baselined at V0 and V1
+  # is applied on top — but in prod we never expect V1 to run against a real
+  # DB (production DBs are managed). For fresh dev/qa/stage environments,
+  # Flyway builds the schema from scratch.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    out-of-order: false
   jpa:
     show-sql: false
     open-in-view: false   # avoid the "open session in view" antipattern in REST APIs
     hibernate:
-      ddl-auto: update
+      # validate ONLY. Hibernate must never touch DDL in production — schema
+      # changes go through Flyway migrations reviewed in PRs.
+      ddl-auto: validate
     properties:
       hibernate:
-        globally_quoted_identifiers: true
         format_sql: false
         # Batch INSERTs / UPDATEs for performance on bulk operations.
         jdbc:
           batch_size: 50
         order_inserts: true
         order_updates: true
-    generate-ddl: true
   sql:
     init:
       mode: never

@@ -65,10 +65,10 @@ export class VerifyComponent implements OnInit {
           }), // emit the last cached data with a LOADING state while the request is in-flight so the template can show the spinner without losing the existing data
           catchError((error: string) =>
             of({
-              title: 'An error has occurred. Please try again.',
+              title: error,
               dataState: DataState.ERROR,
               error,
-              message: 'An unknown error has occurred. Please try your attempt again.',
+              message: error,
               verifySuccess: false,
             }),
           ),

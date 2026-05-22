@@ -147,9 +147,15 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# PSQL db creation .sql file
+# PSQL db creation .sql file (removed — kept for historical context)
 
 psqlschema.sql
+
+# Database seed dumps generated locally — real data never goes in source control.
+# See documentation/DATA_IMPORT.md for how these are produced.
+seed-data.sql
+*.seed-data.sql
+seeds/
 
 .claude
 target/*

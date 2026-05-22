@@ -31,6 +31,7 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 @NoArgsConstructor
 @JsonInclude(NON_DEFAULT)
 @Entity
+@Table(name = "invoice")
 public class Invoice {
     /**
      * Auto-generated unique identifier for the invoice.
@@ -41,6 +42,7 @@ public class Invoice {
     /**
      * Unique human-readable invoice reference code (e.g., "A3F9KQ2B").
      * Generated automatically on creation via {@code randomAlphanumeric}.
+     * Maps to column {@code invoice_number} via Spring's naming strategy.
      */
     private String invoiceNumber;
     /**
@@ -61,15 +63,18 @@ public class Invoice {
      */
     private String status;
     /**
-     * Denormalized foreign key to the owning customer, for direct queries.
+     * Denormalised foreign key to the owning customer, for direct SQL queries
+     * that bypass the JPA relationship. Maps to column {@code customer_id}.
      */
     private Long customerId;
     /**
      * Date on which the invoice was issued to the customer.
+     * Maps to column {@code invoice_date} via the naming strategy.
      */
     private Date invoiceDate;
     /**
      * Final total amount after any adjustments, discounts, or taxes are applied.
+     * Maps to column {@code total_amount} via the naming strategy.
      */
     private Double totalAmount;
     /**

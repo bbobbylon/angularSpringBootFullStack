@@ -88,6 +88,26 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Flyway: versioned, automatic database migrations.
+             In Spring Boot 4.0 the per-technology auto-configurations were
+             modularised out of spring-boot-autoconfigure into dedicated jars
+             (see https://spring.io/blog/2025/10/28/modularizing-spring-boot/).
+             Pulling in flyway-core alone is no longer enough — without the
+             matching auto-config module, FlywayAutoConfiguration never runs
+             and Hibernate's validate step crashes on the empty schema.
+             The spring-boot-starter-flyway brings in:
+               * spring-boot-flyway-autoconfigure (the auto-config module)
+               * flyway-core (the engine)
+               * the right MySQL dialect support
+             — so the starter is the production-correct way to wire Flyway in. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
         <!-- removing PostgreSQL boilerplate for now since we are using MySQL -->
         <!--        <dependency>-->
         <!--            <groupId>org.postgresql</groupId>-->
