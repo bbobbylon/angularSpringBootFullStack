@@ -69,13 +69,19 @@ public interface UserService {
     UserDTO verifyPasswordKey(String key);
 
     /**
-     * Sets a new password using a valid password reset key.
+     * Completes the forgot-password reset flow for the user identified by {@code userID}.
+     * <p>
+     * Invoked by {@code PUT /user/new/password} after {@link #verifyPasswordKey(String)}
+     * has already validated the reset link and returned the user (whose ID the
+     * frontend now holds). Distinct from
+     * {@link #updatePassword(Long, String, String, String)}, which is the
+     * authenticated change-password flow and requires the current password.
      *
-     * @param key             password reset key from the verification URL
+     * @param userID          the user whose password is being reset
      * @param newPassword     new password
      * @param confirmPassword must match {@code newPassword}
      */
-    void setNewPassword(String key, String newPassword, String confirmPassword);
+    void setNewPassword(Long userID, String newPassword, String confirmPassword);
 
     /**
      * Verifies an account verification key and enables the user account.

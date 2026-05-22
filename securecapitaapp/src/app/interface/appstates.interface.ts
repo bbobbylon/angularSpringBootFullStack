@@ -164,6 +164,25 @@ export interface ResetPasswordStateInterface {
 }
 export type AccountType = 'account' | 'password';
 
+/**
+ * Request body shape sent to {@code PUT /user/new/password} to complete the
+ * forgot-password reset flow.
+ *
+ * The {@code userID} is obtained from the prior {@code GET /user/verify/password/{key}}
+ * response — by the time the user submits the new-password form, the reset link
+ * has already been validated and the user's ID is known, so neither the URL key
+ * nor the password itself ever appears in the URL.
+ *
+ * Field names must match the Spring backend's {@code NewPasswordForm.java}
+ * exactly, since Spring's {@code @RequestBody @Valid} binding uses JSON property
+ * names as binding keys.
+ */
+export interface NewPasswordFormInterface {
+  userID: number;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 export interface VerifyStateInterface {
   dataState: DataState;
   verifySuccess?: boolean;

@@ -362,7 +362,8 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * Resolves and validates a password reset key/link.
      *
      * <p>This method only verifies the key is present and not expired; updating the password is
-     * performed by {@link #setNewPassword(String, String, String)}.
+     * performed by {@link #setNewPassword(Long, String, String)} once the caller has the userID
+     * returned by this step.
      */
     @Override
     public User verifyPasswordKey(String key) {
@@ -372,36 +373,6 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             // Delete the password verification row by user_id. Use the existing constant for deleting by user id
             // jdbcTemplate.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", user.getId())); // remove the verification record for this user
             return jdbcTemplate.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("url", getVerificationURL(key, PASSWORD.getType())), new UserRowMapper());
-        } catch (EmptyResultDataAccessException e) {
-            log.error(e.getMessage());
-            throw new ApiException("This link is not valid. Please request a new password reset link.");
-        } catch (Exception exception) {
-            log.error(exception.getMessage());
-            throw new ApiException("An unexpected error occurred. Please try again.");
-        }
-    }
-
-    /**
-     * Updates a user's password after validating the reset key and confirming passwords match.
-     *
-     * <p>After a successful update, the verification URL row is deleted (single-use).
-     */
-    @Override
-    public void setNewPassword(String key, String newPassword, String confirmPassword) {
-        if (!newPassword.equals(confirmPassword))
-            throw new ApiException("Passwords do not match. Please try again!");
-        if (isLinkExpired(key, PASSWORD))
-            throw new ApiException("This link is not valid. Please request a new password reset link.");
-        try {
-            // Resolve the full verification URL at once and look up the user tied to it so we can log the email
-            String url = getVerificationURL(key, PASSWORD.getType());
-            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("url", url), new UserRowMapper());
-
-            jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_URL_QUERY, of("password", requireNonNull(passwordEncoder.encode(newPassword)), "url", url));
-            jdbcTemplate.update(DELETE_VERIFICATION_BY_URL_QUERY, of("url", url));
-
-            // Log the actual user's email for auditing (safe because password is not logged)
-            log.info("Password successfully reset for user with email: {}", user.getEmail());
         } catch (EmptyResultDataAccessException e) {
             log.error(e.getMessage());
             throw new ApiException("This link is not valid. Please request a new password reset link.");
@@ -648,6 +619,52 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         } catch (Exception exception) {
             log.error("Unexpected error during 2FA code verification for email '{}'", exception.getMessage(), exception);
             throw new BadCredentialsException("An unexpected error occurred while verifying the code.");
+        }
+    }
+
+    /**
+     * Completes the forgot-password reset flow by setting a new password for the
+     * user identified by {@code userID}.
+     * <p>
+     * Called by the controller's {@code PUT /user/new/password} endpoint after the
+     * reset link has already been validated by
+     * {@link #verifyPasswordKey(String)} in the prior step of the flow — at that
+     * point the frontend holds the user's ID, so the new password can be submitted
+     * in the request body without ever placing the URL key (or the password
+     * itself) in a query string.
+     * <p>
+     * Persists the encoded password via
+     * {@link com.bob.angularspringbootfullstack.query.UserQuery#UPDATE_USER_PASSWORD_BY_ID_QUERY},
+     * which also stamps {@code password_changed_at = NOW()}. The token-validation
+     * layer reads that column to reject any JWT issued before the reset, so old
+     * sessions cannot continue using stale credentials. Finally, the now-consumed
+     * reset row is deleted via
+     * {@link com.bob.angularspringbootfullstack.query.UserQuery#DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY}
+     * to make the reset link single-use.
+     * <p>
+     * Note: no expiry recheck is performed here — that responsibility lives in
+     * {@link #verifyPasswordKey(String)}, the step that hands the userID to the
+     * client. Re-validating here would be redundant and would require
+     * reconstructing a URL we no longer have.
+     *
+     * @param userID          the user whose password is being reset, obtained from
+     *                        the prior {@code verifyPasswordKey} response
+     * @param newPassword     the new plaintext password (encoded before persistence)
+     * @param confirmPassword must equal {@code newPassword}; mismatch raises
+     *                        {@link ApiException}
+     */
+    @Override
+    public void setNewPassword(Long userID, String newPassword, String confirmPassword) {
+        if (!newPassword.equals(confirmPassword))
+            throw new ApiException("Passwords do not match. Please try again!");
+        try {
+            jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY,
+                    of("userId", userID, "password", requireNonNull(passwordEncoder.encode(newPassword))));
+            jdbcTemplate.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", userID));
+            log.info("Password successfully reset for user with id: {}", userID);
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An unexpected error occurred. Please try again.");
         }
     }
 

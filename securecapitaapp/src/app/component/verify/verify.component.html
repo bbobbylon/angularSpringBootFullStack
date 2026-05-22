@@ -77,10 +77,10 @@
                                 type="button"></button>
                       </div>
                     }
-                    <form #resetPasswordForm="ngForm" (ngSubmit)="renewPassword(resetPasswordForm)">
+                    <form #resetPasswordForm="ngForm" (ngSubmit)="setNewPassword(resetPasswordForm)">
                       <div class="form-outline mb-4">
                         <label class="form-label" for="email">New Password</label>
-                        <input [disabled]="isLoading$ | async" class="form-control" minlength="2" name="password"
+                        <input [disabled]="isLoading$ | async" class="form-control" minlength="2" name="newPassword"
                                ngModel required type="password" />
                       </div>
                       <div class="form-outline mb-4">

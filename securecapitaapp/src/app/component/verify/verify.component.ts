@@ -33,7 +33,6 @@ export class VerifyComponent implements OnInit {
   user$ = this.userSubject.asObservable();
   private isLoadingSubject = new BehaviorSubject<boolean>(false);
   protected isLoading$ = this.isLoadingSubject.asObservable();
-  private _resetPasswordForm: NgForm;
   private readonly ACCOUNT_KEY = 'key';
   /**
    * Wires the home state observable to the combined page/size stream.
@@ -65,10 +64,10 @@ export class VerifyComponent implements OnInit {
           }), // emit the last cached data with a LOADING state while the request is in-flight so the template can show the spinner without losing the existing data
           catchError((error: string) =>
             of({
-              title: 'An error has occurred. Please try again.',
+              title: 'Verification Failed :(',
               dataState: DataState.ERROR,
               error,
-              message: 'An unknown error has occurred. Please try your attempt again.',
+              message: error,
               verifySuccess: false,
             }),
           ),
@@ -77,9 +76,54 @@ export class VerifyComponent implements OnInit {
     );
   }
 
-  protected renewPassword(resetPasswordForm: NgForm) {
-    this._resetPasswordForm = resetPasswordForm;
+  /**
+   * Submits the new password for the user resolved by the prior link-verification step.
+   *
+   * The {@code userSubject} was populated in {@link ngOnInit} when {@code verifyAccount$}
+   * resolved the password reset key, so {@code userSubject.value.id} is the userID
+   * that the backend's {@code PUT /user/new/password} endpoint expects. The form field
+   * names ({@code newPassword}, {@code confirmPassword}) mirror the backend's
+   * {@code NewPasswordForm.java} so {@code @RequestBody @Valid} binding succeeds.
+   *
+   * The reactive pipeline reuses {@code verifyState$} so the same LOADING / LOADED /
+   * ERROR template branches render the in-flight, success, and failure states — no
+   * imperative flag-flipping or separate observable needed.
+   *
+   * @param resetPasswordForm - Angular {@link NgForm} containing newPassword and confirmPassword
+   */
+  setNewPassword(resetPasswordForm: NgForm): void {
     this.isLoadingSubject.next(true);
+    this.verifyState$ = this.userService
+      .setNewPassword$({
+        userID: this.userSubject.value.id,
+        newPassword: resetPasswordForm.value.newPassword,
+        confirmPassword: resetPasswordForm.value.confirmPassword,
+      })
+      .pipe(
+        map((response) => {
+          this.isLoadingSubject.next(false);
+          // type: 'account' selects the template's success-card branch (check icon + login link).
+          // The 'password' branch would re-render the empty form, masking the success.
+          return { type: 'account' as AccountType, title: 'Password Updated :) ', dataState: DataState.LOADED, message: response.message, verifySuccess: true };
+        }),
+        startWith({
+          type: 'password' as AccountType,
+          title: 'Saving... ',
+          dataState: DataState.LOADING,
+          message: 'Updating your password. Please wait...',
+          verifySuccess: false,
+        }), // emit a LOADING state while the request is in-flight so the template shows the spinner
+        catchError((error: string) => {
+          this.isLoadingSubject.next(false);
+          return of({
+            title: 'Password Update Failed :(',
+            dataState: DataState.ERROR,
+            error,
+            message: error,
+            verifySuccess: false,
+          });
+        }),
+      );
   }
 
   private getAccountType(url: string): AccountType {

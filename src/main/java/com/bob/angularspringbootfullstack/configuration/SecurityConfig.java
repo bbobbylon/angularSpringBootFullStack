@@ -67,6 +67,7 @@ class SecurityConfig {
             {"/user/login/**",
                     "/user/verify/code/**", "/user/register/**", "/actuator/**",
                     "/user/resetpassword/**", "/user/verify/password/**",
+                    "/user/new/password/**",
                     "/user/verify/account/**", "/user/refresh/token/**",
                     "/user/profile/image/**", "/user/image/**",
             };

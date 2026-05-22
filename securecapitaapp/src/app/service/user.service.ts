@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
-import { AccountType, ProfileInterface } from '../interface/appstates.interface';
+import { AccountType, NewPasswordFormInterface, ProfileInterface } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { UserInterface } from '../interface/user.interface';
 import { Key } from '../enumeration/key.enumeration';
@@ -40,6 +40,25 @@ export class UserService {
   verifyAccount$ = (key: string, type: AccountType): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/${type}/${key}`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Completes the forgot-password reset flow by submitting a new password for the
+   * user identified by {@code form.userID}.
+   *
+   * Called after {@link verifyAccount$} has resolved the reset link and populated
+   * the {@code userSubject} on the verify component — at that point the caller
+   * holds the user's ID, so the new password is sent in the request body rather
+   * than embedded in the URL. Field names in {@link NewPasswordFormInterface} must
+   * match the backend {@code NewPasswordForm.java} exactly so Spring's
+   * {@code @RequestBody @Valid} binding succeeds.
+   *
+   * @param form - userID, newPassword, and confirmPassword for the reset
+   * @returns Observable emitting the standard API envelope on success
+   */
+  setNewPassword$ = (form: NewPasswordFormInterface): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .put<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/new/password`, form)
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**
