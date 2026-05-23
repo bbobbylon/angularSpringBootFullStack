@@ -1,54 +1,56 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { map, Observable, of, startWith } from 'rxjs';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { ResetPasswordStateInterface } from '../../../interface/appstates.interface';
 import { UserService } from '../../../service/user.service';
 import { FormsModule, NgForm } from '@angular/forms';
-import { catchError } from 'rxjs/operators';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { RouterLink } from '@angular/router';
-import { AsyncPipe } from '@angular/common';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 /**
  * Password reset view used after a reset link is verified.
  *
- * Provides the form for entering and confirming a new password.
+ * Provides the form for entering and confirming a new password. State is held
+ * in {@link resetPasswordState}, a writable signal mutated via {@code .set()}
+ * so the template re-renders cleanly under {@code OnPush}.
  */
 @Component({
   selector: 'app-resetpassword',
-  imports: [RouterLink, FormsModule, AsyncPipe],
+  imports: [RouterLink, FormsModule],
   templateUrl: './resetpassword.component.html',
   styleUrl: './resetpassword.component.css',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ResetPasswordComponent {
+  /** Drives the template's loading/success/error rendering. */
   resetPasswordState = signal<ResetPasswordStateInterface>({ dataState: DataState.LOADED });
 
   protected readonly userService = inject(UserService);
   protected readonly DataState = DataState;
+  private readonly destroyRef = inject(DestroyRef);
 
   /**
-   * Submits the password reset request and drives the component state.
+   * Submits the password reset request and drives component state.
    *
-   * Extracts the email from the {@code resetPasswordEmail} form field and passes it to
-   * {@link UserService#requestPasswordReset$}. On success the form is cleared and the
-   * success screen is shown; on failure the error alert renders inline.
+   * Extracts the email from the {@code resetPasswordEmail} form field and passes
+   * it to {@link UserService#requestPasswordReset$}. The form is cleared on success
+   * and the success screen is shown; on failure the inline error alert renders.
    *
-   * @param resetPasswordForm - the template-driven form reference containing the resetPasswordEmail field
+   * @param resetPasswordForm - template-driven form with the resetPasswordEmail field
    */
   resetPassword(resetPasswordForm: NgForm): void {
-    const resetPassword$ = this.userService.requestPasswordReset$(resetPasswordForm.value.resetPasswordEmail).pipe(
-      map((response) => {
-        console.log(response);
-        resetPasswordForm.reset();
-        return { dataState: DataState.LOADED, resetPasswordSuccess: true, message: response.message };
-      }),
-      startWith({ dataState: DataState.LOADING, resetPasswordSuccess: false }),
-      catchError((error: string) => {
-        return of({ dataState: DataState.ERROR, resetPasswordError: true, error });
-      }),
-    );
-    this.resetPasswordState.set(toSignal(resetPassword$)());
+    this.resetPasswordState.set({ dataState: DataState.LOADING, resetPasswordSuccess: false });
+    this.userService.requestPasswordReset$(resetPasswordForm.value.resetPasswordEmail)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          console.log(response);
+          resetPasswordForm.reset();
+          this.resetPasswordState.set({ dataState: DataState.LOADED, resetPasswordSuccess: true, message: response.message });
+        },
+        error: (error: string) => {
+          this.resetPasswordState.set({ dataState: DataState.ERROR, resetPasswordError: true, error });
+        },
+      });
   }
 }

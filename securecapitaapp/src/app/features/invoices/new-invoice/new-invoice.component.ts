@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit, Signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterModule } from '@angular/router';
-import { BehaviorSubject, map, of, startWith } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
@@ -11,8 +11,7 @@ import { NewInvoiceDataInterface } from '../../../interface/appstates.interface'
 import { CustomerService } from '../../../service/customer.service';
 import { InvoiceLineItemInterface } from '../../../interface/invoice.interface';
 import { ServicesInterface } from '../../../interface/services.interface';
-import { catchError } from 'rxjs/operators';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 /**
  * New invoice creation form.
@@ -20,6 +19,9 @@ import { toSignal } from '@angular/core/rxjs-interop';
  * On init, calls {@code GET /customer/invoice/new} to load the authenticated user
  * (for the navbar) and the full customer list (for the customer dropdown).
  * On submit, calls {@code POST /customer/invoice/addtocustomer/:customerId}.
+ *
+ * State lives in {@link newInvoiceState}, a writable signal mutated via {@code .set()}
+ * by both the init fetch and the create-invoice submission.
  */
 @Component({
   selector: 'app-new-invoice',
@@ -33,11 +35,11 @@ export class NewInvoiceComponent implements OnInit {
   /** Exposes {@link DataState} to the template for switch-case rendering. */
   readonly DataState = DataState;
 
-  /**
-   * Drives the template — emits loading, loaded, or error states for the creation
-   * flow, including the navbar user on every resolved state.
-   */
-  newInvoiceState: Signal<GlobalStateInterface<CustomHttpResponseInterface<NewInvoiceDataInterface>>>;
+  /** Drives the template — loading, loaded, or error states for the creation flow. */
+  newInvoiceState = signal<GlobalStateInterface<CustomHttpResponseInterface<NewInvoiceDataInterface>>>({
+    dataState: DataState.LOADING,
+  });
+
   /**
    * The list of service line items the user is building for this invoice.
    * Starts with one empty row. Submitted alongside the form fields in {@link createNewInvoice}.
@@ -52,14 +54,12 @@ export class NewInvoiceComponent implements OnInit {
    */
   availableServices: ServicesInterface[] = [];
 
-  /**
-   * Injected service used to fetch the initial page data and POST new invoices.
-   */
+  /** Injected service used to fetch the initial page data and POST new invoices. */
   protected readonly customerService = inject(CustomerService);
+  private readonly destroyRef = inject(DestroyRef);
   /**
    * Caches the most recent API response so the template can remain in
-   * {@code DataState.LOADED} as the {@code startWith} value while a create
-   * request is in flight.
+   * {@code DataState.LOADED} while a create request is in flight.
    */
   private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<NewInvoiceDataInterface>>(null);
   /**
@@ -111,21 +111,28 @@ export class NewInvoiceComponent implements OnInit {
       this.serviceLines[index].price = service.price;
     }
   }
+
   /**
    * Loads the authenticated user and full customer list from
    * {@code GET /customer/invoice/new} to populate the navbar and customer dropdown.
+   *
+   * The state signal is set to LOADING synchronously and updated to LOADED/ERROR
+   * from the subscribe callbacks, with {@code takeUntilDestroyed} tying the
+   * subscription to the component lifecycle.
    */
   ngOnInit(): void {
-    const newInvoice$ = this.customerService.newInvoice$().pipe(
-      map((response) => {
-        this.dataSubject.next(response);
-        this.availableServices = response.data?.availableServices ?? [];
-        return { dataState: DataState.LOADED, appData: response };
-      }),
-      startWith({ dataState: DataState.LOADING }),
-      catchError((error: string) => of({ dataState: DataState.ERROR, error })),
-    );
-    this.newInvoiceState = toSignal(newInvoice$, { initialValue: { dataState: DataState.LOADING } });
+    this.customerService.newInvoice$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.dataSubject.next(response);
+          this.availableServices = response.data?.availableServices ?? [];
+          this.newInvoiceState.set({ dataState: DataState.LOADED, appData: response });
+        },
+        error: (error: string) => {
+          this.newInvoiceState.set({ dataState: DataState.ERROR, error });
+        },
+      });
   }
 
   /**
@@ -139,19 +146,23 @@ export class NewInvoiceComponent implements OnInit {
   createNewInvoice(invoiceForm: NgForm): void {
     this.dataSubject.next({ ...this.dataSubject.value, message: '' });
     this.isLoadingSubject.next(true);
+    this.newInvoiceState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
     const invoicePayload = { ...invoiceForm.value, services: this.serviceLines };
-    const newInvoice$ = this.customerService.addInvoiceToCustomer$(invoiceForm.value.customerId, invoicePayload).pipe(
-      map((response) => {
-        console.log(response);
-        invoiceForm.reset({ status: 'PENDING' });
-        this.serviceLines = [{ name: '', price: 0 }];
-        this.isLoadingSubject.next(false);
-        this.dataSubject.next(response);
-        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-      }),
-      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-      catchError((error: string) => of({ dataState: DataState.LOADED, error })),
-    );
-    this.newInvoiceState = toSignal(newInvoice$);
+    this.customerService.addInvoiceToCustomer$(invoiceForm.value.customerId, invoicePayload)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          console.log(response);
+          invoiceForm.reset({ status: 'PENDING' });
+          this.serviceLines = [{ name: '', price: 0 }];
+          this.isLoadingSubject.next(false);
+          this.dataSubject.next(response);
+          this.newInvoiceState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+        },
+        error: (error: string) => {
+          this.isLoadingSubject.next(false);
+          this.newInvoiceState.set({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+        },
+      });
   }
 }

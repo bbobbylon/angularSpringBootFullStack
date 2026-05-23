@@ -1,17 +1,17 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal, Signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { AsyncPipe, DatePipe, NgOptimizedImage } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { UserService } from '../../../service/user.service';
-import { BehaviorSubject, catchError, map, of, startWith } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { ProfileInterface } from '../../../interface/appstates.interface';
 import { EventType } from '../../../enumeration/event-type.enum';
 import { RolesInterface } from '../../../interface/roles.interface';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 // TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
 
@@ -20,6 +20,12 @@ import { toSignal } from '@angular/core/rxjs-interop';
  *
  * Loads profile data, supports profile updates and password changes,
  * and manages local UI state such as loading and audit-log toggles.
+ *
+ * State is held in {@link profileState}, a single writable signal that every
+ * update method (`updateProfile`, `updatePassword`, `updateRole`, etc.)
+ * mutates via {@code .set()}. The previous per-method {@code toSignal()}
+ * reassignment pattern hit NG0203 at runtime because {@code toSignal} is
+ * not callable from event handlers — see notes on each method below.
  */
 @Component({
   selector: 'app-profile',
@@ -33,11 +39,12 @@ export class ProfileComponent implements OnInit {
   /** Exposes the `DataState` enum to the template for asynchronous data handling. */
   readonly DataState = DataState;
   /**
-   * Observable state for the profile view.
-   * It holds the global state, including the current data state (e.g., LOADING, LOADED, ERROR),
-   * application data, and any errors that may occur during data fetching.
+   * Single source of truth for the profile view. Carries `dataState`,
+   * `appData` (the full profile response), and optional `error` for the template.
    */
-  profileState: Signal<GlobalStateInterface<CustomHttpResponseInterface<ProfileInterface>>>;
+  profileState = signal<GlobalStateInterface<CustomHttpResponseInterface<ProfileInterface>>>({
+    dataState: DataState.LOADING,
+  });
   /** Exposes the `EventType` enum to the template for styling and displaying event information. */
   protected readonly EventType = EventType;
   /** A signal that controls the visibility of the user's activity logs section. */
@@ -51,6 +58,7 @@ export class ProfileComponent implements OnInit {
 
   /** Injected `UserService` to interact with the backend for user-related operations. */
   private readonly userService = inject(UserService);
+  private readonly destroyRef = inject(DestroyRef);
   /** A BehaviorSubject to hold and manage the raw profile data fetched from the server. */
   private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<ProfileInterface>>(null);
   /** A BehaviorSubject to track the loading state of asynchronous operations. */
@@ -60,31 +68,28 @@ export class ProfileComponent implements OnInit {
 
   /**
    * Initializes the component by fetching the user's profile information.
-   * This method is an Angular lifecycle hook that is called after the component's
-   * data-bound properties have been initialized. It retrieves the user data from
-   * the application state, which is managed by a BehaviorSubject in the UserService.
-   * It subscribes to the user$ observable to get the latest user data and updates
-   * the component's state. This ensures that the profile information is always
-   * current. The method also sets the initial data state to LOADING and then
-   * updates it to LOADED or ERROR based on the outcome of the data fetch operation.
+   *
+   * Sets {@link profileState} to LOADING synchronously, then `.set()`s LOADED or
+   * ERROR from the subscribe callbacks. {@code takeUntilDestroyed} cleans up the
+   * subscription on unmount.
    */
   ngOnInit(): void {
     this.isLoadingSubject.next(true);
-    const profile$ = this.userService.profile$().pipe(
-      map(response => {
-        console.log('Fetched profile data:', response);
-        this.dataSubject.next(response);
-        this.isLoadingSubject.next(false);
-        this.permissions.set(response.data.user.permissions.split(',').map((p: string) => p.trim()));
-        return { dataState: DataState.LOADED, appData: response };
-      }),
-      startWith({ dataState: DataState.LOADING }),
-      catchError((error: string) => {
-        this.isLoadingSubject.next(false);
-        return of({ dataState: DataState.ERROR, error, appData: this.dataSubject.value });
-      }),
-    );
-    this.profileState = toSignal(profile$, { initialValue: { dataState: DataState.LOADING } });
+    this.userService.profile$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          console.log('Fetched profile data:', response);
+          this.dataSubject.next(response);
+          this.isLoadingSubject.next(false);
+          this.permissions.set(response.data.user.permissions.split(',').map((p: string) => p.trim()));
+          this.profileState.set({ dataState: DataState.LOADED, appData: response });
+        },
+        error: (error: string) => {
+          this.isLoadingSubject.next(false);
+          this.profileState.set({ dataState: DataState.ERROR, error, appData: this.dataSubject.value });
+        },
+      });
   }
 
   /**
@@ -102,16 +107,14 @@ export class ProfileComponent implements OnInit {
   }
 
   /**
-   * Handles the form submission for updating the user's profile information.
-   * This method is triggered when the user submits the profile update form.
-   * It sets the application state to LOADING to indicate that an operation is in progress.
-   * It then calls the `update$` method from the `UserService`, passing the form data.
-   * The subscription to the `update$` observable handles the response from the server.
-   * On a successful update, it updates the local user data and sets the application
-   * state to LOADED. If an error occurs, it logs the error and sets the state to ERROR.
+   * Submits the profile-update form to the backend.
    *
-   * Merges form values with the current user snapshot and updates
-   * the observable state so the template reflects the new profile.
+   * Merges form values onto the current user snapshot from {@link dataSubject} so
+   * unmodified fields are preserved (the backend expects a full user object).
+   * Keeps {@link profileState} in LOADED throughout — the form stays visible while
+   * the spinner overlay reacts via {@link isLoading$}.
+   *
+   * @param profileForm - the Angular {@link NgForm} containing the updated profile fields
    */
   updateProfile(profileForm: NgForm): void {
     this.isLoadingSubject.next(true);
@@ -119,57 +122,51 @@ export class ProfileComponent implements OnInit {
     console.log('Current user data before update:', currentUser);
     const updatedUser = { ...currentUser, ...profileForm.value };
     console.log('Updated user data to be sent to server:', updatedUser);
-    const profile$ = this.userService.update$(updatedUser).pipe(
-      map(response => {
-        console.log('Profile updated successfully:', response);
-        this.dataSubject.next({ ...response, data: response.data });
-        this.isLoadingSubject.next(false);
-        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-      }),
-      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-      catchError((error: string) => {
-        this.isLoadingSubject.next(false);
-        return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
-      }),
-    );
-    this.profileState = toSignal(profile$);
+    this.userService.update$(updatedUser)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          console.log('Profile updated successfully:', response);
+          this.dataSubject.next({ ...response, data: response.data });
+          this.isLoadingSubject.next(false);
+          this.profileState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+        },
+        error: (error: string) => {
+          this.isLoadingSubject.next(false);
+          this.profileState.set({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+        },
+      });
   }
 
   /**
-   * Handles the form submission for updating the user's password.
-   * This method is called when the user submits the password update form.
-   * It sets the application state to LOADING. It then calls the `updatePassword$`
-   * method from the `UserService` with the password form data. The subscription
-   * handles the server's response, showing a notification to the user upon success
-   * or logging an error and showing an error notification if the update fails.
-   * After the operation, the form is reset.
+   * Submits the password-change form to the backend.
    *
-   * @param {NgForm} passwordForm - The form containing the user's current and new passwords.
+   * Performs a client-side equality check between `newPassword` and `confirmPassword`
+   * before issuing the request; mismatched values reset the form silently and do not
+   * call the server. On success the form is reset; on failure the error is surfaced
+   * via the LOADED-with-error pattern so the form stays visible.
+   *
+   * @param passwordForm - the {@link NgForm} containing currentPassword, newPassword, confirmPassword
    */
   updatePassword(passwordForm: NgForm): void {
     this.isLoadingSubject.next(true);
-    /*    const currentUser = this.dataSubject.value?.data?.user;
-    console.log('Current user data before update:', currentUser);
-    const updatedUser = { ...currentUser, ...passwordForm.value };
-    console.log('Updated user data to be sent to server:', updatedUser);*/
-
     if (passwordForm.value.newPassword === passwordForm.value.confirmPassword) {
-      const passwordUpdate$ = this.userService.updatePassword$(passwordForm.value).pipe(
-        map(response => {
-          console.log('Profile updated successfully:', response);
-          this.dataSubject.next({ ...response, data: response.data });
-          passwordForm.reset();
-          this.isLoadingSubject.next(false);
-          return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-        }),
-        startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-        catchError((error: string) => {
-          this.isLoadingSubject.next(false);
-          passwordForm.reset();
-          return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
-        }),
-      );
-      this.profileState = toSignal(passwordUpdate$);
+      this.userService.updatePassword$(passwordForm.value)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (response) => {
+            console.log('Profile updated successfully:', response);
+            this.dataSubject.next({ ...response, data: response.data });
+            passwordForm.reset();
+            this.isLoadingSubject.next(false);
+            this.profileState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+          },
+          error: (error: string) => {
+            this.isLoadingSubject.next(false);
+            passwordForm.reset();
+            this.profileState.set({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+          },
+        });
     } else {
       passwordForm.reset();
       this.isLoadingSubject.next(false);
@@ -178,68 +175,56 @@ export class ProfileComponent implements OnInit {
 
   /**
    * Submits the role-change form and reassigns the authenticated user's role.
-   * Sends the selected {@code roleName} to the backend via {@code updateUserRole$},
-   * then refreshes {@code profileState$} and the local {@code dataSubject} snapshot
-   * so the Authorization tab reflects the new role and its permissions immediately.
+   *
+   * Calls {@code updateUserRole$} with the selected {@code roleName}, then mirrors
+   * the server-returned user back into {@link dataSubject} and {@link profileState}
+   * so the Authorization tab reflects the new role and its permissions without a
+   * page reload.
    *
    * @param roleForm - the submitted NgForm containing the selected {@code roleName}
    */
   updateRole(roleForm: NgForm): void {
-    /*    this.isLoadingSubject.next(true);
-    const currentUser = this.dataSubject.value?.data?.user;
-    console.log('Current user data before update:', currentUser);
-    const updatedUser = { ...currentUser, ...profileForm.value };
-    console.log('Updated user data to be sent to server:', updatedUser);*/
     this.isLoadingSubject.next(true);
     console.log(roleForm);
-    const roleUpdate$ = this.userService.updateUserRole$(roleForm.value.roleName).pipe(
-      map(response => {
-        console.log('Role updated successfully:', response);
-        this.dataSubject.next({ ...response, data: response.data });
-        this.isLoadingSubject.next(false);
-        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-      }),
-      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-      catchError((error: string) => {
-        this.isLoadingSubject.next(false);
-        return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
-      }),
-    );
-    this.profileState = toSignal(roleUpdate$);
+    this.userService.updateUserRole$(roleForm.value.roleName)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          console.log('Role updated successfully:', response);
+          this.dataSubject.next({ ...response, data: response.data });
+          this.isLoadingSubject.next(false);
+          this.profileState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+        },
+        error: (error: string) => {
+          this.isLoadingSubject.next(false);
+          this.profileState.set({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+        },
+      });
   }
 
   /**
-   * Updates the user's account settings.
-   * This method is triggered when the user saves changes to their account settings.
-   * It sets the application state to LOADING and calls the `updateAccountSettings$`
-   * method from the `UserService`. The subscription handles the server's response,
-   * updating the local user data and showing a success notification. If an error
-   * occurs, it is logged, and an error notification is shown.
+   * Updates the user's account settings (theme, notifications, etc.) via the
+   * {@code updateAccountSettings$} endpoint.
    *
-   * @param {NgForm} settingsForm - The form containing the updated account settings.
+   * @param settingsForm - the {@link NgForm} with the updated account settings
    */
   updateAccountSettings(settingsForm: NgForm): void {
-    /*    this.isLoadingSubject.next(true);
-    const currentUser = this.dataSubject.value?.data?.user;
-    console.log('Current user data before update:', currentUser);
-    const updatedUser = { ...currentUser, ...profileForm.value };
-    console.log('Updated user data to be sent to server:', updatedUser);*/
     this.isLoadingSubject.next(true);
     console.log(settingsForm);
-    const settingsUpdate$ = this.userService.updateAccountSettings$(settingsForm.value).pipe(
-      map(response => {
-        console.log('Account Settings updated successfully:', response);
-        this.dataSubject.next({ ...response, data: response.data });
-        this.isLoadingSubject.next(false);
-        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-      }),
-      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-      catchError((error: string) => {
-        this.isLoadingSubject.next(false);
-        return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
-      }),
-    );
-    this.profileState = toSignal(settingsUpdate$);
+    this.userService.updateAccountSettings$(settingsForm.value)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          console.log('Account Settings updated successfully:', response);
+          this.dataSubject.next({ ...response, data: response.data });
+          this.isLoadingSubject.next(false);
+          this.profileState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+        },
+        error: (error: string) => {
+          this.isLoadingSubject.next(false);
+          this.profileState.set({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+        },
+      });
   }
 
   /**
@@ -258,26 +243,26 @@ export class ProfileComponent implements OnInit {
 
   /**
    * Flips the authenticated user's MFA status via the backend toggle endpoint.
-   * Sets the loading state before the call and clears it on success or error.
-   * The backend enforces that a phone number is set; if it is missing, the error
-   * propagates through {@code catchError} and surfaces in the template.
+   *
+   * The backend rejects the toggle if no phone number is set; the error
+   * propagates through the subscribe callback and surfaces in the template.
    */
   protected toggleMfa(): void {
     this.isLoadingSubject.next(true);
-    const mfaToggle$ = this.userService.toggleMFA$().pipe(
-      map(response => {
-        console.log('MFA Settings updated successfully:', response);
-        this.dataSubject.next({ ...response, data: response.data });
-        this.isLoadingSubject.next(false);
-        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-      }),
-      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-      catchError((error: string) => {
-        this.isLoadingSubject.next(false);
-        return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
-      }),
-    );
-    this.profileState = toSignal(mfaToggle$);
+    this.userService.toggleMFA$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          console.log('MFA Settings updated successfully:', response);
+          this.dataSubject.next({ ...response, data: response.data });
+          this.isLoadingSubject.next(false);
+          this.profileState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+        },
+        error: (error: string) => {
+          this.isLoadingSubject.next(false);
+          this.profileState.set({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+        },
+      });
   }
 
   /**
@@ -291,40 +276,8 @@ export class ProfileComponent implements OnInit {
   }
 
   /**
-   * Sorts the activity log by the given column.
-   *
-   * Clicking the same column again flips the direction; clicking a new column
-   * sets it as the active sort and resets direction to ascending. The sorted
-   * array is pushed back into {@code dataSubject} and {@code profileState$} is
-   * reassigned so the async pipe re-renders without a network request.
-   *
-   * @param column - a key of {@link ActivityEvent} matching the clicked header
-   */
-  /*  protected sortBy(column: string): void {
-    if (this.sortColumn() === column) {
-      this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      this.sortColumn.set(column);
-      this.sortDirection.set('asc');
-    }
-    const current = this.dataSubject.value;
-    if (!current?.data?.events) return;
-    const dir = this.sortDirection() === 'asc' ? 1 : -1;
-    const col = column as keyof ActivityEvent;
-    const sorted = [...current.data.events].sort((a: ActivityEvent, b: ActivityEvent) => {
-      // TODO(human): compare a[col] and b[col] and return a number that reflects the sort order
-      if (a[col] < b[col]) return -1 * dir;
-      if (a[col] > b[col]) return 1 * dir;
-      return 0;
-    });
-    const updated = { ...current, data: { ...current.data, events: sorted } };
-    this.dataSubject.next(updated);
-    this.profileState$ = of({ dataState: DataState.LOADED, appData: updated });
-  }*/
-
-  /**
    * Handles a file-input change event triggered when the user picks a new profile image.
-   * <p>
+   *
    * Extracts the selected {@link File} from the DOM event, wraps it in a
    * {@code FormData} object (required for multipart upload), and sends it to
    * {@code PATCH /user/update/image}. On success the response contains the updated
@@ -336,24 +289,23 @@ export class ProfileComponent implements OnInit {
     const image = (event.target as HTMLInputElement).files?.[0];
     if (image) {
       this.isLoadingSubject.next(true);
-      const pictureUpdate$ = this.userService.updateProfileImage$(this.getFormData(image)).pipe(
-        map(response => {
-          console.log('MFA Settings updated successfully:', response);
-          this.dataSubject.next({
-            ...response,
-            data: { ...response.data, user: { ...response.data.user, imageUrl: `${response.data.user.imageUrl}?time=${new Date().getTime()}` } },
-          });
-
-          this.isLoadingSubject.next(false);
-          return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-        }),
-        startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-        catchError((error: string) => {
-          this.isLoadingSubject.next(false);
-          return of({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
-        }),
-      );
-      this.profileState = toSignal(pictureUpdate$);
+      this.userService.updateProfileImage$(this.getFormData(image))
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (response) => {
+            console.log('MFA Settings updated successfully:', response);
+            this.dataSubject.next({
+              ...response,
+              data: { ...response.data, user: { ...response.data.user, imageUrl: `${response.data.user.imageUrl}?time=${new Date().getTime()}` } },
+            });
+            this.isLoadingSubject.next(false);
+            this.profileState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+          },
+          error: (error: string) => {
+            this.isLoadingSubject.next(false);
+            this.profileState.set({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+          },
+        });
     }
   }
 

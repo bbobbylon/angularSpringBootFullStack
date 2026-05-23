@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit, Signal, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
-import { BehaviorSubject, map, Observable, of, startWith } from 'rxjs';
+import { BehaviorSubject, map, of, startWith, switchMap } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
@@ -11,13 +11,18 @@ import { InvoiceListDataInterface } from '../../../interface/appstates.interface
 import { catchError } from 'rxjs/operators';
 import { HttpEvent, HttpEventType } from '@angular/common/http';
 import { saveAs } from 'file-saver';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 
 /**
  * All-invoice list view with pagination.
  *
  * Fetches a paginated list of invoices from {@code GET /customer/invoice/list}
  * and renders them in a table with status badges and a Print action per row.
+ *
+ * State is held in {@link invoiceState}, a writable signal driven by changes to
+ * the {@link currentPage} signal — bridged through {@code toObservable} so the
+ * existing RxJS pipeline (with {@code switchMap} cancel-stale semantics) is
+ * preserved without rewriting the service layer.
  */
 @Component({
   selector: 'app-invoices',
@@ -32,20 +37,23 @@ export class InvoicesComponent implements OnInit {
   readonly DataState = DataState;
 
   /**
-   * Drives the entire template — emits a new {@link GlobalStateInterface} snapshot
-   * whenever the page index changes.
+   * Drives the entire template — set to LOADING/LOADED/ERROR by the
+   * page-fetch subscription in {@link ngOnInit}.
    */
-  invoiceState: Signal<GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>>;
-  invoiceState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>>;
+  invoiceState = signal<GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>>({
+    dataState: DataState.LOADING,
+  });
   protected readonly router = inject(Router);
   /**
-   * Tracks the current 0-based page index.
-   * Emitting a new value triggers a new fetch in {@link goToPage}.
+   * Tracks the current 0-based page index. Changing this value triggers a re-fetch
+   * via the {@code toObservable} bridge in {@link ngOnInit}.
    */
   protected currentPage = signal(0);
-  /** Observable of the current 0-based page index, used by the template to highlight the active page. */
+  /** Readonly view of the current page for the template's pagination controls. */
   currentPage$ = this.currentPage.asReadonly();
+  private readonly _currentPageObs$ = toObservable(this.currentPage);
   private readonly customerService = inject(CustomerService);
+  private readonly destroyRef = inject(DestroyRef);
   /**
    * Caches the most recent successful API response so pagination updates can return
    * {@code DataState.LOADED} immediately as the {@code startWith} value while the next
@@ -56,28 +64,39 @@ export class InvoicesComponent implements OnInit {
   /** Emits download progress state for the progress bar in the template. */
   fileStatus$ = this.fileStatusSubject.asObservable();
 
+  /**
+   * Wires the {@code currentPage} signal to the invoice-list endpoint.
+   *
+   * {@code toObservable} converts the signal into an Observable so we can keep
+   * using {@code switchMap}'s cancel-on-new-emission behavior — pagination clicks
+   * cancel any in-flight request rather than racing it. The inner pipe's
+   * {@code startWith} re-emits LOADING (with cached data) on every page change so
+   * the template never blanks out between fetches.
+   */
   ngOnInit(): void {
-    this.loadPage(0);
+    this._currentPageObs$
+      .pipe(
+        switchMap((page) =>
+          this.customerService.invoices$(page).pipe(
+            map((response) => {
+              this.dataSubject.next(response);
+              return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>;
+            }),
+            startWith({ dataState: DataState.LOADING, appData: this.dataSubject.value } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>),
+            catchError((error: string) =>
+              of({ dataState: DataState.ERROR, error, appData: this.dataSubject.value } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>),
+            ),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((state) => this.invoiceState.set(state));
   }
 
-  /*  ngOnInit(): void {
-    const invoices = this.currentPage.pipe(
-      switchMap((page) =>
-        this.customerService.invoices$(page).pipe(
-          map((response) => {
-            this.dataSubject.next(response);
-            return { dataState: DataState.LOADED, appData: response };
-          }),
-          startWith({ dataState: DataState.LOADING }),
-          catchError((error: string) => of({ dataState: DataState.ERROR, error })),
-        ),
-      ),
-    );
-    this.invoiceState = toSignal(invoices, { initialValue: { dataState: DataState.LOADING } });
-  }*/
-
   /**
-   * Advances or retreats one page.
+   * Advances or retreats one page. The fetch is triggered automatically because
+   * {@link ngOnInit}'s {@code toObservable(currentPage)} bridge re-emits on every
+   * signal change.
    *
    * @param direction - {@code 'forward'} to increment the page, {@code 'backward'} to decrement
    */
@@ -87,7 +106,8 @@ export class InvoicesComponent implements OnInit {
   }
 
   /**
-   * Jumps directly to a specific page index.
+   * Jumps directly to a specific page index. Triggers the same re-fetch path as
+   * {@link goToNextOrPreviousPage} via the {@code currentPage} signal.
    *
    * @param pageIndex - the 0-based index of the target page
    */
@@ -98,29 +118,19 @@ export class InvoicesComponent implements OnInit {
   /**
    * Triggers the invoice XLSX download from {@code GET /customer/invoice/download/report}.
    *
-   * Reassigns {@link invoiceState$} to the download stream so the progress bar in the
-   * template reacts to {@link HttpEventType} emissions. Once the download completes,
-   * {@link reportProgres} calls {@code saveAs} and resets the progress bar.
+   * Progress events are routed to {@link reportProgres}, which pushes percent updates
+   * into {@link fileStatusSubject} so the template's progress bar reacts via the
+   * {@code fileStatus$ | async} binding. The main {@link invoiceState} signal is
+   * intentionally NOT touched — the download button lives inside the LOADED branch
+   * of the template, so transitioning out of LOADED would hide the button itself.
    */
   report(): void {
-    const report$ = this.customerService.downloadInvoiceReport$().pipe(
-      map((response) => {
-        this.reportProgres(response);
-        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-      }),
-      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }),
-      catchError((error: string) => of({ dataState: DataState.ERROR, error, appData: this.dataSubject.value })),
-    );
-    this.invoiceState = toSignal(report$, { initialValue: { dataState: DataState.LOADING, appData: this.dataSubject.value } });
-  }
-
-  /**
-   * Fetches a specific page of invoices and updates {@link invoiceState$}.
-   *
-   * @param page - zero-based page index to fetch
-   */
-  private loadPage(page: number): void {
-    this.currentPage.set(page);
+    this.customerService.downloadInvoiceReport$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.reportProgres(response),
+        error: (error: string) => console.error('Invoice report download failed:', error),
+      });
   }
 
   /**

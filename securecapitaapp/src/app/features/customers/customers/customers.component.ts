@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, Signal, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { NgClass, NgOptimizedImage } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { BehaviorSubject, combineLatest, debounceTime, map, of, startWith, Subject, switchMap } from 'rxjs';
@@ -10,7 +10,7 @@ import { CustomHttpResponseInterface } from '../../../interface/customhttprespon
 import { CustomerListDataInterface } from '../../../interface/appstates.interface';
 import { CustomerService } from '../../../service/customer.service';
 import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 
 /**
  * All-customers list view with search and pagination.
@@ -44,7 +44,7 @@ export class CustomersComponent implements OnInit {
    * Switches between {@code /customer/list} and {@code /customer/search} depending
    * on whether {@link currentSearchSubject} holds a non-empty term.
    */
-  customersState: Signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerListDataInterface>>>;
+  customersState = signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerListDataInterface>>>({ dataState: DataState.LOADING });
   protected readonly router = inject(Router);
   private readonly customerService = inject(CustomerService);
   private readonly activatedRoute = inject(ActivatedRoute);
@@ -78,6 +78,8 @@ export class CustomersComponent implements OnInit {
    * {@code /customer/list}. A non-empty string routes to {@code /customer/search}.
    */
   private currentSearchTerm = signal('');
+  private readonly _currentPageObs$ = toObservable(this.currentPage);
+  private readonly _currentSearchTermObs$ = toObservable(this.currentSearchTerm);
 
   private readonly destroyRef = inject(DestroyRef);
 
@@ -161,7 +163,7 @@ export class CustomersComponent implements OnInit {
         this.currentPage.set(0);
       });
 
-    const customers$ = combineLatest([this.currentPage, this.currentSearchTerm]).pipe(
+    const customers$ = combineLatest([this._currentPageObs$, this._currentSearchTermObs$]).pipe(
       switchMap(([page, name]) =>
         (name ? this.customerService.searchCustomers$(name, page) : this.customerService.customers$(page)).pipe(
           map((response) => {
@@ -173,7 +175,9 @@ export class CustomersComponent implements OnInit {
         ),
       ),
     );
-    this.customersState = toSignal(customers$, { initialValue: { dataState: DataState.LOADING } });
+    customers$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((state) => this.customersState.set(state));
   }
 
   /**

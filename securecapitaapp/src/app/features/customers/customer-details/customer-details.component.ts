@@ -1,8 +1,9 @@
 import { CommonModule, NgOptimizedImage } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, Input, OnInit, Signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, Input, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgForm } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router, RouterModule } from '@angular/router';
-import { BehaviorSubject, catchError, map, Observable, of, startWith, switchMap } from 'rxjs';
+import { BehaviorSubject, catchError, map, of, startWith, switchMap } from 'rxjs';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { CustomerStateInterface } from '../../../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
@@ -43,13 +44,13 @@ export class CustomerDetailsComponent implements OnInit {
    * {@link ActivatedRoute} param stream from {@link aMethodThatDoesStuff} once the backend
    * endpoint is ready.
    */
-  customerState$: Observable<GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>>;
-  customerState: Signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>>;
+  customerState = signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>>({ dataState: DataState.LOADING });
   readonly defaultImage = 'https://www.gravatar.com/avatar/?d=mp';
   protected readonly router = inject(Router);
   protected readonly customerService = inject(CustomerService);
   private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerStateInterface>>(null);
   private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private isLoadingSubject = new BehaviorSubject<boolean>(false);
   /**
    * Emits {@code true} while a form submission or navigation action is in progress.
@@ -127,20 +128,20 @@ export class CustomerDetailsComponent implements OnInit {
    * Intended to replace the body of {@link ngOnInit} once {@code GET /customers/:id} is ready.
    */
   ngOnInit(): void {
-    this.customerState$ = this.activatedRoute.paramMap.pipe(
-      switchMap((params: ParamMap) => {
-        // params.get(this.CUSTOMER_ID) extracts the :id segment from the URL, e.g. /customers/123 → "123"
-        return this.customerService.customerId$(+params.get(this.CUSTOMER_ID)).pipe(
+    this.activatedRoute.paramMap.pipe(
+      switchMap((params: ParamMap) =>
+        this.customerService.customerId$(+params.get(this.CUSTOMER_ID)).pipe(
           map((response) => {
             console.log('Fetched customer detail data:', response);
             this.dataSubject.next(response);
-            return { dataState: DataState.LOADED, appData: response };
+            return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>;
           }),
-          startWith({ dataState: DataState.LOADING }), // emit the last cached data with a LOADING state while the request is in-flight so the template can show the spinner without losing the existing data
-          catchError((error: string) => of({ dataState: DataState.ERROR, error })),
-        );
-      }),
-    );
+          startWith({ dataState: DataState.LOADING } as GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>),
+          catchError((error: string) => of({ dataState: DataState.ERROR, error } as GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>)),
+        ),
+      ),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe((state) => this.customerState.set(state));
   }
   /**
    * Submits the customer edit form and persists the updated record via the service.
@@ -154,22 +155,24 @@ export class CustomerDetailsComponent implements OnInit {
    */
   update(customerForm: NgForm): void {
     this.isLoadingSubject.next(true);
-    this.customerState$ = this.customerService.updateCustomer$(customerForm.value).pipe(
-      map((response) => {
-        console.log('Updating customer detail data:', response);
-        this.isLoadingSubject.next(false);
-        this.dataSubject.next({
-          ...response,
-          data: { ...response.data, customers: { ...response.data.customers, invoices: this.dataSubject.value?.data?.customers?.invoices } },
-        }); // preserve the existing invoices list in the updated state since the update endpoint doesn't return it
-        return { dataState: DataState.LOADED, appData: this.dataSubject.value };
-      }),
-      startWith({ dataState: DataState.LOADED, appData: this.dataSubject.value }), // optimistically update the view with the submitted values while the request is in-flight
-      catchError((error: string) => {
-        this.isLoadingSubject.next(false);
-        return of({ dataState: DataState.ERROR, error });
-      }),
-    );
+    this.customerState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value }); // optimistic update while request is in-flight
+    this.customerService.updateCustomer$(customerForm.value)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          console.log('Updating customer detail data:', response);
+          this.isLoadingSubject.next(false);
+          this.dataSubject.next({
+            ...response,
+            data: { ...response.data, customers: { ...response.data.customers, invoices: this.dataSubject.value?.data?.customers?.invoices } },
+          });
+          this.customerState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+        },
+        error: (error: string) => {
+          this.isLoadingSubject.next(false);
+          this.customerState.set({ dataState: DataState.ERROR, error });
+        },
+      });
   }
 
   /**

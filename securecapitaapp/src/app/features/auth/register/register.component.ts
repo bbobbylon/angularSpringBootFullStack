@@ -1,56 +1,63 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { RegisterStateInterface } from '../../../interface/appstates.interface';
 import { DataState } from '../../../enumeration/datastate.enum';
-import { map, Observable, of, startWith } from 'rxjs';
 import { UserService } from '../../../service/user.service';
 import { FormsModule, NgForm } from '@angular/forms';
-import { catchError } from 'rxjs/operators';
 import { RouterLink } from '@angular/router';
-import { AsyncPipe } from '@angular/common';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 /**
  * Registration view for creating new user accounts.
  *
- * The template wires up the registration form and will
- * submit to the backend registration endpoint.
+ * The template wires up the registration form and submits to the backend
+ * registration endpoint. Component state is held in a writable signal
+ * ({@link registerState}) so the template's `OnPush` change detection
+ * picks up state transitions without re-creating subscriptions per submit.
  */
 @Component({
   selector: 'app-register',
-  imports: [FormsModule, RouterLink, AsyncPipe],
+  imports: [FormsModule, RouterLink],
   templateUrl: './register.component.html',
   styleUrl: './register.component.css',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RegisterComponent {
+  /** Single source of truth for the template's loading/success/error rendering. */
   registerState = signal<RegisterStateInterface>({ dataState: DataState.LOADED });
+  /** Exposes {@link DataState} to the template for switch-case rendering. */
   readonly DataState = DataState;
   protected readonly userService = inject(UserService);
+  private readonly destroyRef = inject(DestroyRef);
 
   /**
-   * Submits the registration form to the backend and drives the component state.
+   * Submits the registration form to the backend and drives component state.
    *
-   * Uses {@code startWith} to immediately enter LOADING state, maps a successful response
-   * to the success screen (resetting the form in the process), and catches errors to display
-   * them inline without breaking the observable chain.
+   * Synchronously sets {@link registerState} to LOADING so the spinner shows
+   * on the next change-detection tick, then subscribes to the create call.
+   * On success the form is reset and the success card is rendered; on failure
+   * the error message is surfaced via the ERROR branch.
    *
-   * @param registerForm - the template-driven form reference containing firstName, lastName,
-   *                       email, and password field values
+   * {@code takeUntilDestroyed} ties the subscription to the component lifecycle
+   * so an unmount mid-flight cannot leak the HTTP callback.
+   *
+   * @param registerForm - the template-driven form with firstName, lastName,
+   *                       email, and password
    */
   register(registerForm: NgForm): void {
-    const register$ = this.userService.register$(registerForm.value).pipe(
-      map((response) => {
-        console.log(response);
-        registerForm.reset();
-        return { dataState: DataState.LOADED, registerSuccess: true, message: response.message };
-      }),
-      startWith({ dataState: DataState.LOADING, registerSuccess: false }),
-      catchError((error: string) => {
-        return of({ dataState: DataState.ERROR, registerError: true, error });
-      }),
-    );
-    this.registerState.set(toSignal(register$)());
+    this.registerState.set({ dataState: DataState.LOADING, registerSuccess: false });
+    this.userService.register$(registerForm.value)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          console.log(response);
+          registerForm.reset();
+          this.registerState.set({ dataState: DataState.LOADED, registerSuccess: true, message: response.message });
+        },
+        error: (error: string) => {
+          this.registerState.set({ dataState: DataState.ERROR, registerError: true, error });
+        },
+      });
   }
 
   /** Resets the view back to the blank registration form. */
