@@ -1,6 +1,7 @@
 # This is the MySQL config, following the tutorial.
 jwt:
-  secret: myCrazySecretSecretKey
+  secret: ${JWT_SECRET}
+  # myCrazySecretSecretKey
   #jwt.secret: ${JWT_SECRET}
 spring:
   datasource:
@@ -34,6 +35,24 @@ spring:
       path: /user/error
       whitelabel:
         enabled: false
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    # Username and password come from the MAIL_USERNAME / MAIL_PASSWORD environment
+    # variables — see README "Configure Email Environment Variables" for setup.
+    # NEVER hardcode the Gmail app password here; it will end up in git history.
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          writetimeout: 5000
+          timeout: 5000
+          connectiontimeout: 5000
+          auth: true
+          starttls:
+            enable: true
+            required: true
 #logging:
 #  level:
 #    "[org.springframework.security, org.springframework.boot, org.hibernate]": DEBUG

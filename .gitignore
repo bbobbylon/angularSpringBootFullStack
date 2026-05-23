@@ -144,3 +144,6 @@ psqlschema.sql
 
 .claude
 target/*
+application-dev.yml
+application.yml
+application-prod.yml
