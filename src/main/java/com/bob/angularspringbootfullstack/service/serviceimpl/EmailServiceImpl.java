@@ -9,8 +9,22 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
- 
 
+
+/**
+ * Default {@link EmailService} implementation. Composes a plain-text
+ * {@link SimpleMailMessage} for account and password verification flows and
+ * dispatches it through Spring's {@link JavaMailSender}, which is auto-wired by
+ * {@code MailSenderAutoConfiguration} from the {@code spring.mail.*} properties
+ * in {@code application-dev.yml} (Gmail SMTP credentials supplied via the
+ * {@code MAIL_USERNAME} and {@code MAIL_PASSWORD} environment variables).
+ * <p>
+ * Callers are expected to invoke this on a background worker — typically
+ * {@link com.bob.angularspringbootfullstack.service.serviceimpl.NotificationServiceImpl},
+ * which wraps every send in {@link java.util.concurrent.CompletableFuture#runAsync}
+ * so the originating HTTP thread returns to the client without waiting on the
+ * SMTP round-trip. This class itself stays synchronous and exception-transparent.
+ */
 @Slf4j
 @Service
 @AllArgsConstructor
@@ -18,27 +32,52 @@ public class EmailServiceImpl implements EmailService {
     private final JavaMailSender mailSender;
 
     /**
-     * @param firstName
-     * @param verificationURL
-     * @param email
-     * @param verificationType
+     * Composes a {@link SimpleMailMessage} carrying the verification link and
+     * dispatches it via the configured {@link JavaMailSender}.
+     * <p>
+     * Exceptions are intentionally <em>not</em> caught here so that any
+     * {@link org.springframework.mail.MailException} (parse failures, SMTP
+     * connection issues, auth failures) propagates to
+     * {@link com.bob.angularspringbootfullstack.service.serviceimpl.NotificationServiceImpl},
+     * whose {@code .exceptionally(...)} on the {@code CompletableFuture} logs a
+     * single, accurate error entry. Catching here would force the caller to
+     * log a misleading success.
+     *
+     * @param firstName        recipient's first name, used in the body greeting
+     * @param email            recipient's email address (the {@code To:} header)
+     * @param verificationURL  the one-time link embedded in the body
+     * @param verificationType {@code ACCOUNT} or {@code PASSWORD} — drives the
+     *                         subject line and body template selected in
+     *                         {@link #getEmailMessage}
      */
     @Override
-    public void sendVerificationEmail(String firstName, String verificationURL, String email, VerificationType verificationType) {
-        try {
-
-            SimpleMailMessage msg = new SimpleMailMessage();
-            msg.setTo(email);
-            msg.setFrom("");
-            msg.setText(getEmailMessage(firstName, verificationURL, verificationType));
-            msg.setSubject(String.format("Secure Capita - %s Verification Email", StringUtils.capitalize(verificationType.name().toLowerCase())));
-            mailSender.send(msg);
-            log.info(mailSender.toString(), firstName);
-        } catch (Exception e) {
-            log.error("Failed to send email to {}", email, e);
-        }
+    public void sendVerificationEmail(String firstName, String email, String verificationURL, VerificationType verificationType) {
+        SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setTo(email);
+        msg.setFrom("bobsangularemail@gmail.com");
+        msg.setText(getEmailMessage(firstName, verificationURL, verificationType));
+        msg.setSubject(String.format("Secure Capita - %s Verification Email", StringUtils.capitalize(verificationType.name().toLowerCase())));
+        mailSender.send(msg);
+        log.info("Verification email ({}) dispatched to {}", verificationType.getType(), email);
     }
 
+    /**
+     * Selects the plain-text body template for the given verification flow and
+     * substitutes the recipient's first name and verification URL into it.
+     * <p>
+     * Keeping the body construction private and switch-based localises template
+     * changes to a single method: when a new {@link VerificationType} is added
+     * (e.g. an email-change confirmation), the new {@code case} branch is the
+     * only place to touch besides the enum itself.
+     *
+     * @param firstName        recipient's first name, used in the greeting
+     * @param verificationURL  the link to embed in the body
+     * @param verificationType {@code ACCOUNT} or {@code PASSWORD}
+     * @return the rendered email body as a plain {@link String}
+     * @throws ApiException if {@code verificationType} has no template branch —
+     *                      a defensive guard against future enum values being
+     *                      added without an accompanying template
+     */
     private String getEmailMessage(String firstName, String verificationURL, VerificationType verificationType) {
         switch (verificationType) {
             case PASSWORD -> {

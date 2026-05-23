@@ -16,10 +16,11 @@ public interface EmailService {
      * the supplied recipient.
      *
      * @param firstName        recipient's first name, used in the email greeting
-     * @param verificationURL  the one-time link the recipient clicks to verify
-     * @param email            recipient's email address
+     * @param email            recipient's email address (the {@code To:} header)
+     * @param verificationURL  the one-time link the recipient clicks to verify;
+     *                         embedded in the email body
      * @param verificationType {@code ACCOUNT} or {@code PASSWORD} — controls the
      *                         subject line and template the implementation uses
      */
-    void sendVerificationEmail(String firstName, String verificationURL, String email, VerificationType verificationType);
+    void sendVerificationEmail(String firstName, String email, String verificationURL, VerificationType verificationType);
 }
