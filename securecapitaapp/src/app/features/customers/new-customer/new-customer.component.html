@@ -1,0 +1,105 @@
+@if (newCustomerState(); as state) {
+  @switch (state.dataState) {
+    @case (DataState.LOADED) {
+      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <section>
+        <div class="container">
+          <nav aria-label="breadcrumb" style="margin-top: 8px">
+            <ol class="breadcrumb">
+              <li class="breadcrumb-item">
+                <a [routerLink]="['/']">Home</a>
+              </li>
+              <li class="breadcrumb-item"><a [routerLink]="['/customers']">Customers</a></li>
+              <li aria-current="page" class="breadcrumb-item active">New</li>
+            </ol>
+          </nav>
+          <div class="row justify-content-center">
+            <div class="col-md-12">
+              <div class="card">
+                <div class="card-body">
+                  <div class="text-center">
+                    <h2>
+                      <i class="bi bi-person-plus-fill" style="margin-right: 5px"></i>
+                      New Customer
+                    </h2>
+                  </div>
+                  @if (state.error) {
+                    <div class="alert alert-danger bg-danger text-light border-0 alert-dismissible fade show"
+                         role="alert">
+                      {{ state.error }}
+                      <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
+                              type="button"></button>
+                    </div>
+                  }
+                  <form #newCustomerForm="ngForm" (ngSubmit)="createNewCustomer(newCustomerForm)">
+                    <div class="row">
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <div class="form-group">
+                          <label>Name</label>
+                          <input class="form-control" name="customerName" ngModel required type="text" />
+                        </div>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <div class="form-group">
+                          <label>Email</label>
+                          <input class="form-control" name="email" ngModel required type="text" />
+                        </div>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <div class="form-group">
+                          <label for="address">Address</label>
+                          <input class="form-control" name="address" ngModel required type="text" />
+                        </div>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <div class="form-group">
+                          <label>Phone</label>
+                          <input class="form-control" name="phoneNumber" ngModel required type="text" />
+                        </div>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <label>Type</label>
+                        <select class="form-control" name="type" ngModel="INDIVIDUAL" required>
+                          <option value="INDIVIDUAL">INDIVIDUAL</option>
+                          <option [selected]="true">INSTITUTION</option>
+                        </select>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <label>Status</label>
+                        <select class="form-control" name="status" ngModel="ACTIVE" required>
+                          <option [selected]="true" value="ACTIVE">ACTIVE</option>
+                          <option value="BANNED">BANNED</option>
+                          <option value="PENDING">PENDING</option>
+                          <option value="INACTIVE">INACTIVE</option>
+                        </select>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-group">
+                          <label>Image URL</label>
+                          <input class="form-control" name="imageUrl" ngModel required type="text" />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <button
+                        [disabled]="newCustomerForm.invalid || newCustomerForm.pristine || (isLoading$ | async)"
+                        class="btn btn-primary mt-5" type="submit">
+                        @if (isLoading$ | async) {
+                          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
+                                style="margin-right: 5px;"></span>
+                          <span>Saving...</span>
+                        } @else {
+                          <span>Save Customer</span>
+                        }
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    }
+  }
+}

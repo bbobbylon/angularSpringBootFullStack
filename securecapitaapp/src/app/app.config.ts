@@ -2,7 +2,7 @@ import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/
 import { IMAGE_CONFIG } from '@angular/common';
 import { provideRouter } from '@angular/router';
 
-import { routes } from './app.routing-module';
+import { routes } from './app.routes';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { tokenInterceptor } from './interceptor/token.interceptor';
 import { cacheInterceptor } from './interceptor/cache.interceptor';
