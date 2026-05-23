@@ -113,7 +113,48 @@ spring:
       ddl-auto: update  # Creates tables automatically
 ```
 
-#### 1d. Build the backend
+#### 1d. Configure Email Environment Variables
+
+The password reset and account verification flows send emails via Gmail SMTP. The Gmail credentials are read from
+environment variables at startup — **never hardcoded in `application-dev.yml`** (which is committed to git).
+
+Set these once as Windows User Environment Variables (persistent across all shells, IDEs, and processes). Run this in
+PowerShell **once** — restart any open IDE / terminal afterwards so new processes inherit the vars:
+
+```powershell
+[Environment]::SetEnvironmentVariable("MAIL_USERNAME", "your-gmail@gmail.com", "User")
+[Environment]::SetEnvironmentVariable("MAIL_PASSWORD", "your-16-char-app-password", "User")
+```
+
+Verify they're set:
+
+```powershell
+$env:MAIL_USERNAME
+$env:MAIL_PASSWORD
+```
+
+| Variable        | Purpose                                                                                                                                   |
+|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| `MAIL_USERNAME` | Your Gmail address used as the `From` address on outgoing verification emails.                                                            |
+| `MAIL_PASSWORD` | A Google **App Password** (16 lowercase characters), NOT your regular Gmail password. Generate at <https://myaccount.google.com/apppasswords>. |
+
+> **Why an app password?** Google retired "less secure app access" in 2022, so SMTP clients can no longer authenticate
+> with your regular account password. App passwords are scoped, revocable, and can be rotated without touching your
+> main Google account credentials. If yours ever leaks, revoke and regenerate at the same URL — takes ~30 seconds.
+
+Confirm the placeholders are still in place in `src/main/resources/application-dev.yml`:
+
+```yaml
+spring:
+  mail:
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+```
+
+If Spring Boot fails to start with `Could not resolve placeholder 'MAIL_USERNAME'`, the env vars are not set in the
+process launching the app — restart your IDE/terminal after `SetEnvironmentVariable` and try again.
+
+#### 1e. Build the backend
 
 ```powershell
 .\mvnw.cmd clean package
@@ -125,7 +166,7 @@ Or skip tests for a faster build:
 .\mvnw.cmd clean package -DskipTests
 ```
 
-#### 1e. Run the backend
+#### 1f. Run the backend
 
 ```powershell
 .\mvnw.cmd spring-boot:run

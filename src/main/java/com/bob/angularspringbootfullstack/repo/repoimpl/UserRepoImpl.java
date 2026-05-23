@@ -10,6 +10,7 @@ import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
 import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
+import com.bob.angularspringbootfullstack.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
@@ -106,22 +107,38 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final RoleRepo<Role> roleRepository;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final NotificationService notificationService;
 
     /**
-     * Creates a new user in the database with a transactional context.
+     * Registers a new user under a transactional boundary.
      * <p>
-     * This method performs the following steps:
-     * 1. Validates that the email is unique; throws an exception if duplicate
-     * 2. Inserts the user into the database and retrieves the generated user ID
-     * 3. Assigns the default ROLE_USER role to the new user
-     * 4. Generates a unique account verification URL using a UUID
-     * 5. Stores the verification URL in the database for email verification flow
-     * 6. Sets user status flags (enabled, notLocked)
-     * 7. Returns the created user with its ID set
+     * Steps, in order:
+     * <ol>
+     *   <li>Reject the request if {@link #getEmailCount(String)} finds an existing
+     *       row with the (normalized, lowercased) email.</li>
+     *   <li>Insert the user via {@code INSERT_USER_QUERY}, capturing the
+     *       generated primary key from the {@link GeneratedKeyHolder}.</li>
+     *   <li>Grant the default {@code ROLE_USER} via
+     *       {@link RoleRepo#addRoleToUser(Long, String)}.</li>
+     *   <li>Mint a UUID-based account verification URL and persist it through
+     *       {@code INSERT_ACCOUNT_VERIFICATION_URL_QUERY} so the recipient's
+     *       click later resolves back to this user.</li>
+     *   <li>Hand the recipient + link off to
+     *       {@link NotificationService#sendAccountVerification(String, String, String)}
+     *       which dispatches the email asynchronously on a {@code ForkJoinPool}
+     *       worker so this request doesn't block on SMTP.</li>
+     *   <li>Return the in-memory {@link User} with its generated id populated.
+     *       The DB row's {@code enabled} column remains {@code false}
+     *       (schema-level default) until the recipient hits the verification
+     *       link, at which point {@link #verifyAccountKey(String)} flips it.</li>
+     * </ol>
+     * The {@code @Transactional} boundary ensures that if the role grant or
+     * verification-URL insert fails, the user insert is rolled back — leaving
+     * no orphan {@code users} rows lacking a role or activation link.
      *
-     * @param user the user object containing registration information (firstName, lastName, email, password)
-     * @return the created User with ID populated from the database
-     * @throws ApiException if email already exists or any database operation fails
+     * @param user the registration payload (firstName, lastName, email, raw password)
+     * @return the persisted {@link User} with its database-generated id populated
+     * @throws ApiException if the email already exists or any persistence step fails
      */
     @Override
     @Transactional
@@ -140,11 +157,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
 
             String verificationURL = getVerificationURL(UUID.randomUUID().toString(), ACCOUNT.getType());
             jdbcTemplate.update(INSERT_ACCOUNT_VERIFICATION_URL_QUERY, of("userId", user.getId(), "url", verificationURL, "type", ACCOUNT.getType()));
-            // Log the account verification link for auditing/debugging (do not log passwords)
+            notificationService.sendAccountVerification(user.getFirstName(), user.getEmail(), verificationURL);
             log.info("Account verification url {} sent to user with email: {}", verificationURL, user.getEmail());
 
-            user.setEnabled(true);
-            user.setNotLocked(true);
+            ///user.setEnabled(true);
+            //user.setNotLocked(true);
             return user;
         } catch (Exception exception) {
             log.error("Error creating user: {}", exception.getMessage(), exception);
@@ -272,16 +289,30 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Sends a 2FA verification code to the user via SMS.
+     * Generates a fresh 2FA code for the given user, replaces any prior code,
+     * and hands dispatch off to {@link NotificationService#sendTwoFactorCode}.
      * <p>
-     * This method performs the following steps:
-     * 1. Generates a random 7-character alphanumeric verification code
-     * 2. Calculates the expiration date (24 hours from now)
-     * 3. Deletes any existing 2FA codes for the user
-     * 4. Inserts the new 2FA code into the database
-     * 5. Sends the code to the user's phone number via SMS (commented out for cost)
+     * Steps, in order:
+     * <ol>
+     *   <li>Generate a 7-character uppercase alphanumeric code via
+     *       {@link org.apache.commons.lang3.RandomStringUtils#randomAlphanumeric}.</li>
+     *   <li>Compute an expiration timestamp 24 hours from now in the
+     *       {@code yyyy-MM-dd HH:mm:ss} format MySQL expects.</li>
+     *   <li>Delete any existing {@code twofactorverifications} row for this
+     *       user so only one code is valid at a time (single-use guarantee).</li>
+     *   <li>Insert the new code with its expiration via
+     *       {@code INSERT_2FA_CODE_BY_USER_ID_QUERY}.</li>
+     *   <li>Delegate the actual outbound SMS to
+     *       {@link NotificationService#sendTwoFactorCode}. The Twilio call inside
+     *       that service is currently commented out to avoid charges during
+     *       development; the service logs the code instead so it can be read
+     *       from the application log during testing.</li>
+     * </ol>
+     * Called from the login flow when {@code using_mfa = true} on the user row.
      *
-     * @param userDTO the user who will receive the verification code
+     * @param userDTO the authenticated user receiving the code; provides id
+     *                (for the delete/insert), email (for logging), first name
+     *                (for the SMS body greeting), and phone number (the SMS recipient)
      * @throws ApiException if any database operation fails
      */
     @Override
@@ -294,9 +325,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             jdbcTemplate.update(DELETE_2FA_CODE_BY_USER_ID, of("id", userDTO.getId()));
             jdbcTemplate.update(INSERT_2FA_CODE_BY_USER_ID_QUERY, of("userId", userDTO.getId(), "code", verificationCode, "expirationDate", expirationDate));
 
-            // TODO: enable SMS sending when ready (Twilio messages incur cost)
-            // sendSMS(userDTO.getPhoneNumber(), "From: AngularSpringBootFullStack App, To: " + userDTO.getPhoneNumber() + ", Message: Your 2FA verification code is: " + verificationCode + ". It will expire in 24 hours.");
-            log.info("Verification code: {}", verificationCode);
+            notificationService.sendTwoFactorCode(userDTO.getFirstName(), userDTO.getPhoneNumber(), verificationCode);
             log.debug("2FA code successfully delete/replaced on user with email: {}", userDTO.getEmail());
         } catch (Exception exception) {
             log.error("Unexpected error retrieving user by email '{}': {}", userDTO.getEmail(), exception.getMessage(), exception);
@@ -336,9 +365,39 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Creates a password reset verification URL for a user.
+     * Kicks off the forgot-password flow for the user identified by the given
+     * email by minting a one-time reset URL, persisting it with an expiration,
+     * and emailing it to the user.
+     * <p>
+     * Steps, in order:
+     * <ol>
+     *   <li>Reject if no user exists with that email. <em>Note:</em> this
+     *       currently throws {@link ApiException} with a message that reveals
+     *       whether the email exists — a user-enumeration vulnerability. A
+     *       future hardening pass should swap this for a silent no-op that
+     *       still returns 200, so attackers can't probe the user database
+     *       via the reset endpoint.</li>
+     *   <li>Compute an expiration 24 hours from now and look up the full
+     *       {@link User} row so the first-name greeting is available for the
+     *       email body.</li>
+     *   <li>Mint a UUID-based reset URL via
+     *       {@link #getVerificationURL(String, String)} with
+     *       {@link VerificationType#PASSWORD}.</li>
+     *   <li>Delete any prior {@code resetpasswordverifications} row for this
+     *       user so only the newest link is valid (single-use guarantee).</li>
+     *   <li>Insert the new row via {@code INSERT_PASSWORD_VERIFICATION_QUERY}
+     *       carrying {@code (user_id, url, expiration_date)}.</li>
+     *   <li>Delegate the email send to
+     *       {@link NotificationService#sendPasswordResetVerification}, which
+     *       dispatches asynchronously so this request doesn't block on SMTP.</li>
+     * </ol>
+     * The recipient clicks the emailed link, lands on the frontend
+     * {@code VerifyComponent}, and continues into the password-reset form
+     * which ultimately calls {@link #setNewPassword(Long, String, String)}.
      *
-     * <p>The URL is persisted with an expiration timestamp and is intended to be emailed to the user.
+     * @param email the recipient's email address (case-insensitive lookup)
+     * @throws ApiException                if the email is not found in the database
+     * @throws BadCredentialsException     if any persistence step fails
      */
     @Override
     public void resetPassword(String email) {
@@ -351,7 +410,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             jdbcTemplate.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", user.getId()));
             jdbcTemplate.update(INSERT_PASSWORD_VERIFICATION_QUERY, of("userId", user.getId(), "url", verificationURL, "expirationDate", expirationDate));
             log.info("Password reset verification url {} sent to user with email: {}", verificationURL, email);
-            // TODO send email with url to our user
+            notificationService.sendPasswordResetVerification(user.getFirstName(), email, verificationURL);
         } catch (Exception exception) {
             log.error("Unexpected error during password reset verification '{}'", exception.getMessage(), exception);
             throw new BadCredentialsException("An unexpected error occurred while verifying the code.");
@@ -376,6 +435,71 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         } catch (EmptyResultDataAccessException e) {
             log.error(e.getMessage());
             throw new ApiException("This link is not valid. Please request a new password reset link.");
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An unexpected error occurred. Please try again.");
+        }
+    }
+
+    /**
+     * Checks whether a verification URL (password/account) has expired.
+     *
+     * @param key      the UUID key portion from the URL
+     * @param password verification type (PASSWORD or ACCOUNT)
+     * @return {@code true} if expired
+     */
+    private boolean isLinkExpired(String key, VerificationType password) {
+        try {
+            return Boolean.TRUE.equals(jdbcTemplate.queryForObject(SELECT_EXPIRATION_BY_URL, of("url", getVerificationURL(key, password.getType())), Boolean.class));
+        } catch (EmptyResultDataAccessException e) {
+            log.error(e.getMessage());
+            throw new ApiException("This link is not valid. Please request a new password reset link.");
+        } catch (Exception exception) {
+            log.error(exception.getMessage());
+            throw new ApiException("An unexpected error occurred. Please try again.");
+        }
+    }
+
+    /**
+     * Completes the forgot-password reset flow by setting a new password for the
+     * user identified by {@code userID}.
+     * <p>
+     * Called by the controller's {@code PUT /user/new/password} endpoint after the
+     * reset link has already been validated by
+     * {@link #verifyPasswordKey(String)} in the prior step of the flow — at that
+     * point the frontend holds the user's ID, so the new password can be submitted
+     * in the request body without ever placing the URL key (or the password
+     * itself) in a query string.
+     * <p>
+     * Persists the encoded password via
+     * {@link com.bob.angularspringbootfullstack.query.UserQuery#UPDATE_USER_PASSWORD_BY_ID_QUERY},
+     * which also stamps {@code password_changed_at = NOW()}. The token-validation
+     * layer reads that column to reject any JWT issued before the reset, so old
+     * sessions cannot continue using stale credentials. Finally, the now-consumed
+     * reset row is deleted via
+     * {@link com.bob.angularspringbootfullstack.query.UserQuery#DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY}
+     * to make the reset link single-use.
+     * <p>
+     * Note: no expiry recheck is performed here — that responsibility lives in
+     * {@link #verifyPasswordKey(String)}, the step that hands the userID to the
+     * client. Re-validating here would be redundant and would require
+     * reconstructing a URL we no longer have.
+     *
+     * @param userID          the user whose password is being reset, obtained from
+     *                        the prior {@code verifyPasswordKey} response
+     * @param newPassword     the new plaintext password (encoded before persistence)
+     * @param confirmPassword must equal {@code newPassword}; mismatch raises
+     *                        {@link ApiException}
+     */
+    @Override
+    public void setNewPassword(Long userID, String newPassword, String confirmPassword) {
+        if (!newPassword.equals(confirmPassword))
+            throw new ApiException("Passwords do not match. Please try again!");
+        try {
+            jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY,
+                    of("userId", userID, "password", requireNonNull(passwordEncoder.encode(newPassword))));
+            jdbcTemplate.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", userID));
+            log.info("Password successfully reset for user with id: {}", userID);
         } catch (Exception exception) {
             log.error(exception.getMessage());
             throw new ApiException("An unexpected error occurred. Please try again.");
@@ -586,25 +710,6 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Checks whether a verification URL (password/account) has expired.
-     *
-     * @param key      the UUID key portion from the URL
-     * @param password verification type (PASSWORD or ACCOUNT)
-     * @return {@code true} if expired
-     */
-    private boolean isLinkExpired(String key, VerificationType password) {
-        try {
-            return Boolean.TRUE.equals(jdbcTemplate.queryForObject(SELECT_EXPIRATION_BY_URL, of("url", getVerificationURL(key, password.getType())), Boolean.class));
-        } catch (EmptyResultDataAccessException e) {
-            log.error(e.getMessage());
-            throw new ApiException("This link is not valid. Please request a new password reset link.");
-        } catch (Exception exception) {
-            log.error(exception.getMessage());
-            throw new ApiException("An unexpected error occurred. Please try again.");
-        }
-    }
-
-    /**
      * Checks whether a 2FA verification code has expired.
      *
      * @param code verification code
@@ -619,52 +724,6 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
         } catch (Exception exception) {
             log.error("Unexpected error during 2FA code verification for email '{}'", exception.getMessage(), exception);
             throw new BadCredentialsException("An unexpected error occurred while verifying the code.");
-        }
-    }
-
-    /**
-     * Completes the forgot-password reset flow by setting a new password for the
-     * user identified by {@code userID}.
-     * <p>
-     * Called by the controller's {@code PUT /user/new/password} endpoint after the
-     * reset link has already been validated by
-     * {@link #verifyPasswordKey(String)} in the prior step of the flow — at that
-     * point the frontend holds the user's ID, so the new password can be submitted
-     * in the request body without ever placing the URL key (or the password
-     * itself) in a query string.
-     * <p>
-     * Persists the encoded password via
-     * {@link com.bob.angularspringbootfullstack.query.UserQuery#UPDATE_USER_PASSWORD_BY_ID_QUERY},
-     * which also stamps {@code password_changed_at = NOW()}. The token-validation
-     * layer reads that column to reject any JWT issued before the reset, so old
-     * sessions cannot continue using stale credentials. Finally, the now-consumed
-     * reset row is deleted via
-     * {@link com.bob.angularspringbootfullstack.query.UserQuery#DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY}
-     * to make the reset link single-use.
-     * <p>
-     * Note: no expiry recheck is performed here — that responsibility lives in
-     * {@link #verifyPasswordKey(String)}, the step that hands the userID to the
-     * client. Re-validating here would be redundant and would require
-     * reconstructing a URL we no longer have.
-     *
-     * @param userID          the user whose password is being reset, obtained from
-     *                        the prior {@code verifyPasswordKey} response
-     * @param newPassword     the new plaintext password (encoded before persistence)
-     * @param confirmPassword must equal {@code newPassword}; mismatch raises
-     *                        {@link ApiException}
-     */
-    @Override
-    public void setNewPassword(Long userID, String newPassword, String confirmPassword) {
-        if (!newPassword.equals(confirmPassword))
-            throw new ApiException("Passwords do not match. Please try again!");
-        try {
-            jdbcTemplate.update(UPDATE_USER_PASSWORD_BY_ID_QUERY,
-                    of("userId", userID, "password", requireNonNull(passwordEncoder.encode(newPassword))));
-            jdbcTemplate.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", userID));
-            log.info("Password successfully reset for user with id: {}", userID);
-        } catch (Exception exception) {
-            log.error(exception.getMessage());
-            throw new ApiException("An unexpected error occurred. Please try again.");
         }
     }
 
