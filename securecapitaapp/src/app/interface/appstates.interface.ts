@@ -35,6 +35,8 @@ export interface ProfileInterface {
   access_token: string;
   refresh_token: string;
   events?: UserEventsInterface[];
+  eventsTotalElements?: number;
+  eventsTotalPages?: number;
   roles?: RolesInterface[];
 }
 

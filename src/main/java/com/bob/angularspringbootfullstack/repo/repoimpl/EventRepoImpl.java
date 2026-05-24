@@ -11,8 +11,8 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 
-import static com.bob.angularspringbootfullstack.query.EventQuery.INSERT_EVENT_BY_USER_ID_QUERY;
-import static com.bob.angularspringbootfullstack.query.EventQuery.SELECT_EVENTS_BY_USER_ID_QUERY;
+import static com.bob.angularspringbootfullstack.query.EventQuery.*;
+import static java.util.Map.entry;
 import static java.util.Map.of;
 
 /**
@@ -34,6 +34,26 @@ public class EventRepoImpl implements EventRepo {
     @Override
     public Collection<UserEvent> getEventsByUserId(Long userId) {
         return jdbcTemplate.query(SELECT_EVENTS_BY_USER_ID_QUERY, of("id", userId), new UserEventRowMapper());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection<UserEvent> getEventsByUserId(Long userId, int page, int size) {
+        return jdbcTemplate.query(
+                SELECT_EVENTS_BY_USER_ID_PAGINATED_QUERY,
+                of("id", userId, "size", size, "offset", page * size),
+                new UserEventRowMapper());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long countEventsByUserId(Long userId) {
+        Long count = jdbcTemplate.queryForObject(COUNT_EVENTS_BY_USER_ID_QUERY, of("id", userId), Long.class);
+        return count != null ? count : 0L;
     }
 
     /**

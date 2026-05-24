@@ -11,18 +11,39 @@ package com.bob.angularspringbootfullstack.query;
  */
 public class EventQuery {
     /**
-     * Fetches every audit entry for a given user with the newest user being first.
+     * Fetches every audit entry for a given user, newest first.
      *
      * <p>JOINs {@code userevents → events → users} so the result includes the
      * human-readable {@code type} and {@code description} from the reference
-     * table rather than a raw foreign key.  A {@code LIMIT} clause is omitted
-     * for now — pagination will be added in a later iteration.
+     * table rather than a raw foreign key.
      */
     public static final String SELECT_EVENTS_BY_USER_ID_QUERY = "SELECT " +
             "uev.id, uev.device, uev.ip_address, ev.type, ev.description, uev.created_at " +
             "FROM events ev JOIN userevents uev ON ev.id = uev.event_id " +
             "JOIN users u ON u.id = uev.user_id WHERE u.id = :id " +
             "ORDER BY uev.created_at DESC";
+
+    /**
+     * Same join as {@link #SELECT_EVENTS_BY_USER_ID_QUERY} but with {@code LIMIT}
+     * and {@code OFFSET} so only one page of results is returned.
+     *
+     * <p>{@code :size} is the page size; {@code :offset} is {@code page * size},
+     * calculated by the caller so the query stays parameter-only.
+     */
+    public static final String SELECT_EVENTS_BY_USER_ID_PAGINATED_QUERY = "SELECT " +
+            "uev.id, uev.device, uev.ip_address, ev.type, ev.description, uev.created_at " +
+            "FROM events ev JOIN userevents uev ON ev.id = uev.event_id " +
+            "JOIN users u ON u.id = uev.user_id WHERE u.id = :id " +
+            "ORDER BY uev.created_at DESC LIMIT :size OFFSET :offset";
+
+    /**
+     * Returns the total number of audit entries for a given user.
+     *
+     * <p>Used alongside {@link #SELECT_EVENTS_BY_USER_ID_PAGINATED_QUERY} so the
+     * frontend can calculate the total page count without fetching all rows.
+     */
+    public static final String COUNT_EVENTS_BY_USER_ID_QUERY = "SELECT COUNT(*) " +
+            "FROM userevents uev JOIN users u ON u.id = uev.user_id WHERE u.id = :id";
 
     /**
      * Inserts a new audit entry for a user identified by their email address.

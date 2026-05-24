@@ -1,0 +1,142 @@
+@if (newInvoiceState(); as state) {
+  @switch (state.dataState) {
+    @case (DataState.LOADED) {
+      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <section>
+        <div class="container">
+          <nav aria-label="breadcrumb" style="margin-top: 8px">
+            <ol class="breadcrumb">
+              <li class="breadcrumb-item">
+                <a [routerLink]="['/']">Home</a>
+              </li>
+              <li class="breadcrumb-item"><a [routerLink]="['/invoices']">Invoices</a></li>
+              <li aria-current="page" class="breadcrumb-item active">New</li>
+            </ol>
+          </nav>
+          <div class="row justify-content-center">
+            <div class="col-md-12">
+              <div class="card">
+                <div class="card-body">
+                  <div class="text-center">
+                    <h2>
+                      <i class="bi bi-receipt" style="margin-right: 5px"></i>
+                      New Invoice
+                    </h2>
+                  </div>
+                  @if (state.error) {
+                    <div class="alert alert-danger bg-danger text-light border-0 alert-dismissible fade show"
+                         role="alert">
+                      {{ state.error }}
+                      <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
+                              type="button"></button>
+                    </div>
+                  }
+                  @if (state.appData?.message) {
+                    <div class="alert alert-success bg-success text-light border-0 alert-dismissible fade show"
+                         role="alert">
+                      {{ state.appData.message }}
+                      <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
+                              type="button"></button>
+                    </div>
+                  }
+                  <form #invoiceForm="ngForm" (ngSubmit)="createNewInvoice(invoiceForm)">
+                    <div class="row">
+                      <div class="col-md-12" style="margin-bottom: 15px">
+                        <label>Services</label>
+                        @for (line of serviceLines; track $index; let i = $index) {
+                          <div class="d-flex gap-2 mb-2">
+                            <select
+                              (change)="onServiceSelected(i, $any($event.target).value)"
+                              [ngModelOptions]="{ standalone: true }"
+                              [ngModel]="null"
+                              class="form-control"
+                              required>
+                              <option [ngValue]="null" disabled>Select a service...</option>
+                              @for (svc of state?.appData?.data?.availableServices; track svc.id) {
+                                <option [value]="svc.id">{{ svc.name }}</option>
+                              }
+                            </select>
+                            <input
+                              [(ngModel)]="serviceLines[i].price"
+                              [ngModelOptions]="{ standalone: true }"
+                              class="form-control"
+                              placeholder="Price"
+                              style="max-width: 130px"
+                              type="number" />
+                            @if (serviceLines.length > 1) {
+                              <button (click)="removeServiceLine(i)" class="btn btn-outline-danger btn-sm"
+                                      type="button">✕
+                              </button>
+                            }
+                          </div>
+                        }
+                        <button (click)="addServiceLine()" class="btn btn-outline-secondary btn-sm" type="button">+ Add
+                          service
+                        </button>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <label for="customerId">Customer</label>
+                        <select [ngModel]="null" class="form-control select-cl" id="customerId" name="customerId"
+                                required>
+                          @for (customer of state?.appData?.data?.customers; track customer.id) {
+                            <option [disabled]="false" [ngValue]="customer.id" [selected]="false"
+                                    class="select-cl">{{ customer.customerName }}
+                            </option>
+                          }
+                        </select>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <div class="form-group">
+                          <label for="totalAmount">Total</label>
+                          <input class="form-control" id="totalAmount" name="totalAmount" ngModel required
+                                 type="number" />
+                        </div>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <div class="form-group">
+                          <label for="invoiceDate">Date</label>
+                          <input class="form-control" id="invoiceDate" name="invoiceDate" ngModel required
+                                 type="date" />
+                        </div>
+                      </div>
+                      <div class="col-md-6" style="margin-bottom: 15px">
+                        <label for="status">Status</label>
+                        <select class="form-control" id="status" name="status" ngModel="PENDING" required>
+                          <option value="PENDING">PENDING</option>
+                          <option value="PAID">PAID</option>
+                          <option value="CANCELED">CANCELED</option>
+                          <option value="OVERDUE">OVERDUE</option>
+                          <option value="ACTIVE">ACTIVE</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <button
+                        [disabled]="invoiceForm.invalid || invoiceForm.pristine || isLoading()"
+                        class="btn btn-primary mt-5"
+                        type="submit">
+                        @if (isLoading()) {
+                          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
+                                style="margin-right: 5px"></span>
+                          <span>Saving...</span>
+                        } @else {
+                          Save
+                        }
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    }
+    @case (DataState.LOADING) {
+      <div>Loading...</div>
+    }
+    @case (DataState.ERROR) {
+      <div>{{ state.error }}</div>
+    }
+  }
+}

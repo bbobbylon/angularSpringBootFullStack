@@ -23,6 +23,25 @@ public interface EventRepo {
     Collection<UserEvent> getEventsByUserId(Long userId);
 
     /**
+     * Returns one page of audit entries for the given user, ordered newest first.
+     *
+     * @param userId the primary key of the user whose history to fetch
+     * @param page   zero-based page index
+     * @param size   maximum number of entries to return
+     * @return a page-sized collection of fully-resolved {@link UserEvent} objects
+     */
+    Collection<UserEvent> getEventsByUserId(Long userId, int page, int size);
+
+    /**
+     * Returns the total number of audit entries recorded for the given user.
+     * Used to calculate {@code totalPages} for the frontend pagination controls.
+     *
+     * @param userId the primary key of the user
+     * @return total audit-entry count
+     */
+    long countEventsByUserId(Long userId);
+
+    /**
      * Records a new audit entry for the user identified by their email address.
      *
      * <p>The email is resolved to a user ID inside the SQL query, so no

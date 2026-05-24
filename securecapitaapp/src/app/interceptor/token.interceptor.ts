@@ -48,7 +48,7 @@ export const tokenInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, n
    */
   const publicRoutes = ['login', 'register', 'verify', 'resetpassword', 'refresh'];
 
-  if (publicRoutes.some(route => req.url.includes(route))) {
+  if (publicRoutes.some((route) => req.url.includes(route))) {
     return next(req);
   }
 
@@ -104,7 +104,7 @@ function handleRefreshToken(req: HttpRequest<unknown>, next: HttpHandlerFn, user
     isTokenRefreshing = true;
     refreshTokenSubject.next(null);
     return userService.refreshToken$().pipe(
-      switchMap(response => {
+      switchMap((response) => {
         console.log('Token Refresh Response:', response);
         isTokenRefreshing = false;
         refreshTokenSubject.next(response);
@@ -112,7 +112,7 @@ function handleRefreshToken(req: HttpRequest<unknown>, next: HttpHandlerFn, user
         console.log('Sending original request:', req);
         return next(addAuthorizationTokenHeader(req, response.data.access_token));
       }),
-      catchError(error => {
+      catchError((error) => {
         isTokenRefreshing = false;
         localStorage.removeItem(Key.TOKEN);
         localStorage.removeItem(Key.REFRESH_TOKEN);
@@ -124,6 +124,6 @@ function handleRefreshToken(req: HttpRequest<unknown>, next: HttpHandlerFn, user
   return refreshTokenSubject.pipe(
     filter((response): response is CustomHttpResponseInterface<ProfileInterface> => response !== null),
     take(1),
-    switchMap(response => next(addAuthorizationTokenHeader(req, response.data.access_token))),
+    switchMap((response) => next(addAuthorizationTokenHeader(req, response.data.access_token))),
   );
 }

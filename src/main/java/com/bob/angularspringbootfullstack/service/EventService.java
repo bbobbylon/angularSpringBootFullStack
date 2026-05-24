@@ -25,6 +25,25 @@ public interface EventService {
     Collection<UserEvent> getEventsByUserId(Long userId);
 
     /**
+     * Returns one page of audit entries for the given user, newest first.
+     *
+     * @param userId the primary key of the user whose activity to retrieve
+     * @param page   zero-based page index
+     * @param size   maximum number of entries per page
+     * @return a page-sized collection of fully-resolved {@link UserEvent} objects
+     */
+    Collection<UserEvent> getEventsByUserId(Long userId, int page, int size);
+
+    /**
+     * Returns the total number of audit entries for the given user.
+     * Consumed by the controller to calculate {@code totalPages} for the frontend.
+     *
+     * @param userId the primary key of the user
+     * @return total audit-entry count
+     */
+    long countEventsByUserId(Long userId);
+
+    /**
      * Records an audit entry for the user identified by their primary key.
      *
      * @param userId    the primary key of the user who triggered the action

@@ -36,7 +36,9 @@ import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processErr
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getLoggedInUser;
 import static java.time.LocalTime.now;
+import static java.util.Map.entry;
 import static java.util.Map.of;
+import static java.util.Map.ofEntries;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpStatus.*;
 import static org.springframework.http.MediaType.IMAGE_PNG_VALUE;
@@ -80,6 +82,7 @@ import static org.springframework.security.authentication.UsernamePasswordAuthen
 public class UserController {
     // there is a space after Bearer to split the header into two parts and extract the token more easily; this is a standard convention for Authorization headers and is required for the substring operation in refreshToken to work correctly
     private static final String TOKEN_PREFIX = "Bearer ";
+    private static final int DEFAULT_PAGE_SIZE = 10;
     private final UserService userService;
     private final RoleService roleService;
     private final AuthenticationManager authenticationManager;
@@ -199,14 +202,19 @@ public class UserController {
             throw new ApiException("Unauthorized request.");
         userService.updatePassword(dbUser.getId(), updatePasswordForm.getCurrentPassword(), updatePasswordForm.getNewPassword(), updatePasswordForm.getConfirmPassword());
         eventPublisher.publishEvent(new NewUserEvent(authUser.getEmail(), PASSWORD_UPDATE));
+        long pwTotalElements = eventService.countEventsByUserId(dbUser.getId());
+        int pwTotalPages = (int) Math.ceil((double) pwTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", dbUser,
-                                "roles", roleService.getAllRoles(),
-                                "events", eventService.getEventsByUserId(dbUser.getId()),
-                                "access_token", tokenProvider.createAccessToken(getUserPrincipal(dbUser)),
-                                "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(dbUser))))
+                        .data(ofEntries(
+                                entry("user", dbUser),
+                                entry("roles", roleService.getAllRoles()),
+                                entry("events", eventService.getEventsByUserId(dbUser.getId(), 0, DEFAULT_PAGE_SIZE)),
+                                entry("eventsTotalElements", pwTotalElements),
+                                entry("eventsTotalPages", pwTotalPages),
+                                entry("access_token", tokenProvider.createAccessToken(getUserPrincipal(dbUser))),
+                                entry("refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(dbUser)))))
                         .message("Your password has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -228,10 +236,16 @@ public class UserController {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateUserRole(userDTO.getId(), roleName);
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), ROLE_UPDATE));
+        long roleTotalElements = eventService.countEventsByUserId(userDTO.getId());
+        int roleTotalPages = (int) Math.ceil((double) roleTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userService.getUserById(userDTO.getId()), "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .data(of("user", userService.getUserById(userDTO.getId()),
+                                "events", eventService.getEventsByUserId(userDTO.getId(), 0, DEFAULT_PAGE_SIZE),
+                                "eventsTotalElements", roleTotalElements,
+                                "eventsTotalPages", roleTotalPages,
+                                "roles", roleService.getAllRoles()))
                         .message("Your role has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -252,10 +266,16 @@ public class UserController {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateAccountSettings(userDTO.getId(), settingsForm.getEnabled(), settingsForm.getNotLocked());
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), ACCOUNT_SETTINGS_UPDATE));
+        long settingsTotalElements = eventService.countEventsByUserId(userDTO.getId());
+        int settingsTotalPages = (int) Math.ceil((double) settingsTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userService.getUserById(userDTO.getId()), "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .data(of("user", userService.getUserById(userDTO.getId()),
+                                "events", eventService.getEventsByUserId(userDTO.getId(), 0, DEFAULT_PAGE_SIZE),
+                                "eventsTotalElements", settingsTotalElements,
+                                "eventsTotalPages", settingsTotalPages,
+                                "roles", roleService.getAllRoles()))
                         .message("Your account settings have been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -277,10 +297,16 @@ public class UserController {
         //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
         UserDTO userDTO = userService.toggleMFA(getAuthenticatedUser(authentication).getEmail());
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), MFA_UPDATE));
+        long mfaTotalElements = eventService.countEventsByUserId(userDTO.getId());
+        int mfaTotalPages = (int) Math.ceil((double) mfaTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userDTO, "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .data(of("user", userDTO,
+                                "events", eventService.getEventsByUserId(userDTO.getId(), 0, DEFAULT_PAGE_SIZE),
+                                "eventsTotalElements", mfaTotalElements,
+                                "eventsTotalPages", mfaTotalPages,
+                                "roles", roleService.getAllRoles()))
                         .message("Multi-Factor authentication setting has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -314,10 +340,16 @@ public class UserController {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateProfileImage(userDTO, image);
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), PROFILE_PICTURE_UPDATE));
+        long imgTotalElements = eventService.countEventsByUserId(userDTO.getId());
+        int imgTotalPages = (int) Math.ceil((double) imgTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userService.getUserById(userDTO.getId()), "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .data(of("user", userService.getUserById(userDTO.getId()),
+                                "events", eventService.getEventsByUserId(userDTO.getId(), 0, DEFAULT_PAGE_SIZE),
+                                "eventsTotalElements", imgTotalElements,
+                                "eventsTotalPages", imgTotalPages,
+                                "roles", roleService.getAllRoles()))
                         .message("Profile image has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -415,11 +447,48 @@ public class UserController {
     @GetMapping("/profile")
     public ResponseEntity<HttpResponse> getProfile(Authentication authentication) {
         UserDTO userDTO = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
+        long totalElements = eventService.countEventsByUserId(userDTO.getId());
+        int totalPages = (int) Math.ceil((double) totalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userDTO, "events", eventService.getEventsByUserId(userDTO.getId()), "roles", roleService.getAllRoles()))
+                        .data(of("user", userDTO,
+                                "events", eventService.getEventsByUserId(userDTO.getId(), 0, DEFAULT_PAGE_SIZE),
+                                "eventsTotalElements", totalElements,
+                                "eventsTotalPages", totalPages,
+                                "roles", roleService.getAllRoles()))
                         .message("We have fetched your profile for you!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Returns one page of audit events for the authenticated user.
+     *
+     * <p>Called by the frontend pagination controls on the Profile page after the initial
+     * load — keeps page navigation from re-fetching the user object and roles list.
+     *
+     * @param authentication the current Spring Security authentication
+     * @param page           zero-based page index (default 0)
+     * @param size           page size (default {@value DEFAULT_PAGE_SIZE})
+     * @return 200 OK with the events page, total element count, and total page count
+     */
+    @GetMapping("/events")
+    public ResponseEntity<HttpResponse> getUserEvents(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        UserDTO userDTO = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
+        long totalElements = eventService.countEventsByUserId(userDTO.getId());
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("events", eventService.getEventsByUserId(userDTO.getId(), page, size),
+                                "eventsTotalElements", totalElements,
+                                "eventsTotalPages", totalPages))
+                        .message("Retrieved user events!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
@@ -441,10 +510,16 @@ public class UserController {
         //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
         UserDTO updatedUser = userService.updateUserDTO(user);
         eventPublisher.publishEvent(new NewUserEvent(updatedUser.getEmail(), PROFILE_UPDATE));
+        long updateTotalElements = eventService.countEventsByUserId(updatedUser.getId());
+        int updateTotalPages = (int) Math.ceil((double) updateTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", updatedUser, "events", eventService.getEventsByUserId(updatedUser.getId()), "roles", roleService.getAllRoles()))
+                        .data(of("user", updatedUser,
+                                "events", eventService.getEventsByUserId(updatedUser.getId(), 0, DEFAULT_PAGE_SIZE),
+                                "eventsTotalElements", updateTotalElements,
+                                "eventsTotalPages", updateTotalPages,
+                                "roles", roleService.getAllRoles()))
                         .message("Your profile has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
