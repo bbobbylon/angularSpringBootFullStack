@@ -13,6 +13,7 @@ import { CustomerService } from '../../../service/customer.service';
 import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { HttpEvent, HttpEventType } from '@angular/common/http';
 import { saveAs } from 'file-saver';
+import { NotificationsService } from '../../../service/notifications-service';
 
 /**
  * Main dashboard component displayed after login.
@@ -45,6 +46,7 @@ export class HomeComponent implements OnInit {
   protected readonly router = inject(Router);
   protected readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
   private readonly avatarColors = ['0D8ABC', '2ECC71', 'E74C3C', '9B59B6', 'F39C12', '1ABC9C', 'E67E22'];
   private data = signal<CustomHttpResponseInterface<CustomerListDataInterface>>(null);
   private readonly _currentPage$ = toObservable(this.currentPage);
@@ -70,7 +72,10 @@ export class HomeComponent implements OnInit {
               return { dataState: DataState.LOADED, appData: response };
             }),
             startWith({ dataState: DataState.LOADING }),
-            catchError((error: string) => of({ dataState: DataState.ERROR, error })),
+            catchError((error: string) => {
+              this.notification.onError(error);
+              return of({ dataState: DataState.ERROR, error });
+            }),
           ),
         ),
         takeUntilDestroyed(this.destroyRef),
@@ -97,7 +102,10 @@ export class HomeComponent implements OnInit {
           this.reportProgress(response);
           return { dataState: DataState.LOADED, appData: this.data() };
         }),
-        catchError((error: string) => of({ dataState: DataState.ERROR, error, appData: this.data() })),
+        catchError((error: string) => {
+          this.notification.onError(error);
+          return of({ dataState: DataState.ERROR, error, appData: this.data() });
+        }),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((state) => this.homeState.set(state));
@@ -187,6 +195,7 @@ export class HomeComponent implements OnInit {
         break;
       case HttpEventType.Response:
         saveAs(new File([httpEvent.body as Blob], 'customer_report.xlsx', { type: `${httpEvent.headers.get('Content-Type')};charset=utf-8` }));
+        this.notification.onSuccess('Report downloaded successfully');
         this.fileStatus.set(undefined);
         break;
       default:

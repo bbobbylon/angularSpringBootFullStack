@@ -5,6 +5,7 @@ import { UserService } from '../../../service/user.service';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NotificationsService } from '../../../service/notifications-service';
 
 /**
  * Registration view for creating new user accounts.
@@ -29,6 +30,7 @@ export class RegisterComponent {
   readonly DataState = DataState;
   protected readonly userService = inject(UserService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
 
   /**
    * Submits the registration form to the backend and drives component state.
@@ -52,9 +54,11 @@ export class RegisterComponent {
         next: (response) => {
           console.log(response);
           registerForm.reset();
+          this.notification.onSuccess(response.message);
           this.registerState.set({ dataState: DataState.LOADED, registerSuccess: true, message: response.message });
         },
         error: (error: string) => {
+          this.notification.onError(error);
           this.registerState.set({ dataState: DataState.ERROR, registerError: true, error });
         },
       });

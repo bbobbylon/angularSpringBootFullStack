@@ -12,6 +12,7 @@ import { UserInterface } from '../../../interface/user.interface';
 import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { CustomerService } from '../../../service/customer.service';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
+import { NotificationsService } from '../../../service/notifications-service';
 
 /**
  * Customer detail view showing a single customer's profile fields, invoice count, and invoice history.
@@ -46,6 +47,7 @@ export class CustomerDetailsComponent implements OnInit {
   protected readonly customerService = inject(CustomerService);
   private data = signal<CustomHttpResponseInterface<CustomerStateInterface>>(null);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
   /**
    * Tracks whether a form submission is in progress.
    *
@@ -74,7 +76,10 @@ export class CustomerDetailsComponent implements OnInit {
         return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>;
       }),
       startWith({ dataState: DataState.LOADING } as GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>),
-      catchError((error: string) => of({ dataState: DataState.ERROR, error } as GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>)),
+      catchError((error: string) => {
+        this.notification.onError(error);
+        return of({ dataState: DataState.ERROR, error } as GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>);
+      }),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe((state) => this.customerState.set(state));
   }
@@ -101,10 +106,12 @@ export class CustomerDetailsComponent implements OnInit {
             ...response,
             data: { ...response.data, customers: { ...response.data.customers, invoices: this.data()?.data?.customers?.invoices } },
           });
+          this.notification.onSuccess('Customer updated successfully');
           this.customerState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
           this.isLoading.set(false);
+          this.notification.onError(error);
           this.customerState.set({ dataState: DataState.ERROR, error });
         },
       });

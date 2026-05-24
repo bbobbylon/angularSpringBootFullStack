@@ -11,6 +11,7 @@ import { UserInterface } from '../../../interface/user.interface';
 import { CustomerInvoiceUserInterface } from '../../../interface/appstates.interface';
 import { CustomerService } from '../../../service/customer.service';
 import { jsPDF } from 'jspdf';
+import { NotificationsService } from '../../../service/notifications-service';
 
 @Component({
   selector: 'app-invoice-detail',
@@ -30,6 +31,7 @@ export class InvoiceDetailComponent implements OnInit {
   protected readonly customerService = inject(CustomerService);
   private data = signal<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(null);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
 
   ngOnInit(): void {
     this.customerService.invoice$(this.id).pipe(
@@ -38,7 +40,10 @@ export class InvoiceDetailComponent implements OnInit {
         return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>;
       }),
       startWith({ dataState: DataState.LOADING } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>),
-      catchError((error: string) => of({ dataState: DataState.ERROR, error } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>)),
+      catchError((error: string) => {
+        this.notification.onError(error);
+        return of({ dataState: DataState.ERROR, error } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>);
+      }),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe((state) => this.invoiceState.set(state));
   }

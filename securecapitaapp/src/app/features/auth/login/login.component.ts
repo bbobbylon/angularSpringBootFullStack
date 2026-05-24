@@ -7,6 +7,7 @@ import { LoginStateInterface } from '../../../interface/appstates.interface';
 import { UserService } from '../../../service/user.service';
 import { Key } from '../../../enumeration/key.enumeration';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NotificationsService } from '../../../service/notifications-service';
 
 /**
  * Handles login and MFA verification flows.
@@ -32,6 +33,7 @@ export class LoginComponent implements OnInit {
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
   private readonly phone = signal<string | null>(null);
   private readonly email = signal<string | null>(null);
 
@@ -69,6 +71,7 @@ export class LoginComponent implements OnInit {
           this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
         },
         error: (error: string) => {
+          this.notification.onError(error);
           this.loginState.set({
             dataState: DataState.ERROR,
             error,
@@ -121,6 +124,7 @@ export class LoginComponent implements OnInit {
           }
         },
         error: (error: string) => {
+          this.notification.onError(error);
           this.loginState.set({
             dataState: DataState.ERROR,
             error,

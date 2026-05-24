@@ -1,11 +1,13 @@
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { IMAGE_CONFIG } from '@angular/common';
 import { PreloadAllModules, provideRouter, withComponentInputBinding, withPreloading } from '@angular/router';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 
 import { routes } from './app.routes';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { tokenInterceptor } from './interceptor/token.interceptor';
 import { cacheInterceptor } from './interceptor/cache.interceptor';
+import { provideToastr } from 'ngx-toastr';
 
 /**
  * Root application configuration for the Angular standalone app.
@@ -47,5 +49,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([cacheInterceptor, tokenInterceptor])),
 
     { provide: IMAGE_CONFIG, useValue: { disableImageSizeWarning: true } },
+    provideAnimationsAsync(),
+    provideToastr({ timeOut: 4000, positionClass: 'toast-bottom-right', preventDuplicates: true }),
   ],
 };
