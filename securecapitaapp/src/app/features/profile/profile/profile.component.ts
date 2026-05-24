@@ -6,6 +6,7 @@ import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { UserService } from '../../../service/user.service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
+import { NotificationsService } from '../../../service/notifications-service';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { ProfileInterface } from '../../../interface/appstates.interface';
 import { EventType } from '../../../enumeration/event-type.enum';
@@ -65,6 +66,7 @@ export class ProfileComponent implements OnInit {
   /** Injected `UserService` to interact with the backend for user-related operations. */
   private readonly userService = inject(UserService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
   /** Caches the most recent successful API response so all update methods can stay in LOADED state while requests are in flight. */
   private data = signal<CustomHttpResponseInterface<ProfileInterface>>(null);
 
@@ -91,6 +93,7 @@ export class ProfileComponent implements OnInit {
         },
         error: (error: string) => {
           this.isLoading.set(false);
+          this.notification.onError(error);
           this.profileState.set({ dataState: DataState.ERROR, error, appData: this.data() });
         },
       });
@@ -134,10 +137,12 @@ export class ProfileComponent implements OnInit {
           console.log('Profile updated successfully:', response);
           this.data.set({ ...response, data: response.data });
           this.isLoading.set(false);
+          this.notification.onSuccess('Profile updated successfully');
           this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
           this.isLoading.set(false);
+          this.notification.onError(error);
           this.profileState.set({ dataState: DataState.LOADED, error, appData: this.data() });
         },
       });
@@ -165,11 +170,13 @@ export class ProfileComponent implements OnInit {
             this.data.set({ ...response, data: response.data });
             passwordForm.reset();
             this.isLoading.set(false);
+            this.notification.onSuccess('Password updated successfully');
             this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
           },
           error: (error: string) => {
             this.isLoading.set(false);
             passwordForm.reset();
+            this.notification.onError(error);
             this.profileState.set({ dataState: DataState.LOADED, error, appData: this.data() });
           },
         });
@@ -200,10 +207,12 @@ export class ProfileComponent implements OnInit {
           console.log('Role updated successfully:', response);
           this.data.set({ ...response, data: response.data });
           this.isLoading.set(false);
+          this.notification.onSuccess('Role updated successfully');
           this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
           this.isLoading.set(false);
+          this.notification.onError(error);
           this.profileState.set({ dataState: DataState.LOADED, error, appData: this.data() });
         },
       });
@@ -226,10 +235,12 @@ export class ProfileComponent implements OnInit {
           console.log('Account Settings updated successfully:', response);
           this.data.set({ ...response, data: response.data });
           this.isLoading.set(false);
+          this.notification.onSuccess('Settings updated successfully');
           this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
           this.isLoading.set(false);
+          this.notification.onError(error);
           this.profileState.set({ dataState: DataState.LOADED, error, appData: this.data() });
         },
       });
@@ -265,10 +276,12 @@ export class ProfileComponent implements OnInit {
           console.log('MFA Settings updated successfully:', response);
           this.data.set({ ...response, data: response.data });
           this.isLoading.set(false);
+          this.notification.onSuccess('MFA settings updated');
           this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
           this.isLoading.set(false);
+          this.notification.onError(error);
           this.profileState.set({ dataState: DataState.LOADED, error, appData: this.data() });
         },
       });
@@ -305,6 +318,7 @@ export class ProfileComponent implements OnInit {
           this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
+          this.notification.onError(error);
           this.profileState.set({ dataState: DataState.LOADED, error, appData: this.data() });
         },
       });

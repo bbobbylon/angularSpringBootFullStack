@@ -5,6 +5,7 @@ import { FormsModule, NgForm } from '@angular/forms';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NotificationsService } from '../../../service/notifications-service';
 
 /**
  * Password reset view used after a reset link is verified.
@@ -28,6 +29,7 @@ export class ResetPasswordComponent {
   protected readonly userService = inject(UserService);
   protected readonly DataState = DataState;
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
 
   /**
    * Submits the password reset request and drives component state.
@@ -46,9 +48,11 @@ export class ResetPasswordComponent {
         next: (response) => {
           console.log(response);
           resetPasswordForm.reset();
+          this.notification.onSuccess(response.message);
           this.resetPasswordState.set({ dataState: DataState.LOADED, resetPasswordSuccess: true, message: response.message });
         },
         error: (error: string) => {
+          this.notification.onError(error);
           this.resetPasswordState.set({ dataState: DataState.ERROR, resetPasswordError: true, error });
         },
       });

@@ -10,6 +10,7 @@ import { CustomerService } from '../../../service/customer.service';
 import { InvoiceLineItemInterface } from '../../../interface/invoice.interface';
 import { ServicesInterface } from '../../../interface/services.interface';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NotificationsService } from '../../../service/notifications-service';
 
 /**
  * New invoice creation form.
@@ -55,6 +56,7 @@ export class NewInvoiceComponent implements OnInit {
   /** Injected service used to fetch the initial page data and POST new invoices. */
   protected readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
   /**
    * Caches the most recent successful API response so the form stays in
    * {@code DataState.LOADED} while a create request is in flight.
@@ -123,6 +125,7 @@ export class NewInvoiceComponent implements OnInit {
           this.newInvoiceState.set({ dataState: DataState.LOADED, appData: response });
         },
         error: (error: string) => {
+          this.notification.onError(error);
           this.newInvoiceState.set({ dataState: DataState.ERROR, error });
         },
       });
@@ -150,10 +153,12 @@ export class NewInvoiceComponent implements OnInit {
           this.serviceLines = [{ name: '', price: 0 }];
           this.isLoading.set(false);
           this.data.set(response);
+          this.notification.onSuccess('Invoice created successfully');
           this.newInvoiceState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
           this.isLoading.set(false);
+          this.notification.onError(error);
           this.newInvoiceState.set({ dataState: DataState.LOADED, error, appData: this.data() });
         },
       });

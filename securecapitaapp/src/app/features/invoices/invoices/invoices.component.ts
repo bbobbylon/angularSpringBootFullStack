@@ -12,6 +12,7 @@ import { catchError } from 'rxjs/operators';
 import { HttpEvent, HttpEventType } from '@angular/common/http';
 import { saveAs } from 'file-saver';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { NotificationsService } from '../../../service/notifications-service';
 
 /**
  * All-invoice list view with pagination.
@@ -54,6 +55,7 @@ export class InvoicesComponent implements OnInit {
   private readonly _currentPageObs$ = toObservable(this.currentPage);
   private readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
   /**
    * Caches the most recent successful API response so pagination updates can return
    * {@code DataState.LOADED} immediately as the {@code startWith} value while the next
@@ -82,9 +84,10 @@ export class InvoicesComponent implements OnInit {
               return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>;
             }),
             startWith({ dataState: DataState.LOADING, appData: this.data() } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>),
-            catchError((error: string) =>
-              of({ dataState: DataState.ERROR, error, appData: this.data() } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>),
-            ),
+            catchError((error: string) => {
+              this.notification.onError(error);
+              return of({ dataState: DataState.ERROR, error, appData: this.data() } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>);
+            }),
           ),
         ),
         takeUntilDestroyed(this.destroyRef),
@@ -128,7 +131,10 @@ export class InvoicesComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => this.reportProgres(response),
-        error: (error: string) => console.error('Invoice report download failed:', error),
+        error: (error: string) => {
+          this.notification.onError(error);
+          console.error('Invoice report download failed:', error);
+        },
       });
   }
 
@@ -155,6 +161,7 @@ export class InvoicesComponent implements OnInit {
         break;
       case HttpEventType.Response:
         saveAs(new File([httpEvent.body as Blob], 'invoice_report.xlsx', { type: `${httpEvent.headers.get('Content-Type')};charset=utf-8` }));
+        this.notification.onSuccess('Report downloaded successfully');
         this.fileStatus.set(undefined);
         break;
       default:

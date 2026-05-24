@@ -11,6 +11,7 @@ import { CustomerListDataInterface } from '../../../interface/appstates.interfac
 import { CustomerService } from '../../../service/customer.service';
 import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { NotificationsService } from '../../../service/notifications-service';
 
 /**
  * All-customers list view with search and pagination.
@@ -73,6 +74,7 @@ export class CustomersComponent implements OnInit {
   private readonly _currentSearchTermObs$ = toObservable(this.currentSearchTerm);
 
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
 
   /**
    * Raw keystrokes from the search input are pushed here.
@@ -114,7 +116,10 @@ export class CustomersComponent implements OnInit {
             return { dataState: DataState.LOADED, appData: response };
           }),
           startWith({ dataState: DataState.LOADING }),
-          catchError((error: string) => of({ dataState: DataState.ERROR, error })),
+          catchError((error: string) => {
+            this.notification.onError(error);
+            return of({ dataState: DataState.ERROR, error });
+          }),
         ),
       ),
     );

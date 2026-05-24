@@ -8,6 +8,7 @@ import { UserInterface } from '../../../interface/user.interface';
 import { ActivatedRoute, ParamMap, RouterLink } from '@angular/router';
 import { CustomerService } from '../../../service/customer.service';
 import { UserService } from '../../../service/user.service';
+import { NotificationsService } from '../../../service/notifications-service';
 
 /**
  * Verification landing view for account and password reset links.
@@ -45,6 +46,7 @@ export class VerifyComponent implements OnInit {
   protected isLoading = signal(false);
   private readonly userService = inject(UserService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly notification = inject(NotificationsService);
   private userSubject = signal<UserInterface>(null);
   user = this.userSubject.asReadonly();
   private readonly ACCOUNT_KEY = 'key';
@@ -130,6 +132,7 @@ export class VerifyComponent implements OnInit {
           this.isLoading.set(false);
           // type: 'account' selects the template's success-card branch (check icon + login link).
           // The 'password' branch would re-render the empty form, masking the success.
+          this.notification.onSuccess(response.message);
           this.verifyState.set({
             type: 'account' as AccountType,
             title: 'Password Updated :) ',
@@ -140,6 +143,7 @@ export class VerifyComponent implements OnInit {
         },
         error: (error: string) => {
           this.isLoading.set(false);
+          this.notification.onError(error);
           this.verifyState.set({
             title: 'Password Update Failed :(',
             dataState: DataState.ERROR,
