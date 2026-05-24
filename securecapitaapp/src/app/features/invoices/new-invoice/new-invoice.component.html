@@ -112,10 +112,10 @@
                     </div>
                     <div>
                       <button
-                        [disabled]="invoiceForm.invalid || invoiceForm.pristine || (isLoading$ | async)"
+                        [disabled]="invoiceForm.invalid || invoiceForm.pristine || isLoading()"
                         class="btn btn-primary mt-5"
                         type="submit">
-                        @if (isLoading$ | async) {
+                        @if (isLoading()) {
                           <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                                 style="margin-right: 5px"></span>
                           <span>Saving...</span>
@@ -131,6 +131,12 @@
           </div>
         </div>
       </section>
+    }
+    @case (DataState.LOADING) {
+      <div>Loading...</div>
+    }
+    @case (DataState.ERROR) {
+      <div>{{ state.error }}</div>
     }
   }
 }

@@ -45,9 +45,15 @@
              id="navbarDropdownProfile"
              role="button">
             @if (user; as u) {
-              <div style="position: relative; width: 60px; height: 60px; border-radius: 50%; overflow: hidden;">
-                <img [alt]="u.firstName" [ngSrc]="u.imageUrl" fill style="object-fit: cover;" class="user-avatar-md">
-              </div>
+              @if (u.imageUrl) {
+                <div style="position: relative; width: 60px; height: 60px; border-radius: 50%; overflow: hidden;">
+                  <img [alt]="u.firstName" [ngSrc]="u.imageUrl" class="user-avatar-md" fill style="object-fit: cover;">
+                </div>
+              } @else {
+                <div style="width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#0D8ABC;color:white;font-weight:bold;font-size:24px;">
+                  {{ u.firstName?.charAt(0)?.toUpperCase() }}
+                </div>
+              }
             } @else {
               <i class="bi bi-person-circle" style="font-size: 1.5rem;"></i>
             }

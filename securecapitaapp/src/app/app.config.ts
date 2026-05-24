@@ -1,6 +1,6 @@
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { IMAGE_CONFIG } from '@angular/common';
-import { provideRouter } from '@angular/router';
+import { PreloadAllModules, provideRouter, withComponentInputBinding, withPreloading } from '@angular/router';
 
 import { routes } from './app.routes';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
@@ -31,7 +31,7 @@ export const appConfig: ApplicationConfig = {
      * route guards would not function. The routes array maps URL paths to the
      * components that should render at those paths (e.g. /profile → ProfileComponent).
      */
-    provideRouter(routes),
+    provideRouter(routes, withComponentInputBinding(), withPreloading(PreloadAllModules)),
 
     /**
      * Registers Angular's HttpClient so it can be injected anywhere in the app

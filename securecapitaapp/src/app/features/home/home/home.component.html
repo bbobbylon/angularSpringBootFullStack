@@ -5,14 +5,14 @@
        @if (state.dataState === DataState.LOADED)  { <content> }
        @if (state.dataState === DataState.ERROR)   { <error message> }
      Apply this same pattern to all routed page components (customers, invoices, customer-details, etc.). -->
-@if (homeState$ | async; as state) {
+@if (homeState(); as state) {
   <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
   <app-stats [stats]="state?.appData?.data?.stats"></app-stats>
   <section>
     <div class="container">
       <div class="row mt-3">
 
-        @if (fileStatus$ | async; as status) {
+        @if (fileStatus(); as status) {
           <div class="progress">
             <div [attr.aria-valuenow]="status.percent" [style.width.%]="status.percent" aria-valuemax="100"
                  aria-valuemin="0" class="progress-bar bg-success" role="progressbar">
@@ -52,12 +52,15 @@
                   <th class="text-center">{{ customer.id }}</th>
                   <td>
                     <!-- Option C: [src]="customer.imageUrl || getDefaultImageC(customer.id)" -->
-                    <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
-                      <img [alt]="customer.customerName"
-                           [ngSrc]="customer.imageUrl || getDefaultImageC(customer.id)"
-                           fill
-                           style="object-fit: cover;">
-                    </div>
+                    @if (customer.imageUrl) {
+                      <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
+                           loading="lazy" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">
+                    } @else {
+                      <div [style.background-color]="getAvatarColor(customer.id)"
+                           style="width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:16px;">
+                        {{ customer.customerName?.charAt(0)?.toUpperCase() }}
+                      </div>
+                    }
                   </td>
                   <td>{{ customer.customerName }}</td>
                   <td>{{ customer.email }}</td>
@@ -91,33 +94,33 @@
                 <select (change)="changePageSize(+$any($event.target).value)"
                         class="form-select form-select-sm w-auto">
                   @for (option of pageSizeOptions; track option) {
-                    <option [selected]="option === (pageSize$ | async)" [value]="option">{{ option }}</option>
+                    <option [selected]="option === pageSize()" [value]="option">{{ option }}</option>
                   }
                 </select>
               </div>
               <nav aria-label="Page navigation">
                 <ul class="pagination justify-content-end mb-0">
-                  <li [ngClass]="0 === (currentPage$ | async) ? 'disabled' : ''"
+                  <li [ngClass]="0 === currentPage() ? 'disabled' : ''"
                       class="page-item pointer">
                     <button (click)="changePage('backward')"
-                            [disabled]="0 === (currentPage$ | async)"
+                            [disabled]="0 === currentPage()"
                             class="page-link">&laquo; Prev
                     </button>
                   </li>
                   @for (_page of state?.appData?.data?.page?.page?.totalPages | ExtractArrayValue: 'number'; track $index; let i = $index) {
                     <li class="page-item pointer">
                       <button (click)="goToPage(i)"
-                              [ngClass]="i === (currentPage$ | async) ? 'active' : ''"
+                              [ngClass]="i === currentPage() ? 'active' : ''"
                               class="page-link">
                         {{ i + 1 }}
                       </button>
                     </li>
                   }
                   <li
-                    [ngClass]="(state?.appData?.data?.page?.page?.totalPages - 1) === (currentPage$ | async) ? 'disabled' : ''"
+                    [ngClass]="(state?.appData?.data?.page?.page?.totalPages - 1) === currentPage() ? 'disabled' : ''"
                     class="page-item pointer">
                     <button (click)="changePage('forward')"
-                            [disabled]="(state?.appData?.data?.page?.page?.totalPages - 1) === (currentPage$ | async)"
+                            [disabled]="(state?.appData?.data?.page?.page?.totalPages - 1) === currentPage()"
                             class="page-link">Next &raquo;
                     </button>
                   </li>

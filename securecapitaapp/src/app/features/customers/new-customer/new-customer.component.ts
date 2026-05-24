@@ -1,8 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, Input, OnInit, signal } from '@angular/core';
-import { AsyncPipe } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterModule } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
@@ -28,7 +26,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
  */
 @Component({
   selector: 'app-new-customer',
-  imports: [AsyncPipe, RouterModule, FormsModule, NavbarComponent],
+  imports: [RouterModule, FormsModule, NavbarComponent],
   templateUrl: './new-customer.component.html',
   standalone: true,
   styleUrls: ['./new-customer.component.css'],
@@ -61,25 +59,17 @@ export class NewCustomerComponent implements OnInit {
 
   /** Injected service used to fetch the initial user data and POST new customers. */
   protected readonly customerService = inject(CustomerService);
-  private readonly destroyRef = inject(DestroyRef);
-
   /**
-   * Caches the most recent API response so the template can remain in
+   * Tracks whether a create request is in flight. Controls the submit button's
+   * disabled state and spinner visibility.
+   */
+  protected isLoading = signal(false);
+  private readonly destroyRef = inject(DestroyRef);
+  /**
+   * Caches the most recent successful API response so the form stays in
    * {@code DataState.LOADED} while a create request is in flight.
    */
-  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerListDataInterface>>(null);
-
-  /**
-   * Controls the submit button's disabled state and spinner visibility
-   * while a create request is in flight.
-   */
-  private isLoadingSubject = new BehaviorSubject<boolean>(false);
-
-  /**
-   * Observable of the current submission-in-progress state, consumed by the template
-   * to show the spinner and disable the submit button.
-   */
-  protected isLoading$ = this.isLoadingSubject.asObservable();
+  private data = signal<CustomHttpResponseInterface<CustomerListDataInterface>>(null);
 
   //TODO change functinoality to just get the user data instead of calling the customerService and fetching all customers, we just need the user data to prefill the form and then submit the form to create a new customer
   /**
@@ -91,12 +81,13 @@ export class NewCustomerComponent implements OnInit {
    * TODO: Replace with a lighter user-only endpoint once available.
    */
   ngOnInit(): void {
-    this.customerService.customers$()
+    this.customerService
+      .customers$()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
           console.log('Fetched New customer data:', response);
-          this.dataSubject.next(response);
+          this.data.set(response);
           this.newCustomerState.set({ dataState: DataState.LOADED, appData: response });
         },
         error: (error: string) => {
@@ -112,25 +103,26 @@ export class NewCustomerComponent implements OnInit {
    * default values ({@code type: 'INDIVIDUAL', status: 'ACTIVE'}) on success, and
    * surfaces a server error on failure. The signal state stays in LOADED throughout
    * (matching the previous startWith behavior) so the form remains visible during
-   * submission — only the spinner overlay reacts via {@link isLoading$}.
+   * submission — only the spinner overlay reacts via the {@link isLoading} signal.
    *
    * @param newCustomerForm - the Angular template-driven form containing the customer fields
    */
   createNewCustomer(newCustomerForm: NgForm): void {
-    this.isLoadingSubject.next(true);
-    this.newCustomerState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
-    this.customerService.newCustomer$(newCustomerForm.value)
+    this.isLoading.set(true);
+    this.newCustomerState.set({ dataState: DataState.LOADED, appData: this.data() });
+    this.customerService
+      .newCustomer$(newCustomerForm.value)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
           console.log('Fetched customer data:', response);
           newCustomerForm.reset({ type: 'INDIVIDUAL', status: 'ACTIVE' });
-          this.isLoadingSubject.next(false);
-          this.newCustomerState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+          this.isLoading.set(false);
+          this.newCustomerState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
-          this.isLoadingSubject.next(false);
-          this.newCustomerState.set({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+          this.isLoading.set(false);
+          this.newCustomerState.set({ dataState: DataState.LOADED, error, appData: this.data() });
         },
       });
   }

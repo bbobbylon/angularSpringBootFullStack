@@ -1,8 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterModule } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
@@ -25,7 +23,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
  */
 @Component({
   selector: 'app-new-invoice',
-  imports: [CommonModule, RouterModule, FormsModule, NavbarComponent],
+  imports: [RouterModule, FormsModule, NavbarComponent],
   templateUrl: './new-invoice.component.html',
   styleUrl: './new-invoice.component.css',
   standalone: true,
@@ -58,20 +56,15 @@ export class NewInvoiceComponent implements OnInit {
   protected readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
   /**
-   * Caches the most recent API response so the template can remain in
+   * Caches the most recent successful API response so the form stays in
    * {@code DataState.LOADED} while a create request is in flight.
    */
-  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<NewInvoiceDataInterface>>(null);
+  private data = signal<CustomHttpResponseInterface<NewInvoiceDataInterface>>(null);
   /**
-   * Controls the submit button's disabled state and spinner visibility
-   * while a create request is in flight.
+   * Tracks whether a create request is in flight. Controls the submit button's
+   * disabled state and spinner visibility.
    */
-  private isLoadingSubject = new BehaviorSubject<boolean>(false);
-  /**
-   * Observable of the current submission-in-progress state, consumed by the template
-   * to show the spinner and disable the submit button.
-   */
-  protected isLoading$ = this.isLoadingSubject.asObservable();
+  protected isLoading = signal(false);
 
   /**
    * Appends a blank service line to {@link serviceLines} so the user can select
@@ -125,7 +118,7 @@ export class NewInvoiceComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          this.dataSubject.next(response);
+          this.data.set(response);
           this.availableServices = response.data?.availableServices ?? [];
           this.newInvoiceState.set({ dataState: DataState.LOADED, appData: response });
         },
@@ -144,9 +137,9 @@ export class NewInvoiceComponent implements OnInit {
    * @param invoiceForm - the Angular template-driven form containing the invoice fields
    */
   createNewInvoice(invoiceForm: NgForm): void {
-    this.dataSubject.next({ ...this.dataSubject.value, message: '' });
-    this.isLoadingSubject.next(true);
-    this.newInvoiceState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+    this.data.set({ ...this.data(), message: '' });
+    this.isLoading.set(true);
+    this.newInvoiceState.set({ dataState: DataState.LOADED, appData: this.data() });
     const invoicePayload = { ...invoiceForm.value, services: this.serviceLines };
     this.customerService.addInvoiceToCustomer$(invoiceForm.value.customerId, invoicePayload)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -155,13 +148,13 @@ export class NewInvoiceComponent implements OnInit {
           console.log(response);
           invoiceForm.reset({ status: 'PENDING' });
           this.serviceLines = [{ name: '', price: 0 }];
-          this.isLoadingSubject.next(false);
-          this.dataSubject.next(response);
-          this.newInvoiceState.set({ dataState: DataState.LOADED, appData: this.dataSubject.value });
+          this.isLoading.set(false);
+          this.data.set(response);
+          this.newInvoiceState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
-          this.isLoadingSubject.next(false);
-          this.newInvoiceState.set({ dataState: DataState.LOADED, error, appData: this.dataSubject.value });
+          this.isLoading.set(false);
+          this.newInvoiceState.set({ dataState: DataState.LOADED, error, appData: this.data() });
         },
       });
   }

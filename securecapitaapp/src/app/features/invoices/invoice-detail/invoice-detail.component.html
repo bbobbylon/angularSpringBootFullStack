@@ -152,5 +152,11 @@
         </div>
       </section>
     }
+    @case (DataState.LOADING) {
+      <div>Loading...</div>
+    }
+    @case (DataState.ERROR) {
+      <div>{{ state.error }}</div>
+    }
   }
 }

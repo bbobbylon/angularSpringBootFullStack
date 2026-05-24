@@ -48,14 +48,15 @@
                     <tr class="cell-1">
                       <th class="text-center">{{ customer.id }}</th>
                       <td>
-                        <div class="rounded-circle overflow-hidden"
-                             style="position: relative; width: 42px; height: 42px;">
-                          <img (error)="$any($event.target).src = defaultImage"
-                               [alt]="customer.customerName"
-                               [ngSrc]="customer.imageUrl || getDefaultImageC(customer.id)"
-                               fill
-                               style="object-fit: cover">
-                        </div>
+                        @if (customer.imageUrl) {
+                          <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
+                               loading="lazy" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">
+                        } @else {
+                          <div [style.background-color]="getAvatarColor(customer.id)"
+                               style="width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:16px;">
+                            {{ customer.customerName?.charAt(0)?.toUpperCase() }}
+                          </div>
+                        }
                       </td>
                       <td>{{ customer.customerName }}</td>
                       <td>{{ customer.email }}</td>
@@ -76,8 +77,6 @@
                       <td>
                         <button [routerLink]="['/customers', customer.id]" class="btn btn-info" type="button">View
                         </button>
-                        <!--<button (click)="goToCustomerDetails1(customer.id)" class="btn btn-info" type="button">View
-                        </button>-->
                       </td>
                     </tr>
                   } @empty {
@@ -87,7 +86,7 @@
                   }
                 </tbody>
               </table>
-              @if (state?.appData?.data?.page.content.length > 0) {
+              @if (state?.appData?.data?.page?.content?.length > 0) {
                 <nav aria-label="Page navigation example">
                   <ul class="pagination justify-content-end">
                     <li [ngClass]="0 === currentPage$() ? ' disabled' : ''" class="page-item">

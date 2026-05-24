@@ -18,15 +18,19 @@
               <div class="card">
                 <div class="card-body">
                   <div class="d-flex align-items-start">
-                    <td>
-                      <!-- Option C: [src]="customer.imageUrl || getDefaultImageC(customer.id)" -->
-                      <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
+                    <div>
+                      @if (state?.appData?.data?.customers.imageUrl) {
                         <img [alt]="state?.appData?.data?.customers.customerName"
-                             [ngSrc]="state?.appData?.data?.customers.imageUrl || getDefaultImageC(state?.appData?.data?.customers.id)"
-                             fill
-                             style="object-fit: cover;">
-                      </div>
-                    </td>
+                             [src]="state?.appData?.data?.customers.imageUrl"
+                             loading="lazy"
+                             style="width:42px;height:42px;border-radius:50%;object-fit:cover;">
+                      } @else {
+                        <div [style.background-color]="getAvatarColor(state?.appData?.data?.customers.id)"
+                             style="width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:16px;">
+                          {{ state?.appData?.data?.customers.customerName?.charAt(0)?.toUpperCase() }}
+                        </div>
+                      }
+                    </div>
                     <div class="w-100 ms-4">
                       <h4 class="my-0">{{ state?.appData?.data?.customers.customerName }}</h4>
                       <p class="" style="font-size: 13px">{{ state?.appData?.data?.customers.email }}</p>
@@ -111,12 +115,12 @@
                   <h5 class="card-title">Profile Details</h5>
                   <form #customerForm="ngForm" (ngSubmit)="update(customerForm)">
                     <input
-                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
                       [ngModel]="state?.appData?.data?.customers.id"
                       name="id"
                       type="hidden" />
                     <input
-                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
                       [ngModel]="state?.appData?.data?.customers.createdAt"
                       name="createdAt"
                       type="hidden" />
@@ -124,7 +128,7 @@
                       <label class="col-sm-3 col-form-label" for="name">First Name</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
                           [ngModel]="state?.appData?.data?.customers.customerName"
                           class="form-control"
                           name="customerName"
@@ -135,7 +139,7 @@
                       <label class="col-sm-3 col-form-label" for="email">Email</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
                           [ngModel]="state?.appData?.data?.customers.email"
                           class="form-control"
                           name="email"
@@ -146,7 +150,7 @@
                       <label class="col-sm-3 col-form-label" for="type">Type</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
                           [ngModel]="state?.appData?.data?.customers.type"
                           class="form-control"
                           name="type"
@@ -157,7 +161,7 @@
                       <label class="col-sm-3 col-form-label" for="status">Status</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
                           [ngModel]="state?.appData?.data?.customers.status"
                           class="form-control"
                           name="status"
@@ -168,7 +172,7 @@
                       <label class="col-sm-3 col-form-label" for="address">Address</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
                           [ngModel]="state?.appData?.data?.customers.address"
                           class="form-control"
                           name="address"
@@ -179,7 +183,7 @@
                       <label class="col-sm-3 col-form-label" for="phoneNumber">phoneNumber</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
                           [ngModel]="state?.appData?.data?.customers.phoneNumber"
                           class="form-control"
                           name="phoneNumber"
@@ -190,7 +194,7 @@
                       <label class="col-sm-3 col-form-label" for="imageUrl">Image URL</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || (isLoading$ | async)"
+                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
                           [ngModel]="state?.appData?.data?.customers.imageUrl"
                           class="form-control"
                           name="imageUrl"
@@ -198,11 +202,11 @@
                       </div>
                     </div>
                     <button
-                      [disabled]="isLoading$ | async"
+                      [disabled]="isLoading()"
                       [hidden]="state?.appData?.data?.user.roleName === 'ROLE_USER'"
                       class="btn btn-primary float-end"
                       type="submit">
-                      @if (isLoading$ | async) {
+                      @if (isLoading()) {
                         <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                               style="margin-right: 5px"></span>
                         <span>Loading...</span>
@@ -233,7 +237,7 @@
                     </tr>
                     </thead>
                     <tbody>
-                      @for (invoice of state?.appData?.data?.customers?.invoices; track invoice) {
+                      @for (invoice of state?.appData?.data?.customers?.invoices; track invoice.id) {
                         <tr>
                           <td>{{ invoice.invoiceNumber }}</td>
                           <td>

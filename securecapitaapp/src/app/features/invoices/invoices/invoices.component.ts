@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { DatePipe, NgClass } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
-import { BehaviorSubject, map, of, startWith, switchMap } from 'rxjs';
+import { map, of, startWith, switchMap } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
@@ -26,7 +26,7 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
  */
 @Component({
   selector: 'app-invoices',
-  imports: [CommonModule, RouterModule, NavbarComponent, DatePipe],
+  imports: [NgClass, RouterModule, NavbarComponent, DatePipe],
   templateUrl: './invoices.component.html',
   styleUrl: './invoices.component.css',
   standalone: true,
@@ -59,10 +59,9 @@ export class InvoicesComponent implements OnInit {
    * {@code DataState.LOADED} immediately as the {@code startWith} value while the next
    * request is in flight.
    */
-  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<InvoiceListDataInterface>>(null);
-  private fileStatusSubject = new BehaviorSubject<{ status: string; type: string; percent: number }>(undefined);
-  /** Emits download progress state for the progress bar in the template. */
-  fileStatus$ = this.fileStatusSubject.asObservable();
+  private data = signal<CustomHttpResponseInterface<InvoiceListDataInterface>>(null);
+  /** Drives the progress bar in the template during an Excel report download. */
+  protected fileStatus = signal<{ status: string; type: string; percent: number } | undefined>(undefined);
 
   /**
    * Wires the {@code currentPage} signal to the invoice-list endpoint.
@@ -79,12 +78,12 @@ export class InvoicesComponent implements OnInit {
         switchMap((page) =>
           this.customerService.invoices$(page).pipe(
             map((response) => {
-              this.dataSubject.next(response);
+              this.data.set(response);
               return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>;
             }),
-            startWith({ dataState: DataState.LOADING, appData: this.dataSubject.value } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>),
+            startWith({ dataState: DataState.LOADING, appData: this.data() } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>),
             catchError((error: string) =>
-              of({ dataState: DataState.ERROR, error, appData: this.dataSubject.value } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>),
+              of({ dataState: DataState.ERROR, error, appData: this.data() } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>),
             ),
           ),
         ),
@@ -118,9 +117,9 @@ export class InvoicesComponent implements OnInit {
   /**
    * Triggers the invoice XLSX download from {@code GET /customer/invoice/download/report}.
    *
-   * Progress events are routed to {@link reportProgres}, which pushes percent updates
-   * into {@link fileStatusSubject} so the template's progress bar reacts via the
-   * {@code fileStatus$ | async} binding. The main {@link invoiceState} signal is
+   * Progress events are routed to {@link reportProgres}, which updates the
+   * {@link fileStatus} signal so the template's progress bar reacts via Signal
+   * binding. The main {@link invoiceState} signal is
    * intentionally NOT touched — the download button lives inside the LOADED branch
    * of the template, so transitioning out of LOADED would hide the button itself.
    */
@@ -136,7 +135,7 @@ export class InvoicesComponent implements OnInit {
   /**
    * Handles individual {@link HttpEvent} emissions from the download stream.
    *
-   * Updates {@link fileStatusSubject} with progress percentage during the download,
+   * Updates the {@link fileStatus} signal with progress percentage during the download,
    * and triggers {@code saveAs} when the complete {@link HttpEventType.Response} arrives.
    *
    * @param httpEvent - an event emitted by Angular's HTTP pipeline during the download
@@ -145,7 +144,7 @@ export class InvoicesComponent implements OnInit {
     switch (httpEvent.type) {
       case HttpEventType.UploadProgress:
       case HttpEventType.DownloadProgress:
-        this.fileStatusSubject.next({
+        this.fileStatus.set({
           status: 'progress',
           type: 'Downloading File',
           percent: Math.round((100 * httpEvent.loaded) / (httpEvent.total ?? httpEvent.loaded)),
@@ -156,7 +155,7 @@ export class InvoicesComponent implements OnInit {
         break;
       case HttpEventType.Response:
         saveAs(new File([httpEvent.body as Blob], 'invoice_report.xlsx', { type: `${httpEvent.headers.get('Content-Type')};charset=utf-8` }));
-        this.fileStatusSubject.next(undefined);
+        this.fileStatus.set(undefined);
         break;
       default:
         console.log(httpEvent);

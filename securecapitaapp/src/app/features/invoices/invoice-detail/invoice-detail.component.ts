@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, Input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
-import { ActivatedRoute, ParamMap, Router, RouterModule } from '@angular/router';
-import { BehaviorSubject, catchError, map, of, startWith, switchMap } from 'rxjs';
+import { DatePipe, DecimalPipe, NgClass } from '@angular/common';
+import { Router, RouterModule } from '@angular/router';
+import { catchError, map, of, startWith } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
@@ -12,11 +12,9 @@ import { CustomerInvoiceUserInterface } from '../../../interface/appstates.inter
 import { CustomerService } from '../../../service/customer.service';
 import { jsPDF } from 'jspdf';
 
-const INVOICE_ID = 'id';
-
 @Component({
   selector: 'app-invoice-detail',
-  imports: [CommonModule, RouterModule, NavbarComponent, DatePipe, DecimalPipe],
+  imports: [NgClass, DatePipe, DecimalPipe, RouterModule, NavbarComponent],
   templateUrl: './invoice-detail.component.html',
   styleUrl: './invoice-detail.component.css',
   standalone: true,
@@ -24,32 +22,29 @@ const INVOICE_ID = 'id';
 })
 export class InvoiceDetailComponent implements OnInit {
   @Input() user: UserInterface;
+  /** Bound automatically by the router via {@code withComponentInputBinding()} — matches the {@code :id} segment in {@code invoice/:id/:invoiceNumber}. */
+  @Input() id: number;
   readonly DataState = DataState;
   invoiceState = signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>>({ dataState: DataState.LOADING });
   protected readonly router = inject(Router);
   protected readonly customerService = inject(CustomerService);
-  private dataSubject = new BehaviorSubject<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(null);
-  private readonly activatedRoute = inject(ActivatedRoute);
+  private data = signal<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(null);
   private readonly destroyRef = inject(DestroyRef);
 
   ngOnInit(): void {
-    this.activatedRoute.paramMap.pipe(
-      switchMap((params: ParamMap) =>
-        this.customerService.invoice$(+params.get(INVOICE_ID)).pipe(
-          map((response) => {
-            this.dataSubject.next(response);
-            return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>;
-          }),
-          startWith({ dataState: DataState.LOADING } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>),
-          catchError((error: string) => of({ dataState: DataState.ERROR, error } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>)),
-        ),
-      ),
+    this.customerService.invoice$(this.id).pipe(
+      map((response) => {
+        this.data.set(response);
+        return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>;
+      }),
+      startWith({ dataState: DataState.LOADING } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>),
+      catchError((error: string) => of({ dataState: DataState.ERROR, error } as GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>)),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe((state) => this.invoiceState.set(state));
   }
 
   exportAsPDF(): void {
-    const invoice = this.dataSubject.value?.data?.invoice;
+    const invoice = this.data()?.data?.invoice;
     if (!invoice) return;
 
     const element = document.getElementById('invoice');
