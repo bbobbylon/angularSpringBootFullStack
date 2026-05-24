@@ -33,6 +33,22 @@ public class EventServiceImpl implements EventService {
      * {@inheritDoc}
      */
     @Override
+    public Collection<UserEvent> getEventsByUserId(Long userId, int page, int size) {
+        return eventRepo.getEventsByUserId(userId, page, size);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long countEventsByUserId(Long userId) {
+        return eventRepo.countEventsByUserId(userId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public void addUserEvent(Long userId, EventType eventType, String device, String ipAddress) {
         eventRepo.addUserEvent(userId, eventType, device, ipAddress);
     }

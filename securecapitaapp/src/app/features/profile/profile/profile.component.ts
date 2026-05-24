@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, Input, OnInit, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgClass } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
@@ -30,7 +30,7 @@ import { UserInterface } from '../../../interface/user.interface';
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [FormsModule, RouterLink, DatePipe, NavbarComponent],
+  imports: [FormsModule, RouterLink, DatePipe, NgClass, NavbarComponent],
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -56,6 +56,10 @@ export class ProfileComponent implements OnInit {
   protected readonly sortColumn = signal<string>('createdAt');
   /** The current sort direction for the activity log. */
   protected readonly sortDirection = signal<'asc' | 'desc'>('desc');
+  /** Zero-based index of the currently displayed events page. */
+  protected readonly currentEventPage = signal(0);
+  /** Total number of events pages returned by the backend. Drives pagination control visibility. */
+  protected readonly eventsTotalPages = signal(0);
   /** Tracks whether any async operation is in progress. Controls button disabled states and spinner visibility. */
   protected isLoading = signal(false);
   /** Injected `UserService` to interact with the backend for user-related operations. */
@@ -82,6 +86,7 @@ export class ProfileComponent implements OnInit {
           this.data.set(response);
           this.isLoading.set(false);
           this.permissions.set(response.data.user.permissions.split(',').map((p: string) => p.trim()));
+          this.eventsTotalPages.set(response.data?.eventsTotalPages ?? 0);
           this.profileState.set({ dataState: DataState.LOADED, appData: response });
         },
         error: (error: string) => {
@@ -277,6 +282,32 @@ export class ProfileComponent implements OnInit {
    */
   protected toggleLogs(): void {
     this.showLogs.update((v) => !v);
+  }
+
+  /**
+   * Navigates to the given events page without re-fetching the full profile.
+   *
+   * Calls {@code GET /user/events?page=n} and patches only the {@code events}
+   * slice of the cached {@link data} signal so user data and roles are preserved.
+   *
+   * @param page - zero-based target page index
+   */
+  protected goToEventsPage(page: number): void {
+    this.currentEventPage.set(page);
+    this.userService.userEvents$(page)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.data.set({
+            ...this.data(),
+            data: { ...this.data().data, events: response.data?.events },
+          });
+          this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
+        },
+        error: (error: string) => {
+          this.profileState.set({ dataState: DataState.LOADED, error, appData: this.data() });
+        },
+      });
   }
 
   /**

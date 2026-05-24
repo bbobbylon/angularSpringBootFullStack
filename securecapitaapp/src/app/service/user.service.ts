@@ -114,6 +114,21 @@ export class UserService {
     this.http.get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/profile`).pipe(tap(console.log), catchError(this.handleError));
 
   /**
+   * Fetches one page of audit events for the authenticated user.
+   *
+   * Called by the Profile page pagination controls — avoids re-fetching the
+   * full profile (user + roles) on every page turn.
+   *
+   * @param page - zero-based page index
+   * @param size - number of events per page (default 10)
+   * @returns Observable emitting a ProfileInterface response containing only events and pagination metadata
+   */
+  userEvents$ = (page: number, size: number = 10): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/events?page=${page}&size=${size}`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
    * Submits updated profile fields for the authenticated user.
    *
    * @param user - the updated user data to persist

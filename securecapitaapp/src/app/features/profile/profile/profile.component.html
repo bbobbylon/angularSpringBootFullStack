@@ -395,6 +395,26 @@
                     }
                   </tbody>
                 </table>
+                @if (eventsTotalPages() > 1) {
+                  <nav aria-label="Activity log pagination">
+                    <ul class="pagination justify-content-end mb-0">
+                      <li [ngClass]="currentEventPage() === 0 ? 'disabled' : ''" class="page-item">
+                        <button (click)="goToEventsPage(currentEventPage() - 1)" class="page-link">&laquo; Prev</button>
+                      </li>
+                      @for (p of [].constructor(eventsTotalPages()); track $index; let i = $index) {
+                        <li class="page-item">
+                          <button (click)="goToEventsPage(i)"
+                                  [ngClass]="i === currentEventPage() ? 'active' : ''"
+                                  class="page-link">{{ i + 1 }}
+                          </button>
+                        </li>
+                      }
+                      <li [ngClass]="currentEventPage() === eventsTotalPages() - 1 ? 'disabled' : ''" class="page-item">
+                        <button (click)="goToEventsPage(currentEventPage() + 1)" class="page-link">Next &raquo;</button>
+                      </li>
+                    </ul>
+                  </nav>
+                }
               </div>
             </div>
           </div>
