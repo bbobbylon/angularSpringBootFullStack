@@ -4,6 +4,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import nl.basjes.parse.useragent.UserAgent;
 import nl.basjes.parse.useragent.UserAgentAnalyzer;
 
+import static com.bob.angularspringbootfullstack.constants.Constants.USER_AGENT_HEADER;
+import static com.bob.angularspringbootfullstack.constants.Constants.X_FORWARDED_FOR_HEADER;
 import static nl.basjes.parse.useragent.UserAgent.*;
 
 /**
@@ -15,6 +17,7 @@ import static nl.basjes.parse.useragent.UserAgent.*;
  * requiring each caller to duplicate this extraction logic.
  */
 public class RequestUtils {
+
 
     /**
      * Returns the real client IP address, accounting for reverse proxies.
@@ -30,7 +33,7 @@ public class RequestUtils {
     public static String getIpAddress(HttpServletRequest request) {
         String ipAddress = "Unknown IP";
         if (request != null) {
-            ipAddress = request.getHeader("X-Forwarded-For");
+            ipAddress = request.getHeader(X_FORWARDED_FOR_HEADER);
             if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
                 ipAddress = request.getRemoteAddr();
             }
@@ -55,7 +58,7 @@ public class RequestUtils {
      */
     public static String getDevice(HttpServletRequest request) {
         UserAgentAnalyzer userAgentAnalyzer = UserAgentAnalyzer.newBuilder().hideMatcherLoadStats().withCache(10000).build();
-        UserAgent agent = userAgentAnalyzer.parse(request.getHeader("User-Agent"));
+        UserAgent agent = userAgentAnalyzer.parse(request.getHeader(USER_AGENT_HEADER));
         return agent.getValue(OPERATING_SYSTEM_NAME) + " - " + agent.getValue(AGENT_NAME) + " - " + agent.getValue(DEVICE_NAME);
     }
 }

@@ -30,15 +30,14 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 
+import static com.bob.angularspringbootfullstack.constants.Constants.TOKEN_PREFIX;
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.*;
 import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getLoggedInUser;
 import static java.time.LocalTime.now;
-import static java.util.Map.entry;
-import static java.util.Map.of;
-import static java.util.Map.ofEntries;
+import static java.util.Map.*;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpStatus.*;
 import static org.springframework.http.MediaType.IMAGE_PNG_VALUE;
@@ -81,7 +80,7 @@ import static org.springframework.security.authentication.UsernamePasswordAuthen
 @Slf4j
 public class UserController {
     // there is a space after Bearer to split the header into two parts and extract the token more easily; this is a standard convention for Authorization headers and is required for the substring operation in refreshToken to work correctly
-    private static final String TOKEN_PREFIX = "Bearer ";
+
     private static final int DEFAULT_PAGE_SIZE = 10;
     private final UserService userService;
     private final RoleService roleService;

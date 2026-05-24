@@ -29,6 +29,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.bob.angularspringbootfullstack.constants.Constants.PUBLIC_URLS;
 import static org.springframework.http.HttpMethod.*;
 import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
 
@@ -56,21 +57,6 @@ class SecurityConfig {
      */
     private static final Logger securityLogger = LoggerFactory.getLogger(SecurityConfig.class);
 
-    /**
-     * URL patterns that bypass JWT authentication entirely.
-     * <p>
-     * Includes registration, login, MFA verification, password reset, token refresh,
-     * profile images, and Actuator endpoints. Any path not listed here requires a
-     * valid JWT and the appropriate authority.
-     */
-    private static final String[] PUBLIC_URLS =
-            {"/user/login/**",
-                    "/user/verify/code/**", "/user/register/**", "/actuator/**",
-                    "/user/resetpassword/**", "/user/verify/password/**",
-                    "/user/new/password/**",
-                    "/user/verify/account/**", "/user/refresh/token/**",
-                    "/user/profile/image/**", "/user/image/**",
-            };
 
     /**
      * JWT validation filter inserted before {@link UsernamePasswordAuthenticationFilter}.

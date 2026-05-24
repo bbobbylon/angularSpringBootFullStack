@@ -42,7 +42,7 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return stream(this.role.getPermission().split(","))
+        return stream(role.getPermission().split(","))
                 .map(p -> new SimpleGrantedAuthority(p.trim()))
                 .collect(toList());
     }
@@ -55,7 +55,7 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public @Nullable String getPassword() {
-        return this.user.getPassword();
+        return user.getPassword();
     }
 
     /**
@@ -66,7 +66,7 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public String getUsername() {
-        return this.user.getEmail();
+        return user.getEmail();
     }
 
     /**
@@ -87,7 +87,7 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public boolean isAccountNonLocked() {
-        return this.user.isNotLocked();
+        return user.isNotLocked();
     }
 
     /**
@@ -110,7 +110,7 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public boolean isEnabled() {
-        return this.user.isEnabled();
+        return user.isEnabled();
     }
 
     /**
@@ -121,6 +121,6 @@ public class UserPrincipal implements UserDetails {
      * @return a UserDTO view of the wrapped user and role
      */
     public UserDTO getUser() {
-        return fromUser(this.user, role);
+        return fromUser(user, role);
     }
 }

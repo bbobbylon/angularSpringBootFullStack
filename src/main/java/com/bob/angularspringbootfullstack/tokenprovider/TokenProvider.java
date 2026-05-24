@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Objects;
 
 import static com.auth0.jwt.algorithms.Algorithm.HMAC512;
+import static com.bob.angularspringbootfullstack.constants.Constants.*;
 import static java.lang.System.currentTimeMillis;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
@@ -45,12 +46,7 @@ import static java.util.stream.Collectors.toList;
 @Component
 @RequiredArgsConstructor
 public class TokenProvider {
-    private static final String BOBBYLON_LLC = "BOBBYLON_LLC";
-    private static final String BOBS_MANAGEMENT = "BOBS_MANAGEMENT";
-    private static final String AUTHORITIES = "authorities";
-    private static final long ACCESS_TOKEN_EXPIRE_TIME = 1_800_000;
-    private static final long REFRESH_TOKEN_EXPIRE_TIME = 432_000_000;
-    private static final String TOKEN_UNVERIFIABLE = "Invalid JWT secret key";
+
     private final UserService userService;
     @Value("${jwt.secret}")
     private String secret;

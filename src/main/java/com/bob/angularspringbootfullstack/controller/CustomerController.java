@@ -45,7 +45,6 @@ public class CustomerController {
      * Injected by Lombok's {@code @RequiredArgsConstructor}.
      */
     private final CustomerService customerService;
-
     /**
      * Service layer for user profile lookups.
      * Used to embed the authenticated user in every response envelope.
