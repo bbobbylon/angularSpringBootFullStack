@@ -48,7 +48,7 @@ export class HomeComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
   private readonly avatarColors = ['0D8ABC', '2ECC71', 'E74C3C', '9B59B6', 'F39C12', '1ABC9C', 'E67E22'];
-  private data = signal<CustomHttpResponseInterface<CustomerListDataInterface>>(null);
+  private data = signal<CustomHttpResponseInterface<CustomerListDataInterface> | undefined>(undefined);
   private readonly _currentPage$ = toObservable(this.currentPage);
   private readonly _pageSize$ = toObservable(this.pageSize);
 

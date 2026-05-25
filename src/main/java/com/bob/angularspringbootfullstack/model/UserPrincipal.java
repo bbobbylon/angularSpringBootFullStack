@@ -42,9 +42,13 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return stream(this.role.getPermission().split(","))
+        // For quick testing purposes we can use: return AuthorityUtils.NO_AUTHORITIES;
+        return stream(role.getPermission().split(","))
                 .map(p -> new SimpleGrantedAuthority(p.trim()))
                 .collect(toList());
+        // since our delimiter for our roles/permissions is ",", we can also use the below return statement, but there is a danger to it. It does not trim, so the DB storage of permissions has to be perfect and cannot have any trailing or leading spaces. This would cause issues. For example, if we had "READ, WRITE", the below return statement would read those as "READ" and " WRITE" (with a leading space), which would not match the "WRITE" authority we check for in our @PreAuthorize annotations. So we would have to be very careful with the formatting of the permissions in the database if we used the below return statement. The above stream-based return statement is more robust because it trims whitespace from each permission.
+        // return AuthorityUtils.commaSeparatedStringToAuthorityList(role.getPermission());
+
     }
 
     /**
@@ -55,7 +59,7 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public @Nullable String getPassword() {
-        return this.user.getPassword();
+        return user.getPassword();
     }
 
     /**
@@ -66,7 +70,7 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public String getUsername() {
-        return this.user.getEmail();
+        return user.getEmail();
     }
 
     /**
@@ -87,7 +91,7 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public boolean isAccountNonLocked() {
-        return this.user.isNotLocked();
+        return user.isNotLocked();
     }
 
     /**
@@ -110,7 +114,7 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public boolean isEnabled() {
-        return this.user.isEnabled();
+        return user.isEnabled();
     }
 
     /**
@@ -121,6 +125,6 @@ public class UserPrincipal implements UserDetails {
      * @return a UserDTO view of the wrapped user and role
      */
     public UserDTO getUser() {
-        return fromUser(this.user, role);
+        return fromUser(user, role);
     }
 }

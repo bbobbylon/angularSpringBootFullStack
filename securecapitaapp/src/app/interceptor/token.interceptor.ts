@@ -108,9 +108,9 @@ function handleRefreshToken(req: HttpRequest<unknown>, next: HttpHandlerFn, user
         console.log('Token Refresh Response:', response);
         isTokenRefreshing = false;
         refreshTokenSubject.next(response);
-        console.log('New Token:', response.data.access_token);
+        console.log('New Token:', response.data!.access_token);
         console.log('Sending original request:', req);
-        return next(addAuthorizationTokenHeader(req, response.data.access_token));
+        return next(addAuthorizationTokenHeader(req, response.data!.access_token));
       }),
       catchError((error) => {
         isTokenRefreshing = false;
@@ -124,6 +124,6 @@ function handleRefreshToken(req: HttpRequest<unknown>, next: HttpHandlerFn, user
   return refreshTokenSubject.pipe(
     filter((response): response is CustomHttpResponseInterface<ProfileInterface> => response !== null),
     take(1),
-    switchMap((response) => next(addAuthorizationTokenHeader(req, response.data.access_token))),
+    switchMap((response) => next(addAuthorizationTokenHeader(req, response.data!.access_token))),
   );
 }

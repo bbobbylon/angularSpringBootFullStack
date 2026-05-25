@@ -1,6 +1,9 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="AngularSpringBootFullStackApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
     <module name="angularSpringBootFullStack" />
+    <selectedOptions>
+      <option name="environmentVariables" />
+    </selectedOptions>
     <option name="SPRING_BOOT_MAIN_CLASS" value="com.bob.angularspringbootfullstack.AngularSpringBootFullStackApplication" />
     <method v="2">
       <option name="Make" enabled="true" />

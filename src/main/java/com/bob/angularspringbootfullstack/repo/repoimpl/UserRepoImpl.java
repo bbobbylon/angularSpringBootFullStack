@@ -39,6 +39,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
+import static com.bob.angularspringbootfullstack.constants.Constants.DATE_FORMAT;
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.enumeration.VerificationType.ACCOUNT;
 import static com.bob.angularspringbootfullstack.enumeration.VerificationType.PASSWORD;
@@ -99,11 +100,9 @@ import static org.apache.commons.lang3.time.DateUtils.addDays;
 @RequiredArgsConstructor
 @Slf4j
 public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
-    /**
-     * Standard MySQL-compatible timestamp format used when persisting expiration timestamps.
-     */
+
     //HERE WE ARE ADDING SOME BEANZ
-    private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final RoleRepo<Role> roleRepository;
     private final BCryptPasswordEncoder passwordEncoder;
@@ -396,8 +395,8 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * which ultimately calls {@link #setNewPassword(Long, String, String)}.
      *
      * @param email the recipient's email address (case-insensitive lookup)
-     * @throws ApiException                if the email is not found in the database
-     * @throws BadCredentialsException     if any persistence step fails
+     * @throws ApiException            if the email is not found in the database
+     * @throws BadCredentialsException if any persistence step fails
      */
     @Override
     public void resetPassword(String email) {

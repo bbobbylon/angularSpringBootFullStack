@@ -46,7 +46,7 @@ export class NewCustomerComponent implements OnInit {
    * The currently authenticated user, passed in when this component is used in an
    * embedded context. Falls back to the API-fetched user when used as a routed page.
    */
-  @Input() user: UserInterface;
+  @Input() user: UserInterface | undefined;
 
   /** Application title signal — retained for potential future page-title binding. */
   readonly title = signal('securecapitaapp');
@@ -71,7 +71,7 @@ export class NewCustomerComponent implements OnInit {
    * Caches the most recent successful API response so the form stays in
    * {@code DataState.LOADED} while a create request is in flight.
    */
-  private data = signal<CustomHttpResponseInterface<CustomerListDataInterface>>(null);
+  private data = signal<CustomHttpResponseInterface<CustomerListDataInterface> | undefined>(undefined);
 
   //TODO change functinoality to just get the user data instead of calling the customerService and fetching all customers, we just need the user data to prefill the form and then submit the form to create a new customer
   /**

@@ -54,7 +54,7 @@
                         } @else {
                           <div [style.background-color]="getAvatarColor(customer.id)"
                                style="width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:16px;">
-                            {{ customer.customerName?.charAt(0)?.toUpperCase() }}
+                            {{ customer.customerName.charAt(0).toUpperCase() }}
                           </div>
                         }
                       </td>
@@ -86,13 +86,13 @@
                   }
                 </tbody>
               </table>
-              @if (state?.appData?.data?.page?.content?.length > 0) {
+              @if ((state?.appData?.data?.page?.content?.length ?? 0) > 0) {
                 <nav aria-label="Page navigation example">
                   <ul class="pagination justify-content-end">
                     <li [ngClass]="0 === currentPage$() ? ' disabled' : ''" class="page-item">
                       <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; Prev</button>
                     </li>
-                    @for (pageNumber of state?.appData?.data?.page.page.totalPages | ExtractArrayValue: 'number'; track i; let i = $index) {
+                    @for (pageNumber of (state?.appData?.data?.page?.page?.totalPages ?? 0) | ExtractArrayValue: 'number'; track i; let i = $index) {
                       <li class="page-item">
                         <button (click)="goToPage(i)"
                                 [ngClass]="i === currentPage$() ? ' active' : ''"
@@ -101,7 +101,7 @@
                       </li>
                     }
                     <li
-                      [ngClass]="state?.appData?.data?.page.page.totalPages - 1 === currentPage$() ? ' disabled' : ''"
+                      [ngClass]="(state?.appData?.data?.page?.page?.totalPages ?? 0) - 1 === currentPage$() ? ' disabled' : ''"
                       class="page-item">
                       <button (click)="goToNextOrPreviousPage('forward')" class="page-link">Next &raquo;</button>
                     </li>

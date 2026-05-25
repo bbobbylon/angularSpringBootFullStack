@@ -77,7 +77,7 @@
                   }
                 </tbody>
               </table>
-              @if (state?.appData?.data?.invoices?.content?.length > 0) {
+              @if ((state?.appData?.data?.invoices?.content?.length ?? 0) > 0) {
                 <nav aria-label="Page navigation example">
                   <ul class="pagination justify-content-end">
                     <li [ngClass]="0 === (currentPage()) ? ' disabled' : ''" class="page-item pointer">
@@ -92,7 +92,7 @@
                       </li>
                     }
                     <li
-                      [ngClass]="state?.appData?.data?.invoices?.page?.totalPages - 1 === (currentPage()) ? ' disabled' : ''"
+                      [ngClass]="(state?.appData?.data?.invoices?.page?.totalPages ?? 0) - 1 === (currentPage()) ? ' disabled' : ''"
                       class="page-item pointer">
                       <button (click)="goToNextOrPreviousPage('forward')" class="page-link">Next &raquo;</button>
                     </li>

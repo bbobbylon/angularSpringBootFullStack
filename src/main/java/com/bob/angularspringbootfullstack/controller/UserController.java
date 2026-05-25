@@ -30,15 +30,14 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 
+import static com.bob.angularspringbootfullstack.constants.Constants.TOKEN_PREFIX;
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.*;
 import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getLoggedInUser;
 import static java.time.LocalTime.now;
-import static java.util.Map.entry;
-import static java.util.Map.of;
-import static java.util.Map.ofEntries;
+import static java.util.Map.*;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.http.HttpStatus.*;
 import static org.springframework.http.MediaType.IMAGE_PNG_VALUE;
@@ -81,7 +80,7 @@ import static org.springframework.security.authentication.UsernamePasswordAuthen
 @Slf4j
 public class UserController {
     // there is a space after Bearer to split the header into two parts and extract the token more easily; this is a standard convention for Authorization headers and is required for the substring operation in refreshToken to work correctly
-    private static final String TOKEN_PREFIX = "Bearer ";
+
     private static final int DEFAULT_PAGE_SIZE = 10;
     private final UserService userService;
     private final RoleService roleService;
@@ -636,15 +635,26 @@ public class UserController {
     }
 
     /**
-     * Delegates to the AuthenticationManager. Catches any failure, hands it
-     * to ExceptionUtils#processError so the client gets a JSON error, and
-     * rethrows as ApiException, so the caller stops processing.
+     * Validates the email and delegates credential verification to the {@link org.springframework.security.authentication.AuthenticationManager}.
      *
-     * @param email    the submitted email
+     * <p>Before attempting authentication, a {@link EventType#LOGIN_ATTEMPT} event is published
+     * only if the email resolves to a known user — unknown emails are silently ignored to prevent
+     * user enumeration. On success, a {@link EventType#LOGIN_ATTEMPT_SUCCESS} event is published
+     * (unless 2FA is enabled, in which case success is recorded after code verification instead).
+     *
+     * <p>On failure, a {@link EventType#LOGIN_ATTEMPT_FAILURE} event is published (again, only if
+     * the email was valid), {@code processError} writes the error to the response for legacy
+     * compatibility, and an {@link com.bob.angularspringbootfullstack.exception.ApiException} is
+     * rethrown so the caller stops processing and the global exception handler returns a structured
+     * JSON error to the frontend.
+     *
+     * @param email    the submitted email address; must resolve to an existing user for events to fire
      * @param password the submitted password
-     * @return the resulting authenticated Authentication
+     * @return the authenticated {@link UserDTO} on success
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException on any authentication failure
      */
     private UserDTO authenticate(String email, String password) {
+        UserDTO userByEmail = userService.getUserByEmail(email);
         try {
             if (null != userService.getUserByEmail(email)) {
                 eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT));
@@ -656,7 +666,9 @@ public class UserController {
             }
             return loggedInUser;
         } catch (Exception e) {
-            eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_FAILURE));
+            if (null != userByEmail) {
+                eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_FAILURE));
+            }
             // After running our front end, we are seeing that processError is preventing from the actual backend error message to show up on the front end error message (in the alert), so we have commented this out. The reason behind this is that the processError is writing the response to the HttpServletResponse, which is not compatible with our current front end error handling approach. By commenting this out, we allow the ApiException to be thrown and handled by our GlobalExceptionHandler, which will return a structured JSON response that our front end can easily parse and display the error message in an alert. If we were to keep processError, it would interfere with the normal flow of exception handling and prevent our front end from receiving the expected error response format.
             processError(request, response, e);
             throw new ApiException(e.getMessage());

@@ -1,9 +1,19 @@
 /* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
 /* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+// the related flags for strict mode are:
+//    "noImplicitThis": false,
+//    "useUnknownInCatchVariables": false,
+//    "strictNullChecks": false,
+//    "strictFunctionTypes": false,
+//    "strictBindCallApply": false,
+//    "strictPropertyInitialization": false,
+//    "noImplicitAny": false,
+//    "alwaysStrict": false,
+
 {
   "compileOnSave": false,
   "compilerOptions": {
-    "strict": false,
+    "strict": true,
     "noImplicitOverride": false,
     "noPropertyAccessFromIndexSignature": false,
     "noImplicitReturns": false,

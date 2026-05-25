@@ -61,7 +61,7 @@ export class NewInvoiceComponent implements OnInit {
    * Caches the most recent successful API response so the form stays in
    * {@code DataState.LOADED} while a create request is in flight.
    */
-  private data = signal<CustomHttpResponseInterface<NewInvoiceDataInterface>>(null);
+  private data = signal<CustomHttpResponseInterface<NewInvoiceDataInterface> | undefined>(undefined);
   /**
    * Tracks whether a create request is in flight. Controls the submit button's
    * disabled state and spinner visibility.
@@ -140,7 +140,7 @@ export class NewInvoiceComponent implements OnInit {
    * @param invoiceForm - the Angular template-driven form containing the invoice fields
    */
   createNewInvoice(invoiceForm: NgForm): void {
-    this.data.set({ ...this.data(), message: '' });
+    this.data.set({ ...this.data()!, message: '' });
     this.isLoading.set(true);
     this.newInvoiceState.set({ dataState: DataState.LOADED, appData: this.data() });
     const invoicePayload = { ...invoiceForm.value, services: this.serviceLines };

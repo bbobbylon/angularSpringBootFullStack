@@ -47,7 +47,7 @@ export class VerifyComponent implements OnInit {
   private readonly userService = inject(UserService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
-  private userSubject = signal<UserInterface>(null);
+  private userSubject = signal<UserInterface | null>(null);
   user = this.userSubject.asReadonly();
   private readonly ACCOUNT_KEY = 'key';
 
@@ -66,11 +66,11 @@ export class VerifyComponent implements OnInit {
           console.log(this.activatedRoute);
           //TODO implement a better way to determine which URL we are on, instead of using window.location.href
           const type: AccountType = this.getAccountType(window.location.href);
-          return this.userService.verifyAccount$(params.get(this.ACCOUNT_KEY), type).pipe(
+          return this.userService.verifyAccount$(params.get(this.ACCOUNT_KEY)!, type).pipe(
             map((response) => {
               console.log(response);
               if (type === 'password') {
-                this.userSubject.set(response.data.user);
+                this.userSubject.set(response.data?.user ?? null);
               }
               return { type, title: 'Verified :) ', dataState: DataState.LOADED, message: response.message, verifySuccess: true } as VerifyStateInterface;
             }),
@@ -122,7 +122,7 @@ export class VerifyComponent implements OnInit {
     });
     this.userService
       .setNewPassword$({
-        userID: this.user().id,
+        userID: this.user()!.id!,
         newPassword: resetPasswordForm.value.newPassword,
         confirmPassword: resetPasswordForm.value.confirmPassword,
       })

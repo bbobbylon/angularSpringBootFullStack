@@ -35,9 +35,9 @@ export class CustomerDetailsComponent implements OnInit {
    * The logged-in user, injected by the parent route component.
    * Used to display the user's name and avatar in the navbar.
    */
-  @Input() user: UserInterface;
+  @Input() user: UserInterface | undefined;
   /** Bound automatically by the router via {@code withComponentInputBinding()} — matches the {@code :id} segment in {@code customers/:id}. */
-  @Input() id: number;
+  @Input() id!: number;
   /** Exposes the {@link DataState} enum to the template for switch-case rendering. */
   readonly DataState = DataState;
   /** Drives the template — emits the full customer state (user + customer record) once loaded. */
@@ -45,7 +45,7 @@ export class CustomerDetailsComponent implements OnInit {
   private readonly avatarColors = ['0D8ABC', '2ECC71', 'E74C3C', '9B59B6', 'F39C12', '1ABC9C', 'E67E22'];
   protected readonly router = inject(Router);
   protected readonly customerService = inject(CustomerService);
-  private data = signal<CustomHttpResponseInterface<CustomerStateInterface>>(null);
+  private data = signal<CustomHttpResponseInterface<CustomerStateInterface> | undefined>(undefined);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
   /**
@@ -104,7 +104,7 @@ export class CustomerDetailsComponent implements OnInit {
           this.isLoading.set(false);
           this.data.set({
             ...response,
-            data: { ...response.data, customers: { ...response.data.customers, invoices: this.data()?.data?.customers?.invoices } },
+            data: { ...response.data!, customers: { ...response.data!.customers, invoices: this.data()?.data?.customers?.invoices } },
           });
           this.notification.onSuccess('Customer updated successfully');
           this.customerState.set({ dataState: DataState.LOADED, appData: this.data() });

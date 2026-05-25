@@ -30,7 +30,7 @@ import { NgOptimizedImage } from '@angular/common';
 })
 export class NavbarComponent {
   /** The authenticated user passed down from the parent; controls avatar and name display. */
-  @Input() user: UserInterface;
+  @Input() user: UserInterface | undefined;
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
 

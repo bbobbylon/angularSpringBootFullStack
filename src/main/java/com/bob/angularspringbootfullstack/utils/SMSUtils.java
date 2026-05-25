@@ -9,26 +9,21 @@ import com.twilio.type.PhoneNumber;
  * SMSUtils is a utility class for sending SMS messages using the Twilio API.
  * <p>
  * This class provides a static method to send SMS messages to users for
- * 2FA verification codes and other notifications. Credentials are stored as
- * class constants and should be securely managed (preferably via environment variables).
+ * 2FA verification codes and other notifications. Credentials are read from
+ * environment variables (TWILIO_FROM_NUMBER, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+ * and must never be hardcoded or committed to source control.
  * <p>
  * Warning: Each SMS sent incurs a cost with Twilio. Use judiciously in production.
  */
 @SuppressWarnings("unused")
 public class SMSUtils {
 
-    /**
-     * Twilio Account SID (removed for security)
-     */
-    public static final String FROM_NUMBER = "";
-    /**
-     * Twilio Auth Token Part 1 (removed for security)
-     */
-    public static final String FAKE_ONE = "";
-    /**
-     * Twilio Auth Token Part 2 (removed for security)
-     */
-    public static final String FAKE_TWO = "";
+    /** Twilio sender phone number, loaded from TWILIO_FROM_NUMBER env var. */
+    public static final String FROM_NUMBER = System.getenv("TWILIO_FROM_NUMBER");
+    /** Twilio Account SID, loaded from TWILIO_ACCOUNT_SID env var. */
+    public static final String FAKE_ONE    = System.getenv("TWILIO_ACCOUNT_SID");
+    /** Twilio Auth Token, loaded from TWILIO_AUTH_TOKEN env var. */
+    public static final String FAKE_TWO    = System.getenv("TWILIO_AUTH_TOKEN");
 
     /**
      * Sends an SMS message to the specified phone number using Twilio.
