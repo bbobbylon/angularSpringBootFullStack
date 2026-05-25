@@ -22,14 +22,14 @@ import { NotificationsService } from '../../../service/notifications-service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class InvoiceDetailComponent implements OnInit {
-  @Input() user: UserInterface;
+  @Input() user: UserInterface | undefined;
   /** Bound automatically by the router via {@code withComponentInputBinding()} — matches the {@code :id} segment in {@code invoice/:id/:invoiceNumber}. */
-  @Input() id: number;
+  @Input() id!: number;
   readonly DataState = DataState;
   invoiceState = signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>>({ dataState: DataState.LOADING });
   protected readonly router = inject(Router);
   protected readonly customerService = inject(CustomerService);
-  private data = signal<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(null);
+  private data = signal<CustomHttpResponseInterface<CustomerInvoiceUserInterface> | undefined>(undefined);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
 

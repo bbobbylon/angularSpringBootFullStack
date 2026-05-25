@@ -9,7 +9,7 @@
               <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
               <li class="breadcrumb-item"><a [routerLink]="['/customers']">Customers</a></li>
               <li aria-current="page"
-                  class="breadcrumb-item active">{{ state?.appData?.data?.customers.customerName }}
+                  class="breadcrumb-item active">{{ state?.appData?.data?.customers?.customerName }}
               </li>
             </ol>
           </nav>
@@ -19,31 +19,31 @@
                 <div class="card-body">
                   <div class="d-flex align-items-start">
                     <div>
-                      @if (state?.appData?.data?.customers.imageUrl) {
-                        <img [alt]="state?.appData?.data?.customers.customerName"
-                             [src]="state?.appData?.data?.customers.imageUrl"
+                      @if (state?.appData?.data?.customers?.imageUrl) {
+                        <img [alt]="state?.appData?.data?.customers?.customerName"
+                             [src]="state?.appData?.data?.customers?.imageUrl"
                              loading="lazy"
                              style="width:42px;height:42px;border-radius:50%;object-fit:cover;">
                       } @else {
-                        <div [style.background-color]="getAvatarColor(state?.appData?.data?.customers.id)"
+                        <div [style.background-color]="getAvatarColor(state?.appData?.data?.customers?.id ?? 0)"
                              style="width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:16px;">
-                          {{ state?.appData?.data?.customers.customerName?.charAt(0)?.toUpperCase() }}
+                          {{ state?.appData?.data?.customers?.customerName?.charAt(0)?.toUpperCase() }}
                         </div>
                       }
                     </div>
                     <div class="w-100 ms-4">
-                      <h4 class="my-0">{{ state?.appData?.data?.customers.customerName }}</h4>
-                      <p class="" style="font-size: 13px">{{ state?.appData?.data?.customers.email }}</p>
+                      <h4 class="my-0">{{ state?.appData?.data?.customers?.customerName }}</h4>
+                      <p class="" style="font-size: 13px">{{ state?.appData?.data?.customers?.email }}</p>
                       <span
                         [ngClass]="[
-                          state?.appData?.data?.customers.status === 'ACTIVE' ? ' bg-success' : '',
-                          state?.appData?.data?.customers.status === 'PENDING' ? ' bg-primary' : '',
-                          state?.appData?.data?.customers.status === 'BANNED' ? ' bg-danger' : '',
-                          state?.appData?.data?.customers.status === 'INACTIVE' ? ' bg-info' : '',
+                          state?.appData?.data?.customers?.status === 'ACTIVE' ? ' bg-success' : '',
+                          state?.appData?.data?.customers?.status === 'PENDING' ? ' bg-primary' : '',
+                          state?.appData?.data?.customers?.status === 'BANNED' ? ' bg-danger' : '',
+                          state?.appData?.data?.customers?.status === 'INACTIVE' ? ' bg-info' : '',
                         ]"
                         class="badge"
                         style="position: absolute; bottom: 60px; left: 113px; top: 70px; font-size: 11px; height: 18px">
-                        {{ state?.appData?.data?.customers.status }}
+                        {{ state?.appData?.data?.customers?.status }}
                       </span>
                     </div>
                   </div>
@@ -58,7 +58,7 @@
                         style="font-size: 20px">
                       Total Current Invoices:
                       <span class="" style="font-size: 20px">
-                        {{ state?.appData?.data?.customers.invoices.length }}
+                        {{ state?.appData?.data?.customers?.invoices?.length }}
                       </span>
                     </li>
                   </ul>
@@ -72,37 +72,37 @@
                         style="font-size: 20px">
                       Total Billed
                       <span class="badge bg-success" style="font-size: 20px">
-                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'sum': 'totalAmount' }}
+                        $ {{ (state?.appData?.data?.customers?.invoices ?? []) | ExtractArrayValue: 'sum': 'totalAmount' }}
                       </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                       Paid
                       <span class="badge bg-success">
-                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'PAID' }}
+                        $ {{ (state?.appData?.data?.customers?.invoices ?? []) | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'PAID' }}
                       </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                       Active
                       <span class="badge bg-success">
-                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'ACTIVE' }}
+                        $ {{ (state?.appData?.data?.customers?.invoices ?? []) | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'ACTIVE' }}
                       </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                       Pending
                       <span class="badge bg-primary">
-                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'PENDING' }}
+                        $ {{ (state?.appData?.data?.customers?.invoices ?? []) | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'PENDING' }}
                       </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                       Overdue
                       <span class="badge bg-warning">
-                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'OVERDUE' }}
+                        $ {{ (state?.appData?.data?.customers?.invoices ?? []) | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'OVERDUE' }}
                       </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                       Canceled
                       <span class="badge bg-danger">
-                        $ {{ state?.appData?.data?.customers.invoices | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'CANCELED' }}
+                        $ {{ (state?.appData?.data?.customers?.invoices ?? []) | ExtractArrayValue: 'filter-sum': 'totalAmount': 'status': 'CANCELED' }}
                       </span>
                     </li>
                   </ul>
@@ -115,21 +115,21 @@
                   <h5 class="card-title">Profile Details</h5>
                   <form #customerForm="ngForm" (ngSubmit)="update(customerForm)">
                     <input
-                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
-                      [ngModel]="state?.appData?.data?.customers.id"
+                      [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                      [ngModel]="state?.appData?.data?.customers?.id"
                       name="id"
                       type="hidden" />
                     <input
-                      [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
-                      [ngModel]="state?.appData?.data?.customers.createdAt"
+                      [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                      [ngModel]="state?.appData?.data?.customers?.createdAt"
                       name="createdAt"
                       type="hidden" />
                     <div class="row mb-3">
                       <label class="col-sm-3 col-form-label" for="name">First Name</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
-                          [ngModel]="state?.appData?.data?.customers.customerName"
+                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [ngModel]="state?.appData?.data?.customers?.customerName"
                           class="form-control"
                           name="customerName"
                           type="text" />
@@ -139,8 +139,8 @@
                       <label class="col-sm-3 col-form-label" for="email">Email</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
-                          [ngModel]="state?.appData?.data?.customers.email"
+                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [ngModel]="state?.appData?.data?.customers?.email"
                           class="form-control"
                           name="email"
                           type="text" />
@@ -150,8 +150,8 @@
                       <label class="col-sm-3 col-form-label" for="type">Type</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
-                          [ngModel]="state?.appData?.data?.customers.type"
+                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [ngModel]="state?.appData?.data?.customers?.type"
                           class="form-control"
                           name="type"
                           type="text" />
@@ -161,8 +161,8 @@
                       <label class="col-sm-3 col-form-label" for="status">Status</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
-                          [ngModel]="state?.appData?.data?.customers.status"
+                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [ngModel]="state?.appData?.data?.customers?.status"
                           class="form-control"
                           name="status"
                           type="text" />
@@ -172,8 +172,8 @@
                       <label class="col-sm-3 col-form-label" for="address">Address</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
-                          [ngModel]="state?.appData?.data?.customers.address"
+                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [ngModel]="state?.appData?.data?.customers?.address"
                           class="form-control"
                           name="address"
                           type="text" />
@@ -183,8 +183,8 @@
                       <label class="col-sm-3 col-form-label" for="phoneNumber">phoneNumber</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
-                          [ngModel]="state?.appData?.data?.customers.phoneNumber"
+                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [ngModel]="state?.appData?.data?.customers?.phoneNumber"
                           class="form-control"
                           name="phoneNumber"
                           type="text" />
@@ -194,8 +194,8 @@
                       <label class="col-sm-3 col-form-label" for="imageUrl">Image URL</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user.roleName === 'ROLE_USER' || isLoading()"
-                          [ngModel]="state?.appData?.data?.customers.imageUrl"
+                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [ngModel]="state?.appData?.data?.customers?.imageUrl"
                           class="form-control"
                           name="imageUrl"
                           type="text" />
@@ -203,7 +203,7 @@
                     </div>
                     <button
                       [disabled]="isLoading()"
-                      [hidden]="state?.appData?.data?.user.roleName === 'ROLE_USER'"
+                      [hidden]="state?.appData?.data?.user?.roleName === 'ROLE_USER'"
                       class="btn btn-primary float-end"
                       type="submit">
                       @if (isLoading()) {

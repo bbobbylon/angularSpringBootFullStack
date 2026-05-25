@@ -58,7 +58,7 @@
                     } @else {
                       <div [style.background-color]="getAvatarColor(customer.id)"
                            style="width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:16px;">
-                        {{ customer.customerName?.charAt(0)?.toUpperCase() }}
+                        {{ customer.customerName.charAt(0).toUpperCase() }}
                       </div>
                     }
                   </td>
@@ -87,7 +87,7 @@
             </tbody>
           </table>
 
-          @if (state?.appData?.data?.page?.content?.length > 0) {
+          @if ((state?.appData?.data?.page?.content?.length ?? 0) > 0) {
             <div class="d-flex align-items-center justify-content-between mt-2">
               <div class="d-flex align-items-center gap-2">
                 <label class="form-label mb-0 small text-muted" for="pageSize">Rows per page:</label>
@@ -107,7 +107,7 @@
                             class="page-link">&laquo; Prev
                     </button>
                   </li>
-                  @for (_page of state?.appData?.data?.page?.page?.totalPages | ExtractArrayValue: 'number'; track $index; let i = $index) {
+                  @for (_page of (state?.appData?.data?.page?.page?.totalPages ?? 0) | ExtractArrayValue: 'number'; track $index; let i = $index) {
                     <li class="page-item pointer">
                       <button (click)="goToPage(i)"
                               [ngClass]="i === currentPage() ? 'active' : ''"
@@ -117,10 +117,10 @@
                     </li>
                   }
                   <li
-                    [ngClass]="(state?.appData?.data?.page?.page?.totalPages - 1) === currentPage() ? 'disabled' : ''"
+                    [ngClass]="((state?.appData?.data?.page?.page?.totalPages ?? 0) - 1) === currentPage() ? 'disabled' : ''"
                     class="page-item pointer">
                     <button (click)="changePage('forward')"
-                            [disabled]="(state?.appData?.data?.page?.page?.totalPages - 1) === currentPage()"
+                            [disabled]="((state?.appData?.data?.page?.page?.totalPages ?? 0) - 1) === currentPage()"
                             class="page-link">Next &raquo;
                     </button>
                   </li>

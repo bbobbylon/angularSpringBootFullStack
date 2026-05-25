@@ -61,12 +61,12 @@ export class LoginComponent implements OnInit {
       phone: phoneTail,
     });
     this.userService
-      .verifyCode$(this.email(), verifyCodeForm.value.code)
+      .verifyCode$(this.email()!, verifyCodeForm.value.code)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          localStorage.setItem(Key.TOKEN, response.data.access_token);
-          localStorage.setItem(Key.REFRESH_TOKEN, response.data.refresh_token);
+          localStorage.setItem(Key.TOKEN, response.data!.access_token);
+          localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
           this.router.navigate(['/']);
           this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
         },
@@ -107,18 +107,18 @@ export class LoginComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          if (response.data.user.using2FA) {
-            this.phone.set(response.data.user.phoneNumber);
-            this.email.set(response.data.user.email);
+          if (response.data!.user!.using2FA) {
+            this.phone.set(response.data!.user!.phoneNumber ?? null);
+            this.email.set(response.data!.user!.email ?? null);
             this.loginState.set({
               dataState: DataState.LOADED,
               loginSuccess: false,
               isUsingMfa: true,
-              phone: response.data.user.phoneNumber.substring(response.data.user.phoneNumber.length - 4),
+              phone: response.data!.user!.phoneNumber!.substring(response.data!.user!.phoneNumber!.length - 4),
             });
           } else {
-            localStorage.setItem(Key.TOKEN, response.data.access_token);
-            localStorage.setItem(Key.REFRESH_TOKEN, response.data.refresh_token);
+            localStorage.setItem(Key.TOKEN, response.data!.access_token);
+            localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
             this.router.navigate(['/']);
             this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
           }

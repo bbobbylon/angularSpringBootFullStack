@@ -61,7 +61,7 @@ export class InvoicesComponent implements OnInit {
    * {@code DataState.LOADED} immediately as the {@code startWith} value while the next
    * request is in flight.
    */
-  private data = signal<CustomHttpResponseInterface<InvoiceListDataInterface>>(null);
+  private data = signal<CustomHttpResponseInterface<InvoiceListDataInterface> | undefined>(undefined);
   /** Drives the progress bar in the template during an Excel report download. */
   protected fileStatus = signal<{ status: string; type: string; percent: number } | undefined>(undefined);
 

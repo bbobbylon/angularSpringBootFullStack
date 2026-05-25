@@ -8,7 +8,7 @@
             <ol class="breadcrumb">
               <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
               <li class="breadcrumb-item"><a [routerLink]="['/invoices']">Invoices</a></li>
-              <li aria-current="page" class="breadcrumb-item active">{{ state?.appData?.data?.invoice.invoiceNumber }}
+              <li aria-current="page" class="breadcrumb-item active">{{ state?.appData?.data?.invoice?.invoiceNumber }}
               </li>
             </ol>
           </nav>
@@ -46,13 +46,13 @@
                     <div class="invoice-to">
                       <small>to</small>
                       <address class="m-t-5 m-b-5">
-                        <strong class="text-inverse">{{ state?.appData?.data?.customer.customerName }}</strong>
+                        <strong class="text-inverse">{{ state?.appData?.data?.customer?.customerName }}</strong>
                         <br />
-                        Address: {{ state?.appData?.data?.customer.address }}
+                        Address: {{ state?.appData?.data?.customer?.address }}
                         <br />
-                        Email: {{ state?.appData?.data?.customer.email }}
+                        Email: {{ state?.appData?.data?.customer?.email }}
                         <br />
-                        Phone: {{ state?.appData?.data?.customer.phoneNumber }}
+                        Phone: {{ state?.appData?.data?.customer?.phoneNumber }}
                         <br />
                         Status:
                         <span
@@ -69,9 +69,9 @@
                       </address>
                     </div>
                     <div class="invoice-date">
-                      <small>Invoice Number: #{{ state?.appData?.data?.invoice.invoiceNumber }}</small>
+                      <small>Invoice Number: #{{ state?.appData?.data?.invoice?.invoiceNumber }}</small>
                       <div class="date text-inverse m-t-5">Invoice
-                        Date: {{ state?.appData?.data?.invoice.invoiceDate | date: 'mediumDate' }}
+                        Date: {{ state?.appData?.data?.invoice?.invoiceDate | date: 'mediumDate' }}
                       </div>
                       <div class="invoice-detail">Due Date: 30 Days from Invoice Date</div>
                     </div>
@@ -106,7 +106,7 @@
                         <div class="invoice-price-row">
                           <div class="sub-price">
                             <small>SUBTOTAL</small>
-                            <span class="text-inverse">${{ state?.appData?.data?.invoice.totalAmount }}</span>
+                            <span class="text-inverse">${{ state?.appData?.data?.invoice?.totalAmount }}</span>
                           </div>
                           <div class="sub-price">
                             <i class="fa fa-plus text-muted"></i>
@@ -114,14 +114,14 @@
                           <div class="sub-price">
                             <small>TAX (5.4%)</small>
                             <span
-                              class="text-inverse">${{ state?.appData?.data?.invoice.totalAmount * (5.4 / 100) | number: '.2-2' }}</span>
+                              class="text-inverse">${{ (state?.appData?.data?.invoice?.totalAmount ?? 0) * (5.4 / 100) | number: '.2-2' }}</span>
                           </div>
                         </div>
                       </div>
                       <div class="invoice-price-right">
                         <small>TOTAL</small>
                         <span class="f-w-600">
-                          ${{ state?.appData?.data?.invoice.totalAmount * (5.4 / 100) + state?.appData?.data?.invoice.totalAmount | number: '.2-2' }}
+                          ${{ (state?.appData?.data?.invoice?.totalAmount ?? 0) * (5.4 / 100) + (state?.appData?.data?.invoice?.totalAmount ?? 0) | number: '.2-2' }}
                         </span>
                       </div>
                     </div>

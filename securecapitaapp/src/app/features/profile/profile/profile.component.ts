@@ -37,7 +37,7 @@ import { UserInterface } from '../../../interface/user.interface';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProfileComponent implements OnInit {
-  @Input() user: UserInterface;
+  @Input() user: UserInterface | undefined;
   /** Exposes the `DataState` enum to the template for asynchronous data handling. */
   readonly DataState = DataState;
   /**
@@ -68,7 +68,7 @@ export class ProfileComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
   /** Caches the most recent successful API response so all update methods can stay in LOADED state while requests are in flight. */
-  private data = signal<CustomHttpResponseInterface<ProfileInterface>>(null);
+  private data = signal<CustomHttpResponseInterface<ProfileInterface> | undefined>(undefined);
 
   /**
    * Initializes the component by fetching the user's profile information.
@@ -87,7 +87,7 @@ export class ProfileComponent implements OnInit {
           console.log('Fetched profile data:', response);
           this.data.set(response);
           this.isLoading.set(false);
-          this.permissions.set(response.data.user.permissions.split(',').map((p: string) => p.trim()));
+          this.permissions.set(response.data!.user!.permissions!.split(',').map((p: string) => p.trim()));
           this.eventsTotalPages.set(response.data?.eventsTotalPages ?? 0);
           this.profileState.set({ dataState: DataState.LOADED, appData: response });
         },
@@ -312,8 +312,8 @@ export class ProfileComponent implements OnInit {
       .subscribe({
         next: (response) => {
           this.data.set({
-            ...this.data(),
-            data: { ...this.data().data, events: response.data?.events },
+            ...this.data()!,
+            data: { ...this.data()!.data!, events: response.data?.events },
           });
           this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
@@ -346,7 +346,7 @@ export class ProfileComponent implements OnInit {
             console.log('MFA Settings updated successfully:', response);
             this.data.set({
               ...response,
-              data: { ...response.data, user: { ...response.data.user, imageUrl: `${response.data.user.imageUrl}?time=${new Date().getTime()}` } },
+              data: { ...response.data!, user: { ...response.data!.user!, imageUrl: `${response.data!.user!.imageUrl}?time=${new Date().getTime()}` } },
             });
             this.isLoading.set(false);
             this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });

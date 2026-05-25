@@ -156,8 +156,8 @@ export class UserService {
           console.log('Received refresh token response:', response);
           localStorage.removeItem(Key.TOKEN);
           localStorage.removeItem(Key.REFRESH_TOKEN);
-          localStorage.setItem(Key.TOKEN, response.data.access_token);
-          localStorage.setItem(Key.REFRESH_TOKEN, response.data.refresh_token);
+          localStorage.setItem(Key.TOKEN, response.data!.access_token);
+          localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
         }),
         catchError(this.handleError),
       );
@@ -184,8 +184,8 @@ export class UserService {
       tap((response) => {
         localStorage.removeItem(Key.TOKEN);
         localStorage.removeItem(Key.REFRESH_TOKEN);
-        localStorage.setItem(Key.TOKEN, response.data.access_token);
-        localStorage.setItem(Key.REFRESH_TOKEN, response.data.refresh_token);
+        localStorage.setItem(Key.TOKEN, response.data!.access_token);
+        localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
       }),
       catchError(this.handleError),
     );
@@ -244,7 +244,7 @@ export class UserService {
       .pipe(tap(console.log), catchError(this.handleError));
 
   isAuthenticated = (): boolean =>
-    this.jwtHelper.decodeToken<string>(localStorage.getItem(Key.TOKEN)) && !this.jwtHelper.isTokenExpired(localStorage.getItem(Key.TOKEN));
+    !!this.jwtHelper.decodeToken<string>(localStorage.getItem(Key.TOKEN) ?? '') && !this.jwtHelper.isTokenExpired(localStorage.getItem(Key.TOKEN) ?? '');
 
   logOut() {
     localStorage.removeItem(Key.TOKEN);

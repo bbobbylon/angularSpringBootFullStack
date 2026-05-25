@@ -25,5 +25,5 @@ import { StatsInterface } from '../../interface/stats.interface';
 })
 export class StatsComponent {
   /** Aggregated totals passed down from {@link HomeComponent} via the customer list response. */
-  @Input() stats: StatsInterface;
+  @Input() stats: StatsInterface | undefined;
 }
