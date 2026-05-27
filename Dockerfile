@@ -1,5 +1,7 @@
+#Multi-stage Dockerfile for Spring Boot + Angular application
+
 # Stage 1: Build Angular frontend
-FROM node:25-alpine AS frontend-build
+FROM node:22-alpine AS frontend-build
 WORKDIR /build
 COPY securecapitaapp/package*.json ./
 RUN npm ci
@@ -13,7 +15,7 @@ COPY pom.xml ./
 RUN mvn dependency:go-offline -B -q
 COPY src/ ./src/
 COPY --from=frontend-build /build/dist/securecapitaapp/browser/ ./src/main/resources/static/
-RUN mvn package -DskipTests -Pprod -B -q
+RUN mvn package -DskipTests -Pprod -B
 
 # Stage 3: Runtime image — JRE only, no build tools
 FROM eclipse-temurin:21-jre-alpine
@@ -23,4 +25,6 @@ COPY --from=backend-build /build/target/*.jar app.jar
 RUN chown appuser:appgroup app.jar
 USER appuser
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD wget -qO- http://localhost:8080/actuator/health || exit 1
 ENTRYPOINT ["java", "-Dspring.profiles.active=prod", "-jar", "app.jar"]

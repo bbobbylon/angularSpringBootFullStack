@@ -1,588 +1,322 @@
-# 🚀 Angular Spring Boot Full Stack Application
+# Angular Spring Boot Full Stack Application
 
-A production-ready full-stack application combining **Angular** (frontend) and **Spring Boot** (backend) with
-comprehensive security features including JWT authentication, refresh tokens, 2FA, and role-based access control.
-
----
-
-## 📋 Requirements
-
-- **Java**: 21 or higher
-- **Node.js**: 18 or higher
-- **Angular CLI**: 20 or higher
-- **PostgreSQL**: 12 or higher
-- **Maven**: 3.8+
+A full-stack application combining **Angular 21** (frontend) and **Spring Boot 4** (backend) with JWT authentication, refresh tokens, two-factor authentication, role-based access control, customer management, and invoicing.
 
 ---
 
-## 🛠️ Project Features
+## Tech Stack
 
-### Backend (Spring Boot)
-
-- ✅ JWT Token Authentication (Access + Refresh tokens)
-- ✅ Two-Factor Authentication (2FA)
-- ✅ Role-Based Access Control (RBAC)
-- ✅ Password Reset with Verification Links
-- ✅ Account Verification
-- ✅ BCrypt Password Hashing
-- ✅ Custom Security Filters & Exception Handling
-- ✅ Comprehensive Logging & Auditing
-
-### Frontend (Angular)
-
-- ✅ Standalone Angular components (no AppModule)
-- ✅ HTTP interceptor for token attachment + refresh retry
-- ✅ Login + MFA verification flow
-- ✅ Profile update + password change flows
-- ✅ Bootstrap-based responsive UI
-
-See `securecapitaapp/README.md` and `FRONTEND_DOCUMENTATION_SETUP.md` for frontend architecture details.
+| Layer | Technology |
+|---|---|
+| Frontend | Angular 21, Bootstrap 5, ngx-toastr |
+| Backend | Spring Boot 4, Spring Security 7, Hibernate 7 |
+| Database | MySQL 8.4 |
+| Auth | JWT (access + refresh tokens), 2FA via email |
+| Runtime | Java 21, Node 22 |
+| Container | Docker (multi-stage build) |
 
 ---
 
-## 🏗️ Architecture Overview
+## Prerequisites
 
-```
-┌─────────────────────────────────────────────────────┐
-│         SPRING SECURITY FILTER CHAIN                 │
-├─────────────────────────────────────────────────────┤
-│ CustomAuthFilter (JWT validation & authentication)  │
-│         ↓                                            │
-│ SecurityFilterChain (authorization rules)           │
-│         ↓                                            │
-│ Controller Layer (REST endpoints)                   │
-│         ↓                                            │
-│ Service Layer (business logic)                      │
-│         ↓                                            │
-│ Repository Layer (database operations)              │
-└─────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────────┐
-│                               FRONTEND                                 │
-│  Angular Components → UserService → Token Interceptor → HttpClient      │
-└────────────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        SPRING SECURITY FILTER CHAIN                     │
-├────────────────────────────────────────────────────────────────────────┤
-│ CustomAuthFilter (JWT validation & authentication)                      │
-│         ↓                                                               │
-│ SecurityFilterChain (authorization rules)                               │  
-│         ↓                                                               │
-│ Controller Layer (REST endpoints)                                       │
-│         ↓                                                               │
-│ Service Layer (business logic)                                          │
-│         ↓                                                               │
-│ Repository Layer (database operations)                                  │
-└────────────────────────────────────────────────────────────────────────┘
-```
+| Tool | Version | Required for |
+|---|---|---|
+| Java | 21+ | Running the backend |
+| Maven | 3.8+ | Building the backend |
+| Node.js | 22 LTS | Running the frontend |
+| Docker | 24+ | MySQL container (local mode) or full stack (docker mode) |
+| Git Bash / WSL | any | Running `start.sh` on Windows |
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### Step 1: Backend Setup
-
-#### 1a. Clone and navigate to project
-
-```powershell
-cd B:\Documents\Coding\angularSpringBootFullStack
-```
-
-#### 1b. Configure PostgreSQL Database
-
-Create a new PostgreSQL database:
-
-```sql
-CREATE DATABASE angular_spring_boot;
-```
-
-#### 1c. Update database configuration
-
-Edit `src/main/resources/application.yaml`:
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/angular_spring_boot
-    username: postgres  # Your PostgreSQL username
-    password: password  # Your PostgreSQL password
-  jpa:
-    hibernate:
-      ddl-auto: update  # Creates tables automatically
-```
-
-#### 1d. Configure Email Environment Variables
-
-The password reset and account verification flows send emails via Gmail SMTP. The Gmail credentials are read from
-environment variables at startup — **never hardcoded in `application-dev.yml`** (which is committed to git).
-
-Set these once as Windows User Environment Variables (persistent across all shells, IDEs, and processes). Run this in
-PowerShell **once** — restart any open IDE / terminal afterwards so new processes inherit the vars:
-
-```powershell
-[Environment]::SetEnvironmentVariable("MAIL_USERNAME", "your-gmail@gmail.com", "User")
-[Environment]::SetEnvironmentVariable("MAIL_PASSWORD", "your-16-char-app-password", "User")
-```
-
-Verify they're set:
-
-```powershell
-$env:MAIL_USERNAME
-$env:MAIL_PASSWORD
-```
-
-| Variable        | Purpose                                                                                                                                   |
-|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------|
-| `MAIL_USERNAME` | Your Gmail address used as the `From` address on outgoing verification emails.                                                            |
-| `MAIL_PASSWORD` | A Google **App Password** (16 lowercase characters), NOT your regular Gmail password. Generate at <https://myaccount.google.com/apppasswords>. |
-
-> **Why an app password?** Google retired "less secure app access" in 2022, so SMTP clients can no longer authenticate
-> with your regular account password. App passwords are scoped, revocable, and can be rotated without touching your
-> main Google account credentials. If yours ever leaks, revoke and regenerate at the same URL — takes ~30 seconds.
-
-Confirm the placeholders are still in place in `src/main/resources/application-dev.yml`:
-
-```yaml
-spring:
-  mail:
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
-```
-
-If Spring Boot fails to start with `Could not resolve placeholder 'MAIL_USERNAME'`, the env vars are not set in the
-process launching the app — restart your IDE/terminal after `SetEnvironmentVariable` and try again.
-
-#### 1e. Build the backend
-
-```powershell
-.\mvnw.cmd clean package
-```
-
-Or skip tests for a faster build:
-
-```powershell
-.\mvnw.cmd clean package -DskipTests
-```
-
-#### 1f. Run the backend
-
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-The backend will start at: **http://localhost:8080**
-
-✅ Check health endpoint:
-
-```powershell
-curl -X GET http://localhost:8080/actuator/health
-# Response: {"status":"UP"}
-```
-
----
-
-### Step 2: Frontend Setup
-
-Frontend lives under `securecapitaapp/`.
-
-- Quick start: `securecapitaapp/README.md`
-- Full frontend docs: `FRONTEND_DOCUMENTATION_SETUP.md`
-
----
-
-## ☁️ Azure Deployment
-
-The app is deployed as a single Docker container to Azure App Service. The Angular frontend is embedded inside the
-Spring Boot JAR (served from `static/`), so one container handles everything on port 8080.
-
-**Live URL:** `https://angularspringbootfullstack-ehd6dkevc3edgxer.centralus-01.azurewebsites.net`
-
----
-
-### Azure Resources (all under `bobsresourcegroup`, subscription `Azure subscription 1`)
-
-| Resource           | Name                         | Purpose                 |
-|--------------------|------------------------------|-------------------------|
-| Container Registry | `bobsAngularApp`             | Stores Docker images    |
-| App Service        | `angularSpringBootFullStack` | Runs the container      |
-| App Service Plan   | (auto-created)               | Compute for App Service |
-
-**ACR Login Server:** `bobsangularapp-cnh8fzfxasa6feav.azurecr.io`
-
----
-
-### Database (Aiven MySQL — Free Tier)
-
-Tables are in a schema called `db2` on Aiven's free MySQL instance.
-
-- **Host:** `bobbylonsdb-bobbylon.a.aivencloud.com`
-- **Port:** `11275`
-- **Schema:** `db2`
-- **User:** `avnadmin`
-
-To recreate the schema from scratch, run `src/main/resources/schema.sql` via MySQL Workbench connected to Aiven. The
-seed data (roles + events) is included in that file.
-
----
-
-### Azure DevOps Pipeline (`azure-pipelines.yml`)
-
-Triggers automatically on every push to `master`. Two stages:
-
-1. **Build and Push to ACR** — Docker multi-stage build (Node 25 → Maven 21 → JRE alpine), pushes image tagged with
-   build ID + `latest`
-2. **Deploy to App Service** — Pulls the new image from ACR and restarts the App Service
-
-**Service Connections (Azure DevOps > Project Settings > Service Connections):**
-
-| Name                                  | Type                   | Points to              |
-|---------------------------------------|------------------------|------------------------|
-| `bobsDockerRegistryServiceConnection` | Docker Registry        | `bobsAngularApp` ACR   |
-| `bobsAzureServiceConnection`          | Azure Resource Manager | `Azure subscription 1` |
-
----
-
-### App Service Environment Variables
-
-Set in **Portal > App Service > Configuration > Environment Variables > App Settings:**
-
-| Name                         | Value                                                                                      |
-|------------------------------|--------------------------------------------------------------------------------------------|
-| `SPRING_DATASOURCE_URL`      | `jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/db2?useSSL=true&requireSSL=true` |
-| `SPRING_DATASOURCE_USERNAME` | `avnadmin`                                                                                 |
-| `SPRING_DATASOURCE_PASSWORD` | *(your Aiven password)*                                                                    |
-
----
-
-### How to Redeploy
-
-Just push to `master` — the pipeline does everything automatically:
+### 1. Clone and configure
 
 ```bash
-git add .
-git commit -m "your message"
-git push
+git clone <repo-url>
+cd angularSpringBootFullStack
 ```
 
-Watch the run at: **Azure DevOps > Pipelines**
+Copy the example env file and fill in your values:
+
+```bash
+# Git Bash / WSL
+cp .env.example .env
+
+# PowerShell
+Copy-Item .env.example .env
+```
+
+Open `.env` and set at minimum:
+
+```dotenv
+MYSQL_ROOT_PASSWORD=your-root-password
+MYSQL_DATABASE=db2
+MYSQL_PASSWORD=your-app-password
+JWT_SECRET=<random-base64-string-at-least-32-chars>
+MAIL_USERNAME=your-gmail@gmail.com
+MAIL_PASSWORD=your-16-char-gmail-app-password
+```
+
+Generate a JWT secret (pick one):
+```bash
+# Git Bash / macOS / Linux
+openssl rand -base64 48
+
+# PowerShell
+[Convert]::ToBase64String((1..48 | % { Get-Random -Max 256 }))
+```
+
+> **Gmail App Password**: Google requires an App Password (not your account password) for SMTP.
+> Generate one at <https://myaccount.google.com/apppasswords>. It's 16 lowercase characters.
 
 ---
 
-### Docker Files
+### 2. Run the application
 
-| File            | Purpose                                                         |
-|-----------------|-----------------------------------------------------------------|
-| `Dockerfile`    | Multi-stage build: Angular → Spring Boot JAR → JRE runtime      |
-| `.dockerignore` | Excludes `node_modules/`, `target/`, `.git/` from build context |
+Everything is controlled by a single script at the project root. Open `.env` or `start.sh` and check the `ENV` variable at the top — then run:
 
-The Dockerfile stages:
+```bash
+chmod +x start.sh
+./start.sh
+```
 
-1. `node:25-alpine` — builds Angular, outputs to `dist/securecapitaapp/browser/`
-2. `maven:3.9-eclipse-temurin-21` — copies Angular dist into `src/main/resources/static/`, packages JAR with `-Pprod`
-3. `eclipse-temurin:21-jre-alpine` — runs the JAR as a non-root user on port 8080
+There are two modes. Change `ENV=local` to `ENV=docker` at the top of `start.sh` to switch:
 
 ---
 
-## 📚 API Usage Guide
+#### Mode 1: `local` (recommended for development)
 
-### 1️⃣ User Registration
+```
+ENV=local   ← default
+```
 
-**Endpoint:** `POST /user/register`
+- MySQL starts in Docker (no local MySQL install needed)
+- Spring Boot runs natively via Maven (hot-restart via Spring DevTools)
+- Angular runs via `ng serve` (instant hot-reload)
 
-**Request:**
+**Access the app at: `http://localhost:4200`**
+
+What happens when you run `./start.sh`:
+1. Loads `.env` into the shell environment
+2. Starts the MySQL Docker container and waits for it to be healthy
+3. Starts Spring Boot (`mvn spring-boot:run`) in background
+4. Starts Angular dev server (`ng serve`) in background
+5. Press **Ctrl+C** to stop all three services cleanly
+
+---
+
+#### Mode 2: `docker` (full Docker Compose)
+
+```
+ENV=docker
+```
+
+- Builds the multi-stage Docker image (Angular compiled into the Spring Boot JAR)
+- Starts MySQL + the application container via Docker Compose
+- No hot-reload — use this to test the production build locally
+
+**Access the app at: `http://localhost:8090`** (or `APP_PORT` in `.env`)
+
+```bash
+# To rebuild and restart from scratch:
+docker compose down -v
+./start.sh
+```
+
+---
+
+## Environment Variables Reference
+
+All configuration lives in `.env` at the project root. IntelliJ loads it via **Run > Edit Configurations > Spring Boot > Env file**. The `start.sh` script sources it automatically.
+
+| Variable | Description | Default (dev fallback) |
+|---|---|---|
+| `MYSQL_HOST` | Database hostname | `127.0.0.1` |
+| `MYSQL_PORT` | Database port | `3306` |
+| `MYSQL_DATABASE` | Schema name | `db2` |
+| `MYSQL_USERNAME` | DB user | `root` |
+| `MYSQL_PASSWORD` | DB password | *(required)* |
+| `MYSQL_ROOT_PASSWORD` | MySQL root password (Docker only) | *(required for Docker)* |
+| `JWT_SECRET` | HMAC-SHA signing key (min 32 chars) | *(required)* |
+| `CONTAINER_PORT` | Port Spring Boot listens on | `8080` |
+| `APP_PORT` | Host port mapped to container (Docker mode) | `8090` |
+| `MAIL_USERNAME` | Gmail address for outgoing email | *(required)* |
+| `MAIL_PASSWORD` | Gmail App Password | *(required)* |
+| `VERIFY_EMAIL_HOST` | Base URL for email verification links | `http://localhost:8080` |
+| `UI_APP_URL` | Angular app URL (used for CORS) | `http://localhost:4200` |
+| `SPRING_ACTIVE_PROFILES` | Spring profile (`dev` or `prod`) | `dev` |
+
+> **Never commit `.env`** — it is gitignored. Commit `.env.example` with placeholder values instead.
+
+---
+
+## Project Structure
+
+```
+angularSpringBootFullStack/
+├── src/                        # Spring Boot backend
+│   └── main/
+│       ├── java/               # Controllers, services, repositories, entities
+│       └── resources/
+│           ├── application.yml         # Shared Spring config
+│           ├── application-dev.yml     # Dev profile (local defaults)
+│           └── application-prod.yml    # Prod profile (no defaults — all vars required)
+├── securecapitaapp/            # Angular 21 frontend
+│   └── src/app/
+│       ├── features/           # auth, home, customers, invoices, profile
+│       ├── service/            # HTTP services (UserService, CustomerService)
+│       ├── interceptor/        # JWT injection, error handling
+│       └── guard/              # Route authentication guards
+├── Dockerfile                  # Multi-stage: Node 22 → Maven 21 → JRE 21 Alpine
+├── docker-compose.yml          # MySQL + app services
+├── start.sh                    # Unified startup script (local | docker)
+├── .env                        # Your local secrets (gitignored)
+└── .env.example                # Template — copy to .env and fill in values
+```
+
+---
+
+## Spring Profiles
+
+| Profile | Activated by | Behaviour |
+|---|---|---|
+| `dev` | Default (`SPRING_ACTIVE_PROFILES=dev`) | All vars have safe local fallbacks. App starts without a full `.env`. |
+| `prod` | `SPRING_ACTIVE_PROFILES=prod` or Docker ENTRYPOINT flag | No fallbacks. Missing env var = startup failure. Used in Docker mode. |
+
+---
+
+## Docker Architecture
+
+The Dockerfile uses a **three-stage multi-stage build**:
+
+1. **`node:22-alpine`** — builds the Angular app (`ng build --configuration production`), outputs to `dist/securecapitaapp/browser/`
+2. **`maven:3.9-eclipse-temurin-21`** — copies Angular dist into `src/main/resources/static/`, packages Spring Boot JAR with `-Pprod`
+3. **`eclipse-temurin:21-jre-alpine`** — runs the JAR as a non-root user, exposes port 8080
+
+In Docker mode the Angular app is served by Spring Boot as static files — no separate frontend server.
+
+---
+
+## Cloud Deployment
+
+The app is structured for cloud deployment:
+
+- All secrets are environment variables — set them via your cloud platform's config (ECS task definitions, Cloud Run env vars, Kubernetes Secrets, etc.)
+- The Docker image is self-contained and stateless
+- Health check endpoint: `GET /actuator/health`
+
+**Recommended platforms** (in order of setup simplicity):
+
+| Platform | Notes |
+|---|---|
+| Railway | Simplest — git push, MySQL plugin, env vars in dashboard |
+| Render | Similar to Railway, free tier (spins down on inactivity) |
+| Fly.io | Docker-native, good free tier, uses your Dockerfile directly |
+| Google Cloud Run | Serverless containers, scales to zero, generous free tier |
+
+**Pre-cloud checklist:**
+- [ ] Set `useSSL=true` in `SPRING_DATASOURCE_URL` for managed cloud databases
+- [ ] Use a managed database (RDS, Cloud SQL, Aiven) instead of the Docker MySQL container
+- [ ] Set all required prod env vars via the platform (no `.env` file in cloud)
+- [ ] Consider moving to `ddl-auto: validate` with Flyway for schema migrations
+
+---
+
+## API Reference
+
+### Authentication
+
+| Method | Endpoint | Auth required | Description |
+|---|---|---|---|
+| POST | `/user/register` | No | Create account |
+| POST | `/user/login` | No | Get access + refresh tokens |
+| GET | `/user/verify/account/{key}` | No | Activate account via email link |
+| GET | `/user/verify/code/{email}/{code}` | No | Complete 2FA login |
+| GET | `/user/refresh/token` | Refresh token | Get new access token |
+| GET | `/user/resetpassword/{email}` | No | Trigger password reset email |
+| GET | `/user/verify/password/{key}` | No | Validate reset link |
+| PUT | `/user/new/password` | No | Set new password after reset |
+
+### User Profile
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/user/profile` | Get authenticated user profile + audit log |
+| GET | `/user/events` | Paginated audit events |
+| PATCH | `/user/update` | Update profile fields |
+| PATCH | `/user/update/password` | Change password |
+| PATCH | `/user/update/role/{roleName}` | Change user role |
+| PATCH | `/user/update/settings` | Toggle enabled / locked |
+| PATCH | `/user/update/togglemfa` | Toggle 2FA |
+| PATCH | `/user/update/image` | Upload profile picture |
+
+### Customers
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/customer/list` | Paginated customer list + stats |
+| GET | `/customer/stats` | Dashboard totals |
+| GET | `/customer/get/{id}` | Single customer |
+| GET | `/customer/search` | Search by name |
+| POST | `/customer/create` | Create customer |
+| PUT | `/customer/update/{id}` | Update customer |
+| GET | `/customer/download/report` | Export customers as XLSX |
+
+### Invoices
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/customer/invoice/list` | Paginated invoices |
+| GET | `/customer/invoice/get/{id}` | Single invoice |
+| POST | `/customer/invoice/create` | Create standalone invoice |
+| POST | `/customer/invoice/addtocustomer/{customerId}` | Create and link to customer |
+| GET | `/customer/invoice/download/report` | Export invoices as XLSX |
+
+---
+
+## Example API Calls
+
+### Register
 
 ```bash
 curl -X POST http://localhost:8080/user/register \
   -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "John",
-    "lastName": "Doe",
-    "email": "john@example.com",
-    "password": "P@ssw0rd123"
-  }'
+  -d '{"firstName":"John","lastName":"Doe","email":"john@example.com","password":"P@ssw0rd123"}'
 ```
 
-**Response (201 Created):**
-
-```json
-{
-  "timeStamp": "12:30:45.123456",
-  "data": {
-    "user": {
-      "id": 1,
-      "email": "john@example.com",
-      "firstName": "John",
-      "lastName": "Doe",
-      "enabled": true,
-      "using2FA": false
-    }
-  },
-  "message": "User created successfully!",
-  "status": "201 CREATED",
-  "statusCode": 201
-}
-```
-
-**Server Log:**
-
-```
-INFO: Account verification url http://localhost:8080/user/verify/account/550e8400-e29b-41d4-a716-446655440000 sent to user with email: john@example.com
-```
-
----
-
-### 2️⃣ User Login (Get Tokens)
-
-**Endpoint:** `POST /user/login`
-
-**Request:**
+### Login
 
 ```bash
 curl -X POST http://localhost:8080/user/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "email": "john@example.com",
-    "password": "P@ssw0rd123"
-  }'
+  -d '{"email":"john@example.com","password":"P@ssw0rd123"}'
 ```
 
-**Response (200 OK):**
-
-```json
-{
-  "timeStamp": "12:31:00.123456",
-  "data": {
-    "user": {
-      "id": 1,
-      "email": "john@example.com",
-      "firstName": "John",
-      "lastName": "Doe"
-    },
-    "access_token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9...",
-    "refresh_token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9..."
-  },
-  "message": "Login successful!",
-  "status": "200 OK",
-  "statusCode": 200
-}
-```
-
-**Token Structure:**
-
-- **Access Token**: Valid 30 minutes, includes authorities (permissions), subject is user ID
-- **Refresh Token**: Valid 5 days, no authorities, subject is user ID
-
----
-
-### 3️⃣ Access Protected Endpoint (with Access Token)
-
-**Endpoint:** `GET /user/profile`
-
-**Request:**
+### Access protected endpoint
 
 ```bash
 curl -X GET http://localhost:8080/user/profile \
   -H "Authorization: Bearer <access_token>"
 ```
 
-**Response (200 OK):**
-
-```json
-{
-  "timeStamp": "12:31:30.123456",
-  "data": {
-    "user": {
-      "id": 1,
-      "email": "john@example.com",
-      "firstName": "John",
-      "lastName": "Doe"
-    }
-  },
-  "message": "We have fetched your profile for you!",
-  "status": "200 OK",
-  "statusCode": 200
-}
-```
-
-**If access token is expired → 401 Unauthorized**
-
----
-
-### 4️⃣ Refresh Access Token
-
-**Endpoint:** `GET /user/refresh/token`
-
-**Request:**
+### Refresh token
 
 ```bash
 curl -X GET http://localhost:8080/user/refresh/token \
   -H "Authorization: Bearer <refresh_token>"
 ```
 
-**Response (200 OK):**
-
-```json
-{
-  "timeStamp": "12:32:00.123456",
-  "data": {
-    "user": {
-      "...": "same user info as before"
-    },
-    "access_token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9...",
-    "refresh_token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9..."
-  },
-  "message": "New refresh token sent successfully!",
-  "status": "200 OK",
-  "statusCode": 200
-}
-```
-
-**Server Log:**
-
-```
-INFO: Getting role to user with ID 1
-```
-
 ---
 
-### 5️⃣ Password Reset Request
+## JWT Token Structure
 
-**Endpoint:** `GET /user/resetpassword/{email}`
-
-**Request:**
-
-```bash
-curl -X GET http://localhost:8080/user/resetpassword/john@example.com
-```
-
-**Response (200 OK):**
-
-```json
-{
-  "message": "Email sent to reset password. Please check your inbox.",
-  "status": "200 OK",
-  "statusCode": 200
-}
-```
-
-**Server Log:**
-
-```
-INFO: Password reset verification url http://localhost:8080/user/verify/password/550e8400-e29b-41d4-a716-446655440000 sent to user with email: john@example.com
-```
-
----
-
-### 6️⃣ Verify Password Reset Link
-
-**Endpoint:** `GET /user/verify/password/{key}`
-
-**Request:**
-
-```bash
-curl -X GET "http://localhost:8080/user/verify/password/550e8400-e29b-41d4-a716-446655440000"
-```
-
-**Response (200 OK):**
-
-```json
-{
-  "data": {
-    "user": {
-      "id": 1,
-      "email": "john@example.com",
-      "firstName": "John",
-      "lastName": "Doe"
-    }
-  },
-  "message": "Please enter your new password",
-  "status": "200 OK",
-  "statusCode": 200
-}
-```
-
----
-
-### 7️⃣ Set New Password
-
-**Endpoint:** `POST /user/resetpassword/{key}/{newPassword}/{confirmPassword}`
-
-**Request:**
-
-```bash
-curl -X POST "http://localhost:8080/user/resetpassword/550e8400-e29b-41d4-a716-446655440000/NewPassword123/NewPassword123"
-```
-
-**Response (200 OK):**
-
-```json
-{
-  "message": "Password reset successful! You can now log in with your new password.",
-  "status": "200 OK",
-  "statusCode": 200
-}
-```
-
-**Server Log:**
-
-```
-INFO: Password successfully reset for user with email: john@example.com
-```
-
----
-
-### 8️⃣ Account Verification
-
-**Endpoint:** `GET /user/verify/account/{key}`
-
-**Request:**
-
-```bash
-curl -X GET "http://localhost:8080/user/verify/account/550e8400-e29b-41d4-a716-446655440000"
-```
-
-**Response (200 OK):**
-
-```json
-{
-  "message": "Account verified successfully! You can now log in.",
-  "status": "200 OK",
-  "statusCode": 200
-}
-```
-
-**Server Log:**
-
-```
-INFO: Account successfully verified for user with email: john@example.com
-```
-
----
-
-## 🔐 Authentication & Authorization
-
-### How JWT Works
-
-1. **Login**: User sends email + password → Server verifies → Generates access + refresh tokens
-2. **Access Protected Resource**: Client sends access token in Authorization header
-3. **Filter Checks**: CustomAuthFilter validates token signature + expiration
-4. **Authorization**: SecurityConfig checks if user has required authorities
-5. **Token Expired**: Client uses refresh token to get new access token
-
-### Token Claims (Payload)
-
-**Access Token Example:**
-
+**Access token** (valid 30 minutes):
 ```json
 {
   "sub": "1",
-  "authorities": [
-    "READ:USER",
-    "UPDATE:USER",
-    "DELETE:USER"
-  ],
+  "authorities": ["READ:USER", "UPDATE:USER"],
   "iss": "BOBBYLON_LLC",
   "aud": "BOBS_MANAGEMENT",
   "exp": 1715000000,
@@ -590,154 +324,89 @@ INFO: Account successfully verified for user with email: john@example.com
 }
 ```
 
-**Refresh Token Example:**
-
-```json
-{
-  "sub": "1",
-  "iss": "BOBBYLON_LLC",
-  "aud": "BOBS_MANAGEMENT",
-  "exp": 1715259600,
-  "iat": 1714995600
-}
-```
-
-Note: Refresh token intentionally lacks "authorities" to prevent misuse.
+**Refresh token** (valid 5 days) — intentionally has no `authorities` to prevent misuse.
 
 ---
 
-## 📊 Error Handling
+## Troubleshooting
 
-### Common Error Responses
+**`Could not resolve placeholder 'JWT_SECRET'`**
+Your `.env` file is missing or the variable isn't set. Check `.env` exists at the project root.
 
-#### 401 Unauthorized
+**`Communications link failure` / `No such host is known (mysql)`**
+`MYSQL_HOST` is set to `mysql` (Docker service name) but you're running outside Docker. Check `.env` has `MYSQL_HOST=127.0.0.1`.
 
-```json
-{
-  "reason": "Token has expired",
-  "status": "401 UNAUTHORIZED",
-  "statusCode": 401
-}
-```
+**`Circular placeholder reference`**
+A profile YAML is self-referencing a variable. See `application-dev.yml` — do not use `${VAR:default}` where the key and placeholder name are identical.
 
-#### 403 Forbidden
+**Angular shows blank page after `docker compose up`**
+The multi-stage build may have failed silently. Run `docker compose logs app` to check. Run `docker compose up --build` with `--progress=plain` to see full Maven output.
 
-```json
-{
-  "reason": "Access Denied: You do not have permission to access this resource",
-  "status": "403 FORBIDDEN",
-  "statusCode": 403
-}
-```
-
-#### 400 Bad Request
-
-```json
-{
-  "reason": "Could not decode the token. The input is not a valid Base64-encoded JWT.",
-  "status": "400 BAD_REQUEST",
-  "statusCode": 400
-}
-```
-
-#### 500 Internal Server Error
-
-```json
-{
-  "reason": "An error has occurred, please try again",
-  "status": "500 INTERNAL_SERVER_ERROR",
-  "statusCode": 500
-}
-```
+**MySQL container not becoming healthy**
+Check `docker compose logs mysql`. Common causes: wrong `MYSQL_ROOT_PASSWORD`, port 3306 already in use locally.
 
 ---
 
-## 📝 Logging & Auditing
+## Legacy: Previous Azure Deployment
 
-The application logs important security events:
+> This deployment is no longer actively maintained. Kept here as a reference in case any of these resources need to be revisited or migrated.
 
-```
-INFO: Creating new user with email: john@example.com
-INFO: Account verification url http://localhost:8080/... sent to user with email: john@example.com
-INFO: Getting role to user with ID 1
-INFO: Building UserPrincipal for user with email: john@example.com and id: 1
-INFO: Password reset verification url http://localhost:8080/... sent to user with email: john@example.com
-INFO: Password successfully reset for user with email: john@example.com
-INFO: Account successfully verified for user with email: john@example.com
-```
+**Live URL (may be inactive):** `https://angularspringbootfullstack-ehd6dkevc3edgxer.centralus-01.azurewebsites.net`
 
----
+### Azure Resources (subscription: `Azure subscription 1`, resource group: `bobsresourcegroup`)
 
-## 📖 Documentation
+| Resource | Name | Purpose |
+|---|---|---|
+| Container Registry | `bobsAngularApp` | Stores Docker images |
+| App Service | `angularSpringBootFullStack` | Runs the container |
+| ACR Login Server | `bobsangularapp-cnh8fzfxasa6feav.azurecr.io` | Image registry endpoint |
 
-For detailed technical documentation, see:
+### Database: Aiven MySQL (free tier)
 
-- **SPRING_SECURITY_DETAILED_GUIDE.md** - Complete Spring Security explanation
-- **DOCUMENTATION_SUMMARY.md** - Overview of all documented files
-- **DOCUMENTATION_INDEX.md** - Navigation guide for architecture
-- **REFACTORING_COMPLETE_SUMMARY.md** - Summary of improvements
-- **FRONTEND_DOCUMENTATION_SETUP.md** - Angular setup guide
+| Setting | Value |
+|---|---|
+| Host | `bobbylonsdb-bobbylon.a.aivencloud.com` |
+| Port | `11275` |
+| Schema | `db2` |
+| User | `avnadmin` |
 
----
+To recreate the schema from scratch, run `src/main/resources/schema.sql` via MySQL Workbench connected to Aiven. Seed data (roles + events) is included in that file.
 
-## 🛠️ Development
+### App Service Environment Variables
 
-### Build Project
+Set in **Portal > App Service > Configuration > Environment Variables > App Settings:**
 
-```powershell
-.\mvnw.cmd clean package
-```
+| Name | Value |
+|---|---|
+| `SPRING_DATASOURCE_URL` | `jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/db2?useSSL=true&requireSSL=true` |
+| `SPRING_DATASOURCE_USERNAME` | `avnadmin` |
+| `SPRING_DATASOURCE_PASSWORD` | *(Aiven password — check Aiven dashboard)* |
 
-### Run Tests
+### Azure DevOps Pipeline (`azure-pipelines.yml`)
 
-```powershell
-.\mvnw.cmd test
-```
+Triggered automatically on every push to `master`. Two stages:
 
-### Generate Javadoc
+1. **Build and Push to ACR** — Docker multi-stage build, pushes image tagged with build ID + `latest`
+2. **Deploy to App Service** — Pulls new image from ACR and restarts the App Service
 
-```powershell
-.\mvnw.cmd javadoc:javadoc
+**Service Connections** (Azure DevOps > Project Settings > Service Connections):
+
+| Name | Type | Points to |
+|---|---|---|
+| `bobsDockerRegistryServiceConnection` | Docker Registry | `bobsAngularApp` ACR |
+| `bobsAzureServiceConnection` | Azure Resource Manager | `Azure subscription 1` |
+
+### How to Redeploy to Azure
+
+```bash
+git add .
+git commit -m "your message"
+git push
+# Pipeline triggers automatically — monitor at Azure DevOps > Pipelines
 ```
 
 ---
 
-## 🔧 Troubleshooting
+## Disclaimer
 
-### Port 8080 Already in Use
-
-```powershell
-# Change port in application.yaml
-server:
-  port: 8081
-```
-
-# Requirements:
-
-Java 21 or higher
-Node.js 18 or higher
-Angular CLI 20 or higher
-PostgreSQL
-
-# Steps:
-
-1. Set up the Spring Boot backend:
-    - Create a new Spring Boot project using Spring Initializr (https://start.spring.io/).
-    - Add dependencies for Spring Web, Spring Data JPA, and PostgreSQL Driver.
-    - Configure the application.properties file to connect to your PostgreSQL database.
-    - Create entities, repositories, and controllers for your backend API.
-    - Run the Spring Boot application to ensure it's working correctly.
-2. Set up the Angular frontend:
-    - Create a new Angular project using Angular CLI (https://angular.io/cli).
-    - Generate components, services, and models for your frontend application.
-    - Use HttpClient to make API calls to your Spring Boot backend.
-    - Implement routing and UI components to display data from the backend.
-    - Run the Angular application to ensure it's working correctly.
-3. Creating the database:
-    - Use PostgreSQL to create a new database for your application.
-    - Create tables and insert sample data as needed for your application.
-
-I DON'T OWN ANY OF THE IMAGES IN THIS PROJECT. ALL IMAGES ARE OWNED BY THEIR RESPECTIVE COPYRIGHT HOLDERS. THIS PROJECT
-IS FOR EDUCATIONAL PURPOSES ONLY AND NOT FOR COMMERCIAL USE. IMAGES WERE TAKEN FROM UNSPLASH.COM. THIS PROJECT FOLLOWS
-THE "Full Stack Spring Boot API with Angular(ADVANCED)" COURSE ON Udemy by instructor Junior from GetArrays. HE MAY ALSO
-USE SNIPPETS FROM OTHER LOCATIONS, SUCH AS 'bootdey.com/snippets/view/bs4-invoice'. THANK YOU!
+Images used in this project are from Unsplash.com. This project is for educational purposes only and is not intended for commercial use. Based on the "Full Stack Spring Boot API with Angular (ADVANCED)" course on Udemy by Junior (GetArrays).

@@ -51,15 +51,73 @@
 #    org.hibernate: DEBUG
 #debug: true
 
+# This is the MySQL config, following the tutorial.
+jwt:
+  secret: ${JWT_SECRET}
+  # myCrazySecretSecretKey
+  #jwt.secret: ${JWT_SECRET}
 
-# here we can just define what profile we want to use - either application-dev, prod, etc. and Spring Boot will know which profile to use!
+server:
+  port: ${CONTAINER_PORT:8080}
+
 spring:
   profiles:
-    active: @spring.profiles.active@
-application:
-  title: Spring Boot Angular Full Stack Application
-  version: v1.0
-
+    active: ${SPRING_ACTIVE_PROFILES:dev}  # Use SPRING_PROFILES_ACTIVE env var if set, otherwise default to "dev"
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        globally_quoted_identifiers: true
+        format_sql: true
+    generate-ddl: true
+  sql:
+    init:
+      # "never" means schema.sql is NOT run on startup — existing DB is used as-is.
+      # To apply schema changes (new columns, tables, etc.), either:
+      #   1. Run ALTER TABLE manually in your DB client, OR
+      #   2. Temporarily set the mode to "always", restart, then set back to "never".
+      # WARNING: "always" drops and recreates all tables, wiping all existing data.
+      mode: never
+      continue-on-error: true
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  web:
+    error:
+      path: /user/error
+      whitelabel:
+        enabled: false
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    # Username and password come from the MAIL_USERNAME / MAIL_PASSWORD environment
+    # variables — see README "Configure Email Environment Variables" for setup.
+    # NEVER hardcode the Gmail app password here; it will end up in git history.
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          writetimeout: 5000
+          timeout: 5000
+          connectiontimeout: 5000
+          auth: true
+          starttls:
+            enable: true
+            required: true
+    verify:
+      host: ${VERIFY_EMAIL_HOST}
+#logging:
+#  level:
+#    "[org.springframework.security, org.springframework.boot, org.hibernate]": DEBUG
+#
 #logging:
 #  level:
 #    org.springframework.security: DEBUG
@@ -68,6 +126,10 @@ application:
 #    org.hibernate: DEBUG
 #  pattern:
 #    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n"
+
+ui:
+  app:
+    url: ${UI_APP_URL:http://localhost:4200}  # Use UI_APP_URL env var if set, otherwise default to http://localhost:3000
 
 management:
   endpoints:

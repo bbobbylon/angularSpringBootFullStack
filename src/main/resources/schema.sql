@@ -121,6 +121,17 @@ CREATE TABLE ResetPasswordVerifications
     CONSTRAINT UQ_ResetPasswordVerifications_Url UNIQUE (url)
 );
 
+DROP TABLE IF EXISTS invoiceserviceitems;
+
+CREATE TABLE invoiceserviceitems
+(
+    id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    invoice_id BIGINT UNSIGNED NOT NULL,
+    item_order INT             NOT NULL DEFAULT 0,
+    name       VARCHAR(255)             DEFAULT NULL,
+    price      DECIMAL(38, 2)           DEFAULT NULL
+);
+
 DROP TABLE IF EXISTS twofactorverifications;
 
 CREATE TABLE twofactorverifications

@@ -51,6 +51,7 @@ public class Invoice {
      */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "invoiceserviceitems", joinColumns = @JoinColumn(name = "invoice_id"))
+    @OrderColumn(name = "item_order")
     private List<InvoiceLineItem> services = new ArrayList<>();
     /**
      * The billed amount for this invoice in the application's default currency.
