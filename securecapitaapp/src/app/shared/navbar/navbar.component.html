@@ -1,9 +1,9 @@
 <!-- Navigation-->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<nav class="navbar navbar-expand-lg sc-navbar">
   <div class="container">
-    <a [routerLink]="['/']" class="navbar-brand">
-      <i class="bi bi-safe" style="margin-right: 5px;"></i>
-      A Cool Application
+    <a [routerLink]="['/']" class="navbar-brand sc-brand">
+      <span class="sc-brand__mark"><i class="bi bi-shield-lock-fill"></i></span>
+      <span class="sc-brand__text">Secure<span class="sc-brand__accent">Capita</span></span>
     </a>
     <button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"
             class="navbar-toggler" data-bs-target="#navbarSupportedContent" data-bs-toggle="collapse"
@@ -70,6 +70,14 @@
               style="padding-right: 8px;"></i>Logout</a>
             </li>
           </ul>
+        </li>
+        <li class="nav-item d-flex align-items-center ms-lg-2">
+          <button (click)="toggleTheme()" class="sc-theme-toggle" type="button"
+                  [attr.aria-label]="theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+                  [title]="theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'">
+            <i class="bi" [class.bi-sun-fill]="theme() === 'dark'"
+               [class.bi-moon-stars-fill]="theme() === 'light'"></i>
+          </button>
         </li>
       </ul>
     </div>

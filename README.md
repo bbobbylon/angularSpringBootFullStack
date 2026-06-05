@@ -11,7 +11,7 @@ A full-stack application combining **Angular 21** (frontend) and **Spring Boot 4
 | Frontend | Angular 21, Bootstrap 5, ngx-toastr |
 | Backend | Spring Boot 4, Spring Security 7, Hibernate 7 |
 | Database | MySQL 8.4 |
-| Auth | JWT (access + refresh tokens), 2FA via email |
+| Auth | JWT (access + refresh tokens), 2FA via SMS (Twilio — stubbed in dev, code logged) |
 | Runtime | Java 21, Node 22 |
 | Container | Docker (multi-stage build) |
 
@@ -38,17 +38,17 @@ git clone <repo-url>
 cd angularSpringBootFullStack
 ```
 
-Copy the example env file and fill in your values:
+There is no committed env template — `.env` is gitignored and never checked in. Create one at the project root:
 
 ```bash
 # Git Bash / WSL
-cp .env.example .env
+touch .env
 
 # PowerShell
-Copy-Item .env.example .env
+New-Item -ItemType File .env
 ```
 
-Open `.env` and set at minimum:
+Open `.env` and set at minimum (see the full **Environment Variables Reference** below for every variable):
 
 ```dotenv
 MYSQL_ROOT_PASSWORD=your-root-password
@@ -75,7 +75,7 @@ openssl rand -base64 48
 
 ### 2. Run the application
 
-Everything is controlled by a single script at the project root. Open `.env` or `start.sh` and check the `ENV` variable at the top — then run:
+Everything is controlled by a single script at the project root. Open `start.sh` and check the two toggles at the top — `ENV` (`local` | `docker`) and `DB` (`local` | `aiven`) — then run:
 
 ```bash
 chmod +x start.sh
@@ -92,18 +92,24 @@ There are two modes. Change `ENV=local` to `ENV=docker` at the top of `start.sh`
 ENV=local   ← default
 ```
 
-- MySQL starts in Docker (no local MySQL install needed)
 - Spring Boot runs natively via Maven (hot-restart via Spring DevTools)
 - Angular runs via `ng serve` (instant hot-reload)
+
+In local mode a second toggle, **`DB`** (top of `start.sh`), chooses the database:
+
+| `DB` value | Behaviour | Requires |
+|---|---|---|
+| `local` (default) | Starts a MySQL **Docker container** and waits for it to be healthy. No local MySQL install needed. | Docker running |
+| `aiven` | **Skips the Docker container** and connects local Spring Boot directly to **Aiven cloud MySQL** — handy for developing against real cloud data. | `AIVEN_DB_*` vars set in `.env` (see reference below) |
 
 **Access the app at: `http://localhost:4200`**
 
 What happens when you run `./start.sh`:
 1. Loads `.env` into the shell environment
-2. Starts the MySQL Docker container and waits for it to be healthy
+2. **If `DB=local`:** starts the MySQL Docker container and waits for it to be healthy. **If `DB=aiven`:** overrides the datasource to Aiven cloud MySQL and skips Docker entirely
 3. Starts Spring Boot (`mvn spring-boot:run`) in background
 4. Starts Angular dev server (`ng serve`) in background
-5. Press **Ctrl+C** to stop all three services cleanly
+5. Press **Ctrl+C** to stop all services cleanly
 
 ---
 
@@ -144,11 +150,27 @@ All configuration lives in `.env` at the project root. IntelliJ loads it via **R
 | `APP_PORT` | Host port mapped to container (Docker mode) | `8090` |
 | `MAIL_USERNAME` | Gmail address for outgoing email | *(required)* |
 | `MAIL_PASSWORD` | Gmail App Password | *(required)* |
+| `MAIL_HOST` | SMTP host | `smtp.gmail.com` |
+| `MAIL_PORT` | SMTP port | `587` |
 | `VERIFY_EMAIL_HOST` | Base URL for email verification links | `http://localhost:8080` |
 | `UI_APP_URL` | Angular app URL (used for CORS) | `http://localhost:4200` |
 | `SPRING_ACTIVE_PROFILES` | Spring profile (`dev` or `prod`) | `dev` |
 
-> **Never commit `.env`** — it is gitignored. Commit `.env.example` with placeholder values instead.
+> **Never commit `.env`** — it is gitignored (both `.env` and `.env.*` are excluded). There is no committed template; create `.env` by hand from this table.
+
+#### Local-against-Aiven mode (`DB=aiven`)
+
+These are read **only** when you set `DB=aiven` at the top of `start.sh` (see Mode 1 above). The script uses them to assemble the JDBC URL and point local Spring Boot at Aiven cloud MySQL instead of the Docker container.
+
+| Variable | Description |
+|---|---|
+| `AIVEN_DB_HOST` | Aiven MySQL hostname |
+| `AIVEN_DB_PORT` | Aiven MySQL port |
+| `AIVEN_DB_NAME` | Schema name |
+| `AIVEN_DB_USERNAME` | Aiven DB user |
+| `AIVEN_DB_PASSWORD` | Aiven DB password |
+
+> **SMS 2FA is stubbed:** `TWILIO_FROM_NUMBER`, `TWILIO_ACCOUNT_SID`, and `TWILIO_AUTH_TOKEN` exist in `.env` for the SMS-based 2FA flow, but the actual send is commented out in `NotificationServiceImpl.sendTwoFactorCode` to avoid Twilio charges — when 2FA is enabled the code is just **logged to the server console**, not delivered. (Account-verification and password-reset emails *do* send for real via `JavaMailSender`; those are not 2FA.) Separately, `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` can override the assembled MySQL datasource directly (this is the override path Docker mode and the Aiven path rely on).
 
 ---
 
@@ -171,9 +193,8 @@ angularSpringBootFullStack/
 │       └── guard/              # Route authentication guards
 ├── Dockerfile                  # Multi-stage: Node 22 → Maven 21 → JRE 21 Alpine
 ├── docker-compose.yml          # MySQL + app services
-├── start.sh                    # Unified startup script (local | docker)
-├── .env                        # Your local secrets (gitignored)
-└── .env.example                # Template — copy to .env and fill in values
+├── start.sh                    # Unified startup script (ENV: local | docker, DB: local | aiven)
+└── .env                        # Your local secrets (gitignored; not committed)
 ```
 
 ---

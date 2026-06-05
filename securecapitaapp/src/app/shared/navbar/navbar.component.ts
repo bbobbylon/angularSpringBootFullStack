@@ -3,6 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 import { UserService } from '../../service/user.service';
 import { UserInterface } from '../../interface/user.interface';
 import { NgOptimizedImage } from '@angular/common';
+import { ThemeService } from '../../service/theme.service';
 
 /**
  * Top navigation bar component.
@@ -33,6 +34,21 @@ export class NavbarComponent {
   @Input() user: UserInterface | undefined;
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
+  private readonly themeService = inject(ThemeService);
+
+  /**
+   * The active color mode, exposed for the toggle button's icon and labels.
+   * Reads the shared signal from {@link ThemeService}.
+   */
+  protected readonly theme = this.themeService.theme;
+
+  /**
+   * Flips the application between dark and light mode via {@link ThemeService},
+   * which updates the {@code data-bs-theme} attribute and persists the choice.
+   */
+  protected toggleTheme(): void {
+    this.themeService.toggle();
+  }
 
   /**
    * Clears both JWT tokens from localStorage and navigates to the login screen,

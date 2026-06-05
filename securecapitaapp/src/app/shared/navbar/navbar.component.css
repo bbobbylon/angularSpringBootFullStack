@@ -1,3 +1,87 @@
 :host {
   display: block;
 }
+
+/* Sticky frosted-glass navigation bar. Color tokens come from the global
+   design-token layer (styles.css), so it adapts to dark/light automatically. */
+.sc-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-bottom: 1px solid var(--hairline);
+
+  /* Bootstrap navbar variables, themed */
+  --bs-navbar-color: var(--text-muted);
+  --bs-navbar-hover-color: var(--text-strong);
+  --bs-navbar-active-color: var(--text-strong);
+  --bs-navbar-toggler-border-color: var(--hairline-strong);
+  --bs-navbar-toggler-focus-width: 3px;
+}
+
+/* Brand lockup: gradient mark + wordmark */
+.sc-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+.sc-brand:hover {
+  color: var(--text-strong);
+}
+.sc-brand__mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #fff;
+  font-size: 1rem;
+  box-shadow: var(--shadow-glow);
+}
+.sc-brand__accent {
+  color: var(--accent);
+}
+
+/* Nav links */
+.sc-navbar .nav-link {
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color var(--dur) var(--ease-out);
+}
+.sc-navbar .nav-link:hover,
+.sc-navbar .nav-link:focus {
+  color: var(--text-strong);
+}
+
+/* Theme toggle */
+.sc-theme-toggle {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 1rem;
+  transition:
+    color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+}
+.sc-theme-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent-ring);
+  box-shadow: 0 0 0 4px var(--accent-bg);
+  transform: rotate(-12deg) scale(1.05);
+}

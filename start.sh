@@ -24,7 +24,7 @@
 #    ./start.sh
 # ═══════════════════════════════════════════════════════════════════
 ENV=local
-DB=aiven   # aiven | local
+DB=local   # aiven | local
 
 # ── Internal config ────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
