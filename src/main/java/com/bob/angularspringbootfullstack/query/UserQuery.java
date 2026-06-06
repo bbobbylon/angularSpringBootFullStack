@@ -26,9 +26,18 @@ public class UserQuery {
     public static final String COUNT_USER_EMAIL_QUERY = "SELECT COUNT(*) FROM users WHERE email = :email";
 
     /**
-     * Inserts an account verification record.
-     * Stores the verification URL linked to a user for account activation flow.
-     * Parameters: userId, url
+     * Inserts an account verification record for the account-activation flow.
+     * <p>
+     * NOTE: across all verification queries below, the {@code url} column stores a <b>bare UUID
+     * key</b>, not a full URL. The host-bearing link is built for the email only (see
+     * {@code UserRepoImpl#getVerificationURL}); keeping the host out of the persisted key makes
+     * verification lookups host-independent.
+     * <p>
+     * TODO: rename the {@code url} column to {@code verification_key} to match its contents. That
+     *  requires a DB migration applied to the live local + Aiven databases plus schema.sql,
+     *  psqlschema.sql and aivendatabase.sql — intentionally deferred as a follow-up.
+     * <p>
+     * Parameters: userId, url (the bare key)
      */
     public static final String INSERT_ACCOUNT_VERIFICATION_URL_QUERY = "INSERT INTO accountverifications (user_id, url) VALUES (:userId, :url)";
 
@@ -82,14 +91,9 @@ public class UserQuery {
      * Selects a user by password reset verification URL. Parameter: url.
      */
     public static final String SELECT_USER_BY_PASSWORD_URL_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM resetpasswordverifications WHERE url = :url)";
-    /**
-     * Updates a user's password via password reset verification URL. Parameters: password, url.
-     */
-    public static final String UPDATE_USER_PASSWORD_BY_URL_QUERY = "UPDATE users SET password = :password WHERE id = (SELECT user_id FROM resetpasswordverifications WHERE url = :url)";
-    /**
-     * Deletes a password reset verification row by URL. Parameter: url.
-     */
-    public static final String DELETE_VERIFICATION_BY_URL_QUERY = "DELETE FROM resetpasswordverifications WHERE url = :url";
+    // (UPDATE_USER_PASSWORD_BY_URL_QUERY / DELETE_VERIFICATION_BY_URL_QUERY removed — both were dead code.
+    //  The reset flow keys off userID: it updates via UPDATE_USER_PASSWORD_BY_ID_QUERY and deletes the
+    //  row via DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY.)
 
     /**
      * Selects a user by account verification URL. Parameter: url.

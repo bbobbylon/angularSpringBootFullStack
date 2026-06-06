@@ -102,6 +102,9 @@ CREATE TABLE accountverifications
 (
     id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
+    -- `url` stores a bare UUID verification key (NOT a full URL). The app builds the clickable
+    -- link from it for the email only. TODO: rename to `verification_key` to match its contents
+    -- (coordinate schema.sql / psqlschema.sql / aivendatabase.sql with a live local + Aiven migration).
     url     VARCHAR(255)    NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT UQ_AccountVerifications_User_Id UNIQUE (user_id),
@@ -114,6 +117,8 @@ CREATE TABLE ResetPasswordVerifications
 (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id         BIGINT UNSIGNED NOT NULL,
+    -- `url` stores a bare UUID verification key (NOT a full URL); see accountverifications above.
+    -- TODO: rename to `verification_key` (requires a coordinated DB migration on local + Aiven).
     url             VARCHAR(255)    NOT NULL,
     expiration_date DATETIME        NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
