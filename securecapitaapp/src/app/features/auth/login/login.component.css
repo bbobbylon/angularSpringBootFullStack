@@ -1,0 +1,8 @@
+/* ============================================================================
+   Login / MFA — the "access console" layout is shared by all auth screens and
+   now lives in the AUTH SCREENS section of src/styles.css (used by login,
+   register, verify, reset-password). Only host-level display stays scoped here.
+   ============================================================================ */
+:host {
+  display: block;
+}

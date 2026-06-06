@@ -26,6 +26,12 @@
 ENV=local
 DB=local   # aiven | local
 
+# Auto-open the app in your default browser once it's responding (true | false).
+# OPEN_BROWSER_TIMEOUT caps how long to wait for the server before giving up —
+# raise it for first-time `docker` builds (they compile the Angular app + JAR).
+OPEN_BROWSER=true
+OPEN_BROWSER_TIMEOUT=180
+
 # ── Internal config ────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
@@ -38,6 +44,50 @@ GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; RED='\033[0;31m'; NC
 log()  { echo -e "${GREEN}[start.sh]${NC} $1"; }
 warn() { echo -e "${YELLOW}[start.sh]${NC} $1"; }
 err()  { echo -e "${RED}[start.sh]${NC} $1" >&2; exit 1; }
+
+# ── Browser auto-open ──────────────────────────────────────────────
+# open_browser <url> — best-effort, cross-platform (Git Bash/MSYS, WSL,
+# macOS, native Linux). Never fails the script.
+open_browser() {
+  local url="$1"
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      powershell.exe -NoProfile -Command "Start-Process '$url'" >/dev/null 2>&1 \
+        || start "" "$url" >/dev/null 2>&1 || true ;;
+    Linux*)
+      if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
+        powershell.exe -NoProfile -Command "Start-Process '$url'" >/dev/null 2>&1 \
+          || cmd.exe /c start "" "$url" >/dev/null 2>&1 || true
+      else
+        xdg-open "$url" >/dev/null 2>&1 || true
+      fi ;;
+    Darwin*) open "$url" >/dev/null 2>&1 || true ;;
+    *) warn "Don't know how to open a browser on '$(uname -s)' — visit $url manually." ;;
+  esac
+}
+
+# wait_and_open <url> — polls (in the background) until the URL responds, then
+# opens it. Honors OPEN_BROWSER and the OPEN_BROWSER_TIMEOUT cap; falls back to a
+# short fixed wait if curl isn't installed.
+wait_and_open() {
+  local url="$1"
+  [[ "$OPEN_BROWSER" == "true" ]] || return 0
+  if command -v curl >/dev/null 2>&1; then
+    local waited=0
+    until curl -s -o /dev/null --max-time 3 "$url"; do
+      sleep 2
+      waited=$((waited + 2))
+      if [[ $waited -ge $OPEN_BROWSER_TIMEOUT ]]; then
+        warn "App didn't respond at $url within ${OPEN_BROWSER_TIMEOUT}s — open it manually."
+        return 0
+      fi
+    done
+  else
+    sleep 15  # no curl — best-effort fixed wait for the server to come up
+  fi
+  log "Opening $url in your default browser..."
+  open_browser "$url"
+}
 
 # ═══════════════════════════════════════════════════════════════════
 #  LOCAL MODE
@@ -115,12 +165,18 @@ start_local() {
   log "  Press Ctrl+C to stop all services."
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+  # Open the frontend in the browser once it's actually serving (backgrounded;
+  # never blocks). Lands on the base URL, which redirects to /login when signed out.
+  wait_and_open "http://localhost:4200" &
+  BROWSER_PID=$!
+
   # ── Cleanup ──────────────────────────────────────────────────────
   cleanup() {
     echo ""
     warn "Shutting down Spring Boot and Angular..."
     kill "$SPRING_PID" 2>/dev/null || true
     kill "$ANGULAR_PID" 2>/dev/null || true
+    kill "$BROWSER_PID" 2>/dev/null || true
     if [[ "$DB" == "local" ]]; then
       docker compose stop mysql
     fi
@@ -144,6 +200,17 @@ start_docker() {
   log "Building and starting full Docker Compose stack..."
   log "(Angular will be compiled into the Spring Boot JAR — this may take a few minutes)"
   cd "$SCRIPT_DIR"
+
+  # Published host port (compose maps ${APP_PORT:-8090}:8080). Read straight from
+  # .env without sourcing, so URL values containing '&' aren't mangled by the shell.
+  local app_port
+  app_port="$(grep -E '^[[:space:]]*APP_PORT=' "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d '[:space:]')"
+  # Open the app once it responds; backgrounded so it never blocks the build, and
+  # killed on exit so the poller doesn't linger after Ctrl+C.
+  wait_and_open "http://localhost:${app_port:-8090}" &
+  BROWSER_PID=$!
+  trap 'kill "$BROWSER_PID" 2>/dev/null || true' EXIT
+
   docker compose up --build
 }
 

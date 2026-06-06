@@ -7,6 +7,7 @@ import { CustomHttpResponseInterface } from '../interface/customhttpresponse.int
 import { UserInterface } from '../interface/user.interface';
 import { Key } from '../enumeration/key.enumeration';
 import { JwtHelperService } from '@auth0/angular-jwt';
+import { HttpCacheService } from './http-cache.service';
 
 /**
  * Central HTTP service for all user-related API calls.
@@ -22,6 +23,7 @@ import { JwtHelperService } from '@auth0/angular-jwt';
 })
 export class UserService {
   private http = inject(HttpClient);
+  private readonly httpCache = inject(HttpCacheService);
   private jwtHelper = new JwtHelperService();
   private readonly server: string = 'http://localhost:8080';
 
@@ -246,9 +248,22 @@ export class UserService {
   isAuthenticated = (): boolean =>
     !!this.jwtHelper.decodeToken<string>(localStorage.getItem(Key.TOKEN) ?? '') && !this.jwtHelper.isTokenExpired(localStorage.getItem(Key.TOKEN) ?? '');
 
+  /**
+   * Ends the user's session by clearing both JWT tokens from localStorage AND
+   * evicting the in-memory HTTP cache.
+   *
+   * The cache eviction is essential for correctness and security. {@link HttpCacheService}
+   * (populated by {@code cacheInterceptor}) keys GET responses by URL and is not cleared
+   * on logout by default; the subsequent {@code /user/login} POST is in the interceptor's
+   * {@code bypassRoutes}, so it never triggers the usual mutation-based eviction either.
+   * Without this call, a different user signing in within the same SPA session (no full
+   * page reload) could be served the previous user's cached {@code /user/profile} data —
+   * a cross-session data leak that directly violates the app's zero-trust posture.
+   */
   logOut() {
     localStorage.removeItem(Key.TOKEN);
     localStorage.removeItem(Key.REFRESH_TOKEN);
+    this.httpCache.evictAll();
   }
 
   /**

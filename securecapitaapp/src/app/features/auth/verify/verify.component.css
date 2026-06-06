@@ -1,68 +1,8 @@
-.invalid-feedback {
-  color: red;
-}
-
-.cart {
-  height: 100vh
-}
-
-.progresses {
-  display: flex;
-  align-items: center
-}
-
-.line {
-  width: 76px;
-  height: 6px;
-  background: #63d19e
-}
-
-.steps {
-  display: flex;
-  background-color: #63d19e;
-  color: #fff;
-  font-size: 12px;
-  width: 30px;
-  height: 30px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%
-}
-
-.check1 {
-  display: flex;
-  background-color: #63d19e;
-  color: #fff;
-  font-size: 17px;
-  width: 60px;
-  height: 60px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  margin-bottom: 10px
-}
-
-.check2 {
-  display: flex;
-  background-color: #d40909;
-  color: #fff;
-  font-size: 17px;
-  width: 60px;
-  height: 60px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  margin-bottom: 10px
-}
-
-.invoice-link {
-  font-size: 15px
-}
-
-.order-button {
-  height: 50px
-}
-
-.background-muted {
-  background-color: #fafafc
+/* ============================================================================
+   Verify — reuses the shared "access console" styles from the AUTH SCREENS
+   section of src/styles.css (the same layout used by login, register, and
+   reset-password). Only host-level display is component-scoped here.
+   ============================================================================ */
+:host {
+  display: block;
 }

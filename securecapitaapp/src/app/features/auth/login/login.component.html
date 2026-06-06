@@ -1,131 +1,188 @@
-<section>
-  @if (loginState(); as state) {
-    <!-- Login Form When Not Using MFA -->
-    @if (!state.loginSuccess && !state.isUsingMfa) {
-      <div class="container">
-        <div class="row justify-content-center my-5">
-          <div class="col-md-6" style="margin-top: 50px">
-            <div class="card">
-              <div class="card-body">
-                <div class="text-center">
-                  <h2>
-                    <i class="bi bi-safe" style="margin-right: 5px"></i>
-                    SecureCapita
-                  </h2>
-                  <h5 class="card-title mt-4 mb-5">Account Login</h5>
-                </div>
-                @if (state.dataState === DataState.ERROR) {
-                  <div class="alert alert-danger bg-danger text-light border-0 alert-dismissible fade show"
-                       role="alert">
-                    {{ state.error }}
-                    <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
-                            type="button"></button>
-                  </div>
-                }
-                <form #loginForm="ngForm" (ngSubmit)="login(loginForm)">
-                  <div class="form-outline mb-4">
-                    <label class="form-label" for="email">Email Address</label>
-                    <input [disabled]="state.dataState === DataState.LOADING" class="form-control" name="email" ngModel
-                           required type="email" />
-                  </div>
-                  <div class="form-outline mb-4">
-                    <label class="form-label" for="password">Password</label>
-                    <input [disabled]="state.dataState === DataState.LOADING" class="form-control" name="password" ngModel
-                           required type="password" />
-                  </div>
-                  <div class="d-flex justify-content-center mb-4">
-                    <button
-                      [disabled]="state.dataState === DataState.LOADING || loginForm.invalid || loginForm.pristine"
-                      class="btn btn-primary"
-                      type="submit">
-                      @if (state.dataState === DataState.LOADING) {
-                        <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                              style="margin-right: 5px"></span>
-                        <span>Loading...</span>
-                      } @else {
-                        <span>Log in</span>
-                      }
-                    </button>
-                  </div>
-                </form>
-                <div class="row mb-4">
-                  <div class="col d-flex justify-content-center">
-                    <a [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'"
-                       routerLink="/register">Create an Account</a>
-                  </div>
-                  <div class="col">
-                    <a [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'"
-                       routerLink="/resetpassword">
-                      Forgot password?
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    }
+<!--
+  Login / MFA — "access console" (M1 auth polish).
 
-    <!-- MFA Verification Form -->
-    @if (state.isUsingMfa) {
-      <div class="container">
-        <div class="row justify-content-center my-5">
-          <div class="col-md-6" style="margin-top: 50px">
-            <div class="card">
-              <div class="card-body">
-                <div class="text-center">
-                  <h2>
-                    <i class="bi bi-safe" style="margin-right: 5px"></i>
-                    SecureCapita
-                  </h2>
-                  <h5 class="card-title mt-4 mb-4">Verification Code Sent To ...{{ state.phone }}</h5>
-                  <i class="bi bi-check-circle-fill" style="font-size: 30px; color: green"></i>
-                  <p class="mt-2" style="font-size: 20px">Please access your SMS and enter the code.</p>
-                </div>
-                @if (state.dataState === DataState.ERROR) {
-                  <div class="alert alert-danger bg-danger text-light border-0 alert-dismissible fade show"
-                       role="alert">
-                    {{ state.error }}
-                    <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
-                            type="button"></button>
-                  </div>
-                }
-                <form #verifyCodeForm="ngForm" (ngSubmit)="verifyCode(verifyCodeForm)">
-                  <div class="form-outline mb-4">
-                    <label class="form-label" for="code">Verification Code</label>
-                    <input [disabled]="state.dataState === DataState.LOADING" class="form-control" name="code" ngModel
-                           required type="text" />
-                  </div>
-                  <div class="d-flex justify-content-center mb-4">
-                    <button
-                      [disabled]="state.dataState === DataState.LOADING || verifyCodeForm.invalid || verifyCodeForm.pristine"
-                      class="btn btn-primary"
-                      type="submit">
-                      @if (state.dataState === DataState.LOADING) {
-                        <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                              style="margin-right: 5px"></span>
-                        <span>Loading...</span>
-                      } @else {
-                        <span>Verify Code</span>
-                      }
-                    </button>
-                  </div>
-                </form>
-                <div class="row mb-4">
-                  <div class="col d-flex justify-content-center">
-                    <button (click)="loginPage()" class="btn btn-link p-0" type="button">Account Login</button>
-                  </div>
-                  <div class="col">
-                    <a [routerLink]="['/register']" style="color: #0d6efd; text-decoration: underline; cursor: pointer">Create
-                      an account</a>
-                  </div>
-                </div>
-              </div>
+  Full-bleed two-panel layout: a branded zero-trust security console on the left
+  and the credential / MFA form on the right. All view state still flows through
+  the `loginState()` signal and `DataState`; every form binding (ngModel names,
+  ngSubmit handlers, disabled guards, routerLinks) is preserved from the original
+  so the component's TypeScript contract is untouched — only markup/styling changed.
+-->
+<div class="sc-auth">
+
+  <!-- ── Left: branded security console (decorative + trust signals) ───────── -->
+  <aside class="sc-auth__aside">
+    <div class="sc-auth__aside-inner">
+      <a class="sc-auth__brand" routerLink="/login">
+        <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+        <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+      </a>
+
+      <div class="sc-auth__lede">
+        <p class="eyebrow sc-reveal" style="--d: 0ms">Zero-trust identity platform</p>
+        <h1 class="sc-auth__headline sc-reveal" style="--d: 60ms">Secure access,<br />by design.</h1>
+        <p class="sc-auth__sub sc-reveal" style="--d: 120ms">
+          Every sign-in is cryptographically signed, device-aware, and written to an
+          immutable audit trail.
+        </p>
+      </div>
+
+      <ul class="sc-trust">
+        <li class="sc-trust__item sc-reveal" style="--d: 220ms">
+          <i class="bi bi-fingerprint"></i>
+          <div>
+            <span class="sc-trust__title">HMAC-SHA512 signed tokens</span>
+            <span class="sc-trust__meta">Stateless JWT · 30-min access</span>
+          </div>
+        </li>
+        <li class="sc-trust__item sc-reveal" style="--d: 280ms">
+          <i class="bi bi-lock-fill"></i>
+          <div>
+            <span class="sc-trust__title">BCrypt-hashed credentials</span>
+            <span class="sc-trust__meta">Never stored in plaintext</span>
+          </div>
+        </li>
+        <li class="sc-trust__item sc-reveal" style="--d: 340ms">
+          <i class="bi bi-broadcast-pin"></i>
+          <div>
+            <span class="sc-trust__title">Device &amp; IP audit</span>
+            <span class="sc-trust__meta">Logged on every security event</span>
+          </div>
+        </li>
+        <li class="sc-trust__item sc-reveal" style="--d: 400ms">
+          <i class="bi bi-patch-check-fill"></i>
+          <div>
+            <span class="sc-trust__title">Multi-factor ready</span>
+            <span class="sc-trust__meta">One-time verification codes</span>
+          </div>
+        </li>
+      </ul>
+
+      <div class="sc-auth__status sc-reveal" style="--d: 480ms">
+        <span class="sc-pulse"></span>
+        <span class="mono">Zero-trust gateway · operational</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Right: the form (swaps between credentials and MFA) ───────────────── -->
+  <main class="sc-auth__main">
+    @if (loginState(); as state) {
+
+      <!-- Credentials -->
+      @if (!state.loginSuccess && !state.isUsingMfa) {
+        <div class="sc-auth__form sc-reveal" style="--d: 80ms">
+          <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
+            <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+            <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+          </a>
+
+          <p class="eyebrow">Account access</p>
+          <h2 class="sc-auth__title">Welcome back</h2>
+          <p class="sc-auth__hint">Enter your credentials to continue to your console.</p>
+
+          @if (state.dataState === DataState.ERROR) {
+            <div class="alert sc-alert alert-dismissible fade show" role="alert">
+              <i class="bi bi-exclamation-octagon-fill"></i>
+              <span>{{ state.error }}</span>
+              <button aria-label="Close" class="btn-close" data-bs-dismiss="alert" type="button"></button>
             </div>
+          }
+
+          <form #loginForm="ngForm" (ngSubmit)="login(loginForm)" class="sc-form" novalidate>
+            <div class="sc-field">
+              <label class="form-label" for="email">Email address</label>
+              <span class="sc-field__icon"><i class="bi bi-envelope"></i></span>
+              <input id="email" name="email" ngModel required type="email"
+                     autocomplete="email" placeholder="you@company.com"
+                     [disabled]="state.dataState === DataState.LOADING"
+                     class="form-control sc-input" />
+            </div>
+
+            <div class="sc-field">
+              <label class="form-label" for="password">Password</label>
+              <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
+              <input id="password" name="password" ngModel required type="password"
+                     autocomplete="current-password" placeholder="Your password"
+                     [disabled]="state.dataState === DataState.LOADING"
+                     class="form-control sc-input" />
+            </div>
+
+            <button
+              [disabled]="state.dataState === DataState.LOADING || loginForm.invalid || loginForm.pristine"
+              class="btn btn-primary sc-submit" type="submit">
+              @if (state.dataState === DataState.LOADING) {
+                <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Verifying…</span>
+              } @else {
+                <span>Sign in</span>
+                <i class="bi bi-arrow-right"></i>
+              }
+            </button>
+          </form>
+
+          <div class="sc-auth__links">
+            <a [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'"
+               routerLink="/register">Create an account</a>
+            <a [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'"
+               routerLink="/resetpassword">Forgot password?</a>
           </div>
         </div>
-      </div>
+      }
+
+      <!-- MFA verification -->
+      @if (state.isUsingMfa) {
+        <div class="sc-auth__form sc-reveal" style="--d: 80ms">
+          <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
+            <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+            <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+          </a>
+
+          <p class="eyebrow">Two-factor verification</p>
+          <h2 class="sc-auth__title">Enter your code</h2>
+          <p class="sc-auth__hint">
+            We sent a one-time code to the number ending
+            <span class="sc-phone mono">••• {{ state.phone }}</span>.
+          </p>
+
+          @if (state.dataState === DataState.ERROR) {
+            <div class="alert sc-alert alert-dismissible fade show" role="alert">
+              <i class="bi bi-exclamation-octagon-fill"></i>
+              <span>{{ state.error }}</span>
+              <button aria-label="Close" class="btn-close" data-bs-dismiss="alert" type="button"></button>
+            </div>
+          }
+
+          <form #verifyCodeForm="ngForm" (ngSubmit)="verifyCode(verifyCodeForm)" class="sc-form" novalidate>
+            <div class="sc-field">
+              <label class="form-label" for="code">Verification code</label>
+              <span class="sc-field__icon"><i class="bi bi-shield-lock"></i></span>
+              <input id="code" name="code" ngModel required type="text"
+                     inputmode="numeric" autocomplete="one-time-code" placeholder="••••••"
+                     [disabled]="state.dataState === DataState.LOADING"
+                     class="form-control sc-input sc-input--otp" />
+            </div>
+
+            <button
+              [disabled]="state.dataState === DataState.LOADING || verifyCodeForm.invalid || verifyCodeForm.pristine"
+              class="btn btn-primary sc-submit" type="submit">
+              @if (state.dataState === DataState.LOADING) {
+                <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Verifying…</span>
+              } @else {
+                <span>Verify &amp; continue</span>
+                <i class="bi bi-arrow-right"></i>
+              }
+            </button>
+          </form>
+
+          <div class="sc-auth__links">
+            <button (click)="loginPage()" class="sc-linkbtn" type="button">
+              <i class="bi bi-arrow-left"></i> Back to login
+            </button>
+            <a [routerLink]="['/register']">Create an account</a>
+          </div>
+        </div>
+      }
     }
-  }
-</section>
+  </main>
+</div>

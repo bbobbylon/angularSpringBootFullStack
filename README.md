@@ -38,14 +38,14 @@ git clone <repo-url>
 cd angularSpringBootFullStack
 ```
 
-There is no committed env template — `.env` is gitignored and never checked in. Create one at the project root:
+Copy the committed template and fill in your values:
 
 ```bash
 # Git Bash / WSL
-touch .env
+cp .env.example .env
 
 # PowerShell
-New-Item -ItemType File .env
+Copy-Item .env.example .env
 ```
 
 Open `.env` and set at minimum (see the full **Environment Variables Reference** below for every variable):
@@ -156,7 +156,7 @@ All configuration lives in `.env` at the project root. IntelliJ loads it via **R
 | `UI_APP_URL` | Angular app URL (used for CORS) | `http://localhost:4200` |
 | `SPRING_ACTIVE_PROFILES` | Spring profile (`dev` or `prod`) | `dev` |
 
-> **Never commit `.env`** — it is gitignored (both `.env` and `.env.*` are excluded). There is no committed template; create `.env` by hand from this table.
+> **Never commit `.env`** — it is gitignored. The sanitized **`.env.example`** (placeholders only) is the committed template; `.gitignore` excludes `.env` / `.env.*` but whitelists the example via `!.env.example`. Copy it to `.env` and fill in real values.
 
 #### Local-against-Aiven mode (`DB=aiven`)
 
@@ -194,7 +194,8 @@ angularSpringBootFullStack/
 ├── Dockerfile                  # Multi-stage: Node 22 → Maven 21 → JRE 21 Alpine
 ├── docker-compose.yml          # MySQL + app services
 ├── start.sh                    # Unified startup script (ENV: local | docker, DB: local | aiven)
-└── .env                        # Your local secrets (gitignored; not committed)
+├── .env                        # Your local secrets (gitignored; not committed)
+└── .env.example                # Sanitized template — copy to .env and fill in values
 ```
 
 ---

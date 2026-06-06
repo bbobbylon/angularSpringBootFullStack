@@ -1,164 +1,203 @@
-@if (verifyState(); as state) {
-  <section>
-    @switch (state.dataState) {
-      @case (DataState.LOADING) {
-        <div class="container">
-          <div class="row justify-content-center my-5">
-            <div class="col-md-6" style="margin-top: 50px">
-              <div class="card">
-                <div class="card-body">
-                  <div class="text-center">
-                    <h2>
-                      <i class="bi bi-safe" style="margin-right: 5px"></i>
-                      SecureCapita
-                    </h2>
-                    <h5 class="card-title mt-4 mb-4">{{ state.title }}</h5>
-                    <div class="spinner-border text-secondary" role="status" style="font-size: 30px">
-                      <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2" style="font-size: 20px">{{ state.message }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+<!--
+  Verify — "access console" (M1 auth polish).
+
+  Landing view for the verification links SecureCapita emails out. It shares the
+  security-console aside with the other auth screens; the right panel swaps between
+  the four states driven by `verifyState()` / `DataState`:
+    • LOADING             → "verifying…" spinner
+    • LOADED + 'account'  → success card (account or password reset confirmed)
+    • LOADED + 'password' → the "set a new password" form
+    • ERROR               → failure card
+  Every binding (verifyState, isLoading, the resetPasswordForm ngModel names
+  newPassword/confirmPassword, the setNewPassword submit, disabled guards and
+  routerLinks) is preserved from the original — only markup/styling changed.
+  Shared styling lives in the AUTH SCREENS section of src/styles.css.
+-->
+<div class="sc-auth">
+
+  <!-- ── Left: branded security console ────────────────────────────────────── -->
+  <aside class="sc-auth__aside">
+    <div class="sc-auth__aside-inner">
+      <a class="sc-auth__brand" routerLink="/login">
+        <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+        <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+      </a>
+
+      <div class="sc-auth__lede">
+        <p class="eyebrow sc-reveal" style="--d: 0ms">Zero-trust identity platform</p>
+        <h1 class="sc-auth__headline sc-reveal" style="--d: 60ms">Confirming<br />your identity.</h1>
+        <p class="sc-auth__sub sc-reveal" style="--d: 120ms">
+          Every verification link is single-use and time-boxed. Once confirmed, your
+          session is signed, device-aware, and written to an immutable audit trail.
+        </p>
+      </div>
+
+      <ul class="sc-trust">
+        <li class="sc-trust__item sc-reveal" style="--d: 220ms">
+          <i class="bi bi-fingerprint"></i>
+          <div>
+            <span class="sc-trust__title">HMAC-SHA512 signed tokens</span>
+            <span class="sc-trust__meta">Stateless JWT · 30-min access</span>
           </div>
-        </div>
-      }
-      @case (DataState.LOADED) {
-        @if (state.type === 'account') {
-          <div class="container">
-            <div class="row justify-content-center my-5">
-              <div class="col-md-6" style="margin-top: 50px">
-                <div class="card">
-                  <div class="card-body">
-                    <div class="text-center">
-                      <h2>
-                        <i class="bi bi-safe" style="margin-right: 5px"></i>
-                        SecureCapita
-                      </h2>
-                      <h5 class="card-title mt-4 mb-4">{{ state.title }}</h5>
-                      <i class="bi bi-check-circle-fill" style="font-size: 80px; color: green"></i>
-                      <p class="mt-2" style="font-size: 20px">{{ state.message }}</p>
-                    </div>
-                    <div class="row mb-4">
-                      <div class="col d-flex justify-content-center">
-                        <a [routerLink]="['/login']">Account Login</a>
-                      </div>
-                      <div class="col">
-                        <a [routerLink]="['/register']"
-                           style="color: #0d6efd; text-decoration: underline; cursor: pointer">Create another
-                          account</a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+        </li>
+        <li class="sc-trust__item sc-reveal" style="--d: 280ms">
+          <i class="bi bi-lock-fill"></i>
+          <div>
+            <span class="sc-trust__title">BCrypt-hashed credentials</span>
+            <span class="sc-trust__meta">Never stored in plaintext</span>
           </div>
-        }
-        @if (state.type === 'password') {
-          <div class="container">
-            <div class="row justify-content-center my-5">
-              <div class="col-md-6" style="margin-top: 50px">
-                <div class="card">
-                  <div class="card-body">
-                    <div class="text-center">
-                      <h2>
-                        <i class="bi bi-safe" style="margin-right: 5px"></i>
-                        SecureCapita
-                      </h2>
-                      <h5 class="card-title mt-4 mb-5">Enter New Password</h5>
-                    </div>
-                    @if (state.error) {
-                      <div class="alert alert-danger bg-danger text-light border-0 alert-dismissible fade show"
-                           role="alert">
-                        {{ state.error }}
-                        <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
-                                type="button"></button>
-                      </div>
-                    }
-                    <form #resetPasswordForm="ngForm" (ngSubmit)="setNewPassword(resetPasswordForm)">
-                      <div class="form-outline mb-4">
-                        <label class="form-label" for="email">New Password</label>
-                        <input [disabled]="isLoading()" class="form-control" minlength="2" name="newPassword"
-                               ngModel required type="password" />
-                      </div>
-                      <div class="form-outline mb-4">
-                        <label class="form-label" for="password">Confirm New Password</label>
-                        <input
-                          [disabled]="isLoading()"
-                          class="form-control"
-                          minlength="2"
-                          name="confirmPassword"
-                          ngModel
-                          required
-                          type="password" />
-                      </div>
-                      <div class="d-flex justify-content-center mb-4">
-                        <button
-                          [disabled]="isLoading() || resetPasswordForm.invalid || resetPasswordForm.pristine"
-                          class="btn btn-primary"
-                          type="submit">
-                          @if (isLoading()) {
-                            <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                                  style="margin-right: 5px"></span>
-                            <span>Loading...</span>
-                          } @else {
-                            <span>Update Password</span>
-                          }
-                        </button>
-                      </div>
-                    </form>
-                    <div class="row mb-4">
-                      <div class="col d-flex justify-content-center">
-                        <a [routerLink]="['/login']"
-                           [style.pointer-events]="isLoading() ? 'none' : 'auto'">
-                          Account Login
-                        </a>
-                      </div>
-                      <div class="col">
-                        <a [routerLink]="['/resetpassword']"
-                           [style.pointer-events]="isLoading() ? 'none' : 'auto'">
-                          Forgot password?
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        </li>
+        <li class="sc-trust__item sc-reveal" style="--d: 340ms">
+          <i class="bi bi-broadcast-pin"></i>
+          <div>
+            <span class="sc-trust__title">Device &amp; IP audit</span>
+            <span class="sc-trust__meta">Logged on every security event</span>
+          </div>
+        </li>
+        <li class="sc-trust__item sc-reveal" style="--d: 400ms">
+          <i class="bi bi-hourglass-split"></i>
+          <div>
+            <span class="sc-trust__title">Single-use secure links</span>
+            <span class="sc-trust__meta">Time-boxed · expire fast</span>
+          </div>
+        </li>
+      </ul>
+
+      <div class="sc-auth__status sc-reveal" style="--d: 480ms">
+        <span class="sc-pulse"></span>
+        <span class="mono">Zero-trust gateway · operational</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Right: verification result / set-new-password form ────────────────── -->
+  <main class="sc-auth__main">
+    @if (verifyState(); as state) {
+      @switch (state.dataState) {
+
+        <!-- Verifying… -->
+        @case (DataState.LOADING) {
+          <div class="sc-auth__form sc-reveal" style="--d: 80ms">
+            <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
+              <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+              <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+            </a>
+
+            <div class="sc-auth__success">
+              <span class="spinner-border sc-spinner" role="status">
+                <span class="visually-hidden">Verifying…</span>
+              </span>
+              <h2 class="sc-auth__title">{{ state.title }}</h2>
+              <p class="sc-auth__hint">{{ state.message }}</p>
             </div>
           </div>
         }
-      }
-      @case (DataState.ERROR) {
-        <div class="container">
-          <div class="row justify-content-center my-5">
-            <div class="col-md-6" style="margin-top: 50px">
-              <div class="card">
-                <div class="card-body">
-                  <div class="text-center">
-                    <h2>
-                      <i class="bi bi-safe" style="margin-right: 5px"></i>
-                      SecureCapita
-                    </h2>
-                    <h5 class="card-title mt-4 mb-4">{{ state.title }}</h5>
-                    <i class="bi bi-exclamation-circle-fill" style="font-size: 80px; color: red"></i>
-                    <p class="mt-2" style="font-size: 20px">{{ state.message }}</p>
-                  </div>
-                  <div class="row mb-4">
-                    <div class="col d-flex justify-content-center">
-                      <a [routerLink]="['/login']">Account Login</a>
-                    </div>
-                    <div class="col">
-                      <a [routerLink]="['/register']">Create another account</a>
-                    </div>
-                  </div>
-                </div>
+
+        <!-- Verified -->
+        @case (DataState.LOADED) {
+
+          <!-- Account / password-reset confirmed -->
+          @if (state.type === 'account') {
+            <div class="sc-auth__form sc-reveal" style="--d: 80ms">
+              <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
+                <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+                <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+              </a>
+
+              <div class="sc-auth__success">
+                <span class="sc-auth__success-mark"><i class="bi bi-check-lg"></i></span>
+                <h2 class="sc-auth__title">{{ state.title }}</h2>
+                <p class="sc-auth__hint">{{ state.message }}</p>
+              </div>
+
+              <div class="sc-auth__links">
+                <a [routerLink]="['/login']">Continue to sign in</a>
+                <a [routerLink]="['/register']">Create another account</a>
               </div>
             </div>
+          }
+
+          <!-- Set a new password -->
+          @if (state.type === 'password') {
+            <div class="sc-auth__form sc-reveal" style="--d: 80ms">
+              <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
+                <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+                <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+              </a>
+
+              <p class="eyebrow">Set new password</p>
+              <h2 class="sc-auth__title">Choose a new password</h2>
+              <p class="sc-auth__hint">Pick a strong password you haven't used before — it secures every future sign-in.</p>
+
+              @if (state.error) {
+                <div class="alert sc-alert alert-dismissible fade show" role="alert">
+                  <i class="bi bi-exclamation-octagon-fill"></i>
+                  <span>{{ state.error }}</span>
+                  <button aria-label="Close" class="btn-close" data-bs-dismiss="alert" type="button"></button>
+                </div>
+              }
+
+              <form #resetPasswordForm="ngForm" (ngSubmit)="setNewPassword(resetPasswordForm)" class="sc-form" novalidate>
+                <div class="sc-field">
+                  <label class="form-label" for="newPassword">New password</label>
+                  <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
+                  <input id="newPassword" name="newPassword" ngModel required minlength="2" type="password"
+                         autocomplete="new-password" placeholder="At least 2 characters"
+                         [disabled]="isLoading()" class="form-control sc-input" />
+                </div>
+
+                <div class="sc-field">
+                  <label class="form-label" for="confirmPassword">Confirm new password</label>
+                  <span class="sc-field__icon"><i class="bi bi-lock-fill"></i></span>
+                  <input id="confirmPassword" name="confirmPassword" ngModel required minlength="2" type="password"
+                         autocomplete="new-password" placeholder="Re-enter your password"
+                         [disabled]="isLoading()" class="form-control sc-input" />
+                </div>
+
+                <button
+                  [disabled]="isLoading() || resetPasswordForm.invalid || resetPasswordForm.pristine"
+                  class="btn btn-primary sc-submit" type="submit">
+                  @if (isLoading()) {
+                    <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"></span>
+                    <span>Updating…</span>
+                  } @else {
+                    <span>Update password</span>
+                    <i class="bi bi-arrow-right"></i>
+                  }
+                </button>
+              </form>
+
+              <div class="sc-auth__links">
+                <a [routerLink]="['/login']"
+                   [style.pointer-events]="isLoading() ? 'none' : 'auto'">Back to sign in</a>
+                <a [routerLink]="['/resetpassword']"
+                   [style.pointer-events]="isLoading() ? 'none' : 'auto'">Request a new link</a>
+              </div>
+            </div>
+          }
+        }
+
+        <!-- Verification failed -->
+        @case (DataState.ERROR) {
+          <div class="sc-auth__form sc-reveal" style="--d: 80ms">
+            <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
+              <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+              <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+            </a>
+
+            <div class="sc-auth__success">
+              <span class="sc-auth__success-mark sc-auth__success-mark--danger"><i class="bi bi-x-lg"></i></span>
+              <h2 class="sc-auth__title">{{ state.title }}</h2>
+              <p class="sc-auth__hint">{{ state.message }}</p>
+            </div>
+
+            <div class="sc-auth__links">
+              <a [routerLink]="['/login']">Back to sign in</a>
+              <a [routerLink]="['/register']">Create another account</a>
+            </div>
           </div>
-        </div>
+        }
       }
     }
-  </section>
-}
+  </main>
+</div>

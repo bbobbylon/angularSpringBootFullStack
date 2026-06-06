@@ -1,0 +1,7 @@
+/* ============================================================================
+   Register — reuses the shared "access console" styles from the AUTH SCREENS
+   section of src/styles.css. Only host-level display is component-scoped here.
+   ============================================================================ */
+:host {
+  display: block;
+}

@@ -1,102 +1,170 @@
-@if (registerState(); as state) {
-  @if (!state.registerSuccess) {
-    <div class="container">
-      <div class="row justify-content-center my-5">
-        <div class="col-md-6" style="margin-top: 50px;">
-          <div class="card">
-            <div class="card-body">
-              <div class="text-center">
-                <h2><i class="bi bi-safe" style="margin-right: 5px;"></i>SecureCapita</h2>
-                <h5 class="card-title mt-4 mb-5">Create an Account</h5>
-              </div>
-              @if (state.dataState === DataState.ERROR) {
-                <div class="alert alert-danger bg-danger text-light border-0 alert-dismissible fade show" role="alert">
-                  {{ state.error }}
-                  <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
-                          type="button"></button>
-                </div>
-              }
-              <form #registerForm="ngForm" (ngSubmit)="register(registerForm)">
-                <div class="form-outline mb-4">
-                  <label class="form-label" for="firstName">First Name</label>
-                  <input [disabled]="state.dataState === DataState.LOADING" class="form-control" id="firstName"
-                         minlength="2" name="firstName" ngModel required type="text">
-                </div>
-                <div class="form-outline mb-4">
-                  <label class="form-label" for="lastName">Last Name</label>
-                  <input [disabled]="state.dataState === DataState.LOADING" class="form-control" id="lastName"
-                         minlength="2" name="lastName" ngModel required type="text">
-                </div>
-                <div class="form-outline mb-4">
-                  <label class="form-label" for="email">Email Address</label>
-                  <input [disabled]="state.dataState === DataState.LOADING" class="form-control" id="email"
-                         minlength="3" name="email" ngModel required type="email">
-                </div>
-                <div class="form-outline mb-4">
-                  <label class="form-label" for="password">Password</label>
-                  <input [disabled]="state.dataState === DataState.LOADING" class="form-control" id="password"
-                         minlength="4" name="password" ngModel required type="password">
-                </div>
-                <div class="d-flex justify-content-center mb-4">
-                  <button
-                    [disabled]="state.dataState === DataState.LOADING || registerForm.invalid || registerForm.pristine"
-                    class="btn btn-primary" type="submit">
-                    @if (state.dataState === DataState.LOADING) {
-                      <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                            style="margin-right: 5px;"></span>
-                      <span>Saving...</span>
-                    } @else {
-                      <span>Create Account</span>
-                    }
-                  </button>
-                </div>
-              </form>
-              <div class="row mb-4">
-                <div class="col d-flex justify-content-center">
-                  <a [routerLink]="['/login']"
-                     [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'">Account Login</a>
-                </div>
-                <div class="col">
-                  <a [routerLink]="['/resetpassword']"
-                     [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'">Forgot
-                    password?</a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  }
+<!--
+  Register — "access console" (M1 auth polish).
 
-  <!-- Success screen -->
-  @if (state.registerSuccess) {
-    <div class="container">
-      <div class="row justify-content-center my-5">
-        <div class="col-md-6" style="margin-top: 50px;">
-          <div class="card">
-            <div class="card-body">
-              <div class="text-center">
-                <h2><i class="bi bi-safe" style="margin-right: 5px;"></i>SecureCapita</h2>
-                <h5 class="card-title mt-4 mb-4">{{ state.message }}</h5>
-                <i class="bi bi-check-circle-fill" style="font-size: 80px; color: green;"></i>
-                <p class="mt-2" style="font-size: 20px;">Please access your email and confirm your account.</p>
-              </div>
-              <div class="row mb-4">
-                <div class="col d-flex justify-content-center">
-                  <a [routerLink]="['/login']">Account Login</a>
-                </div>
-                <div class="col">
-                  <a (click)="createAccountForm()" (keydown)="createAccountForm()"
-                     style="color: #0D6EFD; text-decoration: underline; cursor: pointer;">
-                    Create another account
-                  </a>
-                </div>
-              </div>
-            </div>
+  Two-panel layout sharing the security-console aside with the login screen; the
+  right panel hosts the registration form and the post-submit "check your email"
+  success state. Shared styling lives in the AUTH SCREENS section of src/styles.css.
+  Every form binding (ngModel names, validators, ngSubmit, disabled guards,
+  routerLinks, and the registerSuccess branch) is preserved from the original.
+-->
+<div class="sc-auth">
+
+  <!-- ── Left: branded security console ────────────────────────────────────── -->
+  <aside class="sc-auth__aside">
+    <div class="sc-auth__aside-inner">
+      <a class="sc-auth__brand" routerLink="/login">
+        <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+        <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+      </a>
+
+      <div class="sc-auth__lede">
+        <p class="eyebrow sc-reveal" style="--d: 0ms">Zero-trust identity platform</p>
+        <h1 class="sc-auth__headline sc-reveal" style="--d: 60ms">Create your<br />secure identity.</h1>
+        <p class="sc-auth__sub sc-reveal" style="--d: 120ms">
+          One account, protected end to end — signed sessions, hashed credentials,
+          and a full audit trail from your very first sign-in.
+        </p>
+      </div>
+
+      <ul class="sc-trust">
+        <li class="sc-trust__item sc-reveal" style="--d: 220ms">
+          <i class="bi bi-fingerprint"></i>
+          <div>
+            <span class="sc-trust__title">HMAC-SHA512 signed tokens</span>
+            <span class="sc-trust__meta">Stateless JWT · 30-min access</span>
           </div>
-        </div>
+        </li>
+        <li class="sc-trust__item sc-reveal" style="--d: 280ms">
+          <i class="bi bi-lock-fill"></i>
+          <div>
+            <span class="sc-trust__title">BCrypt-hashed credentials</span>
+            <span class="sc-trust__meta">Never stored in plaintext</span>
+          </div>
+        </li>
+        <li class="sc-trust__item sc-reveal" style="--d: 340ms">
+          <i class="bi bi-broadcast-pin"></i>
+          <div>
+            <span class="sc-trust__title">Device &amp; IP audit</span>
+            <span class="sc-trust__meta">Logged on every security event</span>
+          </div>
+        </li>
+        <li class="sc-trust__item sc-reveal" style="--d: 400ms">
+          <i class="bi bi-patch-check-fill"></i>
+          <div>
+            <span class="sc-trust__title">Email-verified accounts</span>
+            <span class="sc-trust__meta">Confirm ownership before access</span>
+          </div>
+        </li>
+      </ul>
+
+      <div class="sc-auth__status sc-reveal" style="--d: 480ms">
+        <span class="sc-pulse"></span>
+        <span class="mono">Zero-trust gateway · operational</span>
       </div>
     </div>
-  }
-}
+  </aside>
+
+  <!-- ── Right: registration form / success ────────────────────────────────── -->
+  <main class="sc-auth__main">
+    @if (registerState(); as state) {
+
+      <!-- Registration form -->
+      @if (!state.registerSuccess) {
+        <div class="sc-auth__form sc-reveal" style="--d: 80ms">
+          <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
+            <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+            <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+          </a>
+
+          <p class="eyebrow">Create account</p>
+          <h2 class="sc-auth__title">Join SecureCapita</h2>
+          <p class="sc-auth__hint">A few details and you're set — we'll email a link to verify your account.</p>
+
+          @if (state.dataState === DataState.ERROR) {
+            <div class="alert sc-alert alert-dismissible fade show" role="alert">
+              <i class="bi bi-exclamation-octagon-fill"></i>
+              <span>{{ state.error }}</span>
+              <button aria-label="Close" class="btn-close" data-bs-dismiss="alert" type="button"></button>
+            </div>
+          }
+
+          <form #registerForm="ngForm" (ngSubmit)="register(registerForm)" class="sc-form" novalidate>
+            <div class="sc-field-row">
+              <div class="sc-field">
+                <label class="form-label" for="firstName">First name</label>
+                <span class="sc-field__icon"><i class="bi bi-person"></i></span>
+                <input id="firstName" name="firstName" ngModel required minlength="2" type="text"
+                       autocomplete="given-name" placeholder="Ada"
+                       [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+              </div>
+              <div class="sc-field">
+                <label class="form-label" for="lastName">Last name</label>
+                <span class="sc-field__icon"><i class="bi bi-person"></i></span>
+                <input id="lastName" name="lastName" ngModel required minlength="2" type="text"
+                       autocomplete="family-name" placeholder="Lovelace"
+                       [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+              </div>
+            </div>
+
+            <div class="sc-field">
+              <label class="form-label" for="email">Email address</label>
+              <span class="sc-field__icon"><i class="bi bi-envelope"></i></span>
+              <input id="email" name="email" ngModel required minlength="3" type="email"
+                     autocomplete="email" placeholder="you@company.com"
+                     [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+            </div>
+
+            <div class="sc-field">
+              <label class="form-label" for="password">Password</label>
+              <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
+              <input id="password" name="password" ngModel required minlength="4" type="password"
+                     autocomplete="new-password" placeholder="At least 4 characters"
+                     [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+            </div>
+
+            <button
+              [disabled]="state.dataState === DataState.LOADING || registerForm.invalid || registerForm.pristine"
+              class="btn btn-primary sc-submit" type="submit">
+              @if (state.dataState === DataState.LOADING) {
+                <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Creating account…</span>
+              } @else {
+                <span>Create account</span>
+                <i class="bi bi-arrow-right"></i>
+              }
+            </button>
+          </form>
+
+          <div class="sc-auth__links">
+            <a [routerLink]="['/login']"
+               [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'">Have an account? Sign in</a>
+            <a [routerLink]="['/resetpassword']"
+               [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'">Forgot password?</a>
+          </div>
+        </div>
+      }
+
+      <!-- Success: account created, verification email sent -->
+      @if (state.registerSuccess) {
+        <div class="sc-auth__form sc-reveal" style="--d: 80ms">
+          <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
+            <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
+            <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+          </a>
+
+          <div class="sc-auth__success">
+            <span class="sc-auth__success-mark"><i class="bi bi-check-lg"></i></span>
+            <h2 class="sc-auth__title">Check your inbox</h2>
+            <p class="sc-auth__hint">{{ state.message }}</p>
+            <p class="sc-auth__hint">We've emailed a verification link — confirm it to activate your account.</p>
+          </div>
+
+          <div class="sc-auth__links">
+            <a [routerLink]="['/login']">Back to sign in</a>
+            <button (click)="createAccountForm()" class="sc-linkbtn" type="button">Create another</button>
+          </div>
+        </div>
+      }
+    }
+  </main>
+</div>
