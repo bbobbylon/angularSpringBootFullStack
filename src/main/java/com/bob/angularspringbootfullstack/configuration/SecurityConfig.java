@@ -3,10 +3,12 @@ package com.bob.angularspringbootfullstack.configuration;
 import com.bob.angularspringbootfullstack.filter.CustomAuthFilter;
 import com.bob.angularspringbootfullstack.handler.CustomAccessDeniedHandler;
 import com.bob.angularspringbootfullstack.handler.CustomAuthenticationEntryPoint;
+import com.bob.angularspringbootfullstack.handler.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -84,6 +86,21 @@ class SecurityConfig {
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
     /**
+     * The token-exchange point for federated sign-in (SRS FR-FED-4): converts a
+     * completed OAuth2 Authorization Code flow into the application's own JWTs and
+     * redirects the browser back to the Angular SPA.
+     */
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+
+    /**
+     * SPA origin used when a federated login attempt fails mid-flow: the browser is
+     * mid-redirect (not an XHR), so the only sane recovery is sending it back to the
+     * SPA login screen with a coarse error code.
+     */
+    @Value("${ui.app.url:http://localhost:4200}")
+    private String uiAppUrl;
+
+    /**
      * Builds the application's SecurityFilterChain.
      * <p>
      * Disables CSRF (stateless JWT API doesn't need it) and HTTP Basic, enables
@@ -123,10 +140,43 @@ class SecurityConfig {
                             .requestMatchers(PUBLIC_URLS).permitAll()
                             .requestMatchers(DELETE, "/user/delete/**").hasAnyAuthority("DELETE:USER")
                             .requestMatchers(DELETE, "/customer/delete/**").hasAnyAuthority("DELETE:CUSTOMER")
+                            // Administrative endpoints (FR-ADMIN / FR-RBAC-4). Matchers are evaluated
+                            // top-down, so these MUST precede the broad GET/POST catch-alls below:
+                            // role reassignment demands UPDATE:ROLE, account-state changes demand
+                            // UPDATE:USER, and everything else under /admin/** requires at least one
+                            // staff-grade authority. AdminUserController repeats these checks with
+                            // @PreAuthorize so URL- and method-level enforcement stay in lockstep
+                            // (FR-RBAC-2).
+                            .requestMatchers(PATCH, "/admin/user/*/role/**").hasAnyAuthority("UPDATE:ROLE")
+                            .requestMatchers(PATCH, "/admin/user/*/settings").hasAnyAuthority("UPDATE:USER")
+                            .requestMatchers("/admin/**").hasAnyAuthority("UPDATE:USER", "UPDATE:ROLE")
+                            // Self-service account security (FR-MFA-4 / plan.md M4-M5): managing
+                            // one's OWN second factor and sessions must not require staff
+                            // authorities, so these are matched BEFORE the POST/GET catch-alls
+                            // below (which demand UPDATE:USER / READ:USER). Authentication alone
+                            // suffices; every handler scopes its work to the token's principal.
+                            .requestMatchers("/user/totp/**").authenticated()
+                            .requestMatchers("/user/sessions/**").authenticated()
                             .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
                             .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
                             .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")
                             .anyRequest().authenticated()
+                    )
+                    // Federated login (SRS §4.3, CON-5). Spring Security's OAuth2 client owns the
+                    // protocol: /oauth2/authorization/{provider} initiates the Authorization Code
+                    // flow and /login/oauth2/code/{provider} receives the provider callback (both
+                    // are in PUBLIC_URLS). On success the custom handler issues OUR JWTs — the
+                    // token-exchange point — so downstream requests are stateless Bearer calls
+                    // exactly like in-house sessions. NOTE on CON-3 (stateless): the OAuth2
+                    // handshake itself briefly uses the container session to hold the CSRF `state`
+                    // parameter between the outbound redirect and the callback; no SecurityContext
+                    // is ever stored, and the session plays no part after token issuance.
+                    .oauth2Login(oauth -> oauth
+                            .successHandler(oAuth2LoginSuccessHandler)
+                            .failureHandler((request, response, exception) -> {
+                                log.warn("Federated login failed: {}", exception.getMessage());
+                                response.sendRedirect(uiAppUrl + "/login?error=federated");
+                            })
                     )
                     .addFilterBefore(customAuthFilter, UsernamePasswordAuthenticationFilter.class)
                     .exceptionHandling(ex -> ex

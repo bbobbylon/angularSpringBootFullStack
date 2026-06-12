@@ -105,6 +105,14 @@ public class UserDTO {
      */
     private boolean isUsing2FA;
     /**
+     * Flag indicating if a confirmed authenticator-app (TOTP) second factor is active
+     * (SRS FR-MFA-4). Mirrors {@link com.bob.angularspringbootfullstack.model.User#usingTotp};
+     * copied automatically by {@code BeanUtils.copyProperties} in {@code UserDTOMapper}.
+     * The login screen branches on this before {@code isUsing2FA} — TOTP takes
+     * precedence over the SMS code path when both are enabled.
+     */
+    private boolean usingTotp;
+    /**
      * Timestamp of when the account was created
      */
     private LocalDateTime createdAt;

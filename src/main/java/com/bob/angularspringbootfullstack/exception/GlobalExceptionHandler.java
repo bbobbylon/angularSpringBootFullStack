@@ -63,5 +63,32 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * Maps authorization denials raised INSIDE controller methods to {@code 403 FORBIDDEN}
+     * in the standard envelope (FR-RBAC-3, FR-ORG-2).
+     * <p>
+     * Two sources reach this handler: {@code @PreAuthorize} failures on admin endpoints
+     * (method-level security throws {@code AuthorizationDeniedException}, a subclass) and
+     * the explicit organization-scope check in {@code AdminUserController}, which throws
+     * {@code AccessDeniedException} when an organization administrator targets a user
+     * outside their organization. URL-level denials never get here — they are handled
+     * earlier in the filter chain by {@code CustomAccessDeniedHandler}; this handler
+     * keeps the response shape identical for denials that occur after dispatch.
+     *
+     * @param ex the denial, whose message is safe to surface (it names no account data)
+     * @return 403 FORBIDDEN with the denial reason in the standard response envelope
+     */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<HttpResponse> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException ex) {
+        HttpResponse response = HttpResponse.builder()
+                .timeStamp(LocalTime.now().toString())
+                .reason("You do not have permission to perform this action.")
+                .devMessage(ex.getMessage())
+                .status(HttpStatus.FORBIDDEN)
+                .statusCode(HttpStatus.FORBIDDEN.value())
+                .build();
+        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+    }
+
 }
 

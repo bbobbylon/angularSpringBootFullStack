@@ -10,8 +10,9 @@ import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.RoleService;
+import com.bob.angularspringbootfullstack.service.SessionService;
+import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.service.UserService;
-import com.bob.angularspringbootfullstack.tokenprovider.TokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -57,7 +58,7 @@ import static org.springframework.security.authentication.UsernamePasswordAuthen
  *   <li><b>Re-fetch by email</b> — {@code getProfile} and {@code toggleMFA}
  *       call {@code getAuthenticatedUser(authentication).getEmail()} then do a
  *       secondary DB lookup by email.</li>
- *   <li><b>Re-fetch by ID</b> — {@code updateUserPassword}, {@code updateUserRole},
+ *   <li><b>Re-fetch by ID</b> — {@code updateUserPassword}
  *       and {@code updateAccountSettings} call
  *       {@code getAuthenticatedUser(authentication).getId()} then do a secondary
  *       DB lookup by ID.</li>
@@ -85,11 +86,12 @@ public class UserController {
     private final UserService userService;
     private final RoleService roleService;
     private final AuthenticationManager authenticationManager;
-    private final TokenProvider tokenProvider;
     private final HttpServletRequest request;
     private final HttpServletResponse response;
     private final ApplicationEventPublisher eventPublisher;
     private final EventService eventService;
+    private final TotpService totpService;
+    private final SessionService sessionService;
 
     /**
      * Registers a new user. Validates the payload, creates the user via
@@ -127,6 +129,10 @@ public class UserController {
      * along with a freshly issued access/refresh token pair. Used to complete
      * login for accounts with 2FA enabled.
      *
+     * <p>Token issuance goes through {@link SessionService#issueTokenPair} (plan.md M5)
+     * so the new session appears in the Security Center's device list and its refresh
+     * token participates in rotation/revocation like every other session.
+     *
      * @param email the email of the user verifying the code
      * @param code  the 2FA code received over SMS
      * @return 200 OK with user and tokens
@@ -136,10 +142,11 @@ public class UserController {
         try {
             UserDTO userDTO = userService.verifyCode(email, code);
             eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), LOGIN_ATTEMPT_SUCCESS));
+            SessionService.TokenPair tokens = sessionService.issueTokenPair(getUserPrincipal(userDTO), request);
             return ResponseEntity.ok(
                     HttpResponse.builder()
                             .timeStamp(now().toString())
-                            .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
+                            .data(of("user", userDTO, "access_token", tokens.accessToken(), "refresh_token", tokens.refreshToken()))
                             .message("Login successful!")
                             .status(OK)
                             .statusCode(OK.value())
@@ -201,6 +208,11 @@ public class UserController {
             throw new ApiException("Unauthorized request.");
         userService.updatePassword(dbUser.getId(), updatePasswordForm.getCurrentPassword(), updatePasswordForm.getNewPassword(), updatePasswordForm.getConfirmPassword());
         eventPublisher.publishEvent(new NewUserEvent(authUser.getEmail(), PASSWORD_UPDATE));
+        // The passwordChangedAt check already kills every outstanding JWT (FR-JWT-6);
+        // revoking the session rows keeps the Security Center's device list truthful,
+        // then a fresh session is opened so THIS browser stays signed in (plan.md M5).
+        sessionService.revokeAllSessions(dbUser.getId());
+        SessionService.TokenPair tokens = sessionService.issueTokenPair(getUserPrincipal(dbUser), request);
         long pwTotalElements = eventService.countEventsByUserId(dbUser.getId());
         int pwTotalPages = (int) Math.ceil((double) pwTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
@@ -212,44 +224,19 @@ public class UserController {
                                 entry("events", eventService.getEventsByUserId(dbUser.getId(), 0, DEFAULT_PAGE_SIZE)),
                                 entry("eventsTotalElements", pwTotalElements),
                                 entry("eventsTotalPages", pwTotalPages),
-                                entry("access_token", tokenProvider.createAccessToken(getUserPrincipal(dbUser))),
-                                entry("refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(dbUser)))))
+                                entry("access_token", tokens.accessToken()),
+                                entry("refresh_token", tokens.refreshToken())))
                         .message("Your password has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
     }
 
-    /**
-     * Reassigns the authenticated user's role to the given role name.
-     * Returns the refreshed user profile alongside the full roles catalogue so
-     * the frontend Authorization tab can update its selector without a separate
-     * request.
-     *
-     * @param authentication the current Spring Security authentication
-     * @param roleName       the target role name (e.g. "ROLE_ADMIN")
-     * @return 200 OK with the updated user and the full roles list
-     */
-    @PatchMapping("/update/role/{roleName}")
-    public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication, @PathVariable String roleName) {
-        UserDTO userDTO = getAuthenticatedUser(authentication);
-        userService.updateUserRole(userDTO.getId(), roleName);
-        eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), ROLE_UPDATE));
-        long roleTotalElements = eventService.countEventsByUserId(userDTO.getId());
-        int roleTotalPages = (int) Math.ceil((double) roleTotalElements / DEFAULT_PAGE_SIZE);
-        return ResponseEntity.ok(
-                HttpResponse.builder()
-                        .timeStamp(now().toString())
-                        .data(of("user", userService.getUserById(userDTO.getId()),
-                                "events", eventService.getEventsByUserId(userDTO.getId(), 0, DEFAULT_PAGE_SIZE),
-                                "eventsTotalElements", roleTotalElements,
-                                "eventsTotalPages", roleTotalPages,
-                                "roles", roleService.getAllRoles()))
-                        .message("Your role has been updated successfully!")
-                        .status(OK)
-                        .statusCode(OK.value())
-                        .build());
-    }
+    // NOTE(FR-RBAC-4): the former PATCH /user/update/role/{roleName} endpoint was removed.
+    // It let any authenticated user reassign their OWN role (no authority gate existed on
+    // PATCH routes), which is a privilege-escalation hole. Role reassignment is now an
+    // administrative operation only — see AdminUserController#updateUserRole, which requires
+    // the UPDATE:ROLE authority and forbids self-targeting.
 
     /**
      * Updates the authenticated user's account settings (enabled / non-locked flags).
@@ -382,27 +369,25 @@ public class UserController {
     }
 
     /**
-     * Exchanges a valid refresh token for a new access token. Validates the
-     * Authorization header, extracts the subject, and returns a new
-     * access token alongside the same refresh token; otherwise returns 400.
+     * Exchanges a valid refresh token for a ROTATED token pair (plan.md M5,
+     * FR-JWT-5): the presented token's session row is retired and a new refresh
+     * token in the same family is returned alongside a fresh access token — the
+     * old refresh token is dead from this moment, and replaying it triggers
+     * reuse detection (the whole family is revoked).
      *
-     * @param request the HTTP request, expected to carry "Authorization: Bearer &lt;refresh&gt";
-     * @return 200 OK with the new access token, or 400 when the header/token is invalid
+     * <p>All validation lives in {@link SessionService#rotate}: JWT signature and
+     * expiry, the {@code passwordChangedAt} check, and the session-store verdicts
+     * (unknown, superseded, or revoked tokens are refused). Failures surface as
+     * {@code ApiException} through the global handler; only a structurally absent
+     * header short-circuits to 400 here.
+     *
+     * @param request the HTTP request, expected to carry "Authorization: Bearer &lt;refresh&gt;"
+     * @return 200 OK with the user and the rotated token pair, or 400 when the header is missing
      */
     @GetMapping("/refresh/token")
     public ResponseEntity<HttpResponse> sendNewRefreshToken(HttpServletRequest request) {
-        if (isHeaderAndTokenValid(request)) {
-            String refreshToken = request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length());
-            UserDTO userDTO = userService.getUserById(tokenProvider.getSubject(refreshToken, request));
-            return ResponseEntity.ok(
-                    HttpResponse.builder()
-                            .timeStamp(now().toString())
-                            .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", refreshToken))
-                            .message("New refresh token sent successfully!")
-                            .status(OK)
-                            .statusCode(OK.value())
-                            .build());
-        } else {
+        String header = request.getHeader(AUTHORIZATION);
+        if (header == null || !header.startsWith(TOKEN_PREFIX)) {
             return ResponseEntity.badRequest().body(
                     HttpResponse.builder()
                             .timeStamp(now().toString())
@@ -412,21 +397,15 @@ public class UserController {
                             .statusCode(BAD_REQUEST.value())
                             .build());
         }
-    }
-
-    /**
-     * Returns true when the request carries a "Bearer" Authorization header
-     * whose token verifies and matches its subject.
-     *
-     * @param request the HTTP request to inspect
-     * @return true if the header is present, well-formed, and the token is valid
-     */
-    private boolean isHeaderAndTokenValid(HttpServletRequest request) {
-        return request.getHeader(AUTHORIZATION) != null
-                && request.getHeader(AUTHORIZATION).startsWith(TOKEN_PREFIX)
-                && tokenProvider.isTokenValid(
-                tokenProvider.getSubject(request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length()), request),
-                request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length()));
+        SessionService.TokenPair tokens = sessionService.rotate(header.substring(TOKEN_PREFIX.length()), request);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", tokens.user(), "access_token", tokens.accessToken(), "refresh_token", tokens.refreshToken()))
+                        .message("New refresh token sent successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
     }
 
     /**
@@ -631,6 +610,10 @@ public class UserController {
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
         UserDTO userDTO = authenticate(loginForm.getEmail(), loginForm.getPassword());
         //UserDTO userDTO = getLoggedInUser(authentication);
+        // MFA precedence (FR-MFA-4): a confirmed authenticator app supersedes the SMS code
+        // path — TOTP is the stronger factor, and sending an SMS a TOTP user will never
+        // type would only burn Twilio quota and confuse the login screen.
+        if (userDTO.isUsingTotp()) return sendTotpChallenge(userDTO);
         return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
     }
 
@@ -677,6 +660,30 @@ public class UserController {
     }
 
     /**
+     * Mints a server-side MFA challenge for a TOTP-enabled user whose first factor just
+     * succeeded, and returns it to the SPA instead of tokens. The challenge — not the
+     * email — is what {@code POST /user/verify/totp} later accepts, because a TOTP code
+     * always exists on the user's device: without this server-side proof that the
+     * password step happened, a public verify endpoint would let anyone holding the
+     * authenticator skip the first factor entirely (contrast with the SMS flow, where
+     * the code's existence itself proves authentication succeeded).
+     *
+     * @param userDTO the user awaiting authenticator verification
+     * @return 200 OK with the user and the opaque {@code challenge}; no tokens (FR-MFA-3)
+     */
+    private ResponseEntity<HttpResponse> sendTotpChallenge(UserDTO userDTO) {
+        String challenge = totpService.createLoginChallenge(userDTO.getId());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userDTO, "challenge", challenge))
+                        .message("Enter the code from your authenticator app.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
      * Asks UserService to send a 2FA code and returns a 200 OK response
      * informing the client a code is on the way. Used when the authenticated
      * user has 2FA enabled.
@@ -697,20 +704,23 @@ public class UserController {
     }
 
     /**
-     * Builds the standard login success response: the user plus a 230-minute
-     * access token and a 5-day refresh token created from a freshly loaded
-     * UserPrincipal.
+     * Builds the standard login success response: the user plus a 30-minute
+     * access token and a 5-day refresh token, issued through
+     * {@link SessionService#issueTokenPair} so the login opens a tracked,
+     * revocable session (plan.md M5). (Doc fix: this previously claimed 230
+     * minutes; {@code ACCESS_TOKEN_EXPIRE_TIME} is and was 1,800,000 ms = 30 min.)
      *
      * @param userDTO the successfully authenticated user
      * @return 200 OK with user data and both tokens
      */
     private ResponseEntity<HttpResponse> sendResponse(UserDTO userDTO) {
+        SessionService.TokenPair tokens = sessionService.issueTokenPair(getUserPrincipal(userDTO), request);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
+                        .data(of("user", userDTO, "access_token", tokens.accessToken(), "refresh_token", tokens.refreshToken()))
                         .message("Login successful!")
-                        .devMessage("AuthenticationManager succeeded; 230-min access token and 5-day refresh token issued via TokenProvider.")
+                        .devMessage("AuthenticationManager succeeded; 30-min access token and 5-day refresh token issued via SessionService (tracked session).")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
