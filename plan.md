@@ -46,14 +46,17 @@ The auth architecture is deliberately **hybrid: stateless tokens + a stateful tr
 - Password-change token invalidation (`passwordChangedAt`)
 - Audit logging with device + IP (`UserEvent`)
 - Anti-enumeration on auth flows · security response headers
+- **Federated OAuth2/OIDC login** (Google/GitHub/Microsoft, env-conditional) converging at a token-exchange point that issues our JWTs; MFA + disable/lock policy applied identically to federated sessions (SRS FR-FED)
+- **Admin user management** (`/admin/user/**` + `/users` dashboard) with FR-RBAC-4 closed (no self role-change anywhere)
+- **Organization-scoped administration** — `ROLE_ORGANIZATION_ADMIN` sees/manages only same-org users, 403 outside scope (SRS FR-ORG); schema via Flyway V1–V4
 
 **Known debt / gaps (track, address opportunistically):**
-- SMS-2FA is **stubbed** — the code is logged, not sent (the "MFA simulation"); → replaced by TOTP in M4
-- **Near-zero tests** (one context-load test; no frontend specs)
+- SMS-2FA dispatch remains **stubbed** (code logged, not sent) — acceptable now that TOTP (M4) is the production-grade factor; live SMS needs only Twilio creds + uncommenting the call
+- **Near-zero tests** (one context-load test; no frontend specs) — rotation/reuse, TOTP challenge binding, and org scoping are the priority candidates
 - Frontend **hardcodes `localhost:8080`** as the API base — portability gap
 - **Two JWT libraries** on the classpath (`jjwt` + `java-jwt`) — consolidation candidate
-- `ddl-auto: update` + `globally_quoted_identifiers` — README itself recommends Flyway + `validate` for prod
-- Access-token Javadoc wrongly says 230 min; the constant is **30 min** (fix the doc in M5)
+- `ddl-auto: update` + `globally_quoted_identifiers` — README itself recommends Flyway + `validate` for prod (identity/security tables are now Flyway V1–V6; the JPA customer/invoice tables are the remainder)
+- ~~Access-token Javadoc wrongly says 230 min~~ — fixed in M5 (`UserController#sendResponse` doc + devMessage now say 30 min)
 
 ---
 
@@ -75,9 +78,9 @@ Custom CSS-variable token layer mapped onto Bootstrap's `--bs-*` vars (`src/styl
 | M0 | Design foundation | ✅ done | tokens, dark/light, IBM Plex, navbar rebrand |
 | M1 | Auth screens + shell polish | 🔄 in progress | login redesigned ✓ · register/verify/reset · route transitions · skeleton loaders |
 | M2 | Security / activity dashboard | ⬜ | count-up stats, login chart, MFA ring, audit feed, device/IP list |
-| M3 | Roles × Permissions matrix | ⬜ | visualize RBAC; admin assigns roles/permissions |
-| M4 | TOTP authenticator MFA | ⬜ | replace stubbed SMS; QR enroll; **creates** the Account Security Center |
-| M5 | Sessions & device management | ⬜ | session/device list + revoke; refresh-token **rotation + reuse detection**; shorten/verify access TTL |
+| M3 | Roles × Permissions matrix | 🔄 in progress | admin Users dashboard shipped (`/users` list + `/users/:id` manage: role reassign, enable/lock, audit history; FR-ADMIN-1..5); FR-RBAC-4 self-elevation gap closed; SRS seven-role catalog via Flyway V2; visual matrix grid still open |
+| M4 | TOTP authenticator MFA | ✅ done | in-house RFC-6238 (`TotpUtils`) + zxing QR enroll; challenge-bound verify; hashed recovery codes; **created** the Account Security Center (`/security`) |
+| M5 | Sessions & device management | ✅ done | `refreshsessions` (Flyway V6); rotation + family-wide **reuse detection** via `SessionService` (the single token-issuance seam); sessions panel + revoke / log-out-everywhere; 30-min TTL doc fixed |
 | M6 | Risk-based step-up + lockout | ⬜ | new device/IP → re-verify; brute-force lockout |
 | M7 | Micro-interactions & polish | ⬜ | Ctrl+K command palette, empty states, toast restyle |
 

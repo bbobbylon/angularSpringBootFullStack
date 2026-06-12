@@ -732,6 +732,38 @@ select,
 }
 .sc-linkbtn:hover { color: var(--accent-strong); }
 
+/* ---- Federated login entry points (SRS FR-FED / EIR-UI-1) ----
+   Rendered by login.component.html only when GET /oauth2/providers reports
+   configured providers. Uses Bootstrap bridge vars so both themes work. */
+.sc-fed-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  color: var(--bs-secondary-color);
+  font-size: var(--fs-sm);
+}
+.sc-fed-divider::before,
+.sc-fed-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--bs-border-color);
+}
+.sc-fed-buttons {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.sc-fed-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+
 /* ---- Entrance: one orchestrated, staggered page-load reveal ---- */
 .sc-reveal {
   opacity: 0;

@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authenticationGuard } from './guard/authentication.guard';
+import { adminGuard } from './guard/admin.guard';
 
 /**
  * Application route table for the standalone router.
@@ -35,6 +36,13 @@ export const routes: Routes = [
     path: 'user/verify/password/:key',
     loadComponent: () => import('./features/auth/verify/verify.component').then((m) => m.VerifyComponent),
   },
+  // Federated login landing (SRS FR-FED-4): the backend's OAuth2 success handler
+  // redirects here with tokens (or an MFA handoff) in the URL fragment. Public by
+  // design — the user is mid-authentication when they arrive.
+  {
+    path: 'oauth2/callback',
+    loadComponent: () => import('./features/auth/oauth2-callback/oauth2-callback.component').then((m) => m.Oauth2CallbackComponent),
+  },
   {
     path: '',
     pathMatch: 'full',
@@ -66,10 +74,31 @@ export const routes: Routes = [
     canActivate: [authenticationGuard],
     loadComponent: () => import('./features/profile/profile/profile.component').then((m) => m.ProfileComponent),
   },
+  // Account Security Center (plan.md M4/M5): authenticator-app MFA enrollment and the
+  // sessions & devices panel. Self-service — plain authentication suffices, no admin guard.
+  {
+    path: 'security',
+    canActivate: [authenticationGuard],
+    loadComponent: () => import('./features/security/security-center/security-center.component').then((m) => m.SecurityCenterComponent),
+  },
   {
     path: 'customers/:id',
     canActivate: [authenticationGuard],
     loadComponent: () => import('./features/customers/customer-details/customer-details.component').then((m) => m.CustomerDetailsComponent),
+  },
+  // Administrative Users dashboard (SRS FR-ADMIN-1/2/5). adminGuard additionally requires a
+  // staff-grade authority (UPDATE:USER / UPDATE:ROLE) in the access token; the backend
+  // enforces the same authorities on every /admin/** request, so the guard is purely a
+  // usability aid (NFR-SEC-4).
+  {
+    path: 'users',
+    canActivate: [authenticationGuard, adminGuard],
+    loadComponent: () => import('./features/users/users/users.component').then((m) => m.UsersComponent),
+  },
+  {
+    path: 'users/:id',
+    canActivate: [authenticationGuard, adminGuard],
+    loadComponent: () => import('./features/users/user-details/user-details.component').then((m) => m.UserDetailsComponent),
   },
   {
     path: 'invoice/:id/:invoiceNumber',
