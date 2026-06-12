@@ -36,12 +36,15 @@ import static java.util.stream.Collectors.toList;
  * Issues and verifies JWTs for authenticated users.
  * <p>
  * Access tokens carry the user's authorities, use the numeric user ID as the
- * subject, and expire in 30 minutes; refresh tokens carry only the subject
- * (user ID) and expire in 5 days. Both are signed
- * with HMAC512 using the secret from application properties. Verification
- * intentionally does not require the "authorities" claim, so refresh tokens
- * remain valid; CustomAuthFilter then refuses to authenticate any token that
- * lacks authorities.
+ * subject, and expire in 30 minutes; refresh tokens carry the subject (user ID)
+ * plus a {@code jti} and expire in 5 days. Both carry the refresh-session FAMILY
+ * id in the {@code sid} claim (plan.md M5): the jti identifies one concrete
+ * refresh token for rotation/reuse detection, while the family ties rotations
+ * together into the one "session" the Security Center lists and revokes — see
+ * {@code SessionService}. Both are signed with HMAC512 using the secret from
+ * application properties. Verification intentionally does not require the
+ * "authorities" claim, so refresh tokens remain valid; CustomAuthFilter then
+ * refuses to authenticate any token that lacks authorities.
  */
 @Component
 @RequiredArgsConstructor
@@ -54,20 +57,26 @@ public class TokenProvider {
     /**
      * Generates a JWT access token for the given UserPrincipal.
      * The token includes issuer, audience, issued at, subject (user ID),
-     * authorities (permissions/roles), and an expiration time (30 minutes).
+     * authorities (permissions/roles), the refresh-session family ({@code sid}),
+     * and an expiration time (30 minutes).
      * The token is signed using HMAC512 with the secret key.
+     * <p>
+     * The {@code sid} claim does not gate validation — access tokens stay fully
+     * stateless (NFR-PERF-2). It exists so the sessions endpoint and the SPA can
+     * mark which listed session the caller is currently on.
      *
      * @param userPrincipal an authenticated user
+     * @param sessionFamily the refresh-session family minted by {@code SessionService}
      * @return a signed JWT access token as a String
      */
-    public String createAccessToken(UserPrincipal userPrincipal) {
-        //TODO explore the available options/methods in the JWT library to see if we can add cooler stuff to the tokens!
+    public String createAccessToken(UserPrincipal userPrincipal, String sessionFamily) {
         return JWT.create()
                 .withIssuer(BOBBYLON_LLC)
                 .withAudience(BOBS_MANAGEMENT)
                 .withIssuedAt(new Date())
                 .withSubject(String.valueOf(userPrincipal.getUser().getId()))
                 .withArrayClaim(AUTHORITIES, getClaimsFromUser(userPrincipal))
+                .withClaim(SESSION_FAMILY, sessionFamily)
                 .withExpiresAt(new Date(currentTimeMillis() + ACCESS_TOKEN_EXPIRE_TIME))
                 .sign(HMAC512(secret.getBytes()));
     }
@@ -88,21 +97,57 @@ public class TokenProvider {
     /**
      * Generates a JWT refresh token for the given UserPrincipal.
      * The refresh token includes issuer, audience, issued at, subject (user ID),
-     * and an expiration time (5 days). It does NOT include authorities.
+     * the rotation identifiers ({@code jti} + {@code sid} family), and an
+     * expiration time (5 days). It does NOT include authorities.
      * The token is signed using HMAC512 with the secret key.
+     * <p>
+     * The jti is the row key of this token's {@code refreshsessions} record: the
+     * refresh endpoint resolves it server-side, which is what turns a bare JWT
+     * into a revocable, rotation-tracked session token (FR-JWT-5).
      *
      * @param userPrincipal an authenticated user
+     * @param jti           unique id of this concrete refresh token
+     * @param sessionFamily the family tying this token's rotations into one session
      * @return a signed JWT refresh token as a String
      */
-    public String createRefreshToken(UserPrincipal userPrincipal) {
+    public String createRefreshToken(UserPrincipal userPrincipal, String jti, String sessionFamily) {
         return JWT.create()
                 .withIssuer(BOBBYLON_LLC)
                 .withAudience(BOBS_MANAGEMENT)
                 .withIssuedAt(new Date())
+                .withJWTId(jti)
+                .withClaim(SESSION_FAMILY, sessionFamily)
                 //returns a string, but we will convert it to type Long when we extract the subject from the token. The subject is the user's ID.
                 .withSubject(String.valueOf(userPrincipal.getUser().getId()))
                 .withExpiresAt(new Date(currentTimeMillis() + REFRESH_TOKEN_EXPIRE_TIME))
                 .sign(HMAC512(secret.getBytes()));
+    }
+
+    /**
+     * Verifies the token and returns its {@code jti} — the rotation identifier the
+     * refresh endpoint resolves against the {@code refreshsessions} table. Null for
+     * legacy tokens minted before M5 (their holders must re-authenticate once).
+     *
+     * @param token the raw refresh JWT
+     * @return the JWT ID, or null when the token predates rotation support
+     * @throws JWTVerificationException if signature, issuer, or expiration verification fails
+     */
+    public String getTokenId(String token) {
+        return getJWTVerifier().verify(token).getId();
+    }
+
+    /**
+     * Verifies the token and returns its {@code sid} (session family) claim, present on
+     * both token types since M5. Used by the sessions endpoint to mark the caller's
+     * current session in the device list.
+     *
+     * @param token a raw access or refresh JWT
+     * @return the session family, or null for pre-M5 tokens
+     * @throws JWTVerificationException if signature, issuer, or expiration verification fails
+     */
+    public String getSessionFamily(String token) {
+        Claim claim = getJWTVerifier().verify(token).getClaim(SESSION_FAMILY);
+        return claim == null || claim.isNull() ? null : claim.asString();
     }
 
 

@@ -250,15 +250,76 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Not yet implemented; returns an empty collection.
+     * Retrieves one page of the user directory with no filter applied.
+     * Delegates to {@link #searchUsers(String, int, int)} with a blank term so the
+     * pagination/ordering logic lives in exactly one place.
      *
      * @param page     0-indexed page number
      * @param pageSize page size
-     * @return an empty list
+     * @return the users on the requested page, newest accounts first
      */
     @Override
     public Collection<User> list(int page, int pageSize) {
-        return List.of();
+        return searchUsers("", page, pageSize);
+    }
+
+    /**
+     * Pages through the user directory for the administrative dashboard (FR-ADMIN-1).
+     * <p>
+     * The free-text term is wrapped in SQL wildcards here (not by callers) and matched
+     * against first name, last name, and email via {@code LIKE}. Page inputs are clamped
+     * defensively — negative pages become page 0 and the page size is bounded to 100 —
+     * so a hand-crafted request cannot turn the directory into an unbounded full-table
+     * dump (NFR-PERF-3).
+     *
+     * @param searchTerm free-text filter; blank or null lists everyone
+     * @param page       0-indexed page number (negative values are treated as 0)
+     * @param pageSize   rows per page (bounded to 1..100)
+     * @return the matching users on the requested page, newest accounts first
+     */
+    @Override
+    public Collection<User> searchUsers(String searchTerm, int page, int pageSize) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(pageSize, 1), 100);
+        try {
+            return jdbcTemplate.query(SELECT_USERS_PAGED_QUERY,
+                    of("searchTerm", toLikePattern(searchTerm),
+                            "pageSize", safeSize,
+                            "offset", safePage * safeSize),
+                    new UserRowMapper());
+        } catch (Exception exception) {
+            log.error("Error listing users (page {}, size {}, term '{}'): {}", safePage, safeSize, searchTerm, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving the user directory. Please try again.");
+        }
+    }
+
+    /**
+     * Counts the users matching the same directory filter as
+     * {@link #searchUsers(String, int, int)}, for total-pages metadata in the admin UI.
+     *
+     * @param searchTerm free-text filter; blank or null counts everyone
+     * @return the total number of matching users
+     */
+    @Override
+    public long countUsers(String searchTerm) {
+        try {
+            Long count = jdbcTemplate.queryForObject(COUNT_USERS_QUERY,
+                    of("searchTerm", toLikePattern(searchTerm)), Long.class);
+            return count == null ? 0 : count;
+        } catch (Exception exception) {
+            log.error("Error counting users for term '{}': {}", searchTerm, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving the user directory. Please try again.");
+        }
+    }
+
+    /**
+     * Normalizes a raw directory search term into the {@code LIKE} pattern both
+     * directory queries expect: trimmed and wrapped in {@code %} wildcards, with a
+     * blank/null term collapsing to {@code %%} (match everything). Centralized so the
+     * SELECT and COUNT queries can never disagree about how filtering works.
+     */
+    private static String toLikePattern(String searchTerm) {
+        return "%" + (isBlank(searchTerm) ? "" : searchTerm.trim()) + "%";
     }
 
     /**

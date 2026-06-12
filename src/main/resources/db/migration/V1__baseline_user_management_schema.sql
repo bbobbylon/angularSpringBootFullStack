@@ -1,15 +1,20 @@
-# MySQL Database Schema for User Management System from Junior from Get Arrays LLC tutorial on Udemy! circa 2022
-CREATE SCHEMA IF NOT EXISTS db2;
+-- V1 — Baseline: the pre-Flyway user-management schema (SRS DB-14 adoption point).
+--
+-- HOW THIS RUNS:
+--   * Fresh/empty database  -> Flyway executes this file, creating the same tables that
+--     schema.sql used to create manually, then applies V2+.
+--   * Existing database (local, Docker, Aiven) -> spring.flyway.baseline-on-migrate marks
+--     version 1 as already applied WITHOUT running this file, then applies V2+ on top of
+--     the live schema. Nothing here is re-executed against existing data.
+--
+-- Scope note: only the user-management tables are baselined. The customer/invoice tables
+-- are still created by Hibernate (ddl-auto: update) from the JPA entities, exactly as
+-- before Flyway was introduced. Folding them into a migration is a follow-up.
+--
+-- Content is a faithful copy of resources/schema.sql at adoption time (no DROPs, and
+-- IF NOT EXISTS guards so a partially initialized database does not fail the migration).
 
-SET NAMES 'UTF8MB4';
-SET TIME_ZONE = '+00:00';
-SET TIME_ZONE = '-4:00';
-
-USE db2;
-
-DROP TABLE IF EXISTS users;
-
-CREATE TABLE users
+CREATE TABLE IF NOT EXISTS users
 (
     id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(50)     NOT NULL,
@@ -29,9 +34,7 @@ CREATE TABLE users
     CONSTRAINT UQ_Users_Email UNIQUE (email)
 );
 
-DROP TABLE IF EXISTS roles;
-
-CREATE TABLE roles
+CREATE TABLE IF NOT EXISTS roles
 (
     id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     name       VARCHAR(50)     NOT NULL,
@@ -39,23 +42,16 @@ CREATE TABLE roles
     CONSTRAINT UQ_Roles_Name UNIQUE (name)
 );
 
-# Seven-role catalog per SRS §2.3, kept in sync with Flyway V2 (db/migration/
-# V2__align_role_catalog_with_srs.sql) — Flyway is the authoritative path; this file
-# is a reference copy for manual full rebuilds only.
+-- Original (pre-SRS) role catalog. V2 reshapes this into the seven SRS roles;
+-- it is seeded here unchanged so the migration history tells the true story.
 INSERT INTO roles (name, permission)
-VALUES ('ROLE_GUEST', 'READ:USER'),
-       ('ROLE_USER', 'READ:USER, READ:CUSTOMER'),
-       ('ROLE_MODERATOR', 'READ:USER, READ:CUSTOMER, UPDATE:CUSTOMER'),
-       ('ROLE_HELP_DESK_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER'),
-       ('ROLE_ORGANIZATION_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE'),
-       ('ROLE_ADMIN',
-        'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, DELETE:USER'),
-       ('ROLE_APPLICATION_ADMIN',
-        'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, DELETE:USER, DELETE:CUSTOMER');
+VALUES ('ROLE_USER', 'READ:USER, READ:CUSTOMER'),
+       ('ROLE_MANAGER', 'READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER'),
+       ('ROLE_ADMIN', 'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER'),
+       ('ROLE_HELP_DESK_ADMIN',
+        'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, DELETE:USER, DELETE:CUSTOMER');
 
-DROP TABLE IF EXISTS userroles;
-
-CREATE TABLE userroles
+CREATE TABLE IF NOT EXISTS userroles
 (
     id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
@@ -65,9 +61,7 @@ CREATE TABLE userroles
     CONSTRAINT UQ_UserRoles_User_Id UNIQUE (user_id)
 );
 
-DROP TABLE IF EXISTS events;
-
-CREATE TABLE events
+CREATE TABLE IF NOT EXISTS events
 (
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     type        VARCHAR(50)     NOT NULL CHECK (type IN
@@ -89,9 +83,7 @@ VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
        ('PASSWORD_UPDATE', 'You have updated your password successfully :)'),
        ('MFA_UPDATE', 'You have updated your multi-factor authentication settings :)');
 
-DROP TABLE IF EXISTS userevents;
-
-CREATE TABLE userevents
+CREATE TABLE IF NOT EXISTS userevents
 (
     id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id    BIGINT UNSIGNED NOT NULL,
@@ -103,29 +95,22 @@ CREATE TABLE userevents
     FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
-DROP TABLE IF EXISTS accountverifications;
-
-CREATE TABLE accountverifications
+CREATE TABLE IF NOT EXISTS accountverifications
 (
     id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
-    -- `url` stores a bare UUID verification key (NOT a full URL). The app builds the clickable
-    -- link from it for the email only. TODO: rename to `verification_key` to match its contents
-    -- (coordinate schema.sql / psqlschema.sql / aivendatabase.sql with a live local + Aiven migration).
+    -- `url` stores a bare UUID verification key (NOT a full URL); see schema.sql notes.
     url     VARCHAR(255)    NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT UQ_AccountVerifications_User_Id UNIQUE (user_id),
     CONSTRAINT UQ_AccountVerifications_Url UNIQUE (url)
 );
 
-DROP TABLE IF EXISTS ResetPasswordVerifications;
-
-CREATE TABLE ResetPasswordVerifications
+CREATE TABLE IF NOT EXISTS resetpasswordverifications
 (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id         BIGINT UNSIGNED NOT NULL,
-    -- `url` stores a bare UUID verification key (NOT a full URL); see accountverifications above.
-    -- TODO: rename to `verification_key` (requires a coordinated DB migration on local + Aiven).
+    -- `url` stores a bare UUID verification key (NOT a full URL); see schema.sql notes.
     url             VARCHAR(255)    NOT NULL,
     expiration_date DATETIME        NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -133,9 +118,7 @@ CREATE TABLE ResetPasswordVerifications
     CONSTRAINT UQ_ResetPasswordVerifications_Url UNIQUE (url)
 );
 
-DROP TABLE IF EXISTS invoiceserviceitems;
-
-CREATE TABLE invoiceserviceitems
+CREATE TABLE IF NOT EXISTS invoiceserviceitems
 (
     id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     invoice_id BIGINT UNSIGNED NOT NULL,
@@ -144,9 +127,7 @@ CREATE TABLE invoiceserviceitems
     price      DECIMAL(38, 2)           DEFAULT NULL
 );
 
-DROP TABLE IF EXISTS twofactorverifications;
-
-CREATE TABLE twofactorverifications
+CREATE TABLE IF NOT EXISTS twofactorverifications
 (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id         BIGINT UNSIGNED NOT NULL,

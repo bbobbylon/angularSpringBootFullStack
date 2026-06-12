@@ -40,6 +40,27 @@ public interface UserRepo<T extends User> {
     Collection<T> list(int page, int pageSize);
 
     /**
+     * Pages through the user directory for the administrative dashboard (FR-ADMIN-1),
+     * filtered by a free-text term matched against first name, last name, and email.
+     * A blank term returns the unfiltered directory, so this also backs {@link #list}.
+     *
+     * @param searchTerm free-text filter; blank or null means "no filter"
+     * @param page       the page number (0-indexed)
+     * @param pageSize   the number of users per page
+     * @return the matching users on the requested page, newest accounts first
+     */
+    Collection<T> searchUsers(String searchTerm, int page, int pageSize);
+
+    /**
+     * Counts the users the same filter in {@link #searchUsers} would match, so callers
+     * can compute total pages for the directory view.
+     *
+     * @param searchTerm free-text filter; blank or null means "no filter"
+     * @return the total number of matching users
+     */
+    long countUsers(String searchTerm);
+
+    /**
      * Retrieves a single user by ID.
      *
      * @param id the user's unique identifier
