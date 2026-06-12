@@ -1,0 +1,10 @@
+/*
+ * User management detail styles.
+ *
+ * Intentionally minimal: surfaces, color, and typography come from the global
+ * design-token layer in src/styles.css (M0). Only view-specific tweaks live here.
+ */
+
+.card {
+  height: auto;
+}

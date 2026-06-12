@@ -40,6 +40,15 @@
               Invoices</a></li>
           </ul>
         </li>
+        @if (canManageUsers) {
+          <!-- Admin-only (SRS FR-ADMIN-5): rendered when the token carries UPDATE:USER or
+               UPDATE:ROLE. adminGuard + the backend's /admin/** rules enforce the same check. -->
+          <li class="nav-item">
+            <a [routerLink]="['/users']" class="nav-link">
+              <i class="bi bi-people" style="padding-right: 4px;"></i>Users
+            </a>
+          </li>
+        }
         <li class="nav-item dropdown">
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
              id="navbarDropdownProfile"
@@ -62,6 +71,9 @@
             @if (user; as u) {
               <li><a [routerLink]="['/profile']" class="dropdown-item"><i class="bi bi-person-circle"
                                                                           style="padding-right: 8px;"></i>{{ u.firstName }} {{ u.lastName }}</a>
+              </li>
+              <li><a [routerLink]="['/security']" class="dropdown-item"><i class="bi bi-shield-lock"
+                                                                           style="padding-right: 8px;"></i>Security Center</a>
               </li>
             }
             <li style="cursor: pointer;"><a (click)="logOut()" (keydown.enter)="logOut()" class="dropdown-item"

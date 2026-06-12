@@ -1,0 +1,239 @@
+<!--
+  Account Security Center (plan.md M4/M5).
+
+  Layout follows the profile page's conventions: navbar + breadcrumb, then stacked
+  cards. Two panels — Multi-factor authentication (TOTP wizard + SMS toggle) and
+  Sessions & devices (the stateful half of the hybrid token model made visible).
+-->
+<app-navbar [user]="user()"></app-navbar>
+<section>
+  <div class="container">
+    <nav aria-label="breadcrumb" style="margin-top: 8px;">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
+        <li aria-current="page" class="breadcrumb-item active">Security Center</li>
+      </ol>
+    </nav>
+
+    <div class="row">
+      <div class="col-xl-12">
+        <h3 class="mb-1">Account Security Center</h3>
+        <p class="text-muted mb-4">Manage your second factor and see every device signed in to your account.</p>
+      </div>
+    </div>
+
+    <!-- ── Multi-factor authentication ─────────────────────────────────────── -->
+    <div class="card mb-4" style="border-radius: 8px;">
+      <div class="card-body">
+        <h5 class="card-title"><i class="bi bi-shield-lock-fill" style="margin-right: 8px;"></i>Multi-factor authentication</h5>
+        <h6 class="card-subtitle mb-3 text-muted">A second factor keeps your account safe even if your password leaks.</h6>
+
+        <div class="list-group shadow-sm">
+
+          <!-- Authenticator app (TOTP) -->
+          <div class="list-group-item p-3">
+
+            @switch (enrollStep()) {
+              <!-- Status row -->
+              @case ('idle') {
+                <div class="row align-items-center">
+                  <div class="col">
+                    <strong>Authenticator app</strong>
+                    @if (user()?.usingTotp) {
+                      <span class="badge bg-success mx-2">Enabled</span>
+                    } @else {
+                      <span class="badge bg-warning mx-2">Not set up</span>
+                    }
+                    <p class="text-muted mb-0">
+                      Time-based one-time codes (TOTP) from Google Authenticator, Authy, 1Password, or any RFC-6238 app.
+                      @if (user()?.usingTotp) {
+                        <span class="d-block mt-1">
+                          Recovery codes remaining:
+                          <span class="mono">{{ recoveryCodesRemaining() }}</span>
+                          @if (recoveryCodesRemaining() <= 2) {
+                            <span class="badge bg-danger ms-2">Running low — re-enroll to get a fresh set</span>
+                          }
+                        </span>
+                      }
+                    </p>
+                  </div>
+                  <div class="col-auto">
+                    @if (!user()?.usingTotp) {
+                      <button (click)="startEnrollment()" [disabled]="isLoading()" class="btn btn-primary btn-sm" type="button">
+                        @if (isLoading()) {
+                          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                        }
+                        Set up
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                <!-- Disable form: a live code is required, so a hijacked browser session
+                     cannot quietly strip the second factor. -->
+                @if (user()?.usingTotp) {
+                  <form #disableForm="ngForm" (ngSubmit)="disableTotp(disableForm)" class="row g-2 align-items-end mt-2">
+                    <div class="col-auto">
+                      <label class="form-label mb-1" for="disableCode">Authenticator or recovery code</label>
+                      <input [disabled]="isLoading()" autocomplete="one-time-code" class="form-control form-control-sm"
+                             id="disableCode" name="code" ngModel placeholder="123456" required type="text">
+                    </div>
+                    <div class="col-auto">
+                      <button [disabled]="disableForm.invalid || isLoading()" class="btn btn-outline-danger btn-sm" type="submit">
+                        Disable authenticator
+                      </button>
+                    </div>
+                  </form>
+                }
+              }
+
+              <!-- Step 1: scan + confirm -->
+              @case ('scan') {
+                <strong>Set up your authenticator</strong>
+                <p class="text-muted mb-3">Scan the QR code, then enter the 6-digit code your app shows to confirm.</p>
+                <div class="row">
+                  <div class="col-md-auto text-center mb-3">
+                    @if (setup(); as s) {
+                      <img [src]="s.qrCode" alt="TOTP enrollment QR code"
+                           style="width: 200px; height: 200px; border-radius: 8px; background: #fff; padding: 8px;">
+                      <p class="text-muted mt-2 mb-0" style="max-width: 220px;">
+                        Can't scan? Enter this key manually:<br>
+                        <span class="mono user-select-all">{{ s.secret }}</span>
+                      </p>
+                    }
+                  </div>
+                  <div class="col-md">
+                    <form #confirmForm="ngForm" (ngSubmit)="confirmEnrollment(confirmForm)">
+                      <div class="mb-3" style="max-width: 260px;">
+                        <label class="form-label" for="confirmCode">Code from your app</label>
+                        <input [disabled]="isLoading()" autocomplete="one-time-code" class="form-control"
+                               id="confirmCode" inputmode="numeric" name="code" ngModel placeholder="••••••" required type="text">
+                      </div>
+                      <button [disabled]="confirmForm.invalid || isLoading()" class="btn btn-primary btn-sm" type="submit">
+                        @if (isLoading()) {
+                          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                          <span>Verifying…</span>
+                        } @else {
+                          <span>Confirm &amp; enable</span>
+                        }
+                      </button>
+                      <button (click)="cancelEnrollment()" [disabled]="isLoading()" class="btn btn-outline-secondary btn-sm ms-2" type="button">
+                        Cancel
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              }
+
+              <!-- Step 2: one-time recovery code reveal -->
+              @case ('codes') {
+                <strong>Save your recovery codes</strong>
+                <p class="text-muted mb-2">
+                  Each code signs you in once if you lose your authenticator.
+                  <strong>They will never be shown again</strong> — store them somewhere safe now.
+                </p>
+                <div class="row row-cols-2 row-cols-md-5 g-2 mb-3" style="max-width: 720px;">
+                  @for (code of recoveryCodes(); track code) {
+                    <div class="col"><span class="mono badge bg-secondary w-100 py-2 user-select-all">{{ code }}</span></div>
+                  }
+                </div>
+                <button (click)="finishEnrollment()" class="btn btn-primary btn-sm" type="button">
+                  I've saved my codes
+                </button>
+              }
+            }
+          </div>
+
+          <!-- SMS verification (legacy second factor, relocated from Profile) -->
+          <div class="list-group-item p-3">
+            <div class="row align-items-center">
+              <div class="col">
+                <strong>SMS verification</strong>
+                @if (user()?.using2FA) {
+                  <span class="badge bg-success mx-2">Enabled</span>
+                } @else {
+                  <span class="badge bg-warning mx-2">Disabled</span>
+                }
+                <p class="text-muted mb-0">
+                  One-time codes sent to your phone. Requires a phone number on your profile.
+                  @if (user()?.usingTotp) {
+                    <span class="d-block mt-1">Your authenticator app takes precedence while it is enabled.</span>
+                  }
+                </p>
+              </div>
+              <div class="col-auto">
+                <button (click)="toggleSmsMfa()" [disabled]="isLoading()" class="btn btn-outline-primary btn-sm" type="button">
+                  {{ user()?.using2FA ? 'Disable' : 'Enable' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Sessions & devices ──────────────────────────────────────────────── -->
+    <div class="card mb-4" style="border-radius: 8px;">
+      <div class="card-body">
+        <div class="row align-items-center mb-2">
+          <div class="col">
+            <h5 class="card-title mb-1"><i class="bi bi-laptop" style="margin-right: 8px;"></i>Sessions &amp; devices</h5>
+            <h6 class="card-subtitle text-muted">
+              Every device holding a live refresh token. Revoking a session stops it from refreshing;
+              its current access token expires within 30 minutes.
+            </h6>
+          </div>
+          <div class="col-auto">
+            <button (click)="revokeOtherSessions()" [disabled]="isLoading() || sessions().length <= 1"
+                    class="btn btn-outline-danger btn-sm" type="button">
+              <i class="bi bi-box-arrow-right" style="margin-right: 4px;"></i>Log out everywhere else
+            </button>
+          </div>
+        </div>
+
+        <table class="table table-hover mb-0">
+          <thead>
+          <tr>
+            <th scope="col">Device</th>
+            <th scope="col">IP Address</th>
+            <th scope="col">Signed in</th>
+            <th scope="col">Last active</th>
+            <th scope="col">Expires</th>
+            <th scope="col">Action</th>
+          </tr>
+          </thead>
+          <tbody>
+            @for (session of sessions(); track session.family) {
+              <tr>
+                <td>
+                  {{ session.device }}
+                  @if (session.family === currentFamily()) {
+                    <span class="badge bg-info ms-2">This device</span>
+                  }
+                </td>
+                <td class="mono">{{ session.ipAddress }}</td>
+                <td>{{ session.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                <td>{{ session.lastUsedAt | date: 'MMM d, y, h:mm a' }}</td>
+                <td>{{ session.expiresAt | date: 'MMM d, y, h:mm a' }}</td>
+                <td>
+                  <button (click)="revokeSession(session.family)"
+                          [disabled]="isLoading() || session.family === currentFamily()"
+                          [title]="session.family === currentFamily() ? 'Use Logout to end this session' : 'Revoke this session'"
+                          class="btn btn-outline-danger btn-sm" type="button">
+                    Revoke
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="text-muted" colspan="6">
+                  No tracked sessions yet — sessions appear here after your next sign-in.
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>

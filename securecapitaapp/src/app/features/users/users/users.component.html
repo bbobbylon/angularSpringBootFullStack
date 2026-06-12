@@ -1,0 +1,138 @@
+@if (usersState(); as state) {
+  @switch (state.dataState) {
+    @case (DataState.LOADED) {
+      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <section>
+        <div class="container">
+          <nav aria-label="breadcrumb" style="margin-top: 8px">
+            <ol class="breadcrumb">
+              <li class="breadcrumb-item">
+                <a [routerLink]="['/']">Home</a>
+              </li>
+              <li class="breadcrumb-item active">Users</li>
+            </ol>
+          </nav>
+          <div class="row mt-3">
+            <div class="col">
+              <h4 class="fw-bold text-start">Users</h4>
+              <p class="text-secondary mb-2">
+                {{ state?.appData?.data?.usersTotalElements ?? 0 }} account(s) in the directory
+              </p>
+            </div>
+            <div class="col-xm-12">
+              <form class="row g-3 float-end">
+                <div class="col-auto">
+                  <label class="visually-hidden" for="userSearch"></label>
+                  <input #searchForm (input)="onSearchInput(searchForm.value)"
+                         class="form-control" id="userSearch" placeholder="Name or email" type="text" />
+                </div>
+              </form>
+            </div>
+            <div class="col-xm-12">
+              <table class="table table-hover">
+                <thead>
+                <tr>
+                  <th class="text-center" scope="col">ID</th>
+                  <th scope="col">Photo</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Email</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">MFA</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Action</th>
+                </tr>
+                </thead>
+                <tbody class="table-body">
+                  @for (user of (state?.appData?.data?.users ?? []); track user.id) {
+                    <tr class="cell-1">
+                      <th class="text-center">{{ user.id }}</th>
+                      <td>
+                        @if (user.imageUrl) {
+                          <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
+                            <img [alt]="user.firstName" [ngSrc]="user.imageUrl" fill
+                                 loading="lazy" style="object-fit: cover;">
+                          </div>
+                        } @else {
+                          <div [style.background-color]="getAvatarColor(user.id)"
+                               style="width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:16px;">
+                            {{ user.firstName?.charAt(0)?.toUpperCase() }}
+                          </div>
+                        }
+                      </td>
+                      <td>{{ user.firstName }} {{ user.lastName }}</td>
+                      <td>{{ user.email }}</td>
+                      <td>
+                        <span
+                          [ngClass]="[
+                            user.roleName === 'ROLE_APPLICATION_ADMIN' || user.roleName === 'ROLE_ADMIN' ? ' bg-danger' : '',
+                            user.roleName === 'ROLE_ORGANIZATION_ADMIN' || user.roleName === 'ROLE_HELP_DESK_ADMIN' ? ' bg-warning' : '',
+                            user.roleName === 'ROLE_MODERATOR' ? ' bg-info' : '',
+                            user.roleName === 'ROLE_USER' ? ' bg-primary' : '',
+                            user.roleName === 'ROLE_GUEST' ? ' bg-secondary' : '',
+                          ]"
+                          class="badge">
+                          {{ user.roleName }}
+                        </span>
+                      </td>
+                      <td>
+                        <span [ngClass]="user.using2FA ? 'bg-success' : 'bg-secondary'" class="badge">
+                          {{ user.using2FA ? 'ON' : 'OFF' }}
+                        </span>
+                      </td>
+                      <td>
+                        <span [ngClass]="[
+                                user.enabled && user.notLocked ? ' bg-success' : '',
+                                !user.enabled ? ' bg-secondary' : '',
+                                user.enabled && !user.notLocked ? ' bg-danger' : '',
+                              ]"
+                              class="badge">
+                          {{ !user.enabled ? 'DISABLED' : (user.notLocked ? 'ACTIVE' : 'LOCKED') }}
+                        </span>
+                      </td>
+                      <td>
+                        <button [routerLink]="['/users', user.id]" class="btn btn-info" type="button">Manage
+                        </button>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td class="text-center text-muted" colspan="8">No results found.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if ((state?.appData?.data?.users?.length ?? 0) > 0) {
+                <nav aria-label="User directory pagination">
+                  <ul class="pagination justify-content-end">
+                    <li [ngClass]="0 === currentPage$() ? ' disabled' : ''" class="page-item">
+                      <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; Prev</button>
+                    </li>
+                    @for (pageNumber of (state?.appData?.data?.usersTotalPages ?? 0) | ExtractArrayValue: 'number'; track i; let i = $index) {
+                      <li class="page-item">
+                        <button (click)="goToPage(i)"
+                                [ngClass]="i === currentPage$() ? ' active' : ''"
+                                class="page-link">{{ i + 1 }}
+                        </button>
+                      </li>
+                    }
+                    <li
+                      [ngClass]="(state?.appData?.data?.usersTotalPages ?? 0) - 1 === currentPage$() ? ' disabled' : ''"
+                      class="page-item">
+                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">Next &raquo;</button>
+                    </li>
+                  </ul>
+                </nav>
+              }
+            </div>
+          </div>
+        </div>
+      </section>
+    }
+    @case (DataState.LOADING) {
+      <div>Loading...</div>
+    }
+    @case (DataState.ERROR) {
+      <div>{{ state.error }}</div>
+    }
+  }
+}

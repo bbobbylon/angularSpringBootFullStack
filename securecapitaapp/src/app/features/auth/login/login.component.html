@@ -120,6 +120,26 @@
             </button>
           </form>
 
+          <!-- Federated entry points (SRS FR-FED / EIR-UI-1). Rendered only for providers
+               the backend reports as configured; clicking hands the whole window to the
+               OAuth2 redirect chain, so these are buttons, not XHR triggers. -->
+          @if (federatedProviders().length > 0) {
+            <div class="sc-fed-divider" role="separator"><span>or continue with</span></div>
+            <div class="sc-fed-buttons">
+              @for (provider of federatedProviders(); track provider) {
+                <button (click)="loginWithProvider(provider)"
+                        [disabled]="state.dataState === DataState.LOADING"
+                        class="btn btn-outline-secondary sc-fed-btn" type="button">
+                  <i class="bi"
+                     [class.bi-google]="provider === 'google'"
+                     [class.bi-github]="provider === 'github'"
+                     [class.bi-microsoft]="provider === 'microsoft'"></i>
+                  <span>{{ provider.charAt(0).toUpperCase() + provider.slice(1) }}</span>
+                </button>
+              }
+            </div>
+          }
+
           <div class="sc-auth__links">
             <a [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'"
                routerLink="/register">Create an account</a>
@@ -139,10 +159,17 @@
 
           <p class="eyebrow">Two-factor verification</p>
           <h2 class="sc-auth__title">Enter your code</h2>
-          <p class="sc-auth__hint">
-            We sent a one-time code to the number ending
-            <span class="sc-phone mono">••• {{ state.phone }}</span>.
-          </p>
+          @if (state.mfaMethod === 'totp') {
+            <p class="sc-auth__hint">
+              Enter the 6-digit code from your authenticator app
+              — or one of your recovery codes.
+            </p>
+          } @else {
+            <p class="sc-auth__hint">
+              We sent a one-time code to the number ending
+              <span class="sc-phone mono">••• {{ state.phone }}</span>.
+            </p>
+          }
 
           @if (state.dataState === DataState.ERROR) {
             <div class="alert sc-alert alert-dismissible fade show" role="alert">

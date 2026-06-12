@@ -43,6 +43,15 @@ export class NavbarComponent {
   protected readonly theme = this.themeService.theme;
 
   /**
+   * Whether the navbar should show the administrative "Users" link (SRS FR-ADMIN-5).
+   * Evaluated once per navbar instantiation from the access token's authorities claim
+   * — the same staff-grade authorities (UPDATE:USER / UPDATE:ROLE) that adminGuard and
+   * the backend's /admin/** rules require. Hiding the link is a usability choice only;
+   * the route guard and the server-side checks are the real enforcement (NFR-SEC-4).
+   */
+  protected readonly canManageUsers = this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE');
+
+  /**
    * Flips the application between dark and light mode via {@link ThemeService},
    * which updates the {@code data-bs-theme} attribute and persists the choice.
    */
