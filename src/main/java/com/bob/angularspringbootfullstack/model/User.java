@@ -35,6 +35,14 @@ public class User {
     private boolean enabled;
     private boolean isNotLocked;
     private boolean isUsing2FA;
+    /**
+     * Whether a CONFIRMED authenticator-app (TOTP) credential exists for this user
+     * (SRS FR-MFA-4). Denormalized from the {@code totpcredentials} table onto
+     * {@code users.using_totp} — kept in lockstep by {@code TotpServiceImpl} — so row
+     * mapping and DTO exposure need no join. When true, login challenges use the
+     * authenticator instead of the SMS code path ({@code isUsing2FA}).
+     */
+    private boolean usingTotp;
     private LocalDateTime createdAt;
     /**
      * Timestamp of the most recent password change.
