@@ -4,6 +4,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { AdminUserDetailInterface, AdminUserListInterface } from '../interface/admin.interface';
+import { environment } from '../../environments/environment';
 
 /**
  * HTTP service for the administrative user-management endpoints (SRS §4.9).
@@ -23,7 +24,7 @@ import { AdminUserDetailInterface, AdminUserListInterface } from '../interface/a
 })
 export class AdminUserService {
   private http = inject(HttpClient);
-  private readonly server: string = 'http://localhost:8080';
+  private readonly server = environment.apiUrl;
 
   /**
    * Fetches one page of the user directory, optionally filtered by a search term
@@ -80,6 +81,25 @@ export class AdminUserService {
   updateAccountSettings$ = (id: number, settings: { enabled: boolean; notLocked: boolean }): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/settings`, settings)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Fetches one page of a managed user's audit event history
+   * ({@code GET /admin/user/:id/events?page=n}, requires UPDATE:USER or UPDATE:ROLE).
+   *
+   * Called by the admin user-detail view's pagination controls so subsequent pages
+   * can be loaded without re-fetching the full user profile.
+   *
+   * @param id   - the managed user's primary key
+   * @param page - zero-based page index
+   * @param size - events per page (default 10)
+   * @returns Observable of the API envelope carrying events and pagination metadata
+   */
+  userEvents$ = (id: number, page = 0, size = 10): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<AdminUserDetailInterface>>(
+        `${this.server}/admin/user/${id}/events?page=${page}&size=${size}`,
+      )
       .pipe(tap(console.log), catchError(this.handleError));
 
   /**

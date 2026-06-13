@@ -22,6 +22,61 @@
       </div>
     </div>
 
+    @if (dataState() === DataState.LOADING) {
+      <!-- ── Loading skeleton ─────────────────────────────────────────────── -->
+      <div class="card mb-4 placeholder-glow" style="border-radius: 8px;">
+        <div class="card-body">
+          <span class="placeholder col-5 mb-3 d-block" style="height: 22px;"></span>
+          <span class="placeholder col-8 mb-4 d-block" style="height: 14px;"></span>
+          <div class="list-group shadow-sm">
+            <div class="list-group-item p-3">
+              <div class="row align-items-center">
+                <div class="col">
+                  <span class="placeholder col-4 mb-2 d-block" style="height: 16px;"></span>
+                  <span class="placeholder col-7 d-block" style="height: 12px;"></span>
+                </div>
+                <div class="col-auto"><span class="placeholder d-block" style="width: 80px; height: 32px; border-radius: 4px;"></span></div>
+              </div>
+            </div>
+            <div class="list-group-item p-3">
+              <div class="row align-items-center">
+                <div class="col">
+                  <span class="placeholder col-3 mb-2 d-block" style="height: 16px;"></span>
+                  <span class="placeholder col-6 d-block" style="height: 12px;"></span>
+                </div>
+                <div class="col-auto"><span class="placeholder d-block" style="width: 80px; height: 32px; border-radius: 4px;"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card mb-4 placeholder-glow" style="border-radius: 8px;">
+        <div class="card-body">
+          <span class="placeholder col-4 mb-3 d-block" style="height: 22px;"></span>
+          <span class="placeholder col-7 mb-4 d-block" style="height: 14px;"></span>
+          <div class="list-group shadow-sm">
+            <div class="list-group-item p-3">
+              <div class="row align-items-center">
+                <div class="col">
+                  <span class="placeholder col-5 mb-2 d-block" style="height: 14px;"></span>
+                  <span class="placeholder col-3 d-block" style="height: 12px;"></span>
+                </div>
+                <div class="col-auto"><span class="placeholder d-block" style="width: 64px; height: 32px; border-radius: 4px;"></span></div>
+              </div>
+            </div>
+            <div class="list-group-item p-3">
+              <div class="row align-items-center">
+                <div class="col">
+                  <span class="placeholder col-6 mb-2 d-block" style="height: 14px;"></span>
+                  <span class="placeholder col-4 d-block" style="height: 12px;"></span>
+                </div>
+                <div class="col-auto"><span class="placeholder d-block" style="width: 64px; height: 32px; border-radius: 4px;"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    } @else {
     <!-- ── Multi-factor authentication ─────────────────────────────────────── -->
     <div class="card mb-4" style="border-radius: 8px;">
       <div class="card-body">
@@ -235,5 +290,69 @@
         </table>
       </div>
     </div>
+
+    <!-- ── Activity History (M2 FR-AUDIT-4) ──────────────────────────────────── -->
+    <div class="card mb-4" style="border-radius: 8px;">
+      <div class="card-body">
+        <h5 class="card-title mb-1">
+          <i class="bi bi-clock-history" style="margin-right: 8px;"></i>Activity History
+        </h5>
+        <h6 class="card-subtitle text-muted mb-3">
+          Every security event on your account — newest first.
+        </h6>
+
+        <table class="table table-hover mb-2">
+          <thead>
+          <tr>
+            <th scope="col">Event</th>
+            <th scope="col">Device</th>
+            <th scope="col">IP Address</th>
+            <th scope="col">Date</th>
+          </tr>
+          </thead>
+          <tbody>
+            @for (event of events(); track event.id) {
+              <tr>
+                <td>
+                  <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
+                    <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
+                    {{ getEventDisplay(event.type).label }}
+                  </span>
+                  <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
+                </td>
+                <td style="font-size: 0.85rem;">{{ event.device }}</td>
+                <td class="mono" style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
+                <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="text-muted text-center" colspan="4">No security events recorded yet.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (eventsTotalPages() > 1) {
+          <nav aria-label="Activity history pagination">
+            <ul class="pagination pagination-sm justify-content-end mb-0">
+              <li [class.disabled]="currentEventPage() === 0" class="page-item">
+                <button (click)="goToEventsPage(currentEventPage() - 1)" class="page-link">&laquo;</button>
+              </li>
+              @for (p of [].constructor(eventsTotalPages()); track $index; let i = $index) {
+                <li class="page-item">
+                  <button (click)="goToEventsPage(i)"
+                          [class.active]="i === currentEventPage()"
+                          class="page-link">{{ i + 1 }}</button>
+                </li>
+              }
+              <li [class.disabled]="currentEventPage() === eventsTotalPages() - 1" class="page-item">
+                <button (click)="goToEventsPage(currentEventPage() + 1)" class="page-link">&raquo;</button>
+              </li>
+            </ul>
+          </nav>
+        }
+      </div>
+    </div>
+    } <!-- @else (LOADED) -->
   </div>
 </section>

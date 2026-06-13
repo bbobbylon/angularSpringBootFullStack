@@ -100,6 +100,13 @@ export const routes: Routes = [
     canActivate: [authenticationGuard, adminGuard],
     loadComponent: () => import('./features/users/user-details/user-details.component').then((m) => m.UserDetailsComponent),
   },
+  // Roles × Permissions Matrix (SRS M3, FR-RBAC-1/2). adminGuard mirrors the
+  // /users route — only staff-grade authorities (UPDATE:USER / UPDATE:ROLE) reach it.
+  {
+    path: 'roles',
+    canActivate: [authenticationGuard, adminGuard],
+    loadComponent: () => import('./features/users/roles-matrix/roles-matrix.component').then((m) => m.RolesMatrixComponent),
+  },
   {
     path: 'invoice/:id/:invoiceNumber',
     canActivate: [authenticationGuard],

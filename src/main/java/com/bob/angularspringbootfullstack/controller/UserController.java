@@ -83,6 +83,10 @@ public class UserController {
     // there is a space after Bearer to split the header into two parts and extract the token more easily; this is a standard convention for Authorization headers and is required for the substring operation in refreshToken to work correctly
 
     private static final int DEFAULT_PAGE_SIZE = 10;
+    /** Maximum consecutive login failures allowed within the brute-force window (M6). */
+    private static final int BRUTE_FORCE_MAX = 5;
+    /** Sliding window length in minutes for the brute-force failure count (M6). */
+    private static final int BRUTE_FORCE_WINDOW_MINUTES = 15;
     private final UserService userService;
     private final RoleService roleService;
     private final AuthenticationManager authenticationManager;
@@ -639,6 +643,14 @@ public class UserController {
     private UserDTO authenticate(String email, String password) {
         UserDTO userByEmail = userService.getUserByEmail(email);
         try {
+            // M6: reject the attempt early when the sliding-window failure count exceeds the
+            // threshold — does NOT reveal whether the account exists (NFR-SEC-7: same generic
+            // message for unknown emails vs. rate-limited known ones).
+            if (null != userByEmail &&
+                    eventService.countRecentFailuresByEmail(email, BRUTE_FORCE_WINDOW_MINUTES) >= BRUTE_FORCE_MAX) {
+                throw new ApiException("Too many failed login attempts. Please wait " +
+                        BRUTE_FORCE_WINDOW_MINUTES + " minutes before trying again.");
+            }
             if (null != userService.getUserByEmail(email)) {
                 eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT));
             }

@@ -164,6 +164,39 @@ public class AdminUserController {
     }
 
     /**
+     * Returns one page of a managed user's audit event history (FR-ADMIN-2 pagination).
+     *
+     * <p>Called by the admin user-detail frontend when paginating beyond the first page
+     * that is bundled into {@link #getUser}. Organization scope is re-checked on every
+     * call so a scope reduction between the initial load and a page turn is enforced.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the target user's primary key
+     * @param page           0-indexed page number (defaults to 0)
+     * @param size           rows per page (defaults to {@value DEFAULT_PAGE_SIZE})
+     * @return 200 OK with the events page and pagination metadata
+     */
+    @GetMapping("/{id}/events")
+    public ResponseEntity<HttpResponse> getUserEvents(Authentication authentication,
+                                                      @PathVariable Long id,
+                                                      @RequestParam(defaultValue = "0") int page,
+                                                      @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size) {
+        requireOrganizationScope(authentication, id);
+        long totalElements = eventService.countEventsByUserId(id);
+        int totalPages = (int) Math.ceil((double) totalElements / Math.max(size, 1));
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("events", eventService.getEventsByUserId(id, page, size),
+                                "eventsTotalElements", totalElements,
+                                "eventsTotalPages", totalPages))
+                        .message("User events retrieved.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
      * Reassigns another user's role (FR-ADMIN-3). Requires the {@code UPDATE:ROLE}
      * authority and refuses self-targeting — administrators change their own role the
      * same way everyone else does: by asking another administrator (FR-RBAC-4 /

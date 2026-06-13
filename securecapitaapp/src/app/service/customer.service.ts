@@ -13,6 +13,7 @@ import {
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { CustomerInterface } from '../interface/customer.interface';
 import { InvoiceInterface } from '../interface/invoice.interface';
+import { environment } from '../../environments/environment';
 
 /**
  * Central HTTP service for all customer and invoice API calls.
@@ -27,7 +28,7 @@ import { InvoiceInterface } from '../interface/invoice.interface';
 })
 export class CustomerService {
   private http = inject(HttpClient);
-  private readonly server: string = 'http://localhost:8080';
+  private readonly server = environment.apiUrl;
 
   /**
    * Fetches aggregated dashboard statistics: total customers, invoices, and billed amount.

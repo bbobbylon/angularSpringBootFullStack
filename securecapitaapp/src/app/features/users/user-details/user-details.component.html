@@ -138,55 +138,67 @@
             </div>
           </div>
 
-          <!-- Audit history (FR-ADMIN-2): most recent events for this account -->
+          <!-- Audit history (FR-ADMIN-2): paginated event history for this account -->
           <div class="row">
             <div class="col-12">
               <div class="card mb-4">
                 <div class="card-body">
                   <h5 class="mb-3">
-                    <i class="bi bi-activity" style="margin-right: 8px;"></i>Activity
+                    <i class="bi bi-clock-history" style="margin-right: 8px;"></i>Activity History
                     <span class="text-secondary" style="font-size: 0.85rem;">
-                      ({{ state?.appData?.data?.eventsTotalElements ?? 0 }} event(s) — showing most recent)
+                      ({{ state?.appData?.data?.eventsTotalElements ?? 0 }} total event(s))
                     </span>
                   </h5>
                   <table class="table table-hover">
                     <thead>
                     <tr>
+                      <th scope="col">Event</th>
                       <th scope="col">Device</th>
                       <th scope="col">IP Address</th>
-                      <th scope="col">Type</th>
-                      <th scope="col">Description</th>
                       <th scope="col">Date</th>
                     </tr>
                     </thead>
                     <tbody>
                       @for (event of state?.appData?.data?.events; track $index) {
                         <tr>
-                          <td>{{ event.device }}</td>
-                          <td>{{ event.ipAddress }}</td>
                           <td>
-                            <span [class.bg-danger]="event.type === EventType.LOGIN_ATTEMPT_FAILURE"
-                                  [class.bg-info]="event.type === EventType.ROLE_UPDATE
-                                                   || event.type === EventType.MFA_UPDATE"
-                                  [class.bg-primary]="event.type === EventType.PROFILE_UPDATE
-                                                      || event.type === EventType.PROFILE_PICTURE_UPDATE"
-                                  [class.bg-success]="event.type === EventType.LOGIN_ATTEMPT_SUCCESS
-                                                      || event.type === EventType.PASSWORD_UPDATE"
-                                  [class.bg-warning]="event.type === EventType.LOGIN_ATTEMPT || event.type === EventType.ACCOUNT_SETTINGS_UPDATE"
-                                  class="badge pill">
-                              {{ event.type }}
+                            <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
+                              <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
+                              {{ getEventDisplay(event.type).label }}
                             </span>
+                            <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
                           </td>
-                          <td>{{ event.description }}</td>
-                          <td>{{ event.createdAt | date: 'medium' }}</td>
+                          <td style="font-size: 0.85rem;">{{ event.device }}</td>
+                          <td style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
+                          <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
                         </tr>
                       } @empty {
                         <tr>
-                          <td class="text-center text-muted" colspan="5">No recorded activity.</td>
+                          <td class="text-center text-muted" colspan="4">No recorded activity.</td>
                         </tr>
                       }
                     </tbody>
                   </table>
+
+                  @if ((state?.appData?.data?.eventsTotalPages ?? 0) > 1) {
+                    <nav aria-label="Activity pagination">
+                      <ul class="pagination pagination-sm justify-content-end mb-0">
+                        <li [class.disabled]="currentEventPage() === 0" class="page-item">
+                          <button (click)="goToEventsPage(currentEventPage() - 1)" class="page-link">&laquo;</button>
+                        </li>
+                        @for (p of [].constructor(state?.appData?.data?.eventsTotalPages ?? 0); track $index; let i = $index) {
+                          <li class="page-item">
+                            <button (click)="goToEventsPage(i)"
+                                    [class.active]="i === currentEventPage()"
+                                    class="page-link">{{ i + 1 }}</button>
+                          </li>
+                        }
+                        <li [class.disabled]="currentEventPage() === (state?.appData?.data?.eventsTotalPages ?? 1) - 1" class="page-item">
+                          <button (click)="goToEventsPage(currentEventPage() + 1)" class="page-link">&raquo;</button>
+                        </li>
+                      </ul>
+                    </nav>
+                  }
                 </div>
               </div>
             </div>

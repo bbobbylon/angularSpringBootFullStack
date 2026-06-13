@@ -9,6 +9,8 @@ import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { UserInterface } from '../../../interface/user.interface';
 import { SessionInterface, TotpSetupInterface } from '../../../interface/security.interface';
+import { UserEventsInterface } from '../../../interface/user-events.interface';
+import { getEventDisplay } from '../../../utils/event-display.utils';
 
 /**
  * Account Security Center (plan.md M4 creates this surface; M5 populates it).
@@ -56,6 +58,14 @@ export class SecurityCenterComponent implements OnInit {
   protected readonly currentFamily = signal('');
   /** Disables buttons while any mutation is in flight. */
   protected readonly isLoading = signal(false);
+  /** Audit events for the Activity History panel (M2). */
+  protected readonly events = signal<UserEventsInterface[]>([]);
+  /** Total event pages returned by the backend — drives the pagination controls. */
+  protected readonly eventsTotalPages = signal(0);
+  /** Zero-based index of the currently shown events page. */
+  protected readonly currentEventPage = signal(0);
+  /** Exposes the event display helper to the template. */
+  protected readonly getEventDisplay = getEventDisplay;
 
   private readonly userService = inject(UserService);
   private readonly notification = inject(NotificationsService);
@@ -82,6 +92,7 @@ export class SecurityCenterComponent implements OnInit {
       });
     this.refreshTotpStatus();
     this.refreshSessions();
+    this.loadEvents(0);
   }
 
   /**
@@ -232,6 +243,36 @@ export class SecurityCenterComponent implements OnInit {
           this.notification.onError(error);
           this.isLoading.set(false);
         },
+      });
+  }
+
+  /**
+   * Navigates to the given events page in the Activity History panel.
+   * Fetches only the events slice so the rest of the page stays intact.
+   *
+   * @param page - zero-based target page index
+   */
+  protected goToEventsPage(page: number): void {
+    this.currentEventPage.set(page);
+    this.loadEvents(page);
+  }
+
+  /**
+   * Fetches one page of the caller's audit events from {@code GET /user/events}.
+   * Called on init (page 0) and by pagination controls for subsequent pages.
+   *
+   * @param page - zero-based page index
+   */
+  private loadEvents(page: number): void {
+    this.userService
+      .userEvents$(page)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.events.set(response.data?.events ?? []);
+          this.eventsTotalPages.set(response.data?.eventsTotalPages ?? 0);
+        },
+        error: () => this.events.set([]),
       });
   }
 

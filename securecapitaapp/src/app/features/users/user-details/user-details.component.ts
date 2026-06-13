@@ -14,6 +14,7 @@ import { AdminUserDetailInterface } from '../../../interface/admin.interface';
 import { AdminUserService } from '../../../service/admin-user.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
+import { getEventDisplay } from '../../../utils/event-display.utils';
 
 /**
  * Single-user management view — the detail half of the Users dashboard
@@ -43,6 +44,10 @@ export class UserDetailsComponent implements OnInit {
   readonly DataState = DataState;
   /** Exposes {@link EventType} to the template for event badge styling. */
   protected readonly EventType = EventType;
+  /** Exposes the event display helper to the template for icon/label/badge rendering. */
+  protected readonly getEventDisplay = getEventDisplay;
+  /** Zero-based index of the currently shown events page in the activity table. */
+  protected readonly currentEventPage = signal(0);
 
   /**
    * Single source of truth for the view: carries dataState, the full detail
@@ -149,6 +154,38 @@ export class UserDetailsComponent implements OnInit {
       .subscribe({
         next: (response) => this.applyMutation(response, 'Account settings updated successfully'),
         error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
+   * Navigates to a different page of the managed user's audit event history
+   * (FR-ADMIN-2). Fetches via {@code GET /admin/user/:id/events?page=n} and patches
+   * only the events slice so the identity card and management forms stay intact.
+   *
+   * @param page - zero-based target page index
+   */
+  protected goToEventsPage(page: number): void {
+    const id = this.data()?.data?.selectedUser?.id;
+    if (!id) return;
+    this.currentEventPage.set(page);
+    this.adminUserService
+      .userEvents$(id, page)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          const current = this.data();
+          this.data.set({
+            ...current!,
+            data: {
+              ...current!.data!,
+              events: response.data?.events ?? [],
+              eventsTotalElements: response.data?.eventsTotalElements ?? current!.data!.eventsTotalElements,
+              eventsTotalPages: response.data?.eventsTotalPages ?? current!.data!.eventsTotalPages,
+            },
+          });
+          this.userState.set({ dataState: DataState.LOADED, appData: this.data() });
+        },
+        error: (error: string) => this.notification.onError(error),
       });
   }
 

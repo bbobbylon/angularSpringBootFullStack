@@ -14,6 +14,29 @@
         </ol>
       </nav>
 
+      @if (profileState().dataState === DataState.LOADING) {
+        <!-- ── Profile loading skeleton ─────────────────────────────────── -->
+        <div class="bg-white shadow rounded-lg p-4 placeholder-glow" style="border-radius: 8px; min-height: 400px;">
+          <div class="row align-items-center mb-4">
+            <div class="col-auto">
+              <span class="placeholder rounded-circle d-block" style="width: 100px; height: 100px;"></span>
+            </div>
+            <div class="col">
+              <span class="placeholder col-5 mb-2 d-block" style="height: 20px;"></span>
+              <span class="placeholder col-3 d-block" style="height: 14px;"></span>
+            </div>
+          </div>
+          <hr>
+          <div class="row mt-4">
+            <div class="col-md-6 mb-3"><span class="placeholder col-12 d-block" style="height: 40px; border-radius: 4px;"></span></div>
+            <div class="col-md-6 mb-3"><span class="placeholder col-12 d-block" style="height: 40px; border-radius: 4px;"></span></div>
+            <div class="col-md-6 mb-3"><span class="placeholder col-12 d-block" style="height: 40px; border-radius: 4px;"></span></div>
+            <div class="col-md-6 mb-3"><span class="placeholder col-12 d-block" style="height: 40px; border-radius: 4px;"></span></div>
+            <div class="col-12 mb-3"><span class="placeholder col-12 d-block" style="height: 80px; border-radius: 4px;"></span></div>
+            <div class="col-auto"><span class="placeholder d-block" style="width: 120px; height: 38px; border-radius: 4px;"></span></div>
+          </div>
+        </div>
+      } @else {
       <div class="bg-white shadow rounded-lg d-block d-sm-flex" style="border-radius: 8px;">
         <div class="profile-tab-nav border-right">
           <div class="p-4">
@@ -353,53 +376,25 @@
                 <table class="table table-hover">
                   <thead>
                   <tr>
+                    <th scope="col">Event</th>
                     <th scope="col">Device</th>
                     <th scope="col">IP Address</th>
                     <th scope="col">Date</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Description</th>
-                    <th scope="col">Action</th>
                   </tr>
                   </thead>
                   <tbody>
-                  <!--       @for (event of state?.appData?.data?.event
-                      -s; track event.createdAt) {   -->
                     @for (event of state?.appData?.data?.events; track $index) {
                       <tr>
-                        <td>{{ event.device }}</td>
-                        <td>{{ event.ipAddress }}</td>
-                        <td>{{ event.createdAt | date: 'MMMM d, y, h:mm a' }}</td>
                         <td>
-                          <span [class.bg-danger]="event.type === EventType.LOGIN_ATTEMPT_FAILURE
-                                                   || event.type === EventType.TOKEN_REUSE_DETECTED"
-                                [class.bg-info]="event.type === EventType.ROLE_UPDATE
-                                                 || event.type === EventType.MFA_UPDATE
-                                                 || event.type === EventType.TOTP_ENROLLED
-                                                 || event.type === EventType.TOTP_DISABLED"
-                                [class.bg-primary]="event.type === EventType.PROFILE_UPDATE
-                                                    || event.type === EventType.PROFILE_PICTURE_UPDATE"
-                                [class.bg-success]="event.type === EventType.LOGIN_ATTEMPT_SUCCESS
-                                                    || event.type === EventType.PASSWORD_UPDATE
-                                                    || event.type === EventType.FEDERATED_LOGIN"
-                                [class.bg-warning]="event.type === EventType.LOGIN_ATTEMPT
-                                                    || event.type === EventType.ACCOUNT_SETTINGS_UPDATE
-                                                    || event.type === EventType.RECOVERY_CODE_USED
-                                                    || event.type === EventType.SESSION_REVOKED"
-                                class="badge pill">
-                            {{ event.type }}
+                          <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
+                            <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
+                            {{ getEventDisplay(event.type).label }}
                           </span>
+                          <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
                         </td>
-                        <td>{{ event.description }}</td>
-                        <td>
-                          <!-- TODO(report-event): Wire up the Report button.
-                               On click, POST to a new backend endpoint (e.g. POST /user/events/{eventId}/report)
-                               that inserts a row into a `reported_events` table recording who reported it,
-                               which event was flagged, and a timestamp. The button should be disabled after
-                               a successful report so the same event cannot be submitted twice in one session. -->
-                          <button class="btn btn-sm" style="background-color: #fd5d0d; font-weight: 450;" type="button">
-                            Report
-                          </button>
-                        </td>
+                        <td style="font-size: 0.85rem;">{{ event.device }}</td>
+                        <td style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
+                        <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
                       </tr>
                     }
                   </tbody>
@@ -429,6 +424,7 @@
           </div>
         </div>
       }
+      } <!-- @else (LOADED) -->
     </div>
   </section>
 }

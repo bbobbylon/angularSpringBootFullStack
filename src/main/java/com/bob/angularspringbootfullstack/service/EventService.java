@@ -55,6 +55,16 @@ public interface EventService {
     void addUserEvent(Long userId, EventType eventType, String device, String ipAddress);
 
     /**
+     * Counts {@code LOGIN_ATTEMPT_FAILURE} events for the given email address
+     * within a sliding time window ending now (M6 brute-force rate limiting).
+     *
+     * @param email         the email of the account to check
+     * @param windowMinutes how many minutes back to look (e.g. 15)
+     * @return number of failure events recorded in the window
+     */
+    long countRecentFailuresByEmail(String email, int windowMinutes);
+
+    /**
      * Records an audit entry for the user identified by their email address.
      *
      * <p>Prefer the ID-based overload when the user ID is already available —

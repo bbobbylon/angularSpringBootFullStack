@@ -9,6 +9,7 @@ import { UserInterface } from '../interface/user.interface';
 import { Key } from '../enumeration/key.enumeration';
 import { JwtHelperService } from '@auth0/angular-jwt';
 import { HttpCacheService } from './http-cache.service';
+import { environment } from '../../environments/environment';
 
 /**
  * Central HTTP service for all user-related API calls.
@@ -26,7 +27,7 @@ export class UserService {
   private http = inject(HttpClient);
   private readonly httpCache = inject(HttpCacheService);
   private jwtHelper = new JwtHelperService();
-  private readonly server: string = 'http://localhost:8080';
+  private readonly server = environment.apiUrl;
 
   /**
    * Verifies a user's 2FA code after login.

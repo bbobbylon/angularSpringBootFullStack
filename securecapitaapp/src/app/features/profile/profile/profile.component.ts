@@ -11,6 +11,7 @@ import { CustomHttpResponseInterface } from '../../../interface/customhttprespon
 import { ProfileInterface } from '../../../interface/appstates.interface';
 import { EventType } from '../../../enumeration/event-type.enum';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { getEventDisplay } from '../../../utils/event-display.utils';
 import { UserInterface } from '../../../interface/user.interface';
 
 // TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
@@ -48,6 +49,8 @@ export class ProfileComponent implements OnInit {
   });
   /** Exposes the `EventType` enum to the template for styling and displaying event information. */
   protected readonly EventType = EventType;
+  /** Exposes the event display helper to the template for icon/label/badge rendering. */
+  protected readonly getEventDisplay = getEventDisplay;
   /** A signal that controls the visibility of the user's activity logs section. */
   protected readonly showLogs = signal(true);
   /** A signal holding the list of permissions for the currently selected role. */

@@ -42,6 +42,19 @@ public interface EventRepo {
     long countEventsByUserId(Long userId);
 
     /**
+     * Counts {@code LOGIN_ATTEMPT_FAILURE} events for the given email address
+     * recorded at or after {@code since}.
+     *
+     * <p>Used by the brute-force rate-limit check to decide whether to reject a
+     * login attempt before even verifying the password (M6).
+     *
+     * @param email the email of the account whose failures to count
+     * @param since the earliest timestamp to include (window start)
+     * @return number of failure events in the window
+     */
+    long countRecentFailuresByEmail(String email, java.time.LocalDateTime since);
+
+    /**
      * Records a new audit entry for the user identified by their email address.
      *
      * <p>The email is resolved to a user ID inside the SQL query, so no

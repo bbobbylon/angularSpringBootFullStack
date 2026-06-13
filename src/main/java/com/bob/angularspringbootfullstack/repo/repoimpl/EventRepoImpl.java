@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 
 import static com.bob.angularspringbootfullstack.query.EventQuery.*;
@@ -53,6 +54,18 @@ public class EventRepoImpl implements EventRepo {
     @Override
     public long countEventsByUserId(Long userId) {
         Long count = jdbcTemplate.queryForObject(COUNT_EVENTS_BY_USER_ID_QUERY, of("id", userId), Long.class);
+        return count != null ? count : 0L;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long countRecentFailuresByEmail(String email, LocalDateTime since) {
+        Long count = jdbcTemplate.queryForObject(
+                COUNT_RECENT_FAILURES_BY_EMAIL_QUERY,
+                of("email", email, "since", since),
+                Long.class);
         return count != null ? count : 0L;
     }
 

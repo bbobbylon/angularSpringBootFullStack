@@ -41,12 +41,21 @@
           </ul>
         </li>
         @if (canManageUsers) {
-          <!-- Admin-only (SRS FR-ADMIN-5): rendered when the token carries UPDATE:USER or
+          <!-- Admin-only (SRS FR-ADMIN-5 / M3): rendered when the token carries UPDATE:USER or
                UPDATE:ROLE. adminGuard + the backend's /admin/** rules enforce the same check. -->
-          <li class="nav-item">
-            <a [routerLink]="['/users']" class="nav-link">
-              <i class="bi bi-people" style="padding-right: 4px;"></i>Users
+          <li class="nav-item dropdown">
+            <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
+               id="navbarDropdownAdmin" role="button">
+              <i class="bi bi-shield-shaded" style="padding-right: 4px;"></i>Admin
             </a>
+            <ul aria-labelledby="navbarDropdownAdmin" class="dropdown-menu dropdown-menu-end">
+              <li><a [routerLink]="['/users']" class="dropdown-item">
+                <i class="bi bi-people-fill" style="padding-right: 8px;"></i>User Directory
+              </a></li>
+              <li><a [routerLink]="['/roles']" class="dropdown-item">
+                <i class="bi bi-grid-3x3-gap-fill" style="padding-right: 8px;"></i>Roles Matrix
+              </a></li>
+            </ul>
           </li>
         }
         <li class="nav-item dropdown">
