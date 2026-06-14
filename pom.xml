@@ -166,17 +166,10 @@
             <artifactId>javase</artifactId>
             <version>3.5.3</version>
         </dependency>
-        <!-- Flyway (SRS DB-14): versioned schema migrations under src/main/resources/db/migration.
-             Versions are managed by the Spring Boot parent; flyway-mysql carries the MySQL dialect.
-             Existing databases are adopted via baseline-on-migrate (see application.yml). -->
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-mysql</artifactId>
-        </dependency>
+        <!-- Flyway removed: schema is now defined by src/main/resources/schema.sql (idempotent,
+             non-destructive). Flyway's baseline bookkeeping repeatedly desynced from the live
+             database and blocked startup, so it was dropped in favour of the simpler model. -->
+
     </dependencies>
     <profiles>
         <profile>

@@ -1,129 +1,109 @@
-# SecureCapita Frontend
+# SecureCapita — Frontend (Angular)
 
-Angular standalone application that powers the SecureCapita UI. It integrates with the Spring Boot backend for authentication, profile management, and future customer/invoice features.
+The Angular 21 single-page app for SecureCapita. It talks to the Spring Boot REST API for authentication, profile/security management, the admin dashboard, and customer/invoice features.
 
-TODO - add admin access to allow specific users to view all users in the server/system/database.
-TODO - spruce up the UI with Angular Material or Tailwind CSS for a more polished look, maybe utilize the stat database table to show some cool charts on the dashboard.
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.3.
+> **Backend & full docs:** see the repo root [`README.md`](../README.md) and [`documentation/`](../documentation/).
+> Architecture context: [documentation/architecture.md §6](../documentation/architecture.md#6-frontend-architecture) · API: [documentation/api-reference.md](../documentation/api-reference.md).
 
-- Standalone Angular components (no AppModule)
-- JWT access/refresh tokens stored in localStorage
-- HTTP interceptor attaches access tokens and refreshes on 401
-- Template-driven forms for login, profile, and verification flows
+---
 
-To start a local development server, run `npm run start` and navigate to `http://localhost:4200`. The frontend will proxy API requests to the Spring Boot backend at `http://localhost:8080`.
+## Tech stack
 
-## Architecture Snapshot
+- **Angular 21** — standalone components (no `NgModule`), bootstrapped from `app.config.ts`
+- **Bootstrap 5** + Bootstrap Icons — styling
+- **RxJS** — async/state via observables and a `DataState` enum
+- **ngx-toastr** — toast notifications
+- **@auth0/angular-jwt** — JWT decoding/expiry checks
+- **jsPDF**, **file-saver** — client-side exports
+- **Vitest** + ESLint + Prettier — test/lint/format
 
-```
-Browser
-  │
-  │ 1) Form submit (login/profile/update)
-  ▼
-Angular Component (login/profile/home)
-  │
-  │ 2) Calls UserService via HttpClient
-  ▼
-UserService
-  │
-  │ 3) HttpClient request
-  ▼
-HTTP Interceptor (token-interceptor)
-  │  ├─ Adds Authorization: Bearer <access_token>
-  │  └─ On 401 → refreshToken$ → retry request
-  ▼
-Spring Boot API (http://localhost:8080)
-```
+---
 
-## Key Frontend Files
-
-## Code scaffolding
+## Project structure
 
 ```
-securecapitaapp/src/app
-├── app.component.ts           # Root shell
-├── app.config.ts              # Standalone providers (router, HttpClient, interceptor)
-├── app.routing-module.ts      # Route definitions
-├── interceptor/token.interceptor.ts
-├── service/user.service.ts
-├── component/
-│   ├── login/                 # Login + MFA flow
-│   ├── profile/               # Profile + password update
-│   ├── navbar/                # Authenticated nav + logout
-│   ├── verify/                # Account/password verification landing
-│   ├── resetpassword/         # Reset password view
-│   ├── register/              # Registration view
-│   ├── home/                  # Dashboard shell + stats
-│   ├── customer(s)/           # Customer placeholders
-│   └── stats/                 # Stats widget
-└── interface/, enumeration/   # Shared types and enums
+src/app/
+├── app.component.ts          Root shell
+├── app.config.ts             Standalone providers: router (preloading), HttpClient + interceptors, toastr
+├── app.routes.ts             Lazy-loaded routes + guards
+├── features/                 Feature pages (standalone components)
+│   ├── auth/                 login, register, reset-password, verify, oauth2-callback
+│   ├── home/                 dashboard
+│   ├── customers/            list, details, new
+│   ├── invoices/             list, detail, new
+│   ├── users/                admin: users, user-details, roles-matrix
+│   ├── security/             Account Security Center (MFA + sessions)
+│   └── profile/              profile + password
+├── service/                  user, admin-user, customer, theme, notifications, http-cache
+├── guard/                    authentication.guard, admin.guard
+├── interceptor/              token.interceptor (auth + refresh), cache.interceptor
+├── interface/                API/UI TypeScript contracts
+└── enumeration/              Key (storage keys), DataState, EventType
 ```
+
+---
 
 ## Routes
 
+| Path | Component | Access |
+|------|-----------|--------|
+| `/login`, `/register`, `/resetpassword`, `/verify` | auth flows | public |
+| `/user/verify/account/:key`, `/user/verify/password/:key` | email-link landings | public |
+| `/oauth2/callback` | federated-login landing | public |
+| `/` | Home (dashboard) | authenticated |
+| `/profile` | Profile | authenticated |
+| `/security` | Account Security Center (TOTP + sessions) | authenticated |
+| `/customers`, `/customers/:id`, `/customer/new` | Customers | authenticated |
+| `/invoices`, `/invoice/new`, `/invoice/:id/:invoiceNumber` | Invoices | authenticated |
+| `/users`, `/users/:id`, `/roles` | Admin (users & roles) | authenticated + `adminGuard` |
+| `**` | redirect → `/` | — |
+
+Routes are lazy (`loadComponent`) and preloaded (`PreloadAllModules`). The `adminGuard` is a **usability aid** — it hides admin routes from users who lack staff authority, but the backend independently enforces the same authorities, so it's never the security boundary.
+
+---
+
+## Authentication flow (frontend)
+
 ```
-/                      → HomeComponent
-/login                 → LoginComponent
-/register              → RegisterComponent
-/resetpassword         → ResetPasswordComponent
-/verify                → VerifyComponent
-/user/verify/account/:key  → VerifyComponent
-/user/reset/password/:key  → VerifyComponent
-/profile               → ProfileComponent
-/customers             → CustomersComponent
-/customer              → CustomerComponent
+LoginComponent → UserService.login$()  → POST /user/login
+   ├─ plain login → store access + refresh tokens (localStorage) → navigate to /
+   ├─ SMS 2FA     → prompt for code → GET /user/verify/code/{email}/{code}
+   └─ TOTP        → prompt for code → POST /user/verify/totp { challenge, code }
+
+Every protected request → tokenInterceptor:
+   ├─ attaches  Authorization: Bearer <access_token>
+   └─ on 401 → silently calls GET /user/refresh/token, stores rotated tokens, retries once
+              (concurrent 401s share a single refresh via a BehaviorSubject guard)
 ```
 
-## Auth Flow (Frontend)
+- Tokens are stored in `localStorage` under the `Key` enum (`Key.TOKEN`, `Key.REFRESH_TOKEN`).
+- `authenticationGuard` checks `UserService.isAuthenticated()` (valid, non-expired JWT) and redirects to `/login` otherwise.
+- **Don't attach tokens manually** — the interceptor owns that (and the refresh dance). Backend token mechanics: [documentation/security.md](../documentation/security.md).
 
-```
-LoginComponent.submit()
-  └─ UserService.login$()
-     └─ POST /user/login
-        ├─ access_token + refresh_token
-        └─ (optional) using2FA = true → verify code
+---
 
-Token Interceptor
-  ├─ Adds access token to requests
-  └─ 401 → UserService.refreshToken$() → retry request
-```
-
-## Running Locally
+## Running locally
 
 ```bash
 npm install
-npm run start
-To build the project and store the build articats in the /dist folder, run:
-npm run build
+npm start        # dev server → http://localhost:4200 (API calls go to http://localhost:8080)
 ```
 
-Frontend runs at: `http://localhost:4200`
+> The full stack is usually launched from the repo root via `./start.sh` (which starts both the API and this app). See [documentation/getting-started.md](../documentation/getting-started.md).
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+Other scripts:
 
 ```bash
-ng test
+npm run build        # production build → dist/securecapitaapp/browser/
+npm test             # Vitest unit tests
+npm run lint         # ESLint
+npm run format       # Prettier (write)
 ```
 
-## Running end-to-end tests
+---
 
-For end-to-end (e2e) testing, run:
+## Notes & known rough edges
 
-```bash
-ng e2e
-npm run lint
-npm test are other commands that can be ran
-```
-
-## Notes
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
-
-- The backend issues JWTs where `sub` is the user ID (see `TokenProvider.java`).
-- Tokens are stored under keys defined in `Key` enum (see `src/app/enumeration`).
-- Some customer/invoice features are placeholders until the backend endpoints are ready.
-
+- **API base URL is `http://localhost:8080`** in the services. Deploying against a different backend origin means updating the environment files and rebuilding (a known limitation — see [deployment.md §7](../documentation/deployment.md#7-pre-deployment-checklist)).
+- In Docker/production the built app is **compiled into the Spring Boot JAR** and served from `:8080` — there's no separate frontend server (see [architecture.md §7](../documentation/architecture.md#7-runtime-topology)).
+- Generated with Angular CLI 21. Use `ng generate component features/<area>/<name>` to scaffold new standalone components.

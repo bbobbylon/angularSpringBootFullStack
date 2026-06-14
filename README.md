@@ -17,6 +17,21 @@ A full-stack application combining **Angular 21** (frontend) and **Spring Boot 4
 
 ---
 
+## Documentation
+
+In-depth guides live in [`documentation/`](documentation/):
+
+| Guide | What it covers |
+|-------|----------------|
+| [Getting Started](documentation/getting-started.md) | Fast path: setup → running → first login |
+| [Architecture](documentation/architecture.md) | Tiers, layers, request lifecycle, frontend |
+| [API Reference](documentation/api-reference.md) | Every REST endpoint, grouped by controller |
+| [Security](documentation/security.md) | JWT, refresh rotation, MFA, federation, RBAC |
+| [Database](documentation/database.md) | Schema, tables, relationships, reference data |
+| [Configuration](documentation/configuration.md) | Env vars, profiles, `application.yml` |
+| [Deployment](documentation/deployment.md) | Docker, Compose, Azure CI/CD, cloud |
+| [Developer Guide](documentation/developer-guide.md) | End-to-end deep dive + how to extend |
+
 ## Prerequisites
 
 | Tool | Version | Required for |
@@ -242,11 +257,13 @@ The app is structured for cloud deployment:
 - [ ] Set `useSSL=true` in `SPRING_DATASOURCE_URL` for managed cloud databases
 - [ ] Use a managed database (RDS, Cloud SQL, Aiven) instead of the Docker MySQL container
 - [ ] Set all required prod env vars via the platform (no `.env` file in cloud)
-- [ ] Consider moving to `ddl-auto: validate` with Flyway for schema migrations
+- [ ] Apply `src/main/resources/schema.sql` to the managed database before first launch (schema is script-managed; the previous Flyway setup was removed)
 
 ---
 
 ## API Reference
+
+> This is a summary of the most common endpoints. For the **complete, authoritative reference** — including TOTP MFA (`/user/totp/*`), session management (`/user/sessions`), federated login (`/oauth2/*`), and admin user management (`/admin/user/*`) — see **[documentation/api-reference.md](documentation/api-reference.md)**.
 
 ### Authentication
 
@@ -269,7 +286,6 @@ The app is structured for cloud deployment:
 | GET | `/user/events` | Paginated audit events |
 | PATCH | `/user/update` | Update profile fields |
 | PATCH | `/user/update/password` | Change password |
-| PATCH | `/user/update/role/{roleName}` | Change user role |
 | PATCH | `/user/update/settings` | Toggle enabled / locked |
 | PATCH | `/user/update/togglemfa` | Toggle 2FA |
 | PATCH | `/user/update/image` | Upload profile picture |

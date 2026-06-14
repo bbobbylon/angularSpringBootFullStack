@@ -78,22 +78,17 @@ spring:
     generate-ddl: true
   sql:
     init:
-      # "never" means schema.sql is NOT run on startup — existing DB is used as-is.
-      # Schema changes are now applied through Flyway migrations (see spring.flyway below
-      # and src/main/resources/db/migration). schema.sql remains only as a reference copy
-      # of the baseline; do NOT flip this to "always" — it drops and recreates all tables.
+      # schema.sql (src/main/resources/schema.sql) is the single, idempotent definition of
+      # every JdbcTemplate-managed table. Flyway was removed — its baseline bookkeeping kept
+      # desyncing from the live database and blocking startup — and schema.sql replaces it.
+      #   mode: never  -> NOT run automatically; run it by hand to initialise a fresh database
+      #                   (e.g.  mysql -u root -p db2 < src/main/resources/schema.sql).
+      #   mode: always -> Spring Boot applies it on every startup. Safe to enable, because the
+      #                   script is idempotent (CREATE TABLE IF NOT EXISTS / INSERT ... ON
+      #                   DUPLICATE KEY) and contains NO DROP statements.
+      # Hibernate ddl-auto:update still owns the JPA customer/invoice/services tables.
       mode: never
       continue-on-error: true
-  flyway:
-    # Versioned migrations (SRS DB-14). On an existing database (local, Docker, Aiven) the
-    # schema predates Flyway, so baseline-on-migrate stamps version 1 as already applied
-    # and only V2+ run; on a fresh database V1 recreates the baseline schema first.
-    # Hibernate ddl-auto:update still runs AFTER Flyway and continues to own the JPA-managed
-    # customer/invoice tables — new identity/security tables belong in migrations.
-    enabled: true
-    baseline-on-migrate: true
-    baseline-version: 1
-    baseline-description: Pre-Flyway schema adopted as baseline
   servlet:
     multipart:
       max-file-size: 10MB

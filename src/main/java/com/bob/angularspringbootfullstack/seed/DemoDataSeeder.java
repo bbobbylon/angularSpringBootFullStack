@@ -72,60 +72,79 @@ public class DemoDataSeeder implements ApplicationRunner {
      */
     private void seedIfMissing(String firstName, String lastName, String email,
                                 String roleName, String device, String ip) {
-        Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM users WHERE email = :email",
-                Map.of("email", email), Integer.class);
-        if (count != null && count > 0) {
-            return; // already seeded
-        }
+        try {
+            Integer count = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM users WHERE email = :email",
+                    Map.of("email", email), Integer.class);
+            if (count != null && count > 0) {
+                return; // already seeded
+            }
 
-        // Insert user — enabled immediately; seed accounts skip the email-verification flow.
-        MapSqlParameterSource userParams = new MapSqlParameterSource()
-                .addValue("firstName", firstName)
-                .addValue("lastName",  lastName)
-                .addValue("email",     email)
-                .addValue("password",  passwordEncoder.encode(DEMO_PASSWORD));
+            // Resolve the role BEFORE inserting the user. The previous code inserted the user
+            // first and then called queryForObject for the role id — which throws
+            // EmptyResultDataAccessException ("expected 1, actual 0") on a missing role. Because
+            // this runs inside an ApplicationRunner, that exception aborts the WHOLE application
+            // at startup, and the auto-committed user INSERT leaves behind an orphaned, role-less
+            // account that makes the seeder skip that email forever. Looking the role up first
+            // with a null-tolerant extractor means a missing SRS role (i.e. Flyway V2 not yet
+            // applied) simply skips this demo user with a clear warning — startup is never harmed.
+            Long roleId = jdbc.query(
+                    "SELECT id FROM roles WHERE name = :name",
+                    Map.of("name", roleName),
+                    rs -> rs.next() ? rs.getLong("id") : null);
+            if (roleId == null) {
+                log.warn("[DemoDataSeeder] Skipping {} — role '{}' not found. " +
+                         "Has Flyway migration V2 (the SRS role catalog) been applied?", email, roleName);
+                return;
+            }
 
-        GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbc.update(
-                "INSERT INTO users (first_name, last_name, email, password, enabled, non_locked) " +
-                "VALUES (:firstName, :lastName, :email, :password, TRUE, TRUE)",
-                userParams, keyHolder);
+            // Insert user — enabled immediately; seed accounts skip the email-verification flow.
+            MapSqlParameterSource userParams = new MapSqlParameterSource()
+                    .addValue("firstName", firstName)
+                    .addValue("lastName",  lastName)
+                    .addValue("email",     email)
+                    .addValue("password",  passwordEncoder.encode(DEMO_PASSWORD));
 
-        Long userId = keyHolder.getKey().longValue();
+            GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
+            jdbc.update(
+                    "INSERT INTO users (first_name, last_name, email, password, enabled, non_locked) " +
+                    "VALUES (:firstName, :lastName, :email, :password, TRUE, TRUE)",
+                    userParams, keyHolder);
 
-        // Assign role
-        Long roleId = jdbc.queryForObject(
-                "SELECT id FROM roles WHERE name = :name",
-                Map.of("name", roleName), Long.class);
-        if (roleId != null) {
+            Long userId = keyHolder.getKey().longValue();
+
             jdbc.update(
                     "INSERT INTO userroles (user_id, role_id) VALUES (:userId, :roleId)",
                     Map.of("userId", userId, "roleId", roleId));
-        }
 
-        // Enroll in the Tessera organization so org-scoped admin views work out of the box.
-        // Wrapped in try/catch: the organizations table may not exist on schemas older than V4.
-        try {
-            Long orgId = jdbc.queryForObject(
-                    "SELECT id FROM organizations WHERE name = 'Tessera' LIMIT 1",
-                    Map.of(), Long.class);
-            if (orgId != null) {
-                jdbc.update(
-                        "INSERT INTO userorganizations (user_id, organization_id, active) " +
-                        "VALUES (:userId, :orgId, TRUE) ON DUPLICATE KEY UPDATE active = TRUE",
-                        Map.of("userId", userId, "orgId", orgId));
+            // Enroll in the Tessera organization so org-scoped admin views work out of the box.
+            // Wrapped in try/catch: the organizations table may not exist on schemas older than V4.
+            try {
+                Long orgId = jdbc.query(
+                        "SELECT id FROM organizations WHERE name = 'Tessera' LIMIT 1",
+                        Map.of(),
+                        rs -> rs.next() ? rs.getLong("id") : null);
+                if (orgId != null) {
+                    jdbc.update(
+                            "INSERT INTO userorganizations (user_id, organization_id, active) " +
+                            "VALUES (:userId, :orgId, TRUE) ON DUPLICATE KEY UPDATE active = TRUE",
+                            Map.of("userId", userId, "orgId", orgId));
+                }
+            } catch (Exception e) {
+                log.debug("[DemoDataSeeder] Skipping org enrollment for {}: {}", email, e.getMessage());
             }
+
+            // Seed a small activity history so the audit dashboard is non-empty.
+            insertEvent(userId, "LOGIN_ATTEMPT_SUCCESS", device, ip);
+            insertEvent(userId, "PROFILE_UPDATE",        device, ip);
+            insertEvent(userId, "LOGIN_ATTEMPT_SUCCESS", device, ip);
+
+            log.info("[DemoDataSeeder] Created {} {} ({}) as {}", firstName, lastName, email, roleName);
         } catch (Exception e) {
-            log.debug("[DemoDataSeeder] Skipping org enrollment for {}: {}", email, e.getMessage());
+            // OTH-2 safety net: a demo-data seeder must NEVER prevent the application from
+            // starting. Any unexpected failure for one user is logged and that user skipped.
+            log.warn("[DemoDataSeeder] Skipped seeding {}: {}", email, e.getMessage());
         }
-
-        // Seed a small activity history so the audit dashboard is non-empty.
-        insertEvent(userId, "LOGIN_ATTEMPT_SUCCESS", device, ip);
-        insertEvent(userId, "PROFILE_UPDATE",        device, ip);
-        insertEvent(userId, "LOGIN_ATTEMPT_SUCCESS", device, ip);
-
-        log.info("[DemoDataSeeder] Created {} {} ({}) as {}", firstName, lastName, email, roleName);
     }
 
     /**
@@ -139,9 +158,10 @@ public class DemoDataSeeder implements ApplicationRunner {
      */
     private void insertEvent(Long userId, String eventType, String device, String ip) {
         try {
-            Long eventId = jdbc.queryForObject(
+            Long eventId = jdbc.query(
                     "SELECT id FROM events WHERE type = :type",
-                    Map.of("type", eventType), Long.class);
+                    Map.of("type", eventType),
+                    rs -> rs.next() ? rs.getLong("id") : null);
             if (eventId != null) {
                 jdbc.update(
                         "INSERT INTO userevents (user_id, event_id, device, ip_address) " +
