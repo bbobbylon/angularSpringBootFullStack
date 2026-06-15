@@ -478,18 +478,25 @@ public class UserController {
 
     /**
      * Updates the authenticated user's profile with the supplied form data.
-     * The user ID is always sourced from the authenticated principal — the client-supplied value is ignored.
      * <p>
-     * //@param authentication the current authentication injected by Spring Security
+     * The target user ID is ALWAYS sourced from the authenticated principal — any {@code id}
+     * present in the request body is overwritten and ignored. This closes a broken
+     * object-level-authorization (IDOR) gap: because the {@code PATCH /**} rule in
+     * {@code SecurityConfig} only requires the {@code UPDATE:USER} authority that every
+     * {@code ROLE_USER} already holds, trusting a client-supplied id would let any
+     * authenticated user edit another user's profile. {@code getAuthenticatedUser} reads the
+     * {@link UserDTO} that {@code CustomAuthFilter} installed as the principal, so resolving
+     * the id requires no extra database round-trip.
      *
-     * @param user the validated update payload
+     * @param authentication the current authentication injected by Spring Security
+     * @param user           the validated update payload; its {@code id} is ignored and replaced
      * @return 200 OK with the updated user as a DTO
      */
     @PatchMapping("/update")
-    public ResponseEntity<HttpResponse> updateUser(/*Authentication authentication, */@RequestBody @Valid UpdateForm user) { //throws InterruptedException {
-        //UserDTO authenticatedUser = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
-        //user.setId(authenticatedUser.getId());
-        //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+    public ResponseEntity<HttpResponse> updateUser(Authentication authentication, @RequestBody @Valid UpdateForm user) {
+        // Bind the update to the caller's OWN id, never the body's — the JWT principal is the
+        // single source of truth for whose row is modified (IDOR fix).
+        user.setId(getAuthenticatedUser(authentication).getId());
         UserDTO updatedUser = userService.updateUserDTO(user);
         eventPublisher.publishEvent(new NewUserEvent(updatedUser.getEmail(), PROFILE_UPDATE));
         long updateTotalElements = eventService.countEventsByUserId(updatedUser.getId());
