@@ -60,24 +60,23 @@ sequenceDiagram
     CMP->>SVC: update$(updatedUser)  :120 / user.service.ts:141
     SVC->>CTRL: PATCH /user/update  🔑
     Note over CTRL: matcher: PATCH /** → UPDATE:USER/CUSTOMER/ROLE  SecurityConfig:162
-    CTRL->>REPO: userService.updateUserDTO(form)  :493
-    REPO->>DB: UPDATE users SET … WHERE id = :id   ← :id is the FORM's id
+    CTRL->>CTRL: user.setId(getAuthenticatedUser(authentication).getId())  ← IDOR fix
+    CTRL->>REPO: userService.updateUserDTO(form)
+    REPO->>DB: UPDATE users SET … WHERE id = :id   ← :id is now the PRINCIPAL's id
     CTRL-->>SVC: 200 { user, events, roles }
     SVC-->>CMP: data.set(...) + toast "Profile updated"
 ```
 
-> ⚠️ **Security finding — broken object-level authorization (IDOR).** The handler passes the
-> client-supplied `UpdateForm` (including its `id`) straight to
-> `updateUserDTO` → `updateUserDetails`, which updates `WHERE id = :id`
-> (`UserController.java:493`, `UserServiceImpl.java:139-141`, `UserQuery.UPDATE_USER_DETAILS_QUERY`).
-> The line that would overwrite `id` from the JWT principal is **commented out**
-> (`UserController.java:490-491`), and the method Javadoc claims the opposite of what the code does.
-> The Angular client always sends the *current* user's `id`, so this is invisible in normal use —
-> but a hand-crafted request with another user's `id` would edit that user's profile, since any
-> `ROLE_USER` holds `UPDATE:USER`.
-> **Fix:** restore `user.setId(getAuthenticatedUser(authentication).getId())` (or add an explicit
-> ownership check) so the principal — never the body — decides whose row is updated. Tracked for
-> verification.
+> ✅ **Resolved 2026-06-15 (was an IDOR).** `updateUser` now binds the target id to the authenticated
+> principal — `user.setId(getAuthenticatedUser(authentication).getId())` in
+> `UserController.updateUser` — so any `id` in the request body is overwritten and ignored, then
+> `updateUserDTO` → `updateUserDetails` runs `UPDATE users … WHERE id = :id` against the *principal's*
+> id (`UserServiceImpl.java:139-141`, `UserQuery.UPDATE_USER_DETAILS_QUERY`).
+> **Previously** the principal-based assignment was commented out and the body's `id` flowed straight
+> through; because the `PATCH /**` rule only requires the `UPDATE:USER` authority every `ROLE_USER`
+> holds, a hand-crafted request with another user's `id` could have edited that user's profile. The
+> Angular client always sent the caller's own `id`, so normal use was never affected — the fix makes
+> the server *enforce* what the client already did, instead of trusting it.
 
 `@Valid UpdateForm` (`form/UpdateForm.java`):
 
@@ -86,7 +85,7 @@ sequenceDiagram
 | `firstName`, `lastName` | `@NotEmpty` | required |
 | `email` | `@Email` | |
 | `phoneNumber` | `@Pattern(^\+?[0-9. ()-]{7,25}$)` | optional, format-checked |
-| `id` | — | *intended* to be ignored server-side; currently is not (see above) |
+| `id` | — | ignored server-side — overwritten with the JWT principal's id (IDOR fix, see above) |
 | `imageUrl`,`address`,`bio`,`title` | — | optional; `image_url` uses `COALESCE` so null preserves existing |
 
 ---

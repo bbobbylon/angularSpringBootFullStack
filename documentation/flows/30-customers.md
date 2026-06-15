@@ -106,9 +106,9 @@ sequenceDiagram
     CTRL-->>CMP: 200 { user, customers: updated }
 ```
 
-> 🟢 **IDOR-safe (contrast with flow 10).** The update id is a `@PathVariable customerId`
-> (`CustomerController.java:150-151`); the service ignores any id in the body. This is the pattern
-> `PATCH /user/update` *should* follow — see [`10 §B`](./10-profile-and-account.md).
+> 🟢 **IDOR-safe.** The update id is a `@PathVariable customerId` (`CustomerController.java:150-151`);
+> the service ignores any id in the body. `PATCH /user/update` now follows the same
+> principal-as-source-of-truth rule after its 2026-06-15 IDOR fix — see [`10 §B`](./10-profile-and-account.md).
 
 ---
 

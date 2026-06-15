@@ -58,19 +58,19 @@ sequenceDiagram
     Note over TOK: 'login' ∈ publicRoutes → 🔓 NO Authorization header  :49
     TOK->>SEC: POST /user/login
     Note over SEC: matcher #2 permitAll  :138
-    SEC->>CTRL: login(@Valid LoginForm)  :613
-    CTRL->>CTRL: authenticate(email, password)  :643
-    Note over CTRL: brute-force gate: countRecentFailuresByEmail<br/>≥ 5 in 15 min → ApiException  :649-653
-    CTRL->>AM: authenticate(unauthenticated(email, pwd))  :657
+    SEC->>CTRL: login(@Valid LoginForm)  :621
+    CTRL->>CTRL: authenticate(email, password)  :650
+    Note over CTRL: brute-force gate: countRecentFailuresByEmail<br/>≥ 5 in 15 min → ApiException  :656-660
+    CTRL->>AM: authenticate(unauthenticated(email, pwd))  :664
     AM->>REPO: loadUserByUsername(email)
     REPO->>DB: SELECT user by email
     DB-->>REPO: row
     REPO-->>AM: UserPrincipal (UserDetails)
     Note over AM: DaoAuthenticationProvider +<br/>BCryptPasswordEncoder.matches()
     AM-->>CTRL: Authentication (principal = UserPrincipal)
-    CTRL->>CTRL: publish LOGIN_ATTEMPT_SUCCESS  :660
-    Note over CTRL: not usingTotp, not using2FA → sendResponse()  :621
-    CTRL->>SESS: issueTokenPair(principal, request)  :729 / SessionServiceImpl:85
+    CTRL->>CTRL: publish LOGIN_ATTEMPT_SUCCESS  :667
+    Note over CTRL: not usingTotp, not using2FA → sendResponse()  :628
+    CTRL->>SESS: issueTokenPair(principal, request)  :736 / SessionServiceImpl:85
     SESS->>DB: INSERT refreshsessions (family, jti, device, ip, +5d)  :202
     SESS->>TP: createAccessToken(principal, family)  :93
     SESS->>TP: createRefreshToken(principal, jti, family)  :94
@@ -85,7 +85,7 @@ sequenceDiagram
 ```
 
 ### Where the credentials are actually checked
-`authenticationManager.authenticate(...)` (`UserController.java:657`) delegates to the
+`authenticationManager.authenticate(...)` (`UserController.java:664`) delegates to the
 `DaoAuthenticationProvider` configured in `SecurityConfig.authenticationManager`
 (`SecurityConfig.java:257-262`). That provider:
 1. loads the user through `UserRepoImpl` (the app's `UserDetailsService`), and
@@ -95,7 +95,7 @@ sequenceDiagram
 `setHideUserNotFoundExceptions(false)` (`SecurityConfig.java:260`) lets a missing user surface as a
 distinct exception for the global handler — but note the **enumeration-safe** event handling: the
 `LOGIN_ATTEMPT`/`LOGIN_ATTEMPT_FAILURE` audit events only fire when the email resolves to a real
-user (`UserController.java:649-666`), so timing/audit behavior doesn't leak account existence.
+user (`UserController.java:656-673`), so timing/audit behavior doesn't leak account existence.
 
 ### Token issuance is a single seam
 Every successful authentication path in the app funnels through
@@ -111,7 +111,7 @@ brand-new login immediately shows up in the Security Center device list
 ## B · SMS-MFA branch (`user.using2FA`)
 
 When the authenticated user has SMS 2FA on, `UserController.login` calls `sendVerificationCode`
-(`:621, 706`) which sends the code (Twilio — stubbed in dev) and returns the user **without
+(`:628, 713`) which sends the code (Twilio — stubbed in dev) and returns the user **without
 tokens**. The component reacts (`login.component.ts:206-215`):
 
 ```mermaid
@@ -147,9 +147,9 @@ passed. (Contrast with TOTP below.)
 
 ## C · TOTP branch (`user.usingTotp`) — the asymmetric one
 
-A confirmed authenticator **supersedes** SMS (`UserController.java:617-621`: `usingTotp` is checked
+A confirmed authenticator **supersedes** SMS (`UserController.java:624-628`: `usingTotp` is checked
 first). Instead of tokens, the backend mints an opaque **challenge** and returns it
-(`sendTotpChallenge`, `:686-696`):
+(`sendTotpChallenge`, `:693-703`):
 
 ```mermaid
 sequenceDiagram
@@ -201,9 +201,9 @@ sequenceDiagram
     participant GEH as GlobalExceptionHandler
     participant SVC as UserService
     CMP->>CTRL: POST /user/login (wrong password)
-    CTRL->>CTRL: authenticate() → AuthenticationManager throws  :657
-    CTRL->>CTRL: publish LOGIN_ATTEMPT_FAILURE (only if email known)  :664-666
-    CTRL->>GEH: throw ApiException(e.getMessage())  :669
+    CTRL->>CTRL: authenticate() → AuthenticationManager throws  :664
+    CTRL->>CTRL: publish LOGIN_ATTEMPT_FAILURE (only if email known)  :671-673
+    CTRL->>GEH: throw ApiException(e.getMessage())  :676
     GEH-->>SVC: 400 HttpResponse { reason: "..." }
     SVC->>SVC: handleError → reads error.error.reason  user.service.ts:425
     SVC-->>CMP: Observable error(message)  :223
@@ -213,15 +213,15 @@ sequenceDiagram
 
 | Failure | Where | User sees |
 | --- | --- | --- |
-| Wrong password / unknown email | `authenticate()` catch → `ApiException` (`:663-670`) | generic error alert + toast (no hint about which was wrong — enumeration-safe) |
-| Too many failures (≥ 5 in 15 min) | brute-force gate (`:649-653`) | "Too many failed login attempts. Please wait 15 minutes…" |
+| Wrong password / unknown email | `authenticate()` catch → `ApiException` (`:670-678`) | generic error alert + toast (no hint about which was wrong — enumeration-safe) |
+| Too many failures (≥ 5 in 15 min) | brute-force gate (`:656-660`) | "Too many failed login attempts. Please wait 15 minutes…" |
 | Wrong MFA code | service throws → `GlobalExceptionHandler` → 400 | error panel stays on the MFA screen (`login.component.ts:158-168`) |
 | Disabled / locked account | `DaoAuthenticationProvider` → `DisabledException`/`LockedException` → 400 | error alert |
 
 The brute-force window/threshold are constants on the controller:
 `BRUTE_FORCE_MAX = 5`, `BRUTE_FORCE_WINDOW_MINUTES = 15` (`UserController.java:87-89`). The check is
 deliberately enumeration-safe — a known-but-rate-limited account and an unknown email both yield the
-same generic message (`:646-653`).
+same generic message (`:653-660`).
 
 ---
 
@@ -313,23 +313,23 @@ Note the Jackson key names (`notLocked`, `using2FA`, `usingTotp`), not the Java 
 ```
 
 **Branch B — SMS 2FA (`200`, no tokens):** `data` carries only `{ "user": { … "using2FA": true … } }`,
-`message: "2FA verification code was sent!"` (`UserController.java:706-716`).
+`message: "2FA verification code was sent!"` (`UserController.java:713-723`).
 
 **Branch C — TOTP (`200`, no tokens):** `data` carries `{ "user": { … "usingTotp": true … },
 "challenge": "8f1c…opaque-uuid" }`, `message: "Enter the code from your authenticator app."`
-(`UserController.java:686-696`). The `challenge` is the only new field — see
+(`UserController.java:693-703`). The `challenge` is the only new field — see
 `ProfileInterface.challenge` (`appstates.interface.ts:54`).
 
 ### F.4 · Error response (`400`)
 
 `authenticate()` catches every auth failure and rethrows `ApiException`
-(`UserController.java:663-670`), which the `GlobalExceptionHandler` renders as:
+(`UserController.java:670-678`), which the `GlobalExceptionHandler` renders as:
 ```jsonc
 { "timeStamp": "…", "reason": "Bad credentials", "status": "BAD_REQUEST", "statusCode": 400 }
 ```
 The SPA's `handleError` reads `error.error.reason` (`user.service.ts:425`) → toast + inline alert.
 The message is deliberately generic for unknown-email **and** wrong-password **and** rate-limited
-cases (enumeration-safe, `UserController.java:646-666`).
+cases (enumeration-safe, `UserController.java:653-673`).
 
 ### F.5 · SQL executed per branch (`NamedParameterJdbcTemplate`)
 

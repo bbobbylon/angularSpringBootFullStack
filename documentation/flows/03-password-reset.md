@@ -32,7 +32,7 @@ sequenceDiagram
     RP->>RP: resetPasswordState.set({ LOADING })  :44
     RP->>SVC: requestPasswordReset$(email)  :45 / user.service.ts:106
     SVC->>CTRL: GET /user/resetpassword/{email}  🔓 public
-    CTRL->>SRV: userService.resetPassword(email)  :529
+    CTRL->>SRV: userService.resetPassword(email)  :536
     SRV->>DB: SELECT user by email → DELETE old reset rows → INSERT reset row (+expiry)
     SRV->>EMAIL: email {uiAppUrl}/user/verify/password/{key}
     CTRL-->>RP: 200 { message: "Email sent to reset password…" }
@@ -45,7 +45,7 @@ sequenceDiagram
     VC->>VC: ngOnInit → getAccountType('password')  :62,68
     VC->>SVC: verifyAccount$(key, 'password')  :69 / user.service.ts:44
     SVC->>CTRL: GET /user/verify/password/{key}  🔓 public
-    CTRL->>SRV: userService.verifyPasswordKey(key)  :548
+    CTRL->>SRV: userService.verifyPasswordKey(key)  :555
     SRV->>DB: SELECT expiry by url → SELECT user by reset url
     CTRL-->>VC: 200 { data:{ user }, message:"Please enter your new password" }
     VC->>VC: userSubject.set(response.data.user)  :73
@@ -57,7 +57,7 @@ sequenceDiagram
     U->>VC: enter new+confirm, submit  html:140,157
     VC->>SVC: setNewPassword$({ userID, newPassword, confirmPassword })  :123 / user.service.ts:63
     SVC->>CTRL: PUT /user/new/password  🔓 public
-    CTRL->>SRV: setNewPassword(userID, new, confirm)  :572
+    CTRL->>SRV: setNewPassword(userID, new, confirm)  :579
     Note over SRV: service compares new == confirm
     SRV->>DB: UPDATE users SET password=BCrypt, password_changed_at=NOW()  💥 kills all tokens
     SRV->>DB: DELETE reset verification row (single-use)
@@ -103,7 +103,7 @@ on submit transitioning to the `account` success card.
 | Blank fields | `NewPasswordForm` `@NotEmpty`/`@NotNull` → 400 before controller body | inline alert |
 
 > 🔎 **Enumeration note.** The controller's stage-1 response message is generic
-> ("Email sent to reset password…", `UserController.java:533`). Whether the flow is *fully*
+> ("Email sent to reset password…", `UserController.java:540`). Whether the flow is *fully*
 > enumeration-safe depends on `userService.resetPassword` not throwing differently for an unknown
 > email — the project's stated policy is to never reveal account existence
 > ([security.md](../security.md)). If an unknown email surfaces an error here, that's the spot to

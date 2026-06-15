@@ -104,6 +104,55 @@ Legend: ✅ documented · ⏳ planned
 
 ---
 
+## Forecasted & not-yet-implemented (gap register)
+
+> So there are **no silent gaps**: every planned-but-unbuilt capability is listed here and
+> cross-referenced to the flow it extends. Sourced from `plan.md` (M0–M7 roadmap),
+> `software_requirements_specification.md`, and `TODO` / `Not yet implemented` markers in the code.
+> Status as of 2026-06-15.
+
+### Roadmap milestones still open (`plan.md`)
+
+| Milestone | Status | What's missing | Flow |
+| --- | --- | --- | --- |
+| M1 — auth-screen polish | 🔄 | login/register/verify/reset redesigned ✓; **route transitions + skeleton loaders** open | [01](./01-register-and-verify.md), [02](./02-login-and-mfa.md), [03](./03-password-reset.md) |
+| M2 — security/activity dashboard | ⬜ partial | Home is still the *business* dashboard; the **security overview** (login chart, MFA-coverage ring, active-session counter, audit feed on Home) isn't built — an audit feed exists only in the Security Center / Profile | [32](./32-dashboard.md), [10](./10-profile-and-account.md), [12](./12-sessions-and-devices.md) |
+| M3 — roles × permissions matrix | ✅ read-only | grid shipped (`/roles`); **in-grid toggle assignment** not built — assignment is via the Users dashboard | [20](./20-admin-users-rbac.md) |
+| M6 — risk-based step-up + lockout | 🔄 | brute-force lockout shipped (login gate, FR-EXT-1 partial); **new-device/IP risk step-up** not built | [02](./02-login-and-mfa.md) |
+| M7 — micro-interactions | ⬜ | Ctrl+K palette, empty/error states, toast restyle | all |
+
+### Backend endpoints / features planned
+
+| Planned capability | Source marker | State | Flow |
+| --- | --- | --- | --- |
+| Admin **profile-field** update `PATCH /user/admin/update/{userId}` (org-scoped) | `UserController.java:519` | not built — admins change role + account-state only | [20](./20-admin-users-rbac.md) |
+| Link a *standalone* invoice to a customer `PUT /customer/invoice/{invoiceId}/addtocustomer/{customerId}` | `CustomerController.java:183` | not built | [31](./31-invoices.md) |
+| Draft invoices (nullable customer) | `Invoice.java:80` | not built — every invoice is created already linked | [31](./31-invoices.md) |
+| Invoice total-sum `@Query` | `InvoiceRepo.java:15` | not built (stats use `CustomerQuery.STATS_QUERY`) | [31](./31-invoices.md), [32](./32-dashboard.md) |
+| Deeper org-scoped role system | `RoleRepoImpl.java:24` | partial — several `RoleRepoImpl` methods are `Not yet implemented; return null` | [20](./20-admin-users-rbac.md) |
+| Server-side `@Valid` on registration & customer-create | flows 01 / 30 | open — validation is **client-side only**, bypassable by a direct API call | [01](./01-register-and-verify.md), [30](./30-customers.md) |
+
+### Known debt / hardening (tracked, non-blocking)
+
+| Item | Source | Note |
+| --- | --- | --- |
+| SMS-2FA dispatch **stubbed** | `NotificationServiceImpl.java:54` | logged, not sent; TOTP ([11](./11-totp-enrollment.md)) is the production factor. Live SMS = Twilio creds + uncomment |
+| Profile-image storage hardcoded to `~/Downloads/images` | `UserController.java:316,359`, `WebMvcConfig.java:20` | dev-only; move to a configurable path / object storage |
+| HTTP caching is client-side | `cache.interceptor.ts` TODO | move to backend (ETag / Redis) and delete the interceptor |
+| `url` column stores a bare key | `UserQuery.java:36`, `UserRepoImpl.java:182` | rename to `verification_key` (DB migration deferred) |
+| Hardcoded API base `localhost:8080` | `environment.ts:11` | make environment-driven before any real deployment |
+| Near-zero tests | `plan.md §3` | priority paths: rotation/reuse ([05](./05-token-refresh-sessions.md)), TOTP challenge binding ([02](./02-login-and-mfa.md)/[11](./11-totp-enrollment.md)), org scoping ([20](./20-admin-users-rbac.md)) |
+| Two JWT libraries on the classpath | `plan.md §3` | `jjwt` + `java-jwt` — consolidation candidate |
+| `HandleException` exposes `.reason`/`.message` | `HandleException.java:31` | strip PII before production |
+| `.env` placeholder `jwt.secret` | `.env` | must be high-entropy anywhere reachable — it underpins every signature in [`00 §6`](./00-anatomy-of-a-request.md) |
+
+### Explicitly out of scope (SRS §1.4)
+
+Machine-to-machine / client-credentials authorization, SCIM provisioning, and SAML federation.
+AI anomaly detection and a login-analytics dashboard (**FR-EXT-2**) are *planned, time-permitting*.
+
+---
+
 ## Relationship to the rest of `documentation/`
 
 These flow docs are the **dynamic** view — what happens *over time* on a single request.

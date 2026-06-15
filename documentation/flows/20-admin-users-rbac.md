@@ -40,10 +40,10 @@ silently drop the gate (`AdminUserController.java:47-54`).
   org (FR-ORG-2); out-of-scope targets get a `403` whose message names no account data (NFR-SEC-7).
   `ROLE_ADMIN` / `ROLE_APPLICATION_ADMIN` are unscoped (FR-ORG-3).
 
-> 🟢 **Contrast with flow 10's IDOR.** Here the target id is a **path variable** (`@PathVariable Long id`,
+> 🟢 **Principal-as-source-of-truth.** Here the target id is a **path variable** (`@PathVariable Long id`,
 > `:213`), the caller is the JWT principal, and ownership/authority are enforced server-side. The
-> self-service `PATCH /user/update` does the opposite (trusts the body's `id`) — see
-> [`10 §B`](./10-profile-and-account.md). Same app, two endpoints, opposite postures.
+> self-service `PATCH /user/update` historically trusted the body's `id` (an IDOR, fixed 2026-06-15 to
+> source the id from the principal) — see [`10 §B`](./10-profile-and-account.md). Same app, two endpoints, opposite postures.
 
 ---
 
@@ -104,6 +104,12 @@ Account-state (`PATCH /{id}/settings`, `@PreAuthorize UPDATE:USER`) is identical
 `@Valid SettingsForm` (`enabled`,`notLocked` both `@NotNull`) → `UPDATE_USER_SETTINGS_QUERY`
 (`AdminUserController.java:244-266`). Both audit against the **target** so the action appears in *that*
 user's activity history (FR-ADMIN-3/4).
+
+> 🔭 **Planned (not built).** An admin endpoint to edit another user's *profile fields* (name, email,
+> phone, …) — `PATCH /user/admin/update/{userId}`, org-scoped (`UserController.java:519`). Today
+> admins change a user's **role** and **account state** only; the `Home > Users > User's Name`
+> frontend skeleton already exists to wire to it. See the
+> [gap register](./README.md#forecasted--not-yet-implemented-gap-register).
 
 ---
 

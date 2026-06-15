@@ -55,6 +55,11 @@ On submit the lines are merged into the payload as `services` (`:146`); the `cus
 becomes the **path variable**, the rest becomes the body — so the invoice is created *and* linked in
 one call.
 
+> 🔭 **Planned (not built).** Linking a *standalone* invoice to a customer after the fact
+> (`PUT /customer/invoice/{invoiceId}/addtocustomer/{customerId}`, `CustomerController.java:183`) and
+> **draft invoices** (nullable `customer`, `Invoice.java:80`). Today every invoice is created already
+> linked to a customer. See the [gap register](./README.md#forecasted--not-yet-implemented-gap-register).
+
 ---
 
 ## B · List & detail
