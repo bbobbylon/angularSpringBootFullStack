@@ -1,3 +1,5 @@
+> 🗑️ **DEPRECATED — MARKED FOR DELETION.** Default Spring Boot scaffolding boilerplate. Superseded by [`documentation/getting-started.md`](getting-started.md). Retained temporarily pending removal; do not update or rely on it.
+
 # Getting Started
 
 ### Reference Documentation

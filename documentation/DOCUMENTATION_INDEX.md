@@ -1,3 +1,5 @@
+> 🗑️ **DEPRECATED — MARKED FOR DELETION.** Superseded by the docs hub [`documentation/README.md`](README.md) and [`documentation/security.md`](security.md). Retained temporarily pending removal; do not update or rely on it.
+
 # 📚 SPRING SECURITY DOCUMENTATION INDEX
 
 **Quick Navigation for Understanding Your Spring Boot + Security Application**

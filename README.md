@@ -4,6 +4,10 @@ A full-stack application combining **Angular 21** (frontend) and **Spring Boot 4
 
 ---
 
+![SecureCapita architecture](documentation/architectLayout.png)
+
+*High-level architecture: Angular client · Spring Boot server · MySQL, containerized with Docker. Full breakdown in [documentation/architecture.md](documentation/architecture.md).*
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -167,8 +171,8 @@ All configuration lives in `.env` at the project root. IntelliJ loads it via **R
 | `MAIL_PASSWORD` | Gmail App Password | *(required)* |
 | `MAIL_HOST` | SMTP host | `smtp.gmail.com` |
 | `MAIL_PORT` | SMTP port | `587` |
-| `VERIFY_EMAIL_HOST` | Base URL for email verification links | `http://localhost:8080` |
-| `UI_APP_URL` | Angular app URL (used for CORS) | `http://localhost:4200` |
+| `VERIFY_EMAIL_HOST` | Reserved for future use — verification links are currently built from `UI_APP_URL`, not this value | `http://localhost:8080` |
+| `UI_APP_URL` | Angular app URL — used for CORS **and** as the base for email verification links | `http://localhost:4200` |
 | `SPRING_ACTIVE_PROFILES` | Spring profile (`dev` or `prod`) | `dev` |
 
 > **Never commit `.env`** — it is gitignored. The sanitized **`.env.example`** (placeholders only) is the committed template; `.gitignore` excludes `.env` / `.env.*` but whitelists the example via `!.env.example`. Copy it to `.env` and fill in real values.
@@ -444,6 +448,10 @@ git push
 ```
 
 ---
+
+## License
+
+Released under the [MIT License](LICENSE) © 2026 Bobby Oliver. See [`LICENSE`](LICENSE) for full terms.
 
 ## Disclaimer
 

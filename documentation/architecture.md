@@ -24,6 +24,10 @@ How SecureCapita is put together — the tiers, the backend's layered design, th
 
 Three tiers, talking over JSON and JDBC:
 
+![SecureCapita system architecture diagram](architectLayout.png)
+
+*Figure 1 — High-level architecture: the Angular client (components, services, interceptors, cache, JWT over HTTP), the Spring Boot server (filters, services, repositories, email/SMS/report integrations, JPA + SQL), and the MySQL database — all containerized with Docker. (Email is via SMTP and the datastore is MySQL; the diagram's "Office365"/"RDS" labels are illustrative.)*
+
 ```
 ┌───────────────┐   HTTPS / JSON      ┌──────────────────────────┐    JDBC     ┌──────────┐
 │  Angular 21   │ ──────────────────▶ │     Spring Boot 4        │ ──────────▶ │ MySQL 8  │

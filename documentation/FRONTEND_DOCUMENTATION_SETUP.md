@@ -1,3 +1,5 @@
+> 🗑️ **DEPRECATED — MARKED FOR DELETION.** This file is corrupted/jumbled and out of date. Superseded by [`documentation/architecture.md` §6](architecture.md#6-frontend-architecture) and [`securecapitaapp/README.md`](../securecapitaapp/README.md). Retained temporarily pending removal; do not update or rely on it.
+
 # Frontend Documentation (SecureCapita)
 
 This document describes the current Angular frontend in `securecapitaapp`, including structure, flows, and how it

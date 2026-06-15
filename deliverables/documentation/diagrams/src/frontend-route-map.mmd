@@ -1,0 +1,41 @@
+---
+title: SecureCapita - Angular Route Map
+---
+flowchart LR
+    root(("App Routes"))
+
+    subgraph pub["Public Routes"]
+        r1["/login"]
+        r2["/register"]
+        r3["/verify"]
+        r4["/resetpassword"]
+        r5["/user/verify/account/:key"]
+        r6["/user/verify/password/:key"]
+    end
+
+    subgraph guarded["Guarded by authenticationGuard"]
+        g0["'' (root) -> Home / Dashboard"]
+        g1["/customers"]
+        g2["/customer/new"]
+        g3["/customers/:id"]
+        g4["/invoices"]
+        g5["/invoice/new"]
+        g6["/invoice/:id/:invoiceNumber"]
+        g7["/profile"]
+    end
+
+    fb["** -> redirect to /"]
+
+    root --> pub
+    root --> guarded
+    root --> fb
+
+    r1 -. lazy .-> LoginComponent
+    g0 -. lazy .-> HomeComponent
+    g1 -. lazy .-> CustomersComponent
+    g4 -. lazy .-> InvoicesComponent
+
+    classDef pubcls fill:#e3f2fd,stroke:#1976d2;
+    classDef gcls fill:#e8f5e9,stroke:#388e3c;
+    class r1,r2,r3,r4,r5,r6 pubcls;
+    class g0,g1,g2,g3,g4,g5,g6,g7 gcls;

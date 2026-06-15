@@ -1,0 +1,42 @@
+---
+title: SecureCapita - Angular Component Tree
+---
+flowchart TD
+    App["AppComponent (root)"]
+    App --> Navbar["NavbarComponent (shared)"]
+    App --> Router["RouterOutlet"]
+
+    Router --> AuthG{"authenticationGuard"}
+
+    subgraph public["Public (no guard)"]
+        Login["LoginComponent"]
+        Register["RegisterComponent"]
+        Verify["VerifyComponent"]
+        Reset["ResetPasswordComponent"]
+    end
+    Router --> public
+
+    subgraph protected["Protected (authenticationGuard)"]
+        Home["HomeComponent (dashboard)"]
+        Customers["CustomersComponent"]
+        NewCustomer["NewCustomerComponent"]
+        CustomerDetails["CustomerDetailsComponent"]
+        Invoices["InvoicesComponent"]
+        NewInvoice["NewInvoiceComponent"]
+        InvoiceDetail["InvoiceDetailComponent"]
+        Profile["ProfileComponent"]
+    end
+    AuthG --> protected
+
+    Home --> Stats["StatsComponent (shared)"]
+
+    subgraph crosscut["Cross-cutting"]
+        Services["HTTP Services (service/)"]
+        Interceptor["JWT Interceptor"]
+        Pipes["Custom Pipes"]
+        Interfaces["TypeScript Interfaces"]
+    end
+
+    public -.uses.-> Services
+    protected -.uses.-> Services
+    Services --> Interceptor

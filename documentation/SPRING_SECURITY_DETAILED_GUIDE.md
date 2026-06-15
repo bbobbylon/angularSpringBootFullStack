@@ -1,3 +1,5 @@
+> 🗑️ **DEPRECATED — MARKED FOR DELETION.** Superseded by [`documentation/security.md`](security.md), which consolidates and updates this content (refresh rotation, TOTP, federation, brute-force). Retained temporarily pending removal; do not update or rely on it.
+
 # Complete Spring Security Flow Documentation
 ## Your Angular Spring Boot Full Stack Application
 

@@ -19,7 +19,7 @@ import java.util.Map;
  * database without manual data setup.
  *
  * <p><b>OTH-2 compliance:</b> annotated {@code @Profile("dev")} — the default active
- * profile per {@code application.yml}. Setting {@code SPRING_ACTIVE_PROFILES=production}
+ * profile per {@code application.yml}. Setting {@code SPRING_ACTIVE_PROFILES=prod}
  * in any production environment prevents this bean from being instantiated entirely.
  *
  * <p><b>Idempotency:</b> each call checks whether the demo email already exists
@@ -86,7 +86,7 @@ public class DemoDataSeeder implements ApplicationRunner {
             // this runs inside an ApplicationRunner, that exception aborts the WHOLE application
             // at startup, and the auto-committed user INSERT leaves behind an orphaned, role-less
             // account that makes the seeder skip that email forever. Looking the role up first
-            // with a null-tolerant extractor means a missing SRS role (i.e. Flyway V2 not yet
+            // with a null-tolerant extractor means a missing SRS role (i.e. schema.sql not yet
             // applied) simply skips this demo user with a clear warning — startup is never harmed.
             Long roleId = jdbc.query(
                     "SELECT id FROM roles WHERE name = :name",
@@ -94,7 +94,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                     rs -> rs.next() ? rs.getLong("id") : null);
             if (roleId == null) {
                 log.warn("[DemoDataSeeder] Skipping {} — role '{}' not found. " +
-                         "Has Flyway migration V2 (the SRS role catalog) been applied?", email, roleName);
+                         "Has schema.sql (the SRS role catalog) been applied?", email, roleName);
                 return;
             }
 
@@ -118,7 +118,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                     Map.of("userId", userId, "roleId", roleId));
 
             // Enroll in the Tessera organization so org-scoped admin views work out of the box.
-            // Wrapped in try/catch: the organizations table may not exist on schemas older than V4.
+            // Wrapped in try/catch: the organizations table may not exist on older schemas (pre-organizations).
             try {
                 Long orgId = jdbc.query(
                         "SELECT id FROM organizations WHERE name = 'Tessera' LIMIT 1",
@@ -152,7 +152,7 @@ public class DemoDataSeeder implements ApplicationRunner {
      * so the seeder does not depend on specific auto-increment IDs.
      *
      * @param userId    target user
-     * @param eventType one of the {@code events.type} values from the Flyway catalog
+     * @param eventType one of the {@code events.type} values seeded by schema.sql
      * @param device    parsed device description
      * @param ip        originating IP address
      */

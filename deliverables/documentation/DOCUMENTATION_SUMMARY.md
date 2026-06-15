@@ -1,5 +1,3 @@
-> 🗑️ **DEPRECATED — MARKED FOR DELETION.** This is an outdated meta-summary of a past JavaDoc effort. Superseded by the [`documentation/`](README.md) guide set. Retained temporarily pending removal; do not update or rely on it.
-
 # Project Documentation Summary
 
 ## Overview
@@ -9,6 +7,13 @@ Frontend TypeScript files now include concise multi-line TSdoc comments where ap
 have been refreshed to reflect the current Angular standalone structure.
 Each method includes detailed documentation explaining what it does, its parameters, return values, and exceptions
 thrown. **Recent updates include detailed documentation for refresh token flow, JWT error handling, and token type detection.**
+
+## Visual Documentation
+
+See **[diagrams/VISUALS.md](diagrams/VISUALS.md)** for the full set of diagrams
+(ER / data model, system architecture, authentication & sequence flows, and
+frontend component / route / API maps). Each is provided as editable Mermaid
+source plus rendered SVG and PNG; run `diagrams/render.sh` to regenerate.
 
 ## Files Documented
 

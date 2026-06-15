@@ -1,0 +1,30 @@
+---
+title: SecureCapita - Registration & Account Verification Flow
+---
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant NG as Angular RegisterComponent
+    participant API as UserController (/user)
+    participant SVC as UserService
+    participant DB as MySQL
+    participant MAIL as SMTP Mail
+    participant VC as Angular VerifyComponent
+
+    U->>NG: Fill registration form
+    NG->>API: POST /user/register
+    API->>SVC: createUser(firstName, lastName, email, password)
+    SVC->>DB: insert user (enabled = 0)
+    SVC->>DB: insert accountverifications (unique URL key)
+    SVC->>MAIL: send account verification email<br/>(/user/verify/account/{key})
+    API-->>NG: 201 Created (check your email)
+    NG-->>U: "Verify your email" message
+
+    U->>MAIL: Open email, click link
+    U->>VC: GET /user/verify/account/{key}
+    VC->>API: GET /user/verify/account/{key}
+    API->>SVC: verifyAccountKey(key)
+    SVC->>DB: lookup accountverifications by url
+    SVC->>DB: set user.enabled = 1
+    API-->>VC: 200 OK (account verified)
+    VC-->>U: Redirect to /login

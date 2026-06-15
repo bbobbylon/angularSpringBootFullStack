@@ -1,3 +1,5 @@
+> 🗑️ **DEPRECATED — MARKED FOR DELETION.** A meta-log of a past refactoring effort, not user-facing documentation. Its security content lives in [`documentation/security.md`](security.md). Retained temporarily pending removal; do not update or rely on it.
+
 # COMPREHENSIVE REFACTORING COMPLETE - SUMMARY
 
 ## What Was Accomplished
