@@ -91,6 +91,14 @@ ui:
   app:
     url: ${UI_APP_URL:http://localhost:4200}  # Use UI_APP_URL env var if set, otherwise default to http://localhost:3000
 
+app:
+  image:
+    # Filesystem directory where uploaded profile images are written and served from.
+    # Dev default lives under the user's home dir (cross-platform). In Docker/cloud,
+    # set IMAGE_STORAGE_PATH to a MOUNTED VOLUME (e.g. /app/data/images) so images
+    # survive container restarts — docker-compose maps the app-images volume there.
+    storage-path: ${IMAGE_STORAGE_PATH:${user.home}/securecapita/images}
+
 management:
   endpoints:
     web:

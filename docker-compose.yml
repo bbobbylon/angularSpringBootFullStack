@@ -26,9 +26,14 @@ services:
       SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true"
       CONTAINER_PORT: 8080
       UI_APP_URL: "http://localhost:${APP_PORT:-8090}"
+      # Profile images live on a named volume so they survive container restarts.
+      IMAGE_STORAGE_PATH: /app/data/images
+    volumes:
+      - app-images:/app/data/images
     depends_on:
       mysql:
         condition: service_healthy
 
 volumes:
   mysql-data:
+  app-images:

@@ -130,6 +130,19 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     private String uiAppUrl;
 
     /**
+     * Filesystem directory where uploaded profile images are written.
+     * <p>
+     * Injected from {@code app.image.storage-path} (env {@code IMAGE_STORAGE_PATH}) so the
+     * location is portable — local dev defaults under the user's home directory, while
+     * Docker/cloud point it at a mounted volume. Replaces the former hardcoded
+     * {@code ~/Downloads/images} path that only worked on the original developer's machine.
+     *
+     * @see #saveImage(String, MultipartFile)
+     */
+    @Value("${app.image.storage-path}")
+    private String imageStoragePath;
+
+    /**
      * Registers a new user under a transactional boundary.
      * <p>
      * Steps, in order:
@@ -767,7 +780,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Writes the uploaded image file to {@code ~/Downloads/images/{email}.png}.
+     * Writes the uploaded image file to {@code {app.image.storage-path}/{email}.png}.
      * Creates the target directory if it does not already exist.
      * If a previous image exists for this user, it is overwritten ({@code REPLACE_EXISTING}).
      *
@@ -776,7 +789,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * @throws ApiException if the directory cannot be created or the file cannot be written
      */
     private void saveImage(String email, MultipartFile image) {
-        Path fileStorageLocation = Paths.get(System.getProperty("user.home") + "/Downloads/images").toAbsolutePath().normalize();
+        Path fileStorageLocation = Paths.get(imageStoragePath).toAbsolutePath().normalize();
         if (!Files.exists(fileStorageLocation)) {
             try {
                 Files.createDirectories(fileStorageLocation);

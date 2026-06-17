@@ -18,6 +18,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -26,8 +27,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 
@@ -96,6 +99,15 @@ public class UserController {
     private final EventService eventService;
     private final TotpService totpService;
     private final SessionService sessionService;
+
+    /**
+     * Filesystem directory profile images are served from; injected from
+     * {@code app.image.storage-path} (env {@code IMAGE_STORAGE_PATH}). Field injection
+     * mirrors the {@code @Value} pattern already used here and keeps the value out of
+     * the Lombok {@code @RequiredArgsConstructor}, which is reserved for bean deps.
+     */
+    @Value("${app.image.storage-path}")
+    private String imageStoragePath;
 
     /**
      * Registers a new user. Validates the payload, creates the user via
@@ -347,29 +359,30 @@ public class UserController {
     }
 
     /**
-     * Serves a profile image file from the local filesystem.
+     * Serves a profile image file from the configured image directory.
      * <p>
-     * Reads the file at {@code ~/Downloads/images/{fileName}} and returns the raw
-     * bytes with {@code Content-Type: image/png} so the browser renders it inline.
-     * The URL pattern {@code /user/image/**} is listed in {@code SecurityConfig.java}
-     * {@code PUBLIC_URLS}, so no authentication token is required — the browser's
-     * {@code <img>} tag can load it directly.
+     * Reads {@code {app.image.storage-path}/{fileName}} and returns the raw bytes with
+     * {@code Content-Type: image/png}. The URL pattern {@code /user/image/**} is in
+     * {@code Constants.PUBLIC_URLS}, so the browser's {@code <img>} tag can load it without
+     * a token.
+     * <p>
+     * Hardened: the resolved path is confined to the storage directory (path-traversal guard
+     * — a crafted {@code fileName} can no longer escape the folder), and a missing file
+     * returns {@code 404} instead of propagating a raw {@code IOException} as a 500.
      *
-     * <p>-----------------------------------------------------------------------
-     * TODO(dev-only): The file path is hardcoded to the developer's home directory.
-     * For deployment, replace with a configurable base path or serve images from
-     * a cloud provider. Also consider returning {@code 404} when the file does not
-     * exist rather than propagating the raw {@code IOException}.
-     * -----------------------------------------------------------------------
-     *
-     * @param fileName the image filename (e.g. {@code user@example.com.png})
-     *                 taken from the URL path variable
-     * @return the raw PNG bytes with {@code Content-Type: image/png}
-     * @throws Exception if the file cannot be read from disk
+     * @param fileName the image filename (e.g. {@code user@example.com.png}) from the URL
+     * @return 200 with PNG bytes, or 404 when the image does not exist
+     * @throws IOException if an existing, in-bounds file cannot be read
      */
     @GetMapping(value = "/image/{fileName}", produces = IMAGE_PNG_VALUE)
-    public byte[] getProfileImage(@PathVariable String fileName) throws Exception {
-        return Files.readAllBytes(Paths.get(System.getProperty("user.home") + "/Downloads/images/" + fileName));
+    public ResponseEntity<byte[]> getProfileImage(@PathVariable String fileName) throws IOException {
+        Path base = Paths.get(imageStoragePath).toAbsolutePath().normalize();
+        Path target = base.resolve(fileName).normalize();
+        // Confine the resolved path to the storage directory — defeats "../" traversal.
+        if (!target.startsWith(base) || !Files.exists(target)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Files.readAllBytes(target));
     }
 
     /**
