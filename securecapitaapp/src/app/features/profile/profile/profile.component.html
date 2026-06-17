@@ -1,13 +1,12 @@
 @if (profileState(); as state) {
   <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-  <section>
+  <main class="sc-page">
     <div class="container">
-      <nav aria-label="breadcrumb" style="margin-top: 8px;">
-        <ol class="breadcrumb">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb sc-breadcrumb">
           <li class="breadcrumb-item">
             <a [routerLink]="['/']">Home</a>
           </li>
-          <li class="breadcrumb-item active">Users</li>
           <li aria-current="page" class="breadcrumb-item active">
             {{ state?.appData?.data?.user?.firstName }} {{ state?.appData?.data?.user?.lastName }}
           </li>
@@ -16,7 +15,7 @@
 
       @if (profileState().dataState === DataState.LOADING) {
         <!-- ── Profile loading skeleton ─────────────────────────────────── -->
-        <div class="bg-white shadow rounded-lg p-4 placeholder-glow" style="border-radius: 8px; min-height: 400px;">
+        <div class="sc-panel placeholder-glow" style="min-height: 400px;">
           <div class="row align-items-center mb-4">
             <div class="col-auto">
               <span class="placeholder rounded-circle d-block" style="width: 100px; height: 100px;"></span>
@@ -37,7 +36,7 @@
           </div>
         </div>
       } @else {
-      <div class="bg-white shadow rounded-lg d-block d-sm-flex" style="border-radius: 8px;">
+      <div class="sc-panel d-block d-sm-flex" style="padding: 0; overflow: hidden;">
         <div class="profile-tab-nav border-right">
           <div class="p-4">
             <div class="img-circle text-center mb-3">
@@ -426,7 +425,7 @@
       }
       } <!-- @else (LOADED) -->
     </div>
-  </section>
+  </main>
 }
 
 <!-- profile image change form -->

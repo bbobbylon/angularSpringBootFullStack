@@ -84,6 +84,15 @@ export interface CustomerListDataInterface {
   page?: PageInterface<CustomerInterface>;
   stats?: StatsInterface;
   statsData?: StatsDataInterface;
+  /**
+   * System-wide customer count keyed by account status (e.g. {@code ACTIVE}, {@code PENDING}).
+   *
+   * Computed by the backend's {@code GROUP BY status} aggregation and embedded in the
+   * {@code /customer/list} and {@code /customer/stats} responses. Drives the home-dashboard
+   * status donut with whole-table accuracy rather than just the loaded page. Optional so
+   * older/cached responses without it degrade gracefully to the page-derived tally.
+   */
+  statusBreakdown?: Record<string, number>;
 }
 
 /**
@@ -96,6 +105,8 @@ export interface CustomerListDataInterface {
 export interface StatsDataInterface {
   user: UserInterface;
   stats: StatsInterface;
+  /** System-wide customer count keyed by account status; see {@link CustomerListDataInterface#statusBreakdown}. */
+  statusBreakdown?: Record<string, number>;
 }
 
 /**

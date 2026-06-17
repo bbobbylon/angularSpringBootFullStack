@@ -2,98 +2,99 @@
   @switch (state.dataState) {
     @case (DataState.LOADED) {
       <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-      <section>
+      <main class="sc-page">
         <div class="container">
-          <nav aria-label="breadcrumb" style="margin-top: 8px">
-            <ol class="breadcrumb">
-              <li class="breadcrumb-item">
-                <a [routerLink]="['/']">Home</a>
-              </li>
-              <li class="breadcrumb-item active">Customers</li>
+
+          <nav aria-label="breadcrumb">
+            <ol class="breadcrumb sc-breadcrumb">
+              <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
+              <li class="breadcrumb-item active" aria-current="page">Customers</li>
             </ol>
           </nav>
-          <div class="row mt-3">
-            <div class="col">
-              <h4 class="fw-bold text-start">Customers</h4>
+
+          <header class="sc-head sc-reveal">
+            <div>
+              <p class="eyebrow mb-1">Directory</p>
+              <h1 class="sc-head__title">Customers</h1>
             </div>
-            <div class="col">
-              <h4 class="fw-bold text-end"><i class="bi bi-file-earmark-excel"
-                                              style="cursor: pointer; color: green; font-size: 30px"></i></h4>
+            <div class="sc-head__actions">
+              <label class="sc-search">
+                <i class="bi bi-search"></i>
+                <input #searchForm (input)="onSearchInput(searchForm.value)"
+                       class="form-control form-control-sm" id="customerName"
+                       placeholder="Search by name" type="text" aria-label="Search customers" />
+              </label>
+              <a [routerLink]="['/customer/new']" class="btn btn-primary btn-sm sc-panel__action">
+                <i class="bi bi-person-plus"></i> New customer
+              </a>
             </div>
-            <div class="col-xm-12">
-              <form class="row g-3 float-end">
-                <div class="col-auto">
-                  <label class="visually-hidden" for="customerName"></label>
-                  <input #searchForm (input)="onSearchInput(searchForm.value)"
-                         class="form-control" id="customerName" placeholder="Customer Name" type="text" />
-                </div>
-              </form>
-            </div>
-            <div class="col-xm-12">
-              <table class="table table-hover">
-                <thead>
-                <tr>
-                  <th class="text-center" scope="col">ID</th>
-                  <th scope="col">Photo</th>
-                  <th scope="col">Name</th>
-                  <th scope="col">Email</th>
-                  <th scope="col">Phone</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Type</th>
-                  <th scope="col">Action</th>
-                </tr>
-                </thead>
-                <tbody class="table-body">
-                  @for (customer of (state?.appData?.data?.page?.content ?? []); track customer.id) {
-                    <tr class="cell-1">
-                      <th class="text-center">{{ customer.id }}</th>
-                      <td>
-                        @if (customer.imageUrl) {
-                          <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
-                               loading="lazy" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">
-                        } @else {
-                          <div [style.background-color]="getAvatarColor(customer.id)"
-                               style="width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:16px;">
-                            {{ customer.customerName.charAt(0).toUpperCase() }}
-                          </div>
-                        }
-                      </td>
-                      <td>{{ customer.customerName }}</td>
-                      <td>{{ customer.email }}</td>
-                      <td>{{ customer.phoneNumber }}</td>
-                      <td>
-                        <span
-                          [ngClass]="[
-                            customer.status === 'ACTIVE' ? ' bg-success' : '',
-                            customer.status === 'PENDING' ? ' bg-primary' : '',
-                            customer.status === 'BANNED' ? ' bg-danger' : '',
-                            customer.status === 'INACTIVE' ? ' bg-info' : '',
-                          ]"
-                          class="badge">
-                          {{ customer.status }}
-                        </span>
-                      </td>
-                      <td>{{ customer.type }}</td>
-                      <td>
-                        <button [routerLink]="['/customers', customer.id]" class="btn btn-info" type="button">View
-                        </button>
-                      </td>
-                    </tr>
-                  } @empty {
-                    <tr>
-                      <td class="text-center text-muted" colspan="8">No results found.</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-              @if ((state?.appData?.data?.page?.content?.length ?? 0) > 0) {
-                <nav aria-label="Page navigation example">
-                  <ul class="pagination justify-content-end">
-                    <li [ngClass]="0 === currentPage$() ? ' disabled' : ''" class="page-item">
+          </header>
+
+          <section class="sc-panel sc-reveal" style="--d: 80ms;">
+            @if ((state?.appData?.data?.page?.content?.length ?? 0) > 0) {
+              <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                  <thead>
+                  <tr>
+                    <th class="text-center" scope="col">ID</th>
+                    <th scope="col">Photo</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Phone</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Type</th>
+                    <th class="text-end" scope="col">Action</th>
+                  </tr>
+                  </thead>
+                  <tbody class="table-body">
+                    @for (customer of (state?.appData?.data?.page?.content ?? []); track customer.id) {
+                      <tr>
+                        <th class="text-center text-muted">{{ customer.id }}</th>
+                        <td>
+                          @if (customer.imageUrl) {
+                            <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
+                                 loading="lazy" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">
+                          } @else {
+                            <div [style.background-color]="getAvatarColor(customer.id)" class="sc-avatar">
+                              {{ customer.customerName.charAt(0).toUpperCase() }}
+                            </div>
+                          }
+                        </td>
+                        <td class="fw-medium">{{ customer.customerName }}</td>
+                        <td class="text-muted">{{ customer.email }}</td>
+                        <td class="text-muted">{{ customer.phoneNumber }}</td>
+                        <td>
+                          <span
+                            [ngClass]="[
+                              customer.status === 'ACTIVE' ? ' bg-success' : '',
+                              customer.status === 'PENDING' ? ' bg-primary' : '',
+                              customer.status === 'BANNED' ? ' bg-danger' : '',
+                              customer.status === 'INACTIVE' ? ' bg-info' : '',
+                            ]"
+                            class="badge">
+                            {{ customer.status }}
+                          </span>
+                        </td>
+                        <td class="text-muted">{{ customer.type }}</td>
+                        <td class="text-end">
+                          <button [routerLink]="['/customers', customer.id]" class="btn btn-info btn-sm" type="button">
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="sc-panel__foot d-flex justify-content-end">
+                <nav aria-label="Page navigation">
+                  <ul class="pagination justify-content-end mb-0">
+                    <li [ngClass]="0 === currentPage$() ? ' disabled' : ''" class="page-item pointer">
                       <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; Prev</button>
                     </li>
                     @for (pageNumber of (state?.appData?.data?.page?.page?.totalPages ?? 0) | ExtractArrayValue: 'number'; track i; let i = $index) {
-                      <li class="page-item">
+                      <li class="page-item pointer">
                         <button (click)="goToPage(i)"
                                 [ngClass]="i === currentPage$() ? ' active' : ''"
                                 class="page-link">{{ i + 1 }}
@@ -102,22 +103,38 @@
                     }
                     <li
                       [ngClass]="(state?.appData?.data?.page?.page?.totalPages ?? 0) - 1 === currentPage$() ? ' disabled' : ''"
-                      class="page-item">
+                      class="page-item pointer">
                       <button (click)="goToNextOrPreviousPage('forward')" class="page-link">Next &raquo;</button>
                     </li>
                   </ul>
                 </nav>
-              }
-            </div>
-          </div>
+              </div>
+            } @else {
+              <div class="sc-empty">
+                <span class="sc-empty__icon"><i class="bi bi-search"></i></span>
+                <p class="sc-empty__title">No customers found</p>
+                <p class="sc-empty__hint">Try a different search term, or add a new customer to the directory.</p>
+                <a [routerLink]="['/customer/new']" class="btn btn-primary btn-sm">
+                  <i class="bi bi-person-plus"></i> Add a customer
+                </a>
+              </div>
+            }
+          </section>
+
         </div>
-      </section>
+      </main>
     }
     @case (DataState.LOADING) {
-      <div>Loading...</div>
+      <div class="sc-state">
+        <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
+        <p class="mb-0">Loading customers…</p>
+      </div>
     }
     @case (DataState.ERROR) {
-      <div>{{ state.error }}</div>
+      <div class="sc-state">
+        <span class="sc-state__icon"><i class="bi bi-exclamation-triangle"></i></span>
+        <p class="mb-0">{{ state.error }}</p>
+      </div>
     }
   }
 }

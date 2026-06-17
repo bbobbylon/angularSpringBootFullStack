@@ -8,25 +8,26 @@
   Read-only. Role and permission assignment lives in the admin user-detail view.
 -->
 <app-navbar [user]="user()"></app-navbar>
-<section>
+<main class="sc-page">
   <div class="container">
-    <nav aria-label="breadcrumb" style="margin-top: 8px;">
-      <ol class="breadcrumb">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb sc-breadcrumb">
         <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
         <li class="breadcrumb-item"><a [routerLink]="['/users']">Admin</a></li>
         <li aria-current="page" class="breadcrumb-item active">Roles Matrix</li>
       </ol>
     </nav>
 
-    <div class="row mb-3">
-      <div class="col">
-        <h3 class="mb-1">Roles × Permissions Matrix</h3>
-        <p class="text-muted mb-0">
+    <header class="sc-head sc-reveal">
+      <div>
+        <p class="eyebrow mb-1">Access control</p>
+        <h1 class="sc-head__title">Roles &times; Permissions</h1>
+        <p class="sc-head__sub">
           Each column is a permission string enforced by Spring Security at the URL and method level (SRS FR-RBAC-2).
-          A checkmark means the role grants that permission; a dash means it does not.
+          A checkmark means the role grants it; a dash means it does not.
         </p>
       </div>
-    </div>
+    </header>
 
     @switch (dataState()) {
 
@@ -42,7 +43,7 @@
       }
 
       @case (DataState.LOADED) {
-        <div class="card mb-4" style="border-radius: 8px; overflow: hidden;">
+        <div class="sc-panel sc-reveal" style="--d: 80ms; overflow: hidden;">
           <div class="table-responsive">
             <table class="table table-bordered table-hover mb-0" style="min-width: max-content;">
               <thead class="table-dark">
@@ -99,4 +100,4 @@
       }
     }
   </div>
-</section>
+</main>

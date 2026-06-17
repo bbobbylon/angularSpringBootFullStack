@@ -8,6 +8,7 @@ import com.bob.angularspringbootfullstack.report.CustomerReport;
 import com.bob.angularspringbootfullstack.report.InvoiceReport;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -64,7 +65,8 @@ public class CustomerController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "stats", customerService.getStats()))
+                                "stats", customerService.getStats(),
+                                "statusBreakdown", customerService.getCustomerStatusBreakdown()))
                         .message("Stats retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -86,7 +88,8 @@ public class CustomerController {
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
                                 "page", customerService.getCustomers(page.orElse(0), size.orElse(20)),
-                                "stats", customerService.getStats()))
+                                "stats", customerService.getStats(),
+                                "statusBreakdown", customerService.getCustomerStatusBreakdown()))
                         .message("Customers retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -148,7 +151,7 @@ public class CustomerController {
      * @return 200 OK with the authenticated user and the updated customer
      */
     @PutMapping("/update/{customerId}")
-    public ResponseEntity<HttpResponse> updateCustomer(@AuthenticationPrincipal UserDTO user, @PathVariable Long customerId, @RequestBody Customer customer) {
+    public ResponseEntity<HttpResponse> updateCustomer(@AuthenticationPrincipal UserDTO user, @PathVariable Long customerId, @RequestBody @Valid Customer customer) {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -168,7 +171,7 @@ public class CustomerController {
      * @return 201 Created with the authenticated user and the newly created customer
      */
     @PostMapping("/create")
-    public ResponseEntity<HttpResponse> createCustomer(@AuthenticationPrincipal UserDTO user, @RequestBody Customer customer) {
+    public ResponseEntity<HttpResponse> createCustomer(@AuthenticationPrincipal UserDTO user, @RequestBody @Valid Customer customer) {
         return ResponseEntity.created(URI.create("")).body(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -193,7 +196,7 @@ public class CustomerController {
      * @return 201 Created with the authenticated user and the newly created invoice
      */
     @PostMapping("/invoice/create")
-    public ResponseEntity<HttpResponse> createInvoice(@AuthenticationPrincipal UserDTO user, @RequestBody Invoice invoice) {
+    public ResponseEntity<HttpResponse> createInvoice(@AuthenticationPrincipal UserDTO user, @RequestBody @Valid Invoice invoice) {
         return ResponseEntity.created(URI.create("")).body(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -287,7 +290,7 @@ public class CustomerController {
      * @return 200 OK with the authenticated user and all customers (for UI refresh)
      */
     @PostMapping("/invoice/addtocustomer/{customerId}")
-    public ResponseEntity<HttpResponse> addInvoiceToCustomer(@AuthenticationPrincipal UserDTO user, @PathVariable Long customerId, @RequestBody Invoice invoice) {
+    public ResponseEntity<HttpResponse> addInvoiceToCustomer(@AuthenticationPrincipal UserDTO user, @PathVariable Long customerId, @RequestBody @Valid Invoice invoice) {
         customerService.addInvoiceToCustomer(customerId, invoice);
         return ResponseEntity.ok(
                 HttpResponse.builder()

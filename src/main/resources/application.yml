@@ -24,13 +24,19 @@ spring:
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}
   jpa:
-    show-sql: true
+    # SQL logging is OFF by default (prod-safe: avoids leaking query text and the
+    # per-statement overhead). Devs opt in with SHOW_SQL=true in their .env.
+    show-sql: ${SHOW_SQL:false}
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
         globally_quoted_identifiers: true
-        format_sql: true
+        format_sql: ${SHOW_SQL:false}
+      # Validation happens at the controller boundary via @Valid + GlobalExceptionHandler,
+      # not on every Hibernate flush — so a legitimate partial update never trips an
+      # entity-level constraint. Keeps a single, predictable place for 400s.
+      '[jakarta.persistence.validation.mode]': none
     generate-ddl: true
   sql:
     init:

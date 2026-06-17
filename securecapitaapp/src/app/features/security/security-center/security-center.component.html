@@ -6,21 +6,22 @@
   Sessions & devices (the stateful half of the hybrid token model made visible).
 -->
 <app-navbar [user]="user()"></app-navbar>
-<section>
+<main class="sc-page">
   <div class="container">
-    <nav aria-label="breadcrumb" style="margin-top: 8px;">
-      <ol class="breadcrumb">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb sc-breadcrumb">
         <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
         <li aria-current="page" class="breadcrumb-item active">Security Center</li>
       </ol>
     </nav>
 
-    <div class="row">
-      <div class="col-xl-12">
-        <h3 class="mb-1">Account Security Center</h3>
-        <p class="text-muted mb-4">Manage your second factor and see every device signed in to your account.</p>
+    <header class="sc-head sc-reveal">
+      <div>
+        <p class="eyebrow mb-1">Account</p>
+        <h1 class="sc-head__title">Security Center</h1>
+        <p class="sc-head__sub">Manage your second factor and see every device signed in to your account.</p>
       </div>
-    </div>
+    </header>
 
     @if (dataState() === DataState.LOADING) {
       <!-- ── Loading skeleton ─────────────────────────────────────────────── -->
@@ -355,4 +356,4 @@
     </div>
     } <!-- @else (LOADED) -->
   </div>
-</section>
+</main>

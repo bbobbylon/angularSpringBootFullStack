@@ -6,6 +6,8 @@ import com.bob.angularspringbootfullstack.model.Services;
 import com.bob.angularspringbootfullstack.model.Stats;
 import org.springframework.data.domain.Page;
 
+import java.util.Map;
+
 /**
  * CustomerService defines the service layer contract for all customer and invoice operations.
  * <p>
@@ -132,4 +134,15 @@ public interface CustomerService {
      * @return a {@link Stats} record with the current system-wide counts and totals
      */
     Stats getStats();
+
+    /**
+     * Returns the system-wide breakdown of customers by account status.
+     * <p>
+     * The result preserves insertion order (largest status first) so the home
+     * dashboard donut and its legend render deterministically. Keys are the raw
+     * status strings stored on each customer; values are the counts.
+     *
+     * @return an ordered map of status → customer count across the whole table
+     */
+    Map<String, Integer> getCustomerStatusBreakdown();
 }

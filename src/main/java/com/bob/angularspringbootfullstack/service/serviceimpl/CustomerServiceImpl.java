@@ -18,8 +18,10 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static com.bob.angularspringbootfullstack.query.CustomerQuery.CUSTOMER_STATUS_BREAKDOWN_QUERY;
 import static com.bob.angularspringbootfullstack.query.CustomerQuery.STATS_QUERY;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
 import static org.springframework.data.domain.PageRequest.of;
@@ -194,6 +196,27 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     public Stats getStats() {
         return jdbcTemplate.queryForObject(STATS_QUERY, Map.of(), new StatsRowMapper());
+    }
+
+    /**
+     * {@inheritDoc}
+     * Runs a single {@code GROUP BY status} aggregation and folds the rows into an
+     * insertion-ordered {@link LinkedHashMap} (the query already orders by descending
+     * count). A {@code ResultSetExtractor} is used rather than a dedicated model +
+     * RowMapper because the result is fundamentally key/value data, not an entity.
+     * A null status is coalesced to {@code "UNKNOWN"} so it never collapses into a
+     * blank legend entry.
+     */
+    @Override
+    public Map<String, Integer> getCustomerStatusBreakdown() {
+        return jdbcTemplate.query(CUSTOMER_STATUS_BREAKDOWN_QUERY, Map.of(), rs -> {
+            Map<String, Integer> breakdown = new LinkedHashMap<>();
+            while (rs.next()) {
+                String status = rs.getString("status");
+                breakdown.put(status != null ? status : "UNKNOWN", rs.getInt("count"));
+            }
+            return breakdown;
+        });
     }
 
 }

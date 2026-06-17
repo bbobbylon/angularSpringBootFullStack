@@ -2,84 +2,93 @@
   @switch (state.dataState) {
     @case (DataState.LOADED) {
       <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-      <section>
+      <main class="sc-page">
         <div class="container">
-          <nav aria-label="breadcrumb" style="margin-top: 8px">
-            <ol class="breadcrumb">
+
+          <nav aria-label="breadcrumb">
+            <ol class="breadcrumb sc-breadcrumb">
               <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
-              <li class="breadcrumb-item active">Invoices</li>
+              <li class="breadcrumb-item active" aria-current="page">Invoices</li>
             </ol>
           </nav>
+
+          <header class="sc-head sc-reveal">
+            <div>
+              <p class="eyebrow mb-1">Billing</p>
+              <h1 class="sc-head__title">Invoices</h1>
+            </div>
+            <div class="sc-head__actions">
+              <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm sc-panel__action">
+                <i class="bi bi-receipt"></i> New invoice
+              </a>
+              <button (click)="report()" class="btn btn-info btn-sm sc-panel__action" type="button">
+                <i class="bi bi-file-earmark-excel"></i> Export
+              </button>
+            </div>
+          </header>
+
           @if (fileStatus(); as status) {
-            <div class="progress">
+            <div class="progress sc-reveal" style="height: 0.6rem;">
               <div [attr.aria-valuenow]="status.percent" [style.width.%]="status.percent" aria-valuemax="100"
                    aria-valuemin="0" class="progress-bar bg-success" role="progressbar">
                 {{ status.type }} {{ status.percent }} %
               </div>
             </div>
           }
-          <div class="row mt-3">
-            <div class="col">
-              <h4 class="fw-bold text-start">Invoices</h4>
-            </div>
-            <div class="col">
-              <h4 class="fw-bold text-end">
-                <button (click)="report()" class="btn btn-link p-0 border-0">
-                  <i class="bi bi-file-earmark-excel" style="color: green; font-size: 30px;"></i>
-                </button>
-              </h4>
-            </div>
-            <div class="col-xm-12">
-              <table class="table table-hover">
-                <thead>
-                <tr>
-                  <th scope="col">Invoice Number</th>
-                  <th scope="col">Service</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Date</th>
-                  <th scope="col">Total</th>
-                  <th scope="col">Action</th>
-                </tr>
-                </thead>
-                <tbody class="table-body">
-                  @for (invoice of state?.appData?.data?.invoices?.content; track invoice.id) {
-                    <tr class="cell-1">
-                      <td>{{ invoice.invoiceNumber }}</td>
-                      <td>
-                        @for (svc of invoice.services; track svc.name; let last = $last) {
-                          {{ svc.name }}@if (!last) {
-                            ,
+
+          <section class="sc-panel sc-reveal" style="--d: 80ms;">
+            @if ((state?.appData?.data?.invoices?.content?.length ?? 0) > 0) {
+              <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                  <thead>
+                  <tr>
+                    <th scope="col">Invoice #</th>
+                    <th scope="col">Service</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Total</th>
+                    <th class="text-end" scope="col">Action</th>
+                  </tr>
+                  </thead>
+                  <tbody class="table-body">
+                    @for (invoice of state?.appData?.data?.invoices?.content; track invoice.id) {
+                      <tr>
+                        <td class="fw-medium mono">{{ invoice.invoiceNumber }}</td>
+                        <td class="text-muted">
+                          @for (svc of invoice.services; track svc.name; let last = $last) {
+                            {{ svc.name }}@if (!last) {, }
                           }
-                        }
-                      </td>
-                      <td>
-                        <span
-                          [ngClass]="[
-                            invoice.status === 'PAID' ? ' bg-success' : '',
-                            invoice.status === 'PENDING' ? ' bg-primary' : '',
-                            invoice.status === 'CANCELED' ? ' bg-danger' : '',
-                            invoice.status === 'OVERDUE' ? ' bg-warning' : '',
-                            invoice.status === 'ACTIVE' ? ' bg-success' : '',
-                          ]"
-                          class="badge">
-                          {{ invoice.status }}
-                        </span>
-                      </td>
-                      <td>{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
-                      <td>${{ invoice.totalAmount }}</td>
-                      <td>
-                        <button [routerLink]="['/invoice', invoice.id, invoice.invoiceNumber]"
-                                class="btn btn-info btn-sm" type="button">
-                          Print
-                        </button>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-              @if ((state?.appData?.data?.invoices?.content?.length ?? 0) > 0) {
-                <nav aria-label="Page navigation example">
-                  <ul class="pagination justify-content-end">
+                        </td>
+                        <td>
+                          <span
+                            [ngClass]="[
+                              invoice.status === 'PAID' ? ' bg-success' : '',
+                              invoice.status === 'PENDING' ? ' bg-primary' : '',
+                              invoice.status === 'CANCELED' ? ' bg-danger' : '',
+                              invoice.status === 'OVERDUE' ? ' bg-warning' : '',
+                              invoice.status === 'ACTIVE' ? ' bg-success' : '',
+                            ]"
+                            class="badge">
+                            {{ invoice.status }}
+                          </span>
+                        </td>
+                        <td class="text-muted">{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
+                        <td class="fw-medium">${{ invoice.totalAmount }}</td>
+                        <td class="text-end">
+                          <button [routerLink]="['/invoice', invoice.id, invoice.invoiceNumber]"
+                                  class="btn btn-info btn-sm" type="button">
+                            Print
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="sc-panel__foot d-flex justify-content-end">
+                <nav aria-label="Page navigation">
+                  <ul class="pagination justify-content-end mb-0">
                     <li [ngClass]="0 === (currentPage()) ? ' disabled' : ''" class="page-item pointer">
                       <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; Prev</button>
                     </li>
@@ -98,17 +107,33 @@
                     </li>
                   </ul>
                 </nav>
-              }
-            </div>
-          </div>
+              </div>
+            } @else {
+              <div class="sc-empty">
+                <span class="sc-empty__icon"><i class="bi bi-receipt"></i></span>
+                <p class="sc-empty__title">No invoices yet</p>
+                <p class="sc-empty__hint">Invoices you create will appear here with their status and totals.</p>
+                <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm">
+                  <i class="bi bi-receipt"></i> Create an invoice
+                </a>
+              </div>
+            }
+          </section>
+
         </div>
-      </section>
+      </main>
     }
     @case (DataState.LOADING) {
-      <div>Loading...</div>
+      <div class="sc-state">
+        <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
+        <p class="mb-0">Loading invoices…</p>
+      </div>
     }
     @case (DataState.ERROR) {
-      <div>{{ state.error }}</div>
+      <div class="sc-state">
+        <span class="sc-state__icon"><i class="bi bi-exclamation-triangle"></i></span>
+        <p class="mb-0">{{ state.error }}</p>
+      </div>
     }
   }
 }

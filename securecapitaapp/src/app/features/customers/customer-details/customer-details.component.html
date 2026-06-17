@@ -2,10 +2,10 @@
   @switch (state.dataState) {
     @case (DataState.LOADED) {
       <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-      <section>
+      <main class="sc-page">
         <div class="container">
-          <nav aria-label="breadcrumb" style="margin-top: 8px">
-            <ol class="breadcrumb">
+          <nav aria-label="breadcrumb">
+            <ol class="breadcrumb sc-breadcrumb">
               <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
               <li class="breadcrumb-item"><a [routerLink]="['/customers']">Customers</a></li>
               <li aria-current="page"
@@ -33,7 +33,7 @@
                     </div>
                     <div class="w-100 ms-4">
                       <h4 class="my-0">{{ state?.appData?.data?.customers?.customerName }}</h4>
-                      <p class="" style="font-size: 13px">{{ state?.appData?.data?.customers?.email }}</p>
+                      <p class="text-muted mb-2" style="font-size: 13px">{{ state?.appData?.data?.customers?.email }}</p>
                       <span
                         [ngClass]="[
                           state?.appData?.data?.customers?.status === 'ACTIVE' ? ' bg-success' : '',
@@ -41,8 +41,7 @@
                           state?.appData?.data?.customers?.status === 'BANNED' ? ' bg-danger' : '',
                           state?.appData?.data?.customers?.status === 'INACTIVE' ? ' bg-info' : '',
                         ]"
-                        class="badge"
-                        style="position: absolute; bottom: 60px; left: 113px; top: 70px; font-size: 11px; height: 18px">
+                        class="badge">
                         {{ state?.appData?.data?.customers?.status }}
                       </span>
                     </div>
@@ -225,8 +224,8 @@
                 <div class="card-body">
                   <h5 class="card-title">Invoices</h5>
                   <h6 class="card-subtitle mb-2 text-muted">Customer Invoices</h6>
-                  <table class="table table-hover">
-                    <thead class="table-dark">
+                  <table class="table table-hover align-middle">
+                    <thead>
                     <tr>
                       <th scope="col">Invoice Number</th>
                       <th scope="col">Service</th>
@@ -277,13 +276,19 @@
             </div>
           </div>
         </div>
-      </section>
+      </main>
     }
     @case (DataState.LOADING) {
-      <div>Loading...</div>
+      <div class="sc-state">
+        <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
+        <p class="mb-0">Loading customer…</p>
+      </div>
     }
     @case (DataState.ERROR) {
-      <div>{{ state.error }}</div>
+      <div class="sc-state">
+        <span class="sc-state__icon"><i class="bi bi-exclamation-triangle"></i></span>
+        <p class="mb-0">{{ state.error }}</p>
+      </div>
     }
   }
 }
