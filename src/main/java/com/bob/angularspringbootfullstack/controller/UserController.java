@@ -14,7 +14,6 @@ import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +21,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -36,7 +38,6 @@ import java.nio.file.Paths;
 import static com.bob.angularspringbootfullstack.constants.Constants.TOKEN_PREFIX;
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.*;
-import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getLoggedInUser;
 import static java.time.LocalTime.now;
@@ -93,7 +94,6 @@ public class UserController {
     private final RoleService roleService;
     private final AuthenticationManager authenticationManager;
     private final HttpServletRequest request;
-    private final HttpServletResponse response;
     private final ApplicationEventPublisher eventPublisher;
     private final EventService eventService;
     private final TotpService totpService;
@@ -634,34 +634,42 @@ public class UserController {
     /**
      * Validates the email and delegates credential verification to the {@link org.springframework.security.authentication.AuthenticationManager}.
      *
-     * <p>Before attempting authentication, a {@link EventType#LOGIN_ATTEMPT} event is published
-     * only if the email resolves to a known user — unknown emails are silently ignored to prevent
-     * user enumeration. On success, a {@link EventType#LOGIN_ATTEMPT_SUCCESS} event is published
-     * (unless 2FA is enabled, in which case success is recorded after code verification instead).
+     * <p><b>Anti-enumeration (FR-AUTH-4, NFR-SEC-7).</b> An unknown email and a wrong password
+     * MUST be indistinguishable to the caller. Two things make that true here: the account is
+     * resolved through {@link #findUserOrNull(String)} (which swallows the repository's
+     * {@code UsernameNotFoundException} to {@code null} instead of letting it escape as a 500),
+     * and every credential failure is rethrown as one generic {@code "Invalid email or password."}
+     * {@link ApiException} — the underlying exception message (which embeds the email) is never
+     * echoed to the client. Both cases therefore yield an identical 400 with an identical body.
+     * Disabled / locked accounts (FR-AUTH-5) keep their own actionable messages, since those are
+     * legitimate state signals rather than credential checks.
      *
-     * <p>On failure, a {@link EventType#LOGIN_ATTEMPT_FAILURE} event is published (again, only if
-     * the email was valid), {@code processError} writes the error to the response for legacy
-     * compatibility, and an {@link com.bob.angularspringbootfullstack.exception.ApiException} is
-     * rethrown so the caller stops processing and the global exception handler returns a structured
-     * JSON error to the frontend.
+     * <p>Audit events mirror the same rule (FR-AUDIT-3): {@link EventType#LOGIN_ATTEMPT} and
+     * {@link EventType#LOGIN_ATTEMPT_FAILURE} are recorded only for a KNOWN account, so the audit
+     * log itself never becomes an enumeration oracle. On success, {@link EventType#LOGIN_ATTEMPT_SUCCESS}
+     * is published unless 2FA is enabled (success is recorded after code verification instead).
      *
-     * @param email    the submitted email address; must resolve to an existing user for events to fire
+     * @param email    the submitted email address
      * @param password the submitted password
      * @return the authenticated {@link UserDTO} on success
      * @throws com.bob.angularspringbootfullstack.exception.ApiException on any authentication failure
      */
     private UserDTO authenticate(String email, String password) {
-        UserDTO userByEmail = userService.getUserByEmail(email);
+        // Resolve WITHOUT throwing on a miss: the repo raises UsernameNotFoundException for an
+        // unknown email, which (uncaught, outside the try) used to surface as a 500 whose
+        // devMessage leaked the email — an enumeration oracle. Null here keeps unknown emails on
+        // the exact same path as a wrong password.
+        UserDTO userByEmail = findUserOrNull(email);
         try {
             // M6: reject the attempt early when the sliding-window failure count exceeds the
-            // threshold — does NOT reveal whether the account exists (NFR-SEC-7: same generic
-            // message for unknown emails vs. rate-limited known ones).
+            // threshold. Gated on a known account, so an unknown email falls through to the same
+            // generic credential failure below rather than revealing the account exists.
             if (null != userByEmail &&
                     eventService.countRecentFailuresByEmail(email, BRUTE_FORCE_WINDOW_MINUTES) >= BRUTE_FORCE_MAX) {
                 throw new ApiException("Too many failed login attempts. Please wait " +
                         BRUTE_FORCE_WINDOW_MINUTES + " minutes before trying again.");
             }
-            if (null != userService.getUserByEmail(email)) {
+            if (null != userByEmail) {
                 eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT));
             }
             Authentication authentication = authenticationManager.authenticate(unauthenticated(email, password));
@@ -670,14 +678,52 @@ public class UserController {
                 eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_SUCCESS));
             }
             return loggedInUser;
-        } catch (Exception e) {
-            if (null != userByEmail) {
-                eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_FAILURE));
-            }
-            // After running our front end, we are seeing that processError is preventing from the actual backend error message to show up on the front end error message (in the alert), so we have commented this out. The reason behind this is that the processError is writing the response to the HttpServletResponse, which is not compatible with our current front end error handling approach. By commenting this out, we allow the ApiException to be thrown and handled by our GlobalExceptionHandler, which will return a structured JSON response that our front end can easily parse and display the error message in an alert. If we were to keep processError, it would interfere with the normal flow of exception handling and prevent our front end from receiving the expected error response format.
-            processError(request, response, e);
+        } catch (ApiException e) {
+            // Brute-force rejection: its message is intentionally non-enumerating; surface as-is.
+            recordLoginFailure(userByEmail, email);
+            throw e;
+        } catch (DisabledException | LockedException e) {
+            // Legitimate account-state signals (FR-AUTH-5) — keep the actionable message.
+            recordLoginFailure(userByEmail, email);
             throw new ApiException(e.getMessage());
+        } catch (Exception e) {
+            // Bad password, unknown email, or anything else: ONE generic message so the cases are
+            // indistinguishable (FR-AUTH-4, NFR-SEC-7). Never echo the underlying exception text.
+            recordLoginFailure(userByEmail, email);
+            throw new ApiException("Invalid email or password.");
+        }
+    }
 
+    /**
+     * Looks up a user by email for the login flow WITHOUT throwing when the email is unknown.
+     * <p>
+     * {@code UserService.getUserByEmail} (via {@code UserRepoImpl}) raises
+     * {@link UsernameNotFoundException} for a miss; swallowing it to {@code null} here is what lets
+     * an unknown email and a wrong password follow the identical failure path, so neither the
+     * status code, the response body, nor the audit trail reveals whether the account exists
+     * (FR-AUTH-4, NFR-SEC-7, FR-AUDIT-3).
+     *
+     * @param email the submitted email
+     * @return the matching {@link UserDTO}, or {@code null} when no account has that email
+     */
+    private UserDTO findUserOrNull(String email) {
+        try {
+            return userService.getUserByEmail(email);
+        } catch (UsernameNotFoundException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Publishes a {@link EventType#LOGIN_ATTEMPT_FAILURE} event only for a KNOWN account, so the
+     * audit log does not itself leak which emails are registered (FR-AUDIT-3).
+     *
+     * @param userByEmail the resolved account, or {@code null} for an unknown email
+     * @param email       the submitted email (event subject when the account is known)
+     */
+    private void recordLoginFailure(UserDTO userByEmail, String email) {
+        if (null != userByEmail) {
+            eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_FAILURE));
         }
     }
 
