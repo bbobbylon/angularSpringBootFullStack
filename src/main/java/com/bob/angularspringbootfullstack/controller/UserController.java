@@ -32,7 +32,6 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.TimeUnit;
 
 import static com.bob.angularspringbootfullstack.constants.Constants.TOKEN_PREFIX;
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
@@ -194,8 +193,7 @@ public class UserController {
      * verified or already verified
      */
     @GetMapping("/verify/account/{key}")
-    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String yeet) throws InterruptedException {
-        TimeUnit.SECONDS.sleep(3); // Simulate a delay for testing the frontend loading state
+    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String yeet) {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -287,16 +285,13 @@ public class UserController {
     /**
      * Flips the authenticated user's MFA (two-factor authentication) flag.
      * Requires a phone number to be set on the account; the service throws if one
-     * is missing. The 2-second sleep simulates backend latency for frontend
-     * loading-state testing and should be removed before production.
+     * is missing.
      *
      * @param authentication the current Spring Security authentication
      * @return 200 OK with the updated user and the full roles list
-     * //@throws InterruptedException if the sleep is interrupted
      */
     @PatchMapping("/update/togglemfa")
-    public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) { // throws InterruptedException {
-        //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+    public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) {
         UserDTO userDTO = userService.toggleMFA(getAuthenticatedUser(authentication).getEmail());
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), MFA_UPDATE));
         long mfaTotalElements = eventService.countEventsByUserId(userDTO.getId());
@@ -319,17 +314,13 @@ public class UserController {
     /**
      * Uploads and persists a new profile image for the authenticated user.
      * <p>
-     * Saves the uploaded file to the local filesystem under
-     * {@code ~/Downloads/images/{email}.png}, constructs a URL pointing to
-     * {@code GET /user/image/{email}.png}, and updates the user's
+     * Saves the uploaded file to the configurable storage directory
+     * ({@code app.image.storage-path}, env {@code IMAGE_STORAGE_PATH}; see
+     * {@code WebMvcConfig}), constructs a URL pointing to
+     * {@code GET /user/profile/image/{email}.png}, and updates the user's
      * {@code image_url} column in the database via {@code UserService.updateProfileImage}.
-     *
-     * <p>-----------------------------------------------------------------------
-     * TODO(dev-only): The save path is hardcoded to the developer's home directory
-     * and will not work in Docker or CI/CD. Replace with a configurable base path
-     * (e.g. an {@code @Value}-injected property) or migrate image storage to a
-     * cloud provider such as AWS S3.
-     * -----------------------------------------------------------------------
+     * The configurable path makes image storage portable across local dev, Docker,
+     * and cloud — in containers it points at a mounted volume so uploads survive restarts.
      *
      * @param authentication the current Spring Security authentication
      * @param image          the uploaded PNG file sent as {@code multipart/form-data}
@@ -337,8 +328,7 @@ public class UserController {
      * @return 200 OK with the updated user and the full roles list
      */
     @PatchMapping("/update/image")
-    public ResponseEntity<HttpResponse> updateProfileImage(Authentication authentication, @RequestParam("image") MultipartFile image) { //throws InterruptedException
-        //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+    public ResponseEntity<HttpResponse> updateProfileImage(Authentication authentication, @RequestParam("image") MultipartFile image) {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateProfileImage(userDTO, image);
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), PROFILE_PICTURE_UPDATE));
