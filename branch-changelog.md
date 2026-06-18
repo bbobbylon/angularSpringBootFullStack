@@ -26,10 +26,10 @@ record of what landed.
 |---|---|
 | **Branch** | `MastersProjectSRSImpl` |
 | **Forked from `master` at** | `617ae18` — *"Store bare verification keys; build frontend links"* (2026-06-06) |
-| **Span of work** | 2026-06-11 → 2026-06-18 (17 commits over 12 days) |
-| **Aggregate diff** | **198 files changed, +16,601 / −1,326** |
-| **New files** | **127** (25 backend classes · 4 tests · 21 frontend files · 24 doc guides · 47 deliverable artifacts · root docs) |
-| **Headline themes** | Federated OAuth2 login · TOTP MFA · stateful refresh-sessions + reuse detection · admin/RBAC + org scoping · dashboard insights + UI token layer · production hardening · a full documentation + deliverables corpus |
+| **Span of work** | 2026-06-11 → 2026-06-18 (18 feature commits over 12 days) |
+| **Aggregate diff** | **209 files changed, +17,865 / −1,362** (measured through `0a2f3ea`; excludes the later doc-only post-submission cleanup) |
+| **New files** | **133** (25 backend classes · 4 tests · 27 frontend files · 24 doc guides · 47 deliverable artifacts · root docs) |
+| **Headline themes** | Federated OAuth2 login · TOTP MFA · stateful refresh-sessions + reuse detection · admin/RBAC + org scoping · dashboard insights + UI token layer · TesseraApp rebrand + billing overview & services catalog · production hardening · a full documentation + deliverables corpus |
 
 **Caveat on attribution:** the five 2026-06-11 commits were authored seconds apart (a single
 working session split by area), so "when" below is grouped by *phase*, not by literal commit
@@ -71,6 +71,17 @@ The large documentation build-out:
 ### Phase E — Prod-readiness finish (2026-06-18, `a891bd2`,`8c42c3e`)
 - `a891bd2` — fixed circular-placeholder config bug (dev→literals, prod→direct env reads), SRS rev 0.3, JPA `validate` + `JpaSchemaSyncTest` drift guard, login-enumeration regression test (+463 / −52).
 - `8c42c3e` — corrected `show-sql` default in the annotated config doc (+3 / −3).
+
+### Phase F — TesseraApp rebrand + billing/services (2026-06-18, `0a2f3ea`, +1,281 / −53)
+Author's own frontend feature drop on top of the prod-readiness work:
+- **TesseraApp rebrand** — app renamed across navbar, `index.html`, `styles.css`, auth screens.
+- **Billing overview** — new `features/billing/billing/` component (`.ts/.html/.css`).
+- **Services catalog** — new `features/services/services-catalog/` component (`.ts/.html/.css`).
+- **Clickable metrics** — `shared/stats/` made interactive; navbar + routes extended for the new pages.
+
+> *Post-cutoff note:* the original §-by-§ inventory below was compiled through `8c42c3e`; the two
+> new components from `0a2f3ea` are listed in §4. The doc-only post-submission cleanup commits that
+> follow `0a2f3ea` are not feature additions.
 
 ---
 
@@ -125,7 +136,7 @@ The large documentation build-out:
 
 ---
 
-## 4. Frontend additions (`securecapitaapp/src`) — 21 new files
+## 4. Frontend additions (`securecapitaapp/src`) — 27 new files
 
 ### Feature components (11)
 - `features/auth/oauth2-callback/` — handles the OAuth2 redirect, exchanges for our JWT.
@@ -141,6 +152,10 @@ The large documentation build-out:
 - `interface/admin.interface.ts`, `interface/security.interface.ts` — typed contracts for the new responses.
 - `utils/event-display.utils.ts` — maps audit `EventType`s to display labels/icons.
 - `environments/environment.ts` (`apiUrl: http://localhost:8080`) + `environments/environment.production.ts` (`apiUrl: ''`, relative) — environment-driven API base.
+
+### Billing & services (6, from `0a2f3ea` — TesseraApp rebrand)
+- `features/billing/billing/` (`.ts/.html/.css`) — billing overview page.
+- `features/services/services-catalog/` (`.ts/.html/.css`) — services catalog page.
 
 ### Notable frontend modifications
 - `app.routes.ts` — routes for users/roles/security/oauth2-callback (admin-guarded).
