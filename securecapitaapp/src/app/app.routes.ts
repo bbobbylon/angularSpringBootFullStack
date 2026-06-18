@@ -112,5 +112,22 @@ export const routes: Routes = [
     canActivate: [authenticationGuard],
     loadComponent: () => import('./features/invoices/invoice-detail/invoice-detail.component').then((m) => m.InvoiceDetailComponent),
   },
+  // Billing overview (SRS admin-only analytics): visible to UPDATE:USER / UPDATE:ROLE / DELETE:USER.
+  // adminGuard enforces the same authority check that protects /admin/** on the backend.
+  {
+    path: 'billing',
+    canActivate: [authenticationGuard, adminGuard],
+    loadComponent: () => import('./features/billing/billing/billing.component').then((m) => m.BillingComponent),
+  },
+  // Service / app catalog — all authenticated users can browse available services and
+  // launch a new invoice pre-filled for a selected service.
+  {
+    path: 'services',
+    canActivate: [authenticationGuard],
+    loadComponent: () =>
+      import('./features/services/services-catalog/services-catalog.component').then(
+        (m) => m.ServicesCatalogComponent,
+      ),
+  },
   { path: '**', redirectTo: '/', pathMatch: 'full' },
 ];

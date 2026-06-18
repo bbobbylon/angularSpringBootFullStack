@@ -1,0 +1,241 @@
+<app-navbar [user]="user()"></app-navbar>
+
+<main class="sc-billing">
+  <div class="container">
+
+    <!-- ── Page header ─────────────────────────────────────────────────── -->
+    <header class="sc-billing__head sc-reveal">
+      <div>
+        <p class="eyebrow mb-1">Billing</p>
+        <h1 class="sc-billing__title">Revenue Overview</h1>
+        <div class="sc-scope-wrap">
+          <span class="sc-scope-badge">
+            <i class="bi bi-building"></i>
+            {{ scopeLabel }}
+          </span>
+          @if (isLoading()) {
+            <span class="sc-scope-badge sc-scope-badge--muted">
+              <i class="bi bi-arrow-clockwise sc-spin"></i> Loading…
+            </span>
+          }
+        </div>
+      </div>
+      <div class="sc-billing__actions">
+        <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm">
+          <i class="bi bi-receipt"></i> New Invoice
+        </a>
+        <a [routerLink]="['/invoices']" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-list-ul"></i> All Invoices
+        </a>
+      </div>
+    </header>
+
+    <!-- ── 4 KPI cards ─────────────────────────────────────────────────── -->
+    <div class="sc-kpi-row sc-reveal" style="--d: 40ms;">
+
+      <div class="sc-kpi sc-kpi--billed">
+        <span class="sc-kpi__icon"><i class="bi bi-cash-stack"></i></span>
+        <div class="sc-kpi__body">
+          <span class="sc-kpi__value">${{ totalBilled() | number: '1.2-2' }}</span>
+          <span class="eyebrow">Total Billed</span>
+        </div>
+        <span class="sc-kpi__tag">Revenue</span>
+      </div>
+
+      <div class="sc-kpi sc-kpi--invoices">
+        <span class="sc-kpi__icon"><i class="bi bi-receipt-cutoff"></i></span>
+        <div class="sc-kpi__body">
+          <span class="sc-kpi__value">{{ totalInvoices() | number }}</span>
+          <span class="eyebrow">Total Invoices</span>
+        </div>
+        <span class="sc-kpi__tag">All time</span>
+      </div>
+
+      <div class="sc-kpi sc-kpi--avg">
+        <span class="sc-kpi__icon"><i class="bi bi-graph-up-arrow"></i></span>
+        <div class="sc-kpi__body">
+          <span class="sc-kpi__value">${{ avgInvoiceValue() | number: '1.2-2' }}</span>
+          <span class="eyebrow">Avg Invoice Value</span>
+        </div>
+        <span class="sc-kpi__tag">Per invoice</span>
+      </div>
+
+      <div class="sc-kpi sc-kpi--rate">
+        <span class="sc-kpi__icon"><i class="bi bi-check-circle"></i></span>
+        <div class="sc-kpi__body">
+          <span class="sc-kpi__value">{{ collectionRate() | number: '1.1-1' }}%</span>
+          <span class="eyebrow">Collection Rate</span>
+        </div>
+        <span class="sc-kpi__tag">Paid / total</span>
+      </div>
+
+    </div>
+
+    <!-- ── Row 2: Status donut + Monthly bars ──────────────────────────── -->
+    <div class="sc-charts-row sc-reveal" style="--d: 80ms;">
+
+      <!-- Invoice status donut -->
+      <section class="sc-panel sc-panel--flush sc-charts-row__donut">
+        <div class="sc-panel__head">
+          <div>
+            <h2 class="sc-panel__title">Invoice Status</h2>
+            <p class="sc-panel__meta">{{ statusTotal() }} total</p>
+          </div>
+        </div>
+
+        @if (statusSegments().length) {
+          <div class="sc-donut-wrap">
+            <div class="sc-donut-fig">
+              <svg viewBox="0 0 36 36" class="sc-donut" role="img" aria-label="Invoice status distribution">
+                <circle class="sc-donut__track" cx="18" cy="18" r="15.915" />
+                @for (seg of statusSegments(); track seg.label) {
+                  <circle class="sc-donut__seg" cx="18" cy="18" r="15.915"
+                          [attr.stroke]="seg.color"
+                          [attr.stroke-dasharray]="seg.dashArray"
+                          [attr.stroke-dashoffset]="seg.dashOffset" />
+                }
+              </svg>
+              <div class="sc-donut__center">
+                <span class="sc-donut__total">{{ statusTotal() }}</span>
+                <span class="eyebrow">invoices</span>
+              </div>
+            </div>
+
+            <ul class="sc-legend">
+              @for (seg of statusSegments(); track seg.label) {
+                <li class="sc-legend__item">
+                  <span class="sc-legend__dot" [style.background]="seg.color"></span>
+                  <span class="sc-legend__label">{{ seg.label }}</span>
+                  <span class="sc-legend__value">{{ seg.value }}</span>
+                  <span class="sc-legend__pct mono">{{ seg.percent | number: '1.0-0' }}%</span>
+                </li>
+              }
+            </ul>
+          </div>
+        } @else {
+          <p class="text-muted small mb-0 px-1">No invoice data yet.</p>
+        }
+      </section>
+
+      <!-- Monthly revenue bar chart -->
+      <section class="sc-panel sc-panel--flush sc-charts-row__bars">
+        <div class="sc-panel__head">
+          <div>
+            <h2 class="sc-panel__title">Monthly Revenue</h2>
+            <p class="sc-panel__meta">Last 6 months</p>
+          </div>
+        </div>
+
+        @if (monthlyRevenue().length) {
+          <div class="sc-bar-chart">
+            <div class="sc-bar-chart__grid">
+              @for (bar of monthlyRevenue(); track bar.label) {
+                <div class="sc-bar-col" [title]="bar.label + ': $' + (bar.revenue | number: '1.2-2') + ' (' + bar.count + ' invoices)'">
+                  <div class="sc-bar-col__fill" [style.height.%]="bar.barHeight">
+                    <span class="sc-bar-col__tip">${{ bar.revenue | number: '1.0-0' }}</span>
+                  </div>
+                  <span class="sc-bar-col__label">{{ bar.label }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        } @else {
+          <p class="text-muted small mb-0 px-1">No monthly data available.</p>
+        }
+      </section>
+
+    </div>
+
+    <!-- ── Revenue by service ──────────────────────────────────────────── -->
+    <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 120ms;">
+      <div class="sc-panel__head">
+        <div>
+          <h2 class="sc-panel__title">Revenue by Service</h2>
+          <p class="sc-panel__meta">Top 8 services by billed amount</p>
+        </div>
+      </div>
+
+      @if (serviceRevenue().length) {
+        <div class="sc-svc-list">
+          @for (svc of serviceRevenue(); track svc.name; let i = $index) {
+            <div class="sc-svc-row">
+              <div class="sc-svc-row__meta">
+                <span class="sc-svc-row__rank mono">#{{ i + 1 }}</span>
+                <span class="sc-svc-row__name">{{ svc.name }}</span>
+                <span class="sc-svc-row__count text-muted">{{ svc.count }} × </span>
+                <span class="sc-svc-row__amount">${{ svc.total | number: '1.2-2' }}</span>
+              </div>
+              <div class="sc-svc-row__bar">
+                <div class="sc-svc-row__fill" [style.width.%]="svc.barPercent"></div>
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="text-muted small mb-0 px-1">No service data available.</p>
+      }
+    </section>
+
+    <!-- ── Recent invoices ─────────────────────────────────────────────── -->
+    <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 160ms;">
+      <div class="sc-panel__head">
+        <div>
+          <h2 class="sc-panel__title">Recent Invoices</h2>
+          <p class="sc-panel__meta">Latest 6 by invoice date</p>
+        </div>
+        <a [routerLink]="['/invoices']" class="btn btn-outline-secondary btn-sm sc-panel__action">
+          View all <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+
+      @if (recentInvoices().length) {
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col">Invoice #</th>
+                <th scope="col">Status</th>
+                <th scope="col">Services</th>
+                <th class="text-end" scope="col">Amount</th>
+                <th class="text-end" scope="col">Date</th>
+                <th class="text-end" scope="col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (inv of recentInvoices(); track inv.id) {
+                <tr>
+                  <td class="mono fw-medium">{{ inv.invoiceNumber }}</td>
+                  <td>
+                    <span class="badge" [ngClass]="{
+                      'bg-success':   inv.status.toUpperCase() === 'PAID',
+                      'bg-primary':   inv.status.toUpperCase() === 'PENDING',
+                      'bg-danger':    inv.status.toUpperCase() === 'OVERDUE',
+                      'bg-secondary': inv.status.toUpperCase() === 'CANCELLED'
+                    }">{{ inv.status }}</span>
+                  </td>
+                  <td class="text-muted">{{ serviceNames(inv) }}</td>
+                  <td class="text-end fw-medium">${{ inv.totalAmount | number: '1.2-2' }}</td>
+                  <td class="text-end text-muted">{{ inv.invoiceDate | date: 'MMM d, y' }}</td>
+                  <td class="text-end">
+                    <a [routerLink]="['/invoice', inv.id, inv.invoiceNumber]"
+                       class="btn btn-sm btn-outline-secondary">View</a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="sc-empty">
+          <span class="sc-empty__icon"><i class="bi bi-receipt"></i></span>
+          <p class="sc-empty__title">No invoices yet</p>
+          <p class="sc-empty__hint">Create your first invoice to start tracking revenue.</p>
+          <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm">
+            <i class="bi bi-receipt"></i> New Invoice
+          </a>
+        </div>
+      }
+    </section>
+
+  </div>
+</main>

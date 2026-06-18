@@ -2,31 +2,38 @@
   <div class="sc-metrics">
 
     <!-- Customers — primary accent (indigo) -->
-    <article class="sc-metric sc-metric--accent">
+    <a class="sc-metric sc-metric--accent" [routerLink]="['/customers']"
+       aria-label="View all customers">
       <span class="sc-metric__icon"><i class="bi bi-people-fill"></i></span>
       <div class="sc-metric__body">
         <span class="sc-metric__value">{{ stats.totalCustomers }}</span>
         <span class="eyebrow">Total Customers</span>
       </div>
-    </article>
+      <i class="bi bi-arrow-right sc-metric__arrow"></i>
+    </a>
 
     <!-- Invoices — info (cyan) -->
-    <article class="sc-metric sc-metric--info">
+    <a class="sc-metric sc-metric--info" [routerLink]="['/invoices']"
+       aria-label="View all invoices">
       <span class="sc-metric__icon"><i class="bi bi-receipt-cutoff"></i></span>
       <div class="sc-metric__body">
         <span class="sc-metric__value">{{ stats.totalInvoices }}</span>
         <span class="eyebrow">Total Invoices</span>
       </div>
-    </article>
+      <i class="bi bi-arrow-right sc-metric__arrow"></i>
+    </a>
 
-    <!-- Billed — success (green) -->
-    <article class="sc-metric sc-metric--ok">
+    <!-- Billed — success (green). Admins → /billing; others → /invoices -->
+    <a class="sc-metric sc-metric--ok"
+       [routerLink]="canViewBilling ? ['/billing'] : ['/invoices']"
+       [attr.aria-label]="canViewBilling ? 'View billing overview' : 'View all invoices'">
       <span class="sc-metric__icon"><i class="bi bi-currency-dollar"></i></span>
       <div class="sc-metric__body">
         <span class="sc-metric__value">${{ stats.totalBilled | number: '1.2-2' }}</span>
         <span class="eyebrow">Total Billed</span>
       </div>
-    </article>
+      <i class="bi bi-arrow-right sc-metric__arrow"></i>
+    </a>
 
   </div>
 }

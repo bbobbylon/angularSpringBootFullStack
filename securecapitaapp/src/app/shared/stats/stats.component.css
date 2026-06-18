@@ -36,6 +36,9 @@
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
   transition:
     transform var(--dur) var(--ease-out),
     box-shadow var(--dur) var(--ease-out),
@@ -45,6 +48,12 @@
   transform: translateY(-3px);
   border-color: var(--metric-ring);
   box-shadow: var(--shadow-lg);
+  color: inherit;
+  text-decoration: none;
+}
+.sc-metric:hover .sc-metric__arrow {
+  opacity: 1;
+  transform: translate(2px, -50%);
 }
 
 /* Accent rail down the leading edge */
@@ -94,6 +103,21 @@
   line-height: 1.1;
   letter-spacing: -0.01em;
   color: var(--text-strong);
+}
+
+/* Arrow icon that appears on hover */
+.sc-metric__arrow {
+  position: absolute;
+  right: var(--space-4);
+  top: 50%;
+  transform: translate(0, -50%);
+  font-size: 0.9rem;
+  color: var(--metric);
+  opacity: 0;
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+  pointer-events: none;
 }
 
 /* ---- Per-metric semantic accents (all from theme tokens) ---- */

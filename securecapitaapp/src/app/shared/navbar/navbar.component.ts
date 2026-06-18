@@ -43,13 +43,22 @@ export class NavbarComponent {
   protected readonly theme = this.themeService.theme;
 
   /**
-   * Whether the navbar should show the administrative "Users" link (SRS FR-ADMIN-5).
+   * Whether the navbar should show the administrative menu (SRS FR-ADMIN-5).
    * Evaluated once per navbar instantiation from the access token's authorities claim
    * — the same staff-grade authorities (UPDATE:USER / UPDATE:ROLE) that adminGuard and
    * the backend's /admin/** rules require. Hiding the link is a usability choice only;
    * the route guard and the server-side checks are the real enforcement (NFR-SEC-4).
    */
   protected readonly canManageUsers = this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE');
+
+  /**
+   * Whether the current user is a super-admin (DELETE:USER authority = highest privilege).
+   *
+   * Super-admins see the Billing Overview with system-wide scope and the
+   * Role Assignment controls, which go beyond the org-admin tier
+   * (UPDATE:USER / UPDATE:ROLE) that can manage users within their organization.
+   */
+  protected readonly isSuperAdmin = this.userService.hasAnyAuthority('DELETE:USER');
 
   /**
    * Flips the application between dark and light mode via {@link ThemeService},

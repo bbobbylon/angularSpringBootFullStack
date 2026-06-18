@@ -1,0 +1,92 @@
+<app-navbar [user]="user()"></app-navbar>
+
+<main class="sc-catalog">
+  <div class="container">
+
+    <!-- ── Header ──────────────────────────────────────────────────────── -->
+    <header class="sc-catalog__head sc-reveal">
+      <div>
+        <p class="eyebrow mb-1">Marketplace</p>
+        <h1 class="sc-catalog__title">Services &amp; Apps</h1>
+        <p class="sc-catalog__sub">
+          Browse available services and create an invoice to get started.
+        </p>
+      </div>
+      <div class="sc-catalog__actions">
+        @if (isAdmin) {
+          <a [routerLink]="['/billing']" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-graph-up-arrow"></i> Billing Overview
+          </a>
+        }
+        <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm">
+          <i class="bi bi-receipt"></i> New Invoice
+        </a>
+      </div>
+    </header>
+
+    <!-- ── Loading ─────────────────────────────────────────────────────── -->
+    @if (pageState().dataState === DataState.LOADING) {
+      <div class="sc-catalog-loading sc-reveal">
+        <div class="sc-catalog-loading__grid">
+          @for (_ of [1,2,3,4,5,6]; track $index) {
+            <div class="sc-svc-skeleton"></div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- ── Error ───────────────────────────────────────────────────────── -->
+    @if (pageState().dataState === DataState.ERROR) {
+      <div class="alert alert-danger sc-reveal" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        {{ pageState().error ?? 'Failed to load service catalog.' }}
+      </div>
+    }
+
+    <!-- ── Service grid ─────────────────────────────────────────────────── -->
+    @if (pageState().dataState === DataState.LOADED) {
+      @if (services().length) {
+        <div class="sc-catalog-summary sc-reveal" style="--d: 40ms;">
+          <span class="sc-catalog-summary__count">
+            <strong>{{ services().length }}</strong> services available
+          </span>
+          <span class="sc-catalog-summary__sep">·</span>
+          <span class="sc-catalog-summary__total">
+            Catalog value: <strong>${{ catalogTotal() | number: '1.2-2' }}</strong>
+          </span>
+        </div>
+
+        <div class="sc-svc-grid sc-reveal" style="--d: 80ms;">
+          @for (svc of services(); track svc.id) {
+            <article class="sc-svc-card">
+              <div class="sc-svc-card__icon">
+                <i class="bi bi-grid-1x2-fill"></i>
+              </div>
+              <div class="sc-svc-card__body">
+                <h3 class="sc-svc-card__name">{{ svc.name }}</h3>
+                @if (svc.description) {
+                  <p class="sc-svc-card__desc">{{ svc.description }}</p>
+                } @else {
+                  <p class="sc-svc-card__desc sc-svc-card__desc--empty">No description provided.</p>
+                }
+              </div>
+              <div class="sc-svc-card__foot">
+                <span class="sc-svc-card__price">${{ svc.price | number: '1.2-2' }}</span>
+                <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm sc-svc-card__cta">
+                  <i class="bi bi-receipt"></i> Create Invoice
+                </a>
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <div class="sc-empty sc-reveal">
+          <span class="sc-empty__icon"><i class="bi bi-grid-3x3"></i></span>
+          <p class="sc-empty__title">No services in catalog</p>
+          <p class="sc-empty__hint">The service catalog is empty. Add services via the admin panel or directly in the database.</p>
+        </div>
+      }
+    }
+
+  </div>
+</main>
