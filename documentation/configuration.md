@@ -177,13 +177,13 @@ spring:
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}
   jpa:
-    show-sql: true                      # log generated SQL (dev convenience)
+    show-sql: ${SHOW_SQL:false}         # SQL logging OFF by default (prod-safe); opt in with SHOW_SQL=true
     hibernate:
-      ddl-auto: update                  # Hibernate creates/updates ONLY the JPA tables (customer/invoice/services)
+      ddl-auto: update                  # Hibernate creates/updates ONLY the JPA tables (customer/invoice/services); prod overrides to `validate`
     properties:
       hibernate:
         globally_quoted_identifiers: true   # ⚠ see gotcha #3
-        format_sql: true
+        format_sql: ${SHOW_SQL:false}
     generate-ddl: true
   sql:
     init:
