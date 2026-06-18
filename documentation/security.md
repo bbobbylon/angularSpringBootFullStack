@@ -2,7 +2,7 @@
 
 The complete authentication and authorization model: how login works, how JWTs are issued and verified, how authority-based access control is enforced, refresh-session rotation with reuse detection, multi-factor authentication, federated login, and the transport hardening around it all.
 
-> This guide **consolidates and supersedes** the older `SPRING_SECURITY_DETAILED_GUIDE.md`, bringing it current with refresh-session rotation (M5), authenticator-app MFA (M4), federated login, and the brute-force gate (M6).
+> This is the single, current security reference, covering refresh-session rotation (M5), authenticator-app MFA (M4), federated login, and the brute-force gate (M6).
 >
 > **Key source files:** `configuration/SecurityConfig.java` · `tokenprovider/TokenProvider.java` · `filter/CustomAuthFilter.java` · `constants/Constants.java` · `service/serviceimpl/SessionServiceImpl.java` · `controller/UserController.java`
 > **See also:** [api-reference.md](api-reference.md) · [database.md](database.md) · [architecture.md](architecture.md)

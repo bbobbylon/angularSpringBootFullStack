@@ -40,5 +40,3 @@ The full documentation set for SecureCapita — an Angular 21 + Spring Boot 4 us
 - **`architectLayout.png`** — architecture diagram image.
 - **`APIs.postman_collection`** — Postman collection for exercising the API.
 - Project license — moved to the repo root: [`../LICENSE`](../LICENSE).
-
-> **Legacy docs pending review:** `SPRING_SECURITY_DETAILED_GUIDE.md`, `DOCUMENTATION_INDEX.md`, `DOCUMENTATION_SUMMARY.md`, `REFACTORING_COMPLETE_SUMMARY.md`, `FRONTEND_DOCUMENTATION_SETUP.md`, and `HELP.md` predate this guide set. Their still-relevant content has been folded into the guides above (notably `security.md`). They're kept for now and earmarked for removal — see the note at the top of the revamp summary.
