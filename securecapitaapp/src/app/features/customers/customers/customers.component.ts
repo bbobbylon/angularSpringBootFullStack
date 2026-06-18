@@ -12,6 +12,7 @@ import { CustomerService } from '../../../service/customer.service';
 import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
+import { CustomerTrendComponent } from '../../../shared/charts/customer-trend/customer-trend.component';
 
 /**
  * All-customers list view with search and pagination.
@@ -23,7 +24,7 @@ import { NotificationsService } from '../../../service/notifications-service';
  */
 @Component({
   selector: 'app-customers',
-  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage],
+  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, CustomerTrendComponent],
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.css',
   standalone: true,

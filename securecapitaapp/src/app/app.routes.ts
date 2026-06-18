@@ -129,5 +129,15 @@ export const routes: Routes = [
         (m) => m.ServicesCatalogComponent,
       ),
   },
+  // Analytics hub (admin-only) — dual-area trend chart, acquisition bars, stacked status
+  // breakdown, service utilisation. adminGuard mirrors billing — UPDATE:USER or higher.
+  {
+    path: 'analytics',
+    canActivate: [authenticationGuard, adminGuard],
+    loadComponent: () =>
+      import('./features/analytics/analytics/analytics.component').then(
+        (m) => m.AnalyticsComponent,
+      ),
+  },
   { path: '**', redirectTo: '/', pathMatch: 'full' },
 ];

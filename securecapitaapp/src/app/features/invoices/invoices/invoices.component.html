@@ -27,6 +27,8 @@
             </div>
           </header>
 
+          <app-invoice-trend></app-invoice-trend>
+
           @if (fileStatus(); as status) {
             <div class="progress sc-reveal" style="height: 0.6rem;">
               <div [attr.aria-valuenow]="status.percent" [style.width.%]="status.percent" aria-valuemax="100"

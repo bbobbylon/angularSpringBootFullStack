@@ -13,6 +13,7 @@ import { HttpEvent, HttpEventType } from '@angular/common/http';
 import { saveAs } from 'file-saver';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
+import { InvoiceTrendComponent } from '../../../shared/charts/invoice-trend/invoice-trend.component';
 
 /**
  * All-invoice list view with pagination.
@@ -27,7 +28,7 @@ import { NotificationsService } from '../../../service/notifications-service';
  */
 @Component({
   selector: 'app-invoices',
-  imports: [NgClass, RouterModule, NavbarComponent, DatePipe],
+  imports: [NgClass, RouterModule, NavbarComponent, DatePipe, InvoiceTrendComponent],
   templateUrl: './invoices.component.html',
   styleUrl: './invoices.component.css',
   standalone: true,
