@@ -160,7 +160,7 @@ npm install
 npm start            # dev server on http://localhost:4200, proxies API calls to :8080
 ```
 
-> ⚠ A bare `mvn spring-boot:run` **without** the environment variables loaded will fail with `Circular placeholder reference 'CONTAINER_PORT'` — see below. `start.sh` avoids this by exporting them for you.
+> ℹ A bare `mvn spring-boot:run` boots with the dev profile's built-in literal defaults — **no `.env` required** (you do need a running MySQL on `127.0.0.1:3306`; see below). `start.sh` still exports the variables for you and remains the recommended path; setting any variable overrides the dev default.
 
 ---
 
@@ -168,8 +168,7 @@ npm start            # dev server on http://localhost:4200, proxies API calls to
 
 | Symptom | Cause & fix |
 |---------|-------------|
-| `Circular placeholder reference 'CONTAINER_PORT'` | Env vars not loaded. Run via `./start.sh`, or load `.env` into your IDE run config, or `export CONTAINER_PORT=8080` (+ the other vars). See [configuration.md §8](configuration.md#8-configuration-gotchas-read-this). |
-| `Could not resolve placeholder 'JWT_SECRET'` | `.env` missing or not loaded. |
+| `Could not resolve placeholder 'MYSQL_USERNAME'` (or `'JWT_SECRET'`, etc.) | A **required** env var is missing. Happens in **prod/CI**, not dev — dev ships literal defaults. Set the variable (run via `./start.sh`, load `.env`, or use the platform config), or launch the dev profile. See [configuration.md §8](configuration.md#8-configuration-gotchas-read-this). |
 | `Communications link failure` / `No such host is known (mysql)` | `MYSQL_HOST=mysql` (Docker service name) used outside Docker. Set `MYSQL_HOST=127.0.0.1`. |
 | `Column 'using_totp' not found` (or missing-role errors) | Database not initialised. Apply `schema.sql` (step 4). |
 | Port 8080/4200/3306 already in use | Another process (or a previous run) holds the port. Stop it, or change the port. |

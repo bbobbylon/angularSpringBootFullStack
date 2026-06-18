@@ -237,12 +237,12 @@ The signing key itself is the `JWT_SECRET` env var. Full token mechanics live in
 
 ## 8. Configuration gotchas (read this)
 
-**1. `Circular placeholder reference 'CONTAINER_PORT'` on startup.**
-`application-dev.yml` defines each variable self-referentially, e.g. `CONTAINER_PORT: ${CONTAINER_PORT:8080}`. This resolves *only when the matching OS environment variable is set* — which `start.sh` does (`export CONTAINER_PORT=8080`). If you launch with a bare `mvn spring-boot:run` or from an IDE **without** loading `.env`, the placeholder references itself and Spring throws `Circular placeholder reference`.
-**Fix:** run via `./start.sh`, or load `.env` into the run configuration, or `export CONTAINER_PORT=8080` (and the other vars) before launching.
+**1. `Could not resolve placeholder 'MYSQL_USERNAME'` (or similar) on startup.**
+The **dev** profile (`application-dev.yml`) ships literal defaults, so a bare `mvn spring-boot:run` or an IDE launch boots with **no `.env`** (you still need a running MySQL — see #4). The **prod** profile deliberately keeps **no fallback** for secrets, DB credentials, mail credentials, or the UI/verify URLs: they are read straight from the environment, so a missing one fails fast at startup with `Could not resolve placeholder '<NAME>'`. **Fix:** set every required variable (see the table in §1) before launching prod, e.g. via `./start.sh`, the platform's config, or an exported `.env`.
+> _Historical note: earlier revisions declared each variable self-referentially (`CONTAINER_PORT: ${CONTAINER_PORT:8080}`), which threw `Circular placeholder reference 'CONTAINER_PORT'` whenever the env var was absent (the placeholder resolved back to its own property). Those self-references were replaced with literals (dev) and direct env reads (prod), so that error no longer occurs._
 
-**2. `Could not resolve placeholder 'JWT_SECRET'` / datasource bind failure.**
-Same root cause — the environment variables aren't present. Ensure `.env` exists and is being loaded.
+**2. Datasource / `JWT_SECRET` bind failure in prod or CI.**
+Same root cause as #1 — a **required** environment variable isn't present. Dev supplies a literal `JWT_SECRET` and DB defaults; prod (and any environment launched without `.env`) must provide them explicitly.
 
 **3. Hibernate column names — `globally_quoted_identifiers: true`.**
 This flag makes Hibernate quote identifiers and **bypass the snake_case naming strategy**, so a `usingMfa` field maps to a column literally named `usingMfa`, not `using_mfa`. Always add an explicit `@Column(name = "using_mfa")` on JPA entity fields to keep them aligned with the `schema.sql` column names.

@@ -163,7 +163,7 @@ Choosing a path for new work: **identity/security/audit → JdbcTemplate** (expl
 
 ## 7. Gotchas that will bite you
 
-1. **Env vars must be loaded** or the app throws `Circular placeholder reference 'CONTAINER_PORT'` — `application-dev.yml` uses self-referential defaults. Use `start.sh` or load `.env` into your IDE. ([configuration.md §8](configuration.md#8-configuration-gotchas-read-this))
+1. **Dev boots with literal defaults; prod fails fast.** `application-dev.yml` ships plain literal values, so a bare `mvn spring-boot:run`/IDE launch works without `.env` (you still need MySQL up). The **prod** profile keeps no fallback for secrets/DB/mail vars and aborts with `Could not resolve placeholder '<NAME>'` if one is missing. (Both profiles previously used self-referential placeholders that threw `Circular placeholder reference 'CONTAINER_PORT'` when env vars were absent — that footgun is gone.) ([configuration.md §8](configuration.md#8-configuration-gotchas-read-this))
 2. **`globally_quoted_identifiers: true`** makes Hibernate create literal camelCase columns. Add `@Column(name="snake_case")` on entity fields. ([database.md §13](database.md#13-conventions-gotchas--history))
 3. **`schema.sql` must be applied by hand** to a fresh DB (`sql.init.mode: never`). Missing it → `Column 'using_totp' not found` / missing-role errors.
 4. **Public-URL lockstep:** a public route must be in **both** `Constants.PUBLIC_URLS` (filter-chain `permitAll`) and `PUBLIC_ROUTES` (filter skip), or a stale `Bearer` header breaks it. ([security.md §12](security.md#12-public-endpoints))

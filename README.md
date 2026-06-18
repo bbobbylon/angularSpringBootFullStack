@@ -372,14 +372,14 @@ curl -X GET http://localhost:8080/user/refresh/token \
 
 ## Troubleshooting
 
-**`Could not resolve placeholder 'JWT_SECRET'`**
-Your `.env` file is missing or the variable isn't set. Check `.env` exists at the project root.
+**`Could not resolve placeholder 'JWT_SECRET'` (or `MYSQL_USERNAME`, etc.)**
+A **required** environment variable isn't set. This affects **prod/CI**, not local dev — the dev profile (`application-dev.yml`) ships literal defaults, so `mvn spring-boot:run` boots without `.env` (a running MySQL is still required). For prod, set the variable via the platform config, `start.sh`, or an exported `.env`.
 
 **`Communications link failure` / `No such host is known (mysql)`**
 `MYSQL_HOST` is set to `mysql` (Docker service name) but you're running outside Docker. Check `.env` has `MYSQL_HOST=127.0.0.1`.
 
-**`Circular placeholder reference`**
-A profile YAML is self-referencing a variable. See `application-dev.yml` — do not use `${VAR:default}` where the key and placeholder name are identical.
+**`Circular placeholder reference`** *(no longer expected)*
+Historically the profile YAMLs declared each variable self-referentially (`VAR: ${VAR:default}`), which loops when the env var is absent. They now use plain literals (dev) / direct env reads (prod), so this error should not occur. If you reintroduce a `${VAR:default}` whose key and placeholder name are identical, the loop returns — use a literal value instead.
 
 **Angular shows blank page after `docker compose up`**
 The multi-stage build may have failed silently. Run `docker compose logs app` to check. Run `docker compose up --build` with `--progress=plain` to see full Maven output.

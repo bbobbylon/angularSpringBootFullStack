@@ -16,8 +16,12 @@
 --                   brand-new database:  mysql -u root -p db2 < src/main/resources/schema.sql
 --   * mode: always — Spring Boot applies it on every startup (safe, because it is idempotent).
 --
--- NOTE: the customer / invoice / services tables are intentionally NOT defined here — those
--- are JPA @Entity tables created and maintained by Hibernate (spring.jpa.hibernate.ddl-auto).
+-- NOTE: the Customer / Invoice / Services / invoiceserviceitems tables ARE defined here (see the
+-- "JPA-managed domain" section below). They back JPA @Entity classes, so their DDL was produced by
+-- Hibernate's own schema export — using the app's dialect and globally_quoted_identifiers=true (see
+-- the test com.bob...tooling.JpaSchemaSyncTest) — so it matches EXACTLY what
+-- spring.jpa.hibernate.ddl-auto: validate expects in production (quoted camelCase identifiers and
+-- all). Do NOT hand-edit those column names or types: a mismatch fails the prod boot.
 -- =====================================================================================
 
 CREATE SCHEMA IF NOT EXISTS db2;
@@ -159,11 +163,63 @@ CREATE TABLE IF NOT EXISTS twofactorverifications
     CONSTRAINT UQ_TwoFactorVerifications_Code UNIQUE (code)
 );
 
--- ── Invoice line items ─────────────────────────────────────────────────────────────────
--- NOTE: `invoiceserviceitems` is intentionally NOT defined here. It is the @ElementCollection
--- table for the Invoice JPA entity (model/Invoice.java) and is created/maintained by Hibernate
--- (ddl-auto: update) with columns invoice_id, item_order, name, price (NO surrogate id).
--- Declaring it here would diverge from the structure Hibernate actually creates.
+-- ── JPA-managed domain: customers, invoices, services ──────────────────────────────────
+-- These four tables back the JPA @Entity classes (model/Customer, Invoice, Services, and the
+-- Invoice @ElementCollection of InvoiceLineItem → invoiceserviceitems). Previously they were left
+-- to Hibernate's ddl-auto:update; defining them here lets production run ddl-auto:validate
+-- (fail-fast, never auto-alter). The DDL is a VERBATIM transcription of Hibernate's own schema
+-- export (test JpaSchemaSyncTest, dialect=MySQL, globally_quoted_identifiers=true), so
+-- the quoted camelCase identifiers and column types match exactly what `validate` checks against.
+-- Foreign keys are inlined (not ALTER TABLE) so the script stays idempotent under IF NOT EXISTS,
+-- which also fixes the create order: Customer → Invoice → invoiceserviceitems.
+CREATE TABLE IF NOT EXISTS `Customer`
+(
+    `createdAt`     datetime(6),
+    `id`            bigint       NOT NULL AUTO_INCREMENT,
+    `address`       varchar(255),
+    `customer_name` varchar(255) NOT NULL,
+    `email`         varchar(255) NOT NULL,
+    `imageUrl`      varchar(255),
+    `phoneNumber`   varchar(255),
+    `status`        varchar(255) NOT NULL,
+    `type`          varchar(255) NOT NULL,
+    PRIMARY KEY (`id`)
+) engine = InnoDB;
+
+CREATE TABLE IF NOT EXISTS `Invoice`
+(
+    `amount`        float(53),
+    `totalAmount`   float(53)    NOT NULL,
+    `customer`      bigint       NOT NULL,
+    `customerId`    bigint,
+    `id`            bigint       NOT NULL AUTO_INCREMENT,
+    `invoiceDate`   datetime(6),
+    `invoiceNumber` varchar(255),
+    `status`        varchar(255) NOT NULL,
+    PRIMARY KEY (`id`),
+    CONSTRAINT `FK_Invoice_Customer` FOREIGN KEY (`customer`) REFERENCES `Customer` (`id`)
+) engine = InnoDB;
+
+CREATE TABLE IF NOT EXISTS `Services`
+(
+    `price`       float(53),
+    `id`          bigint NOT NULL AUTO_INCREMENT,
+    `description` varchar(255),
+    `name`        varchar(255),
+    PRIMARY KEY (`id`)
+) engine = InnoDB;
+
+-- @ElementCollection table for Invoice.services (List<InvoiceLineItem>); composite PK
+-- (item_order, invoice_id), NO surrogate id — exactly as Hibernate maps an @OrderColumn collection.
+CREATE TABLE IF NOT EXISTS `invoiceserviceitems`
+(
+    `item_order` integer NOT NULL,
+    `price`      float(53),
+    `invoice_id` bigint  NOT NULL,
+    `name`       varchar(255),
+    PRIMARY KEY (`item_order`, `invoice_id`),
+    CONSTRAINT `FK_InvoiceServiceItems_Invoice` FOREIGN KEY (`invoice_id`) REFERENCES `Invoice` (`id`)
+) engine = InnoDB;
 
 -- ── Federated identity (OAuth2 / OIDC) ─────────────────────────────────────────────────
 -- Stores ONLY the provider name + the provider's stable subject id (never a third-party
