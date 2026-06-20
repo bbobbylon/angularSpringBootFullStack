@@ -4,7 +4,7 @@ A full-stack application combining **Angular 21** (frontend) and **Spring Boot 4
 
 ---
 
-![SecureCapita architecture](documentation/architectLayout.png)
+![TesseraApp architecture](documentation/architectLayout.png)
 
 *High-level architecture: Angular client · Spring Boot server · MySQL, containerized with Docker. Full breakdown in [documentation/architecture.md](documentation/architecture.md).*
 

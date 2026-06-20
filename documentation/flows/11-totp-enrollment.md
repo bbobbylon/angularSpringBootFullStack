@@ -127,12 +127,12 @@ Content-Type: application/json
 // 200
 { "timeStamp":"…",
   "data": { "secret": "JBSWY3DPEHPK3PXP",
-            "otpauthUri": "otpauth://totp/SecureCapita:ada@example.com?secret=JBSWY3DPEHPK3PXP&issuer=SecureCapita",
+            "otpauthUri": "otpauth://totp/TesseraApp:ada@example.com?secret=JBSWY3DPEHPK3PXP&issuer=TesseraApp",
             "qrCode": "data:image/png;base64,iVBORw0KGgo…" },
   "message":"Scan the QR code with your authenticator app, then confirm with a code.",
   "status":"OK","statusCode":200 }
 ```
-QR is server-rendered at 240px (`TotpServiceImpl.java:52,82`), issuer label `SecureCapita` (`:50`).
+QR is server-rendered at 240px (`TotpServiceImpl.java:52,82`), issuer label `TesseraApp` (`:50`).
 
 ### D.2 · `POST /user/totp/enable`  (`@Valid TotpCodeForm`: `code` `@NotEmpty`)
 ```http

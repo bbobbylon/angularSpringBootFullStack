@@ -1,6 +1,6 @@
 # Getting Started
 
-The fastest path from a fresh clone to a running SecureCapita instance you can log into. For the *why* behind each setting, follow the cross-links into the deeper guides.
+The fastest path from a fresh clone to a running TesseraApp instance you can log into. For the *why* behind each setting, follow the cross-links into the deeper guides.
 
 > **Time to first login:** ~10 minutes (local mode).
 > **See also:** [configuration.md](configuration.md) (every setting) · [architecture.md](architecture.md) (how it fits together) · [deployment.md](deployment.md) (Docker/cloud).

@@ -1,6 +1,6 @@
-# SecureCapita Documentation
+# TesseraApp Documentation
 
-The full documentation set for SecureCapita — an Angular 21 + Spring Boot 4 user-management & CIAM reference app. Start at the repo root [`README.md`](../README.md) for the project overview; this folder holds the in-depth guides.
+The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user-management & CIAM reference app. Start at the repo root [`README.md`](../README.md) for the project overview; this folder holds the in-depth guides.
 
 ---
 

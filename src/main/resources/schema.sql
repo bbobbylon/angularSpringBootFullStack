@@ -1,5 +1,5 @@
 -- =====================================================================================
--- SecureCapita — full application schema (single source of truth).
+-- TesseraApp — full application schema (single source of truth).
 --
 -- Replaces the former Flyway migration set (db/migration/V1..V6), which was removed because
 -- Flyway's baseline bookkeeping repeatedly desynced from the live database and blocked

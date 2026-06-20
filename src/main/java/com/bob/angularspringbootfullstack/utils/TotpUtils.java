@@ -129,7 +129,7 @@ public final class TotpUtils {
      * {@code issuer:account} per the de-facto Key Uri Format, and the issuer is repeated
      * as a query parameter because some apps only read one of the two locations.
      *
-     * @param issuer  the application name shown in the authenticator (e.g. "SecureCapita")
+     * @param issuer  the application name shown in the authenticator (e.g. "TesseraApp")
      * @param account the user-facing account label (the user's email)
      * @param secret  the Base32 shared secret
      * @return the complete otpauth URI

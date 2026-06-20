@@ -1,6 +1,6 @@
-# SecureCapita — Frontend (Angular)
+# TesseraApp — Frontend (Angular)
 
-The Angular 21 single-page app for SecureCapita. It talks to the Spring Boot REST API for authentication, profile/security management, the admin dashboard, and customer/invoice features.
+The Angular 21 single-page app for TesseraApp. It talks to the Spring Boot REST API for authentication, profile/security management, the admin dashboard, and customer/invoice features.
 
 > **Backend & full docs:** see the repo root [`README.md`](../README.md) and [`documentation/`](../documentation/).
 > Architecture context: [documentation/architecture.md §6](../documentation/architecture.md#6-frontend-architecture) · API: [documentation/api-reference.md](../documentation/api-reference.md).

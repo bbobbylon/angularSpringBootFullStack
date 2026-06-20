@@ -47,7 +47,7 @@ import static org.apache.commons.lang3.time.DateUtils.addMinutes;
 public class TotpServiceImpl implements TotpService {
 
     /** Issuer label rendered by authenticator apps next to the user's email. */
-    private static final String TOTP_ISSUER = "SecureCapita";
+    private static final String TOTP_ISSUER = "TesseraApp";
     /** Pixel size of the enrollment QR code. */
     private static final int QR_SIZE = 240;
     /** How many single-use recovery codes a confirmation issues. */

@@ -1,6 +1,6 @@
 # Architecture Guide
 
-How SecureCapita is put together — the tiers, the backend's layered design, the request lifecycle, the two persistence strategies, the event-driven audit, and the Angular frontend — plus the directory map and the design decisions behind it.
+How TesseraApp is put together — the tiers, the backend's layered design, the request lifecycle, the two persistence strategies, the event-driven audit, and the Angular frontend — plus the directory map and the design decisions behind it.
 
 > **See also:** [security.md](security.md) (auth internals) · [database.md](database.md) (data model) · [api-reference.md](api-reference.md) (endpoints) · [configuration.md](configuration.md) (settings).
 
@@ -24,7 +24,7 @@ How SecureCapita is put together — the tiers, the backend's layered design, th
 
 Three tiers, talking over JSON and JDBC:
 
-![SecureCapita system architecture diagram](architectLayout.png)
+![TesseraApp system architecture diagram](architectLayout.png)
 
 *Figure 1 — High-level architecture: the Angular client (components, services, interceptors, cache, JWT over HTTP), the Spring Boot server (filters, services, repositories, email/SMS/report integrations, JPA + SQL), and the MySQL database — all containerized with Docker. (Email is via SMTP and the datastore is MySQL; the diagram's "Office365"/"RDS" labels are illustrative.)*
 

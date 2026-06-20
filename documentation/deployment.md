@@ -1,6 +1,6 @@
 # Deployment Guide
 
-How to package and run SecureCapita beyond local development: the Docker image, Docker Compose, the Azure CI/CD pipeline, and notes for other cloud platforms.
+How to package and run TesseraApp beyond local development: the Docker image, Docker Compose, the Azure CI/CD pipeline, and notes for other cloud platforms.
 
 > **See also:** [getting-started.md](getting-started.md) (local dev) · [configuration.md](configuration.md) (env vars) · [database.md](database.md) (schema init).
 

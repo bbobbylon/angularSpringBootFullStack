@@ -23,19 +23,50 @@ The complete authentication and authorization model: how login works, how JWTs a
 10. [Password & account security](#10-password--account-security)
 11. [Transport, CORS & headers](#11-transport-cors--headers)
 12. [Public endpoints](#12-public-endpoints)
-13. [Known limitations](#13-known-limitations)
+13. [Known limitations & remaining work](#13-known-limitations--remaining-work)
 
 ---
 
 ## 1. The model at a glance
 
-SecureCapita uses an **in-house, stateless-first, zero-trust** authentication core:
+TesseraApp uses an **in-house, stateless-first, zero-trust** authentication core:
 
 - **Stateless access tokens.** Every API call carries a JWT access token that's verified by signature alone — no database lookup, no server session (`SessionCreationPolicy.STATELESS`).
 - **Stateful refresh tokens.** Refresh tokens are tracked in the `refreshsessions` table so they can be **rotated**, **listed** (the Security Center device list), and **revoked** — the one place the system is intentionally stateful.
 - **Permission-based authorization.** A user's single role carries a comma-separated permission string (e.g. `READ:USER, UPDATE:CUSTOMER`); each permission becomes a Spring Security authority matched against per-endpoint rules.
 
 This "stateless access + stateful refresh" split is the heart of the design: fast, scalable request handling (no per-request DB hit) **and** revocable sessions.
+
+### Hybrid CIAM: what's in-house vs what's federated
+
+This is a **hybrid** Customer Identity & Access Management system: the identity *core* is built in-house, while sign-in at the *edges* can be delegated to external identity providers. The defining property is a **single token-exchange seam** — every authentication path, however it starts, converges on `SessionService` minting **our own** JWT, so RBAC, MFA policy, and audit logging apply identically to a federated user and a password user.
+
+| Built in-house (our logic) | Delegated to a third party (the "hybrid" half) |
+|---|---|
+| Email/password credential auth (`AuthenticationManager` + BCrypt-12, our `users` store) | Federated login (Google / GitHub / Microsoft) via `spring-security-oauth2-client` |
+| JWT mint/verify (`TokenProvider`, HMAC-SHA512) | Transactional email (verify/reset) via Gmail SMTP (JavaMail) |
+| Refresh-session rotation + reuse detection (`SessionServiceImpl`) | SMS second factor via the Twilio SDK |
+| Permission-based RBAC (`SecurityConfig`, authority strings) | |
+| TOTP MFA (RFC 6238, `TotpUtils`) — algorithm implemented in-house | |
+| Brute-force gate, audit logging, account lifecycle | |
+
+The federated providers are a **convergence point, not a replacement**: `OAuth2LoginSuccessHandler` performs find-or-create on `(provider, subject)` and then issues *our* token pair (FR-FED-4), so a Google login becomes an ordinary tracked session subject to the same authority checks and refresh rotation.
+
+### Third-party integrations — and how fully each is used
+
+Not every declared dependency is exercised end-to-end. "Wired" (on the classpath, code present) is distinct from "utilized" (actually doing work at runtime):
+
+| Dependency | Purpose | Utilization |
+|---|---|---|
+| `spring-security-oauth2-client` | Federated OAuth2/OIDC login | ✅ Fully wired; **env-gated** — active only when `GOOGLE_*` / `GITHUB_*` / `MICROSOFT_*` credentials are set (`OAuth2ClientConfig`); otherwise a boot-only placeholder registration and no login buttons |
+| JavaMail (`spring-boot-starter-mail`) | Account/password verification emails | ✅ **Live** — real Gmail SMTP via `MAIL_USERNAME` / `MAIL_PASSWORD` |
+| `com.auth0:java-jwt` | JWT mint/verify | ✅ Fully used — the actual token engine (`TokenProvider`, `ExceptionUtils`, `HandleException`) |
+| ZXing (`core` + `javase`) | TOTP enrollment QR rasterization | ✅ Used |
+| yauaa | Device/user-agent parsing for sessions + audit | ✅ Used |
+| Apache POI | XLSX customer/invoice exports | ✅ Used |
+| OWASP `dependency-check-maven` | Build-time CVE gate (`failBuildOnCVSS=7`) | ✅ Used in the build |
+| **Twilio SDK** | SMS 2FA delivery | ⚠️ **Wired but stubbed** — `SMSUtils.sendSMS` is complete, but `NotificationServiceImpl.sendTwoFactorCode` keeps the call commented out and logs the code instead, to avoid Twilio charges in dev. Demonstrable, not production-delivered. |
+| **`io.jsonwebtoken:jjwt`** (api/impl/jackson) | JWT | ❌ **Declared but unused** — zero imports anywhere in `src/`; all JWT work goes through `java-jwt`. Redundant; safe to remove. |
 
 ---
 
@@ -279,12 +310,23 @@ Public surface: registration, login, SMS/TOTP login completion, account/password
 
 ---
 
-## 13. Known limitations
+## 13. Known limitations & remaining work
 
-In the interest of honesty (and as a to-do list):
+In the interest of honesty (and as a to-do list). Status legend: ⚠️ = built-but-not-production-wired · ❌ = open/planned.
 
-- **SMS 2FA is stubbed** — the Twilio send is commented out in dev; codes are logged, not delivered. TOTP is the real, complete MFA.
-- **Federated login is inactive without credentials** — no provider buttons appear until `*_CLIENT_ID` values are set.
-- **Profile image storage is local + hardcoded** to the developer's home directory (`~/Downloads/images/`) — not container/cloud-ready (see the `TODO(dev-only)` in `UserController`).
-- **Brute-force counting is audit-event based** (per-email sliding window), not a distributed rate limiter — adequate for a single instance, not for horizontal scale.
-- **Tests are sparse** — the security model is not yet covered by an automated suite.
+**Third-party gaps (see §1 for the full utilization table):**
+- ⚠️ **SMS 2FA is stubbed** — the Twilio send is commented out in `NotificationServiceImpl`; codes are logged, not delivered. Restoring it = set the three `TWILIO_*` vars + uncomment one call. TOTP is the real, complete second factor. **Decision still open:** wire it live or formally descope.
+- ⚠️ **Federated login is inactive without credentials** — no provider buttons appear until `*_CLIENT_ID`/`*_CLIENT_SECRET` values are set (by design; env-gated).
+- ❌ **Redundant JWT library** — `io.jsonwebtoken:jjwt` (api/impl/jackson) is on the classpath but unused; the code uses `com.auth0:java-jwt` exclusively. Remove `jjwt` to consolidate.
+
+**Requirement gaps:**
+- ❌ **Federated provider name not on the audit row (FR-FED-5, partial)** — `FEDERATED_LOGIN` is recorded, but *which* provider (Google/GitHub/Microsoft) lives in server logs only; `userevents` has no detail column. One column would close it.
+- ❌ **Risk-based / step-up auth (FR-EXT-2) — PLANNED** — new-device re-verification and the login-analytics dashboard are not built. AI-based anomaly detection is planned, time-permitting (out of scope this revision).
+
+**Operational / hardening gaps:**
+- ❌ **Profile image storage is local + hardcoded** to the developer's home directory — not container/cloud-ready (see the `TODO(dev-only)` in `UserController`).
+- ❌ **Brute-force counting is audit-event based** (per-email sliding window), not a distributed rate limiter — adequate for a single instance, not for horizontal scale. No general request rate limit.
+- ❌ **Prod secrets** (JWT secret, OAuth client secrets, mail creds) must be supplied by the platform, not `.env`.
+- ❌ **Tests** have grown (security regression + schema-drift guards) but security-critical paths — refresh rotation/reuse detection, TOTP challenge binding, org scope — remain thinly covered; the frontend has no specs.
+
+**Explicitly out of scope this revision:** machine-to-machine (client-credentials) authorization, SCIM provisioning, and SAML federation.

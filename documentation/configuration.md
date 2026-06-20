@@ -1,6 +1,6 @@
 # Configuration Guide
 
-How SecureCapita is configured: where settings come from, every environment variable, the Spring profiles, an annotated walk-through of `application.yml`, and the configuration gotchas that will bite you (with fixes).
+How TesseraApp is configured: where settings come from, every environment variable, the Spring profiles, an annotated walk-through of `application.yml`, and the configuration gotchas that will bite you (with fixes).
 
 > **Audience:** anyone setting the app up locally, in Docker, or in the cloud.
 > **See also:** [getting-started.md](getting-started.md) (fastest path to running) · [deployment.md](deployment.md) (Docker/cloud) · [security.md](security.md) (token/auth internals).

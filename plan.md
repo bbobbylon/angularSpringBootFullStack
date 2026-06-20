@@ -1,4 +1,4 @@
-# SecureCapita — Master's Project Plan
+# TesseraApp — Master's Project Plan
 
 > **A hybrid, zero-trust identity platform with a UI that *visualizes* the security domain.**
 > The graded auth/security engineering and the visual overhaul are the same project: the
