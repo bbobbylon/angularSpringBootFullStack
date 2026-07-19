@@ -11,6 +11,8 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | **Get it running** | [getting-started.md](getting-started.md) — setup → run → first login |
 | **Understand the whole system** | [developer-guide.md](developer-guide.md) — the in-depth, end-to-end walkthrough |
 | **Trace one feature end-to-end** | [flows/](flows/README.md) — every use case from button click → JWT/headers → controller → DB → UI change |
+| **Work in the codebase day-to-day** | [development-workflow.md](development-workflow.md) — IDE setup, the `start.sh` loop, debugging, branch workflow |
+| **See project status & what's planned** | [project-status-and-roadmap.md](project-status-and-roadmap.md) — proposed-vs-actual, known gaps, prioritized backlog |
 
 ## Reference guides
 
@@ -23,6 +25,9 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | [database.md](database.md) | Persistence model, every table, relationships, role + event reference data |
 | [configuration.md](configuration.md) | Environment variables, Spring profiles, annotated `application.yml`, gotchas |
 | [deployment.md](deployment.md) | Docker image, Compose, Azure CI/CD, cloud platforms |
+| [frontend-guide.md](frontend-guide.md) | Angular internals — routes→components, the six services, guards, interceptors, `DataState`/signals state pattern |
+| [email-and-notifications.md](email-and-notifications.md) | Email (verification/reset) + SMS-stub + Angular toast notifications; the verification-link model |
+| [testing.md](testing.md) | Test inventory, how to run, how to write backend/frontend tests, the coverage roadmap |
 | [../securecapitaapp/README.md](../securecapitaapp/README.md) | Frontend (Angular) specifics |
 
 ## Suggested reading paths

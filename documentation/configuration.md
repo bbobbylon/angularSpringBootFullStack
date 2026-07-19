@@ -117,6 +117,18 @@ openssl rand -base64 48                                   # Git Bash / macOS / L
 |----------|---------|-------------|
 | `UI_APP_URL` | Angular app origin; used for CORS and the federated-login failure redirect | `http://localhost:4200` |
 
+### Profile image storage
+
+Uploaded profile images are written to and served from a single filesystem directory, resolved from `app.image.storage-path` (env `IMAGE_STORAGE_PATH`) in `application.yml:100`. The same value is injected into `WebMvcConfig.java:28` (which serves the files at `/user/profile/image/**`), `UserController.java:108` (read/write + the public `GET /user/image/{file}` path), and `UserRepoImpl.java:142` (the upload write path), so one variable controls where images live and where they are served from.
+
+| Variable | Purpose | Dev default |
+|----------|---------|-------------|
+| `IMAGE_STORAGE_PATH` | Filesystem directory where uploaded profile images are written and served from | `~/securecapita/images` (i.e. `${user.home}/securecapita/images`) |
+
+> **Docker / cloud:** point this at a **mounted volume** so images survive container restarts. `docker-compose.yml:30` sets `IMAGE_STORAGE_PATH: /app/data/images` and maps the named `app-images` volume there (`docker-compose.yml:32,39`). Leave it unset locally to fall back to the home-directory default.
+> **Note:** unlike the DB/JWT/mail secrets, this default lives in the **base** `application.yml` (not `application-dev.yml`), so the fallback applies under the `prod` profile too — a missing `IMAGE_STORAGE_PATH` will not fail fast; it silently uses `~/securecapita/images`. Always set it explicitly in containers.
+> **History:** this replaced a brittle hardcoded `~/Downloads/images` path that only worked on the original developer's machine (`UserRepoImpl.java:138`); any doc still citing `~/Downloads/images` (e.g. `developer-guide.md`, `flows/10-profile-and-account.md`) is stale — **the code wins**.
+
 ### Federated login (OAuth2 / OIDC) — optional
 
 A provider's login button appears only when its `CLIENT_ID` is set (the SPA discovers configured providers via `GET /oauth2/providers`). With none set, the app logs `Federated login providers configured: none`.

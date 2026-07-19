@@ -24,6 +24,7 @@ The complete authentication and authorization model: how login works, how JWTs a
 11. [Transport, CORS & headers](#11-transport-cors--headers)
 12. [Public endpoints](#12-public-endpoints)
 13. [Known limitations & remaining work](#13-known-limitations--remaining-work)
+14. [Organization-scoped administration](#14-organization-scoped-administration)
 
 ---
 
@@ -330,3 +331,91 @@ In the interest of honesty (and as a to-do list). Status legend: ⚠️ = built-
 - ❌ **Tests** have grown (security regression + schema-drift guards) but security-critical paths — refresh rotation/reuse detection, TOTP challenge binding, org scope — remain thinly covered; the frontend has no specs.
 
 **Explicitly out of scope this revision:** machine-to-machine (client-credentials) authorization, SCIM provisioning, and SAML federation.
+
+---
+
+## 14. Organization-scoped administration
+
+A second authorization axis layered *on top of* the permission-based RBAC of §5: where authorities answer **"what may you do?"**, organization scope answers **"to whom may you do it?"**. It exists so a tenant administrator (`ROLE_ORGANIZATION_ADMIN`) can run the admin surface for *their own* organization's users without becoming a system-wide admin (SRS §4.6, FR-ORG-1..3).
+
+> **Key source files:** `controller/AdminUserController.java` · `service/OrganizationService.java` · `service/serviceimpl/OrganizationServiceImpl.java` · `query/OrganizationQuery.java` · `src/main/resources/schema.sql` (the `organizations` / `userorganizations` tables).
+> **See also:** [`flows/20-admin-users-rbac.md`](flows/20-admin-users-rbac.md) (the click-to-DB trace, including the `requireOrganizationScope` gate) · [database.md §8](database.md#8-organizations) (the two membership tables) · [database.md §12](database.md#12-reference-data) (role catalogue).
+
+This builds directly on the admin surface documented in [`flows/20-admin-users-rbac.md`](flows/20-admin-users-rbac.md): `AdminUserController` is the **only** place one user mutates another's role or account state, and scope is the fifth and innermost of its authorization layers — after frontend `adminGuard`, URL-level matcher, method-level `@PreAuthorize`, and the `requireNotSelf` guard.
+
+### How scope is decided
+
+Two independent pieces:
+
+1. **Is the *caller* scoped at all?** `isOrganizationScoped(caller)` returns true **only** when the caller's role name is exactly `ROLE_ORGANIZATION_ADMIN` (`AdminUserController.java:292-294`). `ROLE_ADMIN` and `ROLE_APPLICATION_ADMIN` are never scoped — they act globally (FR-ORG-3). The role name is read off the JWT principal, so no DB hit is needed to make the decision.
+2. **Is the *target* in scope?** `organizationService.isWithinOrganizationScope(adminId, targetId)` (`OrganizationService.java:29`, impl `OrganizationServiceImpl.java:46-56`) runs a single COUNT over a **self-join of `userorganizations`**: the two users are in scope of each other when both hold an `active = TRUE` membership in **at least one common organization** (`OrganizationQuery.java:21-24`). The organization's own `status` is *not* consulted — deactivating a membership row is the operational lever; retiring an org flips its member rows inactive.
+
+For `ROLE_ORGANIZATION_ADMIN` to even reach this controller it must clear matcher #6 (`/admin/**` → `UPDATE:USER` **or** `UPDATE:ROLE`, see §5); its seeded permission string is `READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE` (`schema.sql:68`), so it passes the authority gate and scope then narrows *which rows* it may touch.
+
+### Where scope is enforced (per endpoint)
+
+Every `AdminUserController` endpoint consults the service — list operations branch to a scoped query; single-target operations call a fail-closed guard.
+
+| Endpoint | Scope mechanism | Out-of-scope result |
+|---|---|---|
+| `GET /admin/user/list` | branch: scoped path calls `countUsersSharingOrganizations` + `searchUsersSharingOrganizations` instead of the unscoped `UserService` methods (`AdminUserController.java:110-116`) | rows silently filtered out — the directory simply shrinks (the caller themselves appears; they share their own orgs) |
+| `GET /admin/user/{id}` | `requireOrganizationScope(authentication, id)` first line (`:147`) | **403** via `AccessDeniedException` |
+| `GET /admin/user/{id}/events` | `requireOrganizationScope` re-checked on every page turn (`:184`) — a scope reduction mid-session is enforced | **403** |
+| `PATCH /admin/user/{id}/role/{roleName}` | `requireNotSelf` then `requireOrganizationScope` (`:215-216`) | **403** |
+| `PATCH /admin/user/{id}/settings` | `requireNotSelf` then `requireOrganizationScope` (`:249-250`) | **403** |
+
+`requireOrganizationScope` (`AdminUserController.java:306-312`) throws `AccessDeniedException("This user is outside your organization scope.")`, which `GlobalExceptionHandler` maps to the standard `HttpResponse` 403 envelope. The message names **no account data**, so it cannot be used to probe which user ids exist (NFR-SEC-7 — the same enumeration-safety rule as §2).
+
+### The scope SQL
+
+All three constants live in `OrganizationQuery` and run through `NamedParameterJdbcTemplate` from `OrganizationServiceImpl` (the service owns its SQL — there is no repo layer here).
+
+| Purpose | Query constant | SQL shape |
+|---|---|---|
+| Scope predicate (single target) | `COUNT_SHARED_ACTIVE_ORGANIZATIONS_QUERY` | `SELECT COUNT(*) FROM userorganizations a JOIN userorganizations b ON a.organization_id = b.organization_id WHERE a.user_id = :adminId AND b.user_id = :targetId AND a.active = TRUE AND b.active = TRUE` |
+| Scoped directory page | `SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY` | `SELECT DISTINCT u.* FROM users u JOIN userorganizations b ON b.user_id = u.id AND b.active = TRUE JOIN userorganizations a ON a.organization_id = b.organization_id AND a.user_id = :adminId AND a.active = TRUE WHERE (u.first_name LIKE :searchTerm OR …) ORDER BY u.created_at DESC, u.id DESC LIMIT :pageSize OFFSET :offset` |
+| Scoped directory count | `COUNT_USERS_SHARING_ORGANIZATIONS_QUERY` | the `COUNT(DISTINCT u.id)` twin of the page query, filter-compatible |
+
+The `LIKE` term is normalized identically to the unscoped path (`toLikePattern` wraps a trimmed term in `%…%`, blank ⇒ match-everything, `OrganizationServiceImpl.java:102-104`), and `pageSize` is clamped to `[1, 100]` (`:66`), so the scoped directory is indistinguishable in shape from the system-wide one — just smaller.
+
+### Two deliberate design choices
+
+- **Fail-closed scope check.** If the COUNT query throws, `isWithinOrganizationScope` logs and returns `false` (`OrganizationServiceImpl.java:51-55`) — an error in the scope check **denies**, never grants. A scoped admin whose DB lookup fails sees a 403, not the user.
+- **Scope is keyed to the role *name*, not a capability.** `isOrganizationScoped` matches the literal `ROLE_ORGANIZATION_ADMIN`. This is simple and unambiguous, but it means scoping is a property of *that one role*, not of "any non-global admin" — see the gap register below.
+
+### What is enforced today vs partial
+
+Status legend: ✅ enforced · ⚠️ partial / by-convention · ❌ not built.
+
+| Concern | Status | Detail |
+|---|:--:|---|
+| Org admin sees only in-scope users | ✅ | list/count branch to the scoped self-join (`AdminUserController.java:110-116`) |
+| Org admin can read/mutate only in-scope users | ✅ | `requireOrganizationScope` on `GET /{id}`, `/{id}/events`, `PATCH …/role`, `PATCH …/settings`; out-of-scope ⇒ 403 |
+| Global admin tiers bypass scope | ✅ | `ROLE_ADMIN` / `ROLE_APPLICATION_ADMIN` are never `isOrganizationScoped` (FR-ORG-3) |
+| Fail-closed on scope-check error | ✅ | `isWithinOrganizationScope` returns `false` on exception |
+| Enumeration-safe denial | ✅ | 403 message names no account data (NFR-SEC-7) |
+| Scope applies to **business** data (customers/invoices) | ❌ | scope covers **user administration only**. `/customer/**` is system-wide — those GETs only need `READ:USER`/`READ:CUSTOMER` (`SecurityConfig.java:160`), so an org admin sees *all* customers/invoices, just not all *users*. The Billing/Analytics "Your Organization" scope badge is cosmetic. |
+| Other UPDATE:USER holders are scoped | ⚠️ | scope is keyed to the exact name `ROLE_ORGANIZATION_ADMIN`. `ROLE_HELP_DESK_ADMIN` *also* carries `UPDATE:USER` (`schema.sql:67`) and reaches `/admin/**`, but is **not** scoped — it sees the whole directory and can change any user's settings. Intentional today, but a footgun if more roles gain `UPDATE:USER`. |
+| Role-tier ceiling on reassignment | ❌ | `updateUserRole` (`AdminUserController.java:210-231`) applies no ceiling. An org admin holds `UPDATE:ROLE`, so they can promote an **in-scope** user to `ROLE_ADMIN`/`ROLE_APPLICATION_ADMIN` — scope bounds *who*, not *which role*. Privilege-elevation-by-proxy; close it by rejecting target roles above the caller's tier. |
+| Membership management API | ❌ | `organizations` + `userorganizations` are seeded/maintained in the DB directly (`schema.sql:239-264` seeds two orgs); there is no endpoint to create an org or assign/deactivate a membership. `OrganizationService` exposes only the scope check + the scoped directory. |
+
+> **Gotcha (code-wins):** `OrganizationQuery`/`OrganizationServiceImpl` javadoc still references *"Flyway V4"* and an *"OrganizationRepoImpl"*. Both are stale — Flyway was removed (the tables are owned by `schema.sql`, §12) and the SQL is consumed straight from `OrganizationServiceImpl`, there is no repo. If a comment and the code disagree, **the code wins**; the comment should be fixed.
+
+### Adding a feature that respects org boundaries
+
+When you add an endpoint that acts on another user (or any org-owned entity), wire it into the same two-piece check rather than re-inventing it:
+
+1. **Inject `OrganizationService`** into your controller (constructor injection via `@RequiredArgsConstructor`), exactly as `AdminUserController` does.
+2. **Single-target action** → call `requireOrganizationScope(authentication, targetId)` as the *first* line, before any read or mutation. The helper already no-ops for global admins and throws the enumeration-safe `AccessDeniedException` (⇒ 403) for an out-of-scope target. Lift the private helper into a shared component if a second controller needs it.
+3. **List/collection action** → branch on `isOrganizationScoped(caller)`: scoped callers use a new scoped query, global callers use the unscoped one (mirror `listUsers`, `AdminUserController.java:110-116`). Do **not** fetch-then-filter in Java — push the membership join into SQL so paging counts stay correct.
+4. **New SQL** → add a constant to `OrganizationQuery` following the `userorganizations a JOIN userorganizations b … a.active = TRUE AND b.active = TRUE` self-join, with named params, and run it from a service via `NamedParameterJdbcTemplate`.
+5. **Keep the invariants:** global admin tiers bypass (never scope `ROLE_ADMIN`/`ROLE_APPLICATION_ADMIN`); fail closed on any scope-check error; audit the action against the **target** user (`new NewUserEvent(target.getEmail(), …)`), not the caller; and never leak account existence in the denial message.
+
+If the new resource is org-*owned* (not user-keyed), give it an `organization_id` and join through `userorganizations` on the caller's active memberships — the same predicate, one hop further.
+
+### Cross-links
+
+- The full administrative request trace, with the scope gate drawn into the authorization flowchart → [`flows/20-admin-users-rbac.md`](flows/20-admin-users-rbac.md)
+- The `organizations` / `userorganizations` table columns and the ERD → [database.md §8](database.md#8-organizations)
+- The role catalogue and which tiers hold `UPDATE:ROLE` → [database.md §12](database.md#12-reference-data)
+- The permission-to-authority matchers this layers on top of → [§5](#5-authorization-rbac)

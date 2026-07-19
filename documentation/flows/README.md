@@ -101,6 +101,9 @@ Legend: ✅ documented · ⏳ planned
 | 30 | Customers: list/search, new, details, update | [30-customers.md](./30-customers.md) | ✅ |
 | 31 | Invoices: list, new, details | [31-invoices.md](./31-invoices.md) | ✅ |
 | 32 | Home dashboard & stats | [32-dashboard.md](./32-dashboard.md) | ✅ |
+| 33 | Analytics hub (admin): KPIs, trends, status/type charts | [33-analytics.md](./33-analytics.md) | ✅ |
+| 34 | Billing overview (admin): totals, collection rate, recent invoices | [34-billing.md](./34-billing.md) | ✅ |
+| 35 | Services & apps catalog: available services + pricing | [35-services-catalog.md](./35-services-catalog.md) | ✅ |
 
 ---
 

@@ -22,6 +22,9 @@ The complete data model: the two persistence mechanisms, how the schema is creat
 11. [Business-domain tables (JPA)](#11-business-domain-tables-jpa)
 12. [Reference data](#12-reference-data)
 13. [Conventions, gotchas & history](#13-conventions-gotchas--history)
+14. [TOTP recovery codes (detail)](#14-totp-recovery-codes-detail)
+15. [Audit-event trigger reference](#15-audit-event-trigger-reference)
+16. [Schema evolution & migration](#16-schema-evolution--migration)
 
 ---
 
@@ -290,3 +293,151 @@ How permissions map to endpoints is in [security.md](security.md#rbac) and [api-
 - **`using_mfa` vs `using_totp`.** Two independent second factors: `using_mfa` = SMS code path (stubbed in dev); `using_totp` = authenticator app (fully implemented). `using_totp` is denormalized from `totpcredentials` for fast row mapping.
 - **Schema history.** A Flyway migration set (`V1..V6`) previously owned the schema; it was removed after repeated baseline desyncs blocked startup. The cumulative result of those migrations is now baked into `schema.sql`. Do not reintroduce a migration tool without revisiting this guide.
 - **Demo data.** On the `dev` profile, `DemoDataSeeder` inserts one user per role (password `TesseraDemo@1`) and a few sample audit events — idempotent, and never runs under `prod`.
+
+---
+
+## 14. TOTP recovery codes (detail)
+
+Expands [§9](#9-authenticator-totp-mfa-tables) (`totprecoverycodes`) with the lifecycle the table only hints at. Recovery codes are the **break-glass** fallback for authenticator-app MFA: if the user loses their phone, one of these single-use codes satisfies a login challenge in place of a live TOTP code.
+
+> **Key source files:** `service/serviceimpl/TotpServiceImpl.java` · `utils/TotpUtils.java` · `query/TotpQuery.java` · `controller/TotpController.java`
+> **Code wins:** every number below is taken from the source cited beside it. If this section and the code ever disagree, **the code wins** and this section should be fixed.
+
+| Property | Value | Source |
+|----------|-------|--------|
+| Count per batch | **10** codes | `RECOVERY_CODE_COUNT = 10` — `TotpServiceImpl.java:54` |
+| Format | `XXXXX-XXXXX` (two groups of 5, single hyphen) | `TotpUtils.generateRecoveryCode()` — `TotpUtils.java:176-183` |
+| Alphabet | RFC 4648 Base32 `A–Z2–7` (no ambiguous `0/1/8/9`) | `BASE32_ALPHABET` — `TotpUtils.java:50` |
+| Entropy | 10 chars × 5 bits = **~50 bits** per code | docstring — `TotpUtils.java:170-174` |
+| At-rest form | **SHA-256 hex** in `code_hash CHAR(64)` (lowercase) | `TotpUtils.sha256Hex()` — `TotpUtils.java:192-199`; column — `schema.sql:283` |
+| Single-use | atomic burn — `UPDATE … SET used_at = NOW() … WHERE used_at IS NULL` | `CONSUME_RECOVERY_CODE_QUERY` — `TotpQuery.java:78-80` |
+
+### Why SHA-256 and not BCrypt
+
+Recovery codes are machine-generated with ~50 bits of entropy, so they are **not** brute-forceable the way a low-entropy human password is. Fast SHA-256 is therefore the right at-rest hash; BCrypt's deliberate slowness would buy nothing here and would slow the per-login verification path (`TotpUtils.java:170-174`). The same reasoning is why passwords (low entropy) still use BCrypt — see [security.md](security.md).
+
+### Normalization (typed-vs-stored)
+
+Users see the hyphenated, upper-case form but type it inconsistently. Both **issuance** and **verification** run the identical normalizer — strip whitespace and the display hyphen, upper-case — *before* hashing, so the digests line up regardless of how the user enters it:
+
+```java
+// TotpServiceImpl.java:222-224
+private static String normalizeRecoveryCode(String code) {
+    return code.replaceAll("[\\s-]", "").toUpperCase();
+}
+```
+
+Applied at issuance (`TotpServiceImpl.java:200`) and at consumption (`TotpServiceImpl.java:213`).
+
+### Single-use semantics
+
+`consumeRecoveryCode()` (`TotpServiceImpl.java:210-215`) issues one `UPDATE` whose **affected-row count is the verdict**: `1` = a matching, still-unused code was just burned; `0` = unknown hash or already used. Because the `used_at IS NULL` predicate and the `SET used_at = NOW()` happen in a single statement, two concurrent attempts can never double-spend the same code. A consumed row is **never deleted and never reset to NULL** — `used_at` is the permanent audit trail of which code was spent (mirrors the retention rule in [§13](#13-conventions-gotchas--history)).
+
+### Issuance, plaintext, and regeneration
+
+| Step | What happens | Source |
+|------|--------------|--------|
+| Issued | Only inside `confirmEnrollment()` — after the user echoes a valid code for the pending secret | `TotpServiceImpl.java:106` → `issueRecoveryCodes()` `:193-203` |
+| Replace-on-issue | `issueRecoveryCodes()` first `DELETE`s every existing code for the user, then inserts 10 fresh hashes | `DELETE_RECOVERY_CODES_BY_USER_ID_QUERY` — `TotpQuery.java:63-64` |
+| Plaintext exposure | Returned to the SPA **exactly once** in the enable response; only the hash is persisted | `TotpController.java:109-116` ("they will not be shown again") |
+| Remaining count | `countUnusedRecoveryCodes()` surfaces the unused tally to the Account Security Center so a user can see they are running low | `TotpServiceImpl.java:184-187`; status endpoint `TotpController.java:161` |
+| Cleared on disable | `disableTotp()` removes the credential **and** all recovery codes in one transaction | `TotpServiceImpl.java:128` |
+
+> **⚠️ Gotcha — there is no standalone "regenerate codes" endpoint.** A fresh batch is minted **only** by a (re)enrollment confirmation. `TotpController` exposes setup / enable / disable / status / verify — but no "regenerate". To replace a depleted set today, the user must **disable and re-enroll** TOTP (which deletes the old codes on disable, then issues a new 10 on the next confirm). A dedicated "regenerate recovery codes" action that reissues without a full re-enroll is a sensible future addition; the underlying `issueRecoveryCodes()` already does the delete-then-insert it would need.
+
+---
+
+## 15. Audit-event trigger reference
+
+[§5](#5-audit-tables) covers the audit *tables*; [§12](#12-reference-data) lists the 15 valid `type` strings. This section maps **each event type → when it fires → what context is recorded**, so you can read a `userevents` row back to the code path that wrote it.
+
+> **One pipe for every event.** Controllers (and one service) publish a `NewUserEvent(email, EventType)` via `ApplicationEventPublisher`; `NewUserEventListener.onNewUserEvent()` (`listener/NewUserEventListener.java:42-46`) is the single sink. It enriches every event uniformly from the **live HTTP request** — there is no per-call-site context plumbing.
+
+### Context captured on every row
+
+| `userevents` column | Source at write time | Notes |
+|---------------------|----------------------|-------|
+| user (`user_id`) | resolved from `NewUserEvent.email` by `EventService.addUserEvent` | events are **keyed by email**, not id (`NewUserEvent.java:33`) |
+| `device` | `RequestUtils.getDevice(request)` — parsed `User-Agent` | injected `HttpServletRequest` (`NewUserEventListener.java:31,45`) |
+| `ip_address` | `RequestUtils.getIpAddress(request)` — originating IP | same request |
+| `created_at` | DB default `CURRENT_TIMESTAMP` | see [§5](#5-audit-tables) |
+
+### Trigger map (all 15 types)
+
+| Event type | Fires when | Published from (`file:line`) |
+|------------|-----------|------------------------------|
+| `LOGIN_ATTEMPT` | Start of a login attempt, before success/failure is known | `UserController.java:673` |
+| `LOGIN_ATTEMPT_SUCCESS` | Password auth succeeds and lock/enable checks pass; also after a TOTP challenge completes login | `UserController.java:159`, `:678` · `TotpController.java:190` |
+| `LOGIN_ATTEMPT_FAILURE` | Bad credentials, or account locked/disabled (feeds the 5-in-15-min lockout) | `UserController.java:170`, `:726` |
+| `PROFILE_UPDATE` | User saves name/email/bio/profile fields | `UserController.java:504` |
+| `PROFILE_PICTURE_UPDATE` | User uploads a new avatar | `UserController.java:334` |
+| `ROLE_UPDATE` | An **admin** reassigns a target user's role (`PATCH /admin/user/{id}/role/{roleName}`) | `AdminUserController.java:219` |
+| `ACCOUNT_SETTINGS_UPDATE` | `enabled`/`non_locked` toggled — self-service or admin-on-other-user | `UserController.java:268` · `AdminUserController.java:253` |
+| `PASSWORD_UPDATE` | User changes their password | `UserController.java:224` |
+| `MFA_UPDATE` | SMS 2FA (`using_mfa`) toggled | `UserController.java:296` |
+| `FEDERATED_LOGIN` | Federated sign-in completes and the success handler mints app JWTs | `OAuth2LoginSuccessHandler.java:130` |
+| `TOTP_ENROLLED` | Authenticator enrollment is confirmed (secret confirmed + recovery codes issued) | `TotpController.java:110` |
+| `TOTP_DISABLED` | Authenticator removed after proving possession | `TotpController.java:135` |
+| `RECOVERY_CODE_USED` | A single-use recovery code (not a live TOTP code) satisfies the login challenge | `TotpController.java:188` |
+| `SESSION_REVOKED` | User revokes one session, or "log out everywhere" | `SessionController.java:89` (one), `:113` (others/all) |
+| `TOKEN_REUSE_DETECTED` | A rotated/revoked refresh token is replayed; the whole session family is revoked | `SessionServiceImpl.java:188` (`handleReuse`) |
+
+> **Gotcha — context follows the request in flight, not the account owner.** Because the listener reads the *current* `HttpServletRequest`, the `device`/`ip_address` on `TOKEN_REUSE_DETECTED` reflect **whoever presented the replayed token** (the reuse handler runs inside that refresh request, `SessionServiceImpl.java:183-195`), which is exactly what you want for forensics. Auditing there is wrapped in try/catch so a logging failure never blocks the security response (`:190-194`).
+
+> **History:** adding a new event type means updating **both** the `CK_Events_Type` `CHECK` constraint and the seed `INSERT` in `schema.sql`, then adding the enum constant — see [§16.3](#163-adding-an-event-type) and [§12](#12-reference-data).
+
+---
+
+## 16. Schema evolution & migration
+
+How to change the schema now that **Flyway is gone** (removed because its baseline bookkeeping kept desyncing from the live DB and blocking startup — `schema.sql:4-8`). There is no migration tool and no auto-versioning; the schema has **two owners**, and which one you touch depends on the table.
+
+| Owner | Tables | How DDL is applied | Config |
+|-------|--------|--------------------|--------|
+| **`schema.sql`** (hand-applied) | all identity/auth tables ([§4](#4-identity--access-tables)–[§10](#10-refresh-session-tables)) | idempotent script, run by hand | `spring.sql.init.mode: never` — `application.yml:52` |
+| **Hibernate** | `customer`, `invoice`, `services`, `invoiceserviceitems` | `ddl-auto: update` (dev) / `validate` (prod) | `application.yml:31` · `application-prod.yml:31` |
+
+`schema.sql` is **idempotent and non-destructive**: every statement is `CREATE TABLE IF NOT EXISTS` or `INSERT … ON DUPLICATE KEY UPDATE`, FKs are inlined (not separate `ALTER`s) to stay re-runnable, and there are **deliberately no `DROP`s** (`schema.sql:10-12,173`).
+
+### 16.1 Adding a column or table to an identity/auth table
+
+1. **Edit `schema.sql`.** For a **new table**, add a `CREATE TABLE IF NOT EXISTS …` block (inline its FKs, give constraints stable names like `UQ_…`/`IX_…` as the existing blocks do). For a **new column**, add it to the table's existing `CREATE` block so a *fresh* database is always correct.
+2. **Apply to existing databases by hand.** ⚠️ `CREATE TABLE IF NOT EXISTS` will **not** alter a table that already exists, and MySQL 8 has **no `ADD COLUMN IF NOT EXISTS`**. So on an already-initialised DB you must run the delta once yourself:
+   ```sql
+   ALTER TABLE users ADD COLUMN new_flag BOOLEAN DEFAULT FALSE;
+   ```
+   Keep the column in the `CREATE` block (step 1) **and** run the one-off `ALTER` on each live DB — fresh installs get it from the block, existing installs from the `ALTER`.
+3. **Wire the read/write path.** Add a named-param SQL constant in the matching `*Query` class, update the `*RowMapper`, and surface it through the repo/service (the [§1](#1-two-persistence-mechanisms) JDBC pattern). For a brand-new aggregate, add the four cooperating pieces (`Query` + `RowMapper` + `Repo` + `RepoImpl`).
+4. **Re-running `schema.sql` is always safe** — idempotent, no `DROP`s, so it never clobbers data.
+
+### 16.2 Adding or altering a JPA entity (and the drift guard)
+
+The business-domain tables are Hibernate-managed, so in **dev** (`ddl-auto: update`) adding a field to `Customer`/`Invoice`/`Services`/`InvoiceLineItem` creates the column automatically on next boot. But **prod runs `ddl-auto: validate`** (`application-prod.yml:31`): Hibernate refuses to start if a mapped column is missing from the hand-applied schema. So a JPA change is **not done** until `schema.sql` carries the generated DDL too.
+
+`JpaSchemaSyncTest` (`src/test/java/.../tooling/JpaSchemaSyncTest.java`) is the build-time guard and the reproducible DDL source:
+
+1. It drives Hibernate's **offline** schema export (no DB connection) with the MySQL dialect and `globally_quoted_identifiers=true` pinned, writing `target/generated-jpa-schema.sql`.
+2. It asserts `schema.sql` contains **every** backtick-quoted table/column Hibernate maps — so a new entity field without a matching `schema.sql` update **fails the build here**, not at the next prod deploy.
+
+Workflow after changing an entity: run the test, open `target/generated-jpa-schema.sql`, copy the new `CREATE TABLE`/column into `schema.sql` as `CREATE TABLE IF NOT EXISTS` with FKs inlined and stable names (the column names are quoted camelCase because of `globally_quoted_identifiers` — see [§13](#13-conventions-gotchas--history)), then re-run the test until green.
+
+### 16.3 Adding an event type
+
+A new audit event touches **three** places (the `CHECK` constraint will reject an unknown `type` otherwise):
+
+1. `schema.sql` — extend the `CK_Events_Type` `CHECK` list **and** add the seed `INSERT … ON DUPLICATE KEY UPDATE` row.
+2. `enumeration/EventType.java` — add the constant with its user-facing description.
+3. Publish it from the relevant code path (`new NewUserEvent(email, NEW_TYPE)`) — see the trigger map in [§15](#15-audit-event-trigger-reference).
+
+### 16.4 Rollback
+
+There is **no down-migration mechanism** — that is the deliberate trade-off of dropping Flyway. Roll back the same way you roll forward: **by hand, code-first.**
+
+| To undo | Do this | Note |
+|---------|---------|------|
+| A bad column add | Write a compensating `ALTER TABLE … DROP COLUMN` and run it manually | Not added to `schema.sql` (it has no `DROP`s); keep it in a one-off ops note |
+| A bad table add | `DROP TABLE` manually after confirming it is unused | Same — never goes in `schema.sql` |
+| A JPA change | Revert the entity + the `schema.sql` DDL together; in prod, `validate` then re-checks them in lockstep | `update` never drops columns, so a removed field leaves a harmless orphan column (cf. the `service`/`services` leftovers, [§11](#11-business-domain-tables-jpa)) |
+| A data seed | Re-run `schema.sql` (idempotent) after editing the seed `INSERT` | `ON DUPLICATE KEY UPDATE` reconciles existing rows |
+
+> **Note — back up first.** Because rollback is manual SQL against a live database, take a dump before applying any destructive `ALTER`/`DROP`, and (per project rule) confirm any destructive DB operation with a human before running it.
