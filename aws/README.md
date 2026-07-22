@@ -1,19 +1,42 @@
 # TesseraApp — AWS Deployment Guide
 
-End-to-end checklist for deploying TesseraApp to AWS using ECS Fargate + RDS MySQL + S3 (image storage) + ALB (HTTPS termination) + Secrets Manager (secrets injection).
+End-to-end checklist for deploying TesseraApp to AWS using ECS Fargate + **Aiven MySQL** (managed DB) + S3 (image storage) + ALB (HTTPS termination) + Secrets Manager (secrets injection).
 
 ---
 
-## AWS services you need
+## Fastest path — one-command bootstrap
+
+`aws/setup.sh` runs all 9 infrastructure steps below in order and prints a final banner with your ALB DNS name:
+
+```bash
+# Prerequisites: AWS CLI configured, correct region set
+export AWS_REGION=us-east-1
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export AIVEN_HOST=mysql-xyz.aivencloud.com
+export AIVEN_PORT=28674
+export AIVEN_DB=defaultdb
+export AIVEN_USER=avnadmin
+export AIVEN_PASSWORD=your-aiven-password
+export APP_DOMAIN=https://app.tessera.example.com
+
+chmod +x aws/setup.sh aws/secrets-setup.sh aws/push-to-ecr.sh
+./aws/setup.sh
+```
+
+The manual steps below explain what `setup.sh` does, which is useful for debugging or incremental changes.
+
+---
+
+## AWS services used
 
 | Service | Purpose | Free-tier? |
 |---|---|---|
-| **ECR** | Container registry (store the Docker image) | 500 MB/month free |
-| **ECS Fargate** | Run the containerised app (no servers to manage) | Compute billed per task |
-| **RDS MySQL 8.x** | Managed MySQL (replaces local/Aiven MySQL) | db.t3.micro free for 12 months |
+| **ECR** | Container registry | 500 MB/month free |
+| **ECS Fargate** | Run the containerised app | Compute billed per task |
+| **Aiven MySQL** | Managed MySQL (replaces RDS) | Paid; ~$19/month starter |
 | **S3** | Profile image object storage | 5 GB free |
-| **ALB** | HTTPS load balancer → ECS task | ~$16/month |
-| **Secrets Manager** | Inject all secrets at task startup (JWT, DB, mail, Twilio, OAuth2) | $0.40/secret/month |
+| **ALB** | HTTPS load balancer → ECS | ~$16/month |
+| **Secrets Manager** | Inject all secrets at task startup | $0.40/secret/month |
 | **CloudWatch Logs** | Container log output | 5 GB free |
 | **IAM** | Roles for the ECS task and execution | Free |
 
@@ -29,17 +52,15 @@ aws iam create-role --role-name ecsTaskExecutionRole \
 aws iam attach-role-policy --role-name ecsTaskExecutionRole \
   --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
-# Allow reading from Secrets Manager (needed for the `secrets:` block in task-definition.json):
 aws iam attach-role-policy --role-name ecsTaskExecutionRole \
   --policy-arn arn:aws:iam::aws:policy/SecretsManagerReadWrite
 ```
 
-### Task role (what the running container can do)
+### Task role (what the running container can do — S3 access)
 ```bash
 aws iam create-role --role-name tessera-app-task-role \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
 
-# Allow S3 image upload/download (replace YOUR_BUCKET_NAME):
 aws iam put-role-policy --role-name tessera-app-task-role \
   --policy-name S3ImageStorage \
   --policy-document '{
@@ -47,7 +68,7 @@ aws iam put-role-policy --role-name tessera-app-task-role \
     "Statement":[{
       "Effect":"Allow",
       "Action":["s3:PutObject","s3:GetObject","s3:DeleteObject"],
-      "Resource":"arn:aws:s3:::YOUR_BUCKET_NAME/*"
+      "Resource":"arn:aws:s3:::tessera-app-images/*"
     }]
   }'
 ```
@@ -59,7 +80,6 @@ aws iam put-role-policy --role-name tessera-app-task-role \
 ```bash
 aws s3 mb s3://tessera-app-images --region us-east-1
 
-# Allow public read (profile images are public):
 aws s3api put-bucket-policy --bucket tessera-app-images --policy '{
   "Version":"2012-10-17",
   "Statement":[{
@@ -70,7 +90,7 @@ aws s3api put-bucket-policy --bucket tessera-app-images --policy '{
   }]
 }'
 
-# CORS (Angular frontend reads images cross-origin from S3 — replace YOUR_DOMAIN):
+# Replace YOUR_DOMAIN with your actual domain:
 aws s3api put-bucket-cors --bucket tessera-app-images --cors-configuration '{
   "CORSRules":[{
     "AllowedOrigins":["https://YOUR_DOMAIN", "http://localhost:4200"],
@@ -88,7 +108,6 @@ aws s3api put-bucket-cors --bucket tessera-app-images --cors-configuration '{
 ```bash
 aws ecr create-repository --repository-name tessera-app --region us-east-1
 
-# Build and push (from the repo root):
 chmod +x aws/push-to-ecr.sh
 AWS_REGION=us-east-1 ./aws/push-to-ecr.sh latest
 ```
@@ -101,55 +120,60 @@ AWS_REGION=us-east-1 ./aws/push-to-ecr.sh latest
 chmod +x aws/secrets-setup.sh
 AWS_REGION=us-east-1 ./aws/secrets-setup.sh
 
-# Then update every CHANGE_ME value:
+# Then fill in the real Aiven values (from Aiven console → Service → Connection info):
 aws secretsmanager update-secret --region us-east-1 \
-  --secret-id tessera-app/db-password \
-  --secret-string 'your-real-db-password'
-# ... repeat for all secrets
+  --secret-id tessera-app/aiven-host     --secret-string 'mysql-xyz.aivencloud.com'
+aws secretsmanager update-secret --region us-east-1 \
+  --secret-id tessera-app/aiven-port     --secret-string '28674'
+aws secretsmanager update-secret --region us-east-1 \
+  --secret-id tessera-app/aiven-db       --secret-string 'defaultdb'
+aws secretsmanager update-secret --region us-east-1 \
+  --secret-id tessera-app/aiven-user     --secret-string 'avnadmin'
+aws secretsmanager update-secret --region us-east-1 \
+  --secret-id tessera-app/db-password    --secret-string 'your-real-aiven-password'
+# ... repeat for mail-*, twilio-*, google-*, github-*
 ```
 
 ---
 
-## Step 5 — Create RDS MySQL
+## Step 5 — Initialise the Aiven database schema
+
+TesseraApp uses Aiven MySQL as the production database. Connect to it and run the schema once:
 
 ```bash
-aws rds create-db-instance \
-  --db-instance-identifier tessera-app-db \
-  --db-instance-class db.t3.micro \
-  --engine mysql \
-  --engine-version 8.0 \
-  --master-username tessera \
-  --master-user-password 'your-real-db-password' \
-  --allocated-storage 20 \
-  --db-name db2 \
-  --vpc-security-group-ids sg-XXXXXXXXXXXXXXXXX \
-  --publicly-accessible \
-  --region us-east-1
+# Install Aiven CA cert first (download from Aiven console → Service → Overview → CA Certificate):
+mysql \
+  --host=mysql-xyz.aivencloud.com \
+  --port=28674 \
+  --user=avnadmin \
+  --password \
+  --ssl-ca=aiven-ca.pem \
+  --ssl-mode=REQUIRED \
+  defaultdb < src/main/resources/schema.sql
 ```
 
-Once the RDS instance is available, initialise the schema (run from your local machine or a bastion host):
-```bash
-mysql -h your-rds-endpoint.us-east-1.rds.amazonaws.com -u tessera -p db2 \
-  < src/main/resources/schema.sql
-```
+The schema is idempotent (`CREATE TABLE IF NOT EXISTS`, no DROPs) so re-running it is safe.
 
 ---
 
-## Step 6 — Fill in task-definition.json placeholders
+## Step 6 — Fill in task-definition.json and register it
 
-Edit `aws/task-definition.json` and replace:
-- `ACCOUNT_ID` → your 12-digit AWS account ID (`aws sts get-caller-identity --query Account`)
-- `REGION` → your region (e.g. `us-east-1`)
-- `RDS_ENDPOINT` → the RDS endpoint from Step 5
-- `S3_BUCKET` → `tessera-app-images`
-- `APP_DOMAIN` → your public URL (e.g. `https://app.tessera.example.com`)
-- `DB_NAME` → `db2`
-- `DB_USERNAME` → `tessera`
+`aws/task-definition.json` is a template with `${VARIABLE}` tokens. Fill and register it:
 
-Then register the task definition:
 ```bash
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export AWS_REGION=us-east-1
+export ECR_IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tessera-app:latest"
+export AIVEN_HOST=mysql-xyz.aivencloud.com
+export AIVEN_PORT=28674
+export AIVEN_DB=defaultdb
+export AIVEN_USER=avnadmin
+export S3_BUCKET=tessera-app-images
+export APP_DOMAIN=https://app.tessera.example.com
+
+envsubst < aws/task-definition.json > /tmp/task-definition.filled.json
 aws ecs register-task-definition \
-  --cli-input-json file://aws/task-definition.json \
+  --cli-input-json file:///tmp/task-definition.filled.json \
   --region us-east-1
 ```
 
@@ -179,12 +203,15 @@ aws ecs create-service \
 
 ## Redeploy after a code change
 
+The GitHub Actions `deploy.yml` workflow handles this automatically on every push to `master`. To trigger manually:
+
 ```bash
 # 1. Push new image:
 AWS_REGION=us-east-1 ./aws/push-to-ecr.sh $(git rev-parse --short HEAD)
 
-# 2. Update task definition with new image tag in task-definition.json, then register:
-aws ecs register-task-definition --cli-input-json file://aws/task-definition.json
+# 2. Fill template and register:
+envsubst < aws/task-definition.json > /tmp/task-definition.filled.json
+aws ecs register-task-definition --cli-input-json file:///tmp/task-definition.filled.json
 
 # 3. Force a rolling deployment:
 aws ecs update-service \
@@ -212,3 +239,25 @@ aws ecs update-service \
   --force-new-deployment \
   --region us-east-1
 ```
+
+---
+
+## GitHub Actions secrets to configure
+
+Go to **GitHub → Repository → Settings → Secrets and variables → Actions** and add:
+
+| Secret name | Where to find it |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | IAM → Users → deploy user → Security credentials |
+| `AWS_SECRET_ACCESS_KEY` | Same as above |
+| `AWS_REGION` | e.g. `us-east-1` |
+| `AWS_ACCOUNT_ID` | `aws sts get-caller-identity --query Account` |
+| `ECR_REPOSITORY` | e.g. `tessera-app` |
+| `ECS_CLUSTER` | e.g. `tessera-app-cluster` |
+| `ECS_SERVICE` | e.g. `tessera-app-service` |
+| `AIVEN_HOST` | Aiven console → Service → Overview → Host |
+| `AIVEN_PORT` | Aiven console → Service → Overview → Port |
+| `AIVEN_DB` | e.g. `defaultdb` |
+| `AIVEN_USER` | e.g. `avnadmin` |
+| `S3_BUCKET` | e.g. `tessera-app-images` |
+| `APP_DOMAIN` | e.g. `https://app.tessera.example.com` |

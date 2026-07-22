@@ -1,25 +1,27 @@
 {
-  "_comment": "ECS Fargate task definition for TesseraApp. Replace every UPPER_CASE placeholder before deploying.",
-  "_placeholders": {
-    "ACCOUNT_ID":    "12-digit AWS account ID (aws sts get-caller-identity --query Account)",
-    "REGION":        "AWS region, e.g. us-east-1",
-    "RDS_ENDPOINT":  "your-rds-instance.REGION.rds.amazonaws.com",
-    "S3_BUCKET":     "name of the S3 bucket for profile images",
-    "APP_DOMAIN":    "your public domain, e.g. https://app.tessera.example.com",
-    "DB_NAME":       "MySQL database name (default: db2)",
-    "DB_USERNAME":   "MySQL username"
+  "_comment": "ECS Fargate task definition TEMPLATE for TesseraApp. All ${VARIABLE} tokens are filled at deploy time via envsubst (see deploy.yml). Do NOT commit a filled copy — commit this template.",
+  "_variables": {
+    "AWS_ACCOUNT_ID":  "12-digit AWS account ID (aws sts get-caller-identity --query Account)",
+    "AWS_REGION":      "AWS region, e.g. us-east-1",
+    "ECR_IMAGE_URI":   "Full ECR image URI, e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/tessera-app:abc1234",
+    "AIVEN_HOST":      "Aiven MySQL hostname, e.g. mysql-abc123.aivencloud.com",
+    "AIVEN_PORT":      "Aiven MySQL port, e.g. 28674",
+    "AIVEN_DB":        "Aiven MySQL database name, e.g. defaultdb",
+    "AIVEN_USER":      "Aiven MySQL username, e.g. avnadmin",
+    "S3_BUCKET":       "S3 bucket name for profile images, e.g. tessera-app-images",
+    "APP_DOMAIN":      "Public URL of the app, e.g. https://app.tessera.example.com"
   },
   "family": "tessera-app",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
-  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
-  "taskRoleArn":      "arn:aws:iam::ACCOUNT_ID:role/tessera-app-task-role",
+  "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole",
+  "taskRoleArn":      "arn:aws:iam::${AWS_ACCOUNT_ID}:role/tessera-app-task-role",
   "containerDefinitions": [
     {
       "name":  "tessera-app",
-      "image": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/tessera-app:latest",
+      "image": "${ECR_IMAGE_URI}",
       "essential": true,
       "portMappings": [
         { "containerPort": 8080, "protocol": "tcp" }
@@ -27,68 +29,68 @@
       "environment": [
         { "name": "SPRING_ACTIVE_PROFILES", "value": "prod" },
         { "name": "CONTAINER_PORT",          "value": "8080" },
-        { "name": "MYSQL_HOST",              "value": "RDS_ENDPOINT" },
-        { "name": "MYSQL_PORT",              "value": "3306" },
-        { "name": "MYSQL_DATABASE",          "value": "DB_NAME" },
-        { "name": "MYSQL_USERNAME",          "value": "DB_USERNAME" },
+        { "name": "MYSQL_HOST",              "value": "${AIVEN_HOST}" },
+        { "name": "MYSQL_PORT",              "value": "${AIVEN_PORT}" },
+        { "name": "MYSQL_DATABASE",          "value": "${AIVEN_DB}" },
+        { "name": "MYSQL_USERNAME",          "value": "${AIVEN_USER}" },
         { "name": "MAIL_HOST",               "value": "smtp.gmail.com" },
         { "name": "MAIL_PORT",               "value": "587" },
-        { "name": "UI_APP_URL",              "value": "APP_DOMAIN" },
+        { "name": "UI_APP_URL",              "value": "${APP_DOMAIN}" },
         { "name": "IMAGE_STORAGE_TYPE",      "value": "s3" },
-        { "name": "AWS_S3_BUCKET",           "value": "S3_BUCKET" },
-        { "name": "AWS_REGION",              "value": "REGION" }
+        { "name": "AWS_S3_BUCKET",           "value": "${S3_BUCKET}" },
+        { "name": "AWS_REGION",              "value": "${AWS_REGION}" }
       ],
       "secrets": [
         {
           "name":      "JWT_SECRET",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/jwt-secret"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/jwt-secret"
         },
         {
           "name":      "MYSQL_PASSWORD",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/db-password"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/db-password"
         },
         {
           "name":      "MAIL_USERNAME",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/mail-username"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/mail-username"
         },
         {
           "name":      "MAIL_PASSWORD",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/mail-password"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/mail-password"
         },
         {
           "name":      "TWILIO_ACCOUNT_SID",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/twilio-sid"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/twilio-sid"
         },
         {
           "name":      "TWILIO_AUTH_TOKEN",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/twilio-token"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/twilio-token"
         },
         {
           "name":      "TWILIO_FROM_NUMBER",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/twilio-from-number"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/twilio-from-number"
         },
         {
           "name":      "GOOGLE_CLIENT_ID",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/google-client-id"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/google-client-id"
         },
         {
           "name":      "GOOGLE_CLIENT_SECRET",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/google-client-secret"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/google-client-secret"
         },
         {
           "name":      "GITHUB_CLIENT_ID",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/github-client-id"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/github-client-id"
         },
         {
           "name":      "GITHUB_CLIENT_SECRET",
-          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:tessera-app/github-client-secret"
+          "valueFrom": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:tessera-app/github-client-secret"
         }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
           "awslogs-group":         "/ecs/tessera-app",
-          "awslogs-region":        "REGION",
+          "awslogs-region":        "${AWS_REGION}",
           "awslogs-stream-prefix": "ecs",
           "awslogs-create-group":  "true"
         }

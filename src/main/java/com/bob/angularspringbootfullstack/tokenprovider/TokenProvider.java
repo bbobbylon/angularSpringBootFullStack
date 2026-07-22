@@ -70,6 +70,10 @@ public class TokenProvider {
      * @return a signed JWT access token as a String
      */
     public String createAccessToken(UserPrincipal userPrincipal, String sessionFamily) {
+        System.out.println("##################");
+        System.out.println("Creating access token for user ID: " + userPrincipal.getUser().getId() + ", session family: " + sessionFamily);
+        System.out.println("Secret value is:" + secret);
+        System.out.println("##################");
         return JWT.create()
                 .withIssuer(BOBBYLON_LLC)
                 .withAudience(BOBS_MANAGEMENT)
@@ -137,6 +141,26 @@ public class TokenProvider {
     }
 
     /**
+     * Creates and returns a JWTVerifier instance using the secret key and HMAC512 algorithm.
+     * This verifier is used to validate the signature and claims of JWT tokens.
+     *
+     * @return a configured JWTVerifier instance
+     * @throws RuntimeException if the secret is invalid or the verifier cannot be created
+     */
+    private JWTVerifier getJWTVerifier() {
+        JWTVerifier verifier;
+        try {
+            Algorithm alg = HMAC512(secret);
+            // Do not require the 'authorities' claim at verification time because refresh tokens
+            // do not include authorities. Claim presence is enforced only when authorities are needed.
+            verifier = JWT.require(alg).withIssuer(BOBBYLON_LLC).build();
+        } catch (JWTVerificationException e) {
+            throw new JWTVerificationException(TOKEN_UNVERIFIABLE);
+        }
+        return verifier;
+    }
+
+    /**
      * Verifies the token and returns its {@code sid} (session family) claim, present on
      * both token types since M5. Used by the sessions endpoint to mark the caller's
      * current session in the device list.
@@ -149,7 +173,6 @@ public class TokenProvider {
         Claim claim = getJWTVerifier().verify(token).getClaim(SESSION_FAMILY);
         return claim == null || claim.isNull() ? null : claim.asString();
     }
-
 
     /**
      * Extracts the authorities (roles/permissions) from a JWT token.
@@ -185,26 +208,6 @@ public class TokenProvider {
         }
         String[] arr = claim.asArray(String.class);
         return arr == null ? new String[0] : arr;
-    }
-
-    /**
-     * Creates and returns a JWTVerifier instance using the secret key and HMAC512 algorithm.
-     * This verifier is used to validate the signature and claims of JWT tokens.
-     *
-     * @return a configured JWTVerifier instance
-     * @throws RuntimeException if the secret is invalid or the verifier cannot be created
-     */
-    private JWTVerifier getJWTVerifier() {
-        JWTVerifier verifier;
-        try {
-            Algorithm alg = HMAC512(secret);
-            // Do not require the 'authorities' claim at verification time because refresh tokens
-            // do not include authorities. Claim presence is enforced only when authorities are needed.
-            verifier = JWT.require(alg).withIssuer(BOBBYLON_LLC).build();
-        } catch (JWTVerificationException e) {
-            throw new JWTVerificationException(TOKEN_UNVERIFIABLE);
-        }
-        return verifier;
     }
 
     /**

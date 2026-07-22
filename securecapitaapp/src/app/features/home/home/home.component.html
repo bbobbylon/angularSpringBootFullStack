@@ -11,6 +11,53 @@
   <main class="sc-dash">
     <div class="container">
 
+      @if (state.dataState === DataState.LOADING) {
+
+        <!-- ─── Skeleton loading state ──────────────────────────────────── -->
+        <div class="sc-dash__head" style="margin-bottom: 1.5rem;">
+          <div>
+            <div class="sc-skeleton sc-skeleton-line sc-skeleton-line--sm" style="width: 5rem; margin-bottom: 0.6rem;"></div>
+            <div class="sc-skeleton sc-skeleton-line" style="width: 18rem; height: 2rem; margin-bottom: 0.6rem;"></div>
+            <div class="sc-skeleton sc-skeleton-line sc-skeleton-line--sm" style="width: 14rem;"></div>
+          </div>
+        </div>
+        <div class="row g-3" style="margin-bottom: 1.5rem;">
+          @for (_ of [1,2,3,4]; track $index) {
+            <div class="col-12 col-sm-6 col-xl-3">
+              <div class="sc-panel" style="margin-top: 0; padding: 1rem 1.2rem;">
+                <div class="sc-skeleton sc-skeleton-line sc-skeleton-line--sm" style="width: 55%; margin-bottom: 0.65rem;"></div>
+                <div class="sc-skeleton sc-skeleton-line" style="width: 40%; height: 1.8rem;"></div>
+              </div>
+            </div>
+          }
+        </div>
+        <section class="sc-panel" style="margin-top: 0;">
+          <div class="sc-panel__head">
+            <div class="sc-skeleton sc-skeleton-line" style="width: 7rem; height: 1.1rem;"></div>
+          </div>
+          @for (_ of [1,2,3,4,5,6]; track $index) {
+            <div class="sc-skeleton-row">
+              <div class="sc-skeleton" style="width: 2rem; height: 0.8em; flex: none; border-radius: 4px;"></div>
+              <div class="sc-skeleton sc-skeleton-avatar" style="flex: none;"></div>
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 0.35rem;">
+                <div class="sc-skeleton sc-skeleton-line" style="width: 55%;"></div>
+                <div class="sc-skeleton sc-skeleton-line sc-skeleton-line--sm" style="width: 40%;"></div>
+              </div>
+              <div class="sc-skeleton sc-skeleton-line" style="width: 4rem; flex: none;"></div>
+              <div class="sc-skeleton sc-skeleton-line" style="width: 3.5rem; flex: none;"></div>
+            </div>
+          }
+        </section>
+
+      } @else if (state.dataState === DataState.ERROR) {
+
+        <div class="sc-state">
+          <span class="sc-state__icon"><i class="bi bi-exclamation-triangle"></i></span>
+          <p class="mb-0">{{ state.error }}</p>
+        </div>
+
+      } @else {
+
       <!-- Page header: greets the authenticated user and hosts the report export. -->
       <header class="sc-dash__head sc-reveal">
         <div class="sc-dash__heading">
@@ -165,6 +212,8 @@
           </div>
         }
       </section>
+
+      } <!-- end @else LOADED -->
 
     </div>
   </main>

@@ -22,6 +22,13 @@ services:
     env_file:
       - .env
     environment:
+      # Switch environments by setting SPRING_ACTIVE_PROFILES in your .env file:
+      #   dev   → local defaults, ddl-auto:update, SQL logging opt-in
+      #   qa    → validate schema, show-sql opt-in, no fallback secrets
+      #   stage → prod-mirror, validate schema, show-sql off
+      #   prod  → (default) validate schema, show-sql off, jwt guard active
+      # Or override on the CLI: docker compose --env-file .env.qa up
+      SPRING_ACTIVE_PROFILES: ${SPRING_ACTIVE_PROFILES:-prod}
       # Override local .env values that are wrong inside Docker networking
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306

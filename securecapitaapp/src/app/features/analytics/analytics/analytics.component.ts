@@ -396,9 +396,43 @@ export class AnalyticsComponent implements OnInit {
     }));
   });
 
-  // ── Tooltip hover index ────────────────────────────────────────────────
+  // ── Chart crosshair tooltip ─────────────────────────────────────────────
 
   readonly hoveredTrendIdx = signal<number | null>(null);
+  /** Left position of the tooltip, as a percentage of the chart-wrap width (0–100). */
+  readonly tooltipLeft = signal(0);
+  /** The actual data point currently under the cursor, or null when off-chart. */
+  readonly hoveredPoint = computed<TrendPoint | null>(() => {
+    const i = this.hoveredTrendIdx();
+    return i !== null ? (this.trendPoints()[i] ?? null) : null;
+  });
+
+  /**
+   * Tracks mouse position over the dual-area SVG chart.
+   *
+   * Converts the cursor's X fraction within the wrapper into an SVG-space X
+   * coordinate (viewBox 0–100), then finds the nearest TrendPoint. Clamping
+   * the tooltip to 8–92% prevents it from overflowing the panel edges.
+   */
+  onChartMove(event: MouseEvent): void {
+    const wrap = event.currentTarget as HTMLElement;
+    const fraction = Math.max(0, Math.min(1, event.offsetX / wrap.offsetWidth));
+    const svgX = fraction * 100;
+    const pts = this.trendPoints();
+    if (!pts.length) return;
+    let nearestIdx = 0;
+    let minDist = Math.abs(pts[0].x - svgX);
+    for (let i = 1; i < pts.length; i++) {
+      const d = Math.abs(pts[i].x - svgX);
+      if (d < minDist) { minDist = d; nearestIdx = i; }
+    }
+    this.hoveredTrendIdx.set(nearestIdx);
+    this.tooltipLeft.set(Math.min(Math.max(fraction * 100, 8), 92));
+  }
+
+  onChartLeave(): void {
+    this.hoveredTrendIdx.set(null);
+  }
 
   ngOnInit(): void {
     this.customerService

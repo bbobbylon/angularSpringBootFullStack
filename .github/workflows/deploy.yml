@@ -1,0 +1,147 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Deploy — build the Docker image, push to Amazon ECR, update the ECS service.
+#
+# Triggers:
+#   - Push to master            → deploys to PROD
+#   - Manual workflow_dispatch  → deploys to the selected environment (qa/stage/prod)
+#
+# Database: Aiven managed MySQL. Connection details are pulled from AWS Secrets
+# Manager (populated once by aws/secrets-setup.sh) and injected into the ECS
+# task at runtime. This pipeline never touches the DB directly.
+#
+# How task-definition.json works:
+#   aws/task-definition.json is a TEMPLATE with ${VARIABLE} tokens.
+#   The "Fill task-definition template" step below runs envsubst to produce a
+#   filled copy (task-definition.filled.json) that ECS can register. The filled
+#   copy is never committed to git.
+#
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#   AWS_ACCESS_KEY_ID         — IAM deploy user key
+#   AWS_SECRET_ACCESS_KEY     — IAM deploy user secret
+#   AWS_REGION                — e.g. us-east-1
+#   AWS_ACCOUNT_ID            — 12-digit account number
+#   ECR_REPOSITORY            — ECR repo name, e.g. tessera-app
+#   ECS_CLUSTER               — ECS cluster name, e.g. tessera-app-cluster
+#   ECS_SERVICE               — ECS service name, e.g. tessera-app-service
+#   AIVEN_HOST                — Aiven MySQL hostname
+#   AIVEN_PORT                — Aiven MySQL port
+#   AIVEN_DB                  — Aiven database name
+#   AIVEN_USER                — Aiven username
+#   S3_BUCKET                 — S3 bucket for profile images
+#   APP_DOMAIN                — Public app URL, e.g. https://app.tessera.example.com
+#
+# Optional (for environment-specific ECS clusters):
+#   QA_ECS_CLUSTER, QA_ECS_SERVICE
+#   STAGE_ECS_CLUSTER, STAGE_ECS_SERVICE
+# ──────────────────────────────────────────────────────────────────────────────
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: prod
+        type: choice
+        options: [qa, stage, prod]
+
+jobs:
+  build-and-push:
+    name: Build Docker image → ECR
+    runs-on: ubuntu-latest
+    # Only deploy from master (auto-trigger) or on manual dispatch
+    if: github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+
+    outputs:
+      image-uri: ${{ steps.push.outputs.image-uri }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        id: push
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --tag "$REGISTRY/$REPOSITORY:$IMAGE_TAG" \
+            --tag "$REGISTRY/$REPOSITORY:latest" \
+            .
+          docker push "$REGISTRY/$REPOSITORY:$IMAGE_TAG"
+          docker push "$REGISTRY/$REPOSITORY:latest"
+          echo "image-uri=$REGISTRY/$REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy to ECS (${{ github.event.inputs.environment || 'prod' }})
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: ${{ github.event.inputs.environment || 'prod' }}
+
+    env:
+      TARGET_ENV: ${{ github.event.inputs.environment || 'prod' }}
+
+    steps:
+      - name: Checkout (for task definition template)
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Fill task-definition template
+        # envsubst replaces all ${VAR} tokens in the template with values from
+        # GitHub Secrets. The filled file is ephemeral — it exists only inside
+        # this runner and is never committed to git.
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          AWS_REGION:     ${{ secrets.AWS_REGION }}
+          ECR_IMAGE_URI:  ${{ needs.build-and-push.outputs.image-uri }}
+          AIVEN_HOST:     ${{ secrets.AIVEN_HOST }}
+          AIVEN_PORT:     ${{ secrets.AIVEN_PORT }}
+          AIVEN_DB:       ${{ secrets.AIVEN_DB }}
+          AIVEN_USER:     ${{ secrets.AIVEN_USER }}
+          S3_BUCKET:      ${{ secrets.S3_BUCKET }}
+          APP_DOMAIN:     ${{ secrets.APP_DOMAIN }}
+        run: |
+          envsubst < aws/task-definition.json > aws/task-definition.filled.json
+          echo "==> Filled task definition (secrets redacted):"
+          cat aws/task-definition.filled.json | grep -v -E '"valueFrom"|"password"|"secret"' || true
+
+      - name: Render new task definition revision
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: aws/task-definition.filled.json
+          container-name: tessera-app
+          image: ${{ needs.build-and-push.outputs.image-uri }}
+          # Override the Spring profile so the container loads application-<env>.yml
+          environment-variables: |
+            SPRING_ACTIVE_PROFILES=${{ env.TARGET_ENV }}
+
+      - name: Register and deploy task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ secrets.ECS_SERVICE }}
+          cluster: ${{ secrets.ECS_CLUSTER }}
+          wait-for-service-stability: true
