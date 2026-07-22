@@ -1,0 +1,27 @@
+# ── Staging environment ──────────────────────────────────────────────────────
+# Production-mirror for pre-release smoke testing. Applies the same hardening
+# as prod (ddl-auto: validate, show-sql: false, fail-fast on missing secrets).
+# Only the active-profile name differs so logs and APM can distinguish this
+# environment from production.
+#
+# How to run:
+#   1. Copy .env.stage.example → .env  (or set SPRING_ACTIVE_PROFILES=stage)
+#   2. docker compose --env-file .env.stage up
+# ─────────────────────────────────────────────────────────────────────────────
+
+SPRING_ACTIVE_PROFILES: stage
+
+MYSQL_PORT: 3306
+
+MAIL_HOST: smtp.gmail.com
+MAIL_PORT: 587
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    # Show-sql is unconditionally OFF in staging — SHOW_SQL env var is ignored.
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false

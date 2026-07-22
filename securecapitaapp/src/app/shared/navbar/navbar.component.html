@@ -19,10 +19,10 @@
           </a>
           <ul aria-labelledby="navbarDropdownCustomers" class="dropdown-menu dropdown-menu-end">
             <li><a [routerLink]="['/customer/new']" class="dropdown-item">
-              <i class="bi bi-person-plus-fill" style="padding-right: 8px;"></i>New Customer</a>
+              <i class="bi bi-person-plus-fill"></i>New Customer</a>
             </li>
             <li><a [routerLink]="['/customers']" class="dropdown-item">
-              <i class="bi bi-people-fill" style="padding-right: 8px;"></i>All Customers</a>
+              <i class="bi bi-people-fill"></i>All Customers</a>
             </li>
           </ul>
         </li>
@@ -35,10 +35,10 @@
           </a>
           <ul aria-labelledby="navbarDropdownInvoices" class="dropdown-menu dropdown-menu-end">
             <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
-              <i class="bi bi-receipt" style="padding-right: 8px;"></i>New Invoice</a>
+              <i class="bi bi-receipt"></i>New Invoice</a>
             </li>
             <li><a [routerLink]="['/invoices']" class="dropdown-item">
-              <i class="bi bi-receipt-cutoff" style="padding-right: 8px;"></i>All Invoices</a>
+              <i class="bi bi-receipt-cutoff"></i>All Invoices</a>
             </li>
           </ul>
         </li>
@@ -51,10 +51,10 @@
           </a>
           <ul aria-labelledby="navbarDropdownServices" class="dropdown-menu dropdown-menu-end">
             <li><a [routerLink]="['/services']" class="dropdown-item">
-              <i class="bi bi-grid-1x2-fill" style="padding-right: 8px;"></i>Service Catalog</a>
+              <i class="bi bi-grid-1x2-fill"></i>Service Catalog</a>
             </li>
             <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
-              <i class="bi bi-plus-circle" style="padding-right: 8px;"></i>New Service Invoice</a>
+              <i class="bi bi-plus-circle"></i>New Service Invoice</a>
             </li>
           </ul>
         </li>
@@ -65,32 +65,32 @@
           <li class="nav-item dropdown">
             <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
                id="navbarDropdownAdmin" role="button">
-              <i class="bi bi-shield-shaded" style="padding-right: 4px;"></i>Admin
+              <i class="bi bi-shield-shaded"></i>Admin
             </a>
             <ul aria-labelledby="navbarDropdownAdmin" class="dropdown-menu dropdown-menu-end">
               <!-- User management (list + per-user role assignment) -->
               <li><a [routerLink]="['/users']" class="dropdown-item">
-                <i class="bi bi-people-fill" style="padding-right: 8px;"></i>User Directory</a>
+                <i class="bi bi-people-fill"></i>User Directory</a>
               </li>
               @if (isSuperAdmin) {
                 <!-- Role assignment shortcut — super-admin only.
                      Org admins can view users but cannot reassign roles across orgs. -->
                 <li><a [routerLink]="['/users']" class="dropdown-item">
-                  <i class="bi bi-person-badge-fill" style="padding-right: 8px;"></i>Assign Roles</a>
+                  <i class="bi bi-person-badge-fill"></i>Assign Roles</a>
                 </li>
               }
               <!-- Permissions matrix — which authorities belong to which role -->
               <li><a [routerLink]="['/roles']" class="dropdown-item">
-                <i class="bi bi-grid-3x3-gap-fill" style="padding-right: 8px;"></i>Roles &amp; Permissions</a>
+                <i class="bi bi-grid-3x3-gap-fill"></i>Roles &amp; Permissions</a>
               </li>
               <li><hr class="dropdown-divider"></li>
               <!-- Billing overview — revenue analytics for the current scope -->
               <li><a [routerLink]="['/billing']" class="dropdown-item">
-                <i class="bi bi-graph-up-arrow" style="padding-right: 8px;"></i>Billing Overview</a>
+                <i class="bi bi-graph-up-arrow"></i>Billing Overview</a>
               </li>
               <!-- Analytics hub — full trend charts and cross-cutting stats -->
               <li><a [routerLink]="['/analytics']" class="dropdown-item">
-                <i class="bi bi-bar-chart-line-fill" style="padding-right: 8px;"></i>Analytics Hub</a>
+                <i class="bi bi-bar-chart-line-fill"></i>Analytics Hub</a>
               </li>
             </ul>
           </li>
@@ -102,11 +102,11 @@
              id="navbarDropdownProfile" role="button">
             @if (user; as u) {
               @if (u.imageUrl) {
-                <div style="position: relative; width: 60px; height: 60px; border-radius: 50%; overflow: hidden;">
+                <div class="sc-nav-avatar">
                   <img [alt]="u.firstName" [ngSrc]="u.imageUrl" class="user-avatar-md" fill style="object-fit: cover;">
                 </div>
               } @else {
-                <div style="width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#0D8ABC;color:white;font-weight:bold;font-size:24px;">
+                <div class="sc-nav-avatar-fallback">
                   {{ u.firstName?.charAt(0)?.toUpperCase() }}
                 </div>
               }
@@ -117,15 +117,15 @@
           <ul aria-labelledby="navbarDropdownProfile" class="dropdown-menu dropdown-menu-end">
             @if (user; as u) {
               <li><a [routerLink]="['/profile']" class="dropdown-item">
-                <i class="bi bi-person-circle" style="padding-right: 8px;"></i>{{ u.firstName }} {{ u.lastName }}</a>
+                <i class="bi bi-person-circle"></i>{{ u.firstName }} {{ u.lastName }}</a>
               </li>
               <li><a [routerLink]="['/security']" class="dropdown-item">
-                <i class="bi bi-shield-lock" style="padding-right: 8px;"></i>Security Center</a>
+                <i class="bi bi-shield-lock"></i>Security Center</a>
               </li>
             }
             <li style="cursor: pointer;"><a (click)="logOut()" (keydown.enter)="logOut()" class="dropdown-item"
                                             role="button" tabindex="0">
-              <i class="bi bi-box-arrow-in-right" style="padding-right: 8px;"></i>Logout</a>
+              <i class="bi bi-box-arrow-in-right"></i>Logout</a>
             </li>
           </ul>
         </li>

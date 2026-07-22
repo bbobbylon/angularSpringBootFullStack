@@ -40,25 +40,41 @@ echo ""
 # Generate a cryptographically-strong JWT secret immediately
 JWT_SECRET=$(openssl rand -base64 48)
 
-create_secret "jwt-secret"         "${JWT_SECRET}"
-create_secret "db-password"        "CHANGE_ME_db_password"
-create_secret "mail-username"      "CHANGE_ME@gmail.com"
-create_secret "mail-password"      "CHANGE_ME_app_password_16chars"
-create_secret "twilio-sid"         "CHANGE_ME_twilio_account_sid"
-create_secret "twilio-token"       "CHANGE_ME_twilio_auth_token"
-create_secret "twilio-from-number" "+10000000000"
-create_secret "google-client-id"   "CHANGE_ME.apps.googleusercontent.com"
+# ── Application secrets ────────────────────────────────────────────────────────
+create_secret "jwt-secret"           "${JWT_SECRET}"
+
+# ── Aiven MySQL password ───────────────────────────────────────────────────────
+# The Aiven hostname/port/db/user are non-sensitive config stored in GitHub
+# Secrets and injected via envsubst at deploy time (see deploy.yml).
+# Only the password is a secret and lives in Secrets Manager.
+create_secret "db-password"          "CHANGE_ME_aiven_db_password"
+
+# ── Mail (Gmail SMTP) ─────────────────────────────────────────────────────────
+create_secret "mail-username"        "CHANGE_ME@gmail.com"
+create_secret "mail-password"        "CHANGE_ME_app_password_16chars"
+
+# ── Twilio (SMS / MFA) ────────────────────────────────────────────────────────
+create_secret "twilio-sid"           "CHANGE_ME_twilio_account_sid"
+create_secret "twilio-token"         "CHANGE_ME_twilio_auth_token"
+create_secret "twilio-from-number"   "+10000000000"
+
+# ── OAuth2 providers ──────────────────────────────────────────────────────────
+create_secret "google-client-id"     "CHANGE_ME.apps.googleusercontent.com"
 create_secret "google-client-secret" "CHANGE_ME_google_secret"
-create_secret "github-client-id"   "CHANGE_ME_github_oauth_client_id"
+create_secret "github-client-id"     "CHANGE_ME_github_oauth_client_id"
 create_secret "github-client-secret" "CHANGE_ME_github_oauth_secret"
 
 echo ""
 echo "✓ All secrets created in ${REGION}."
 echo ""
-echo "IMPORTANT: Update every CHANGE_ME value before deploying:"
-echo "  aws secretsmanager update-secret --region ${REGION} --secret-id ${PREFIX}/db-password --secret-string '<real-password>'"
-echo "  aws secretsmanager update-secret --region ${REGION} --secret-id ${PREFIX}/mail-username --secret-string 'you@gmail.com'"
-echo "  aws secretsmanager update-secret --region ${REGION} --secret-id ${PREFIX}/mail-password --secret-string '<16-char-app-password>'"
+echo "IMPORTANT: Update every CHANGE_ME value before deploying."
+echo ""
+echo "Aiven MySQL password (host/port/db/user go in GitHub Secrets, not here):"
+echo "  aws secretsmanager update-secret --region ${REGION} --secret-id ${PREFIX}/db-password    --secret-string '<your-aiven-password>'"
+echo ""
+echo "Mail / OAuth2 / Twilio:"
+echo "  aws secretsmanager update-secret --region ${REGION} --secret-id ${PREFIX}/mail-username  --secret-string 'you@gmail.com'"
+echo "  aws secretsmanager update-secret --region ${REGION} --secret-id ${PREFIX}/mail-password  --secret-string '<16-char-app-password>'"
 echo "  ... (repeat for twilio-*, google-*, github-*)"
 echo ""
 echo "The JWT secret was already randomised and is ready to use:"

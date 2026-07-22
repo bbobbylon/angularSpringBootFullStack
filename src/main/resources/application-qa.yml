@@ -1,0 +1,33 @@
+# ── QA (Quality Assurance) environment ──────────────────────────────────────
+# Production-like configuration for the automated test / QA environment.
+# All secrets and connection strings must come from environment variables —
+# no fallbacks are supplied here so a misconfiguration fails fast at startup.
+#
+# How to run:
+#   1. Copy .env.qa.example → .env  (or set SPRING_ACTIVE_PROFILES=qa)
+#   2. docker compose --env-file .env.qa up
+#
+# Differences from prod:
+#   - show-sql can be enabled for debugging:  SHOW_SQL=true
+#   - ddl-auto: validate (same as prod — catches schema drift early)
+#   - JwtSecretGuard active (same as prod; JWT_SECRET must be strong)
+# ─────────────────────────────────────────────────────────────────────────────
+
+SPRING_ACTIVE_PROFILES: qa
+
+MYSQL_PORT: 3306
+
+MAIL_HOST: smtp.gmail.com
+MAIL_PORT: 587
+
+spring:
+  jpa:
+    hibernate:
+      # Validate the JPA schema on startup without auto-altering it.
+      # On a fresh QA database, run schema.sql by hand first.
+      ddl-auto: validate
+    # Allow opt-in SQL logging for debugging test failures (off by default).
+    show-sql: ${SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: ${SHOW_SQL:false}

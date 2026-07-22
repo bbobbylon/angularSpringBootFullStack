@@ -1,0 +1,101 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# CI — build, lint, and test on every push and PR.
+#
+# Database: a local MySQL 8 service container — Aiven (the production/staging DB)
+# is NOT used in CI. Tests run against a throwaway schema so they are isolated
+# and fast without incurring Aiven connection limits or costs.
+#
+# Secrets required (Settings → Secrets → Actions):
+#   CI_JWT_SECRET  — any string ≥ 32 chars (a random one is fine for tests)
+#   CI_MAIL_USERNAME, CI_MAIL_PASSWORD — only needed if email-sending tests exist
+# ──────────────────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [master]
+
+jobs:
+  backend:
+    name: Backend — Maven build + tests
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_password
+          MYSQL_DATABASE: tessera_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -pci_root_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=30s
+
+    env:
+      # Spring profile for CI — uses dev defaults but points at the MySQL service above
+      SPRING_ACTIVE_PROFILES: dev
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: tessera_ci
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ci_root_password
+      # CI-only JWT secret — never used outside this runner
+      JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
+      # Mail is not exercised in CI tests; supply stubs so the context loads
+      MAIL_HOST: smtp.gmail.com
+      MAIL_PORT: "587"
+      MAIL_USERNAME: ${{ secrets.CI_MAIL_USERNAME || 'ci-stub@example.com' }}
+      MAIL_PASSWORD: ${{ secrets.CI_MAIL_PASSWORD || 'stub' }}
+      VERIFY_EMAIL_HOST: http://localhost:8080
+      UI_APP_URL: http://localhost:4200
+      IMAGE_STORAGE_TYPE: local
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      - name: Apply schema.sql to CI database
+        run: |
+          mysql -h 127.0.0.1 -u root -pci_root_password tessera_ci \
+            < src/main/resources/schema.sql
+
+      - name: Build and test (Maven)
+        run: mvn --no-transfer-progress verify
+
+  frontend:
+    name: Frontend — Angular lint + build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: securecapitaapp
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: securecapitaapp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (production)
+        run: npm run build -- --configuration production

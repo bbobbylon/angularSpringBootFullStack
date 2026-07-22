@@ -82,7 +82,24 @@
       </div>
 
       @if (trendPoints().length >= 2) {
-        <div class="sc-dual-chart-wrap">
+        <div class="sc-dual-chart-wrap"
+             (mousemove)="onChartMove($event)"
+             (mouseleave)="onChartLeave()">
+
+          @if (hoveredPoint(); as pt) {
+            <div class="sc-chart-tooltip" [style.left.%]="tooltipLeft()">
+              <span class="sc-chart-tooltip__label">{{ pt.label }}</span>
+              <div class="sc-chart-tooltip__row">
+                <span class="sc-chart-tooltip__dot sc-chart-tooltip__dot--cust"></span>
+                <span>{{ pt.customers | number }} customers</span>
+              </div>
+              <div class="sc-chart-tooltip__row">
+                <span class="sc-chart-tooltip__dot sc-chart-tooltip__dot--rev"></span>
+                <span>${{ pt.revenue | number: '1.0-0' }}</span>
+              </div>
+            </div>
+          }
+
           <svg viewBox="0 0 100 60" preserveAspectRatio="none" class="sc-dual-chart"
                role="img" aria-label="Customer and revenue growth trend">
 

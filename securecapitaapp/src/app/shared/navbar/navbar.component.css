@@ -85,3 +85,30 @@
   box-shadow: 0 0 0 4px var(--accent-bg);
   transform: rotate(-12deg) scale(1.05);
 }
+
+/* Nav avatar (profile picture in the user-dropdown trigger) */
+.sc-nav-avatar {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.sc-nav-avatar-fallback {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+/* Icon gap inside dropdown items — replaces scattered inline style="padding-right:X" */
+.sc-navbar .dropdown-item i { margin-right: 0.5rem; }
+.sc-navbar .nav-link > i:first-child { margin-right: 0.25rem; }

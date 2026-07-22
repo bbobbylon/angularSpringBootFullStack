@@ -27,4 +27,10 @@ USER appuser
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD wget -qO- http://localhost:8080/actuator/health || exit 1
-ENTRYPOINT ["java", "-Dspring.profiles.active=prod", "-jar", "app.jar"]
+
+# Default to prod profile. Override at runtime with:
+#   docker run -e SPRING_ACTIVE_PROFILES=qa  ...
+#   docker compose --env-file .env.qa up
+# application.yml reads this via ${SPRING_ACTIVE_PROFILES:dev}.
+ENV SPRING_ACTIVE_PROFILES=prod
+ENTRYPOINT ["java", "-jar", "app.jar"]
