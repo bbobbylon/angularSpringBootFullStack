@@ -1,61 +1,17 @@
-# psql config - wasn't working unless I ran the psqlschema.sql file inside pgadmin4 within the database noted on line 5. We will use the tutorial's mysql config instead, and possibly route back to this
-#spring:
-#  datasource:
-#    # Replace 'serverdb' with the name of your actual PostgreSQL database
-#    url: jdbc:postgresql://localhost:5432/db1
-#    # Replace with your PostgreSQL username (default is often 'postgres')
-#    username: postgres
-#    # Replace it with your PostgreSQL password
-#    password: password
-#  jpa:
-#    show-sql: true
-#    hibernate:
-#      # 'update' will automatically create or update your database tables based on your Server entity
-#      ddl-auto: update
-#    properties:
-#      hibernate:
-#        globally_quoted_identifiers: true
-#        # Tells Hibernate to use the PostgreSQL dialect - this is also deprecated so it is not needed
-#        dialect: org.hibernate.dialect.PostgreSQLDialect
-#        format_sql: true
-# Tells Hibernate to use the PostgreSQL dialect - this is also deprecated so it is not needed
-#    database-platform: org.hibernate.dialect.PostgreSQLDialect
-#    generate-ddl: true
-#  sql:
-#    init:
-#      mode: always
-##      continue-on-error: false
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared Spring Boot configuration (applies to every profile).
+# Profile-specific overrides live in application-dev.yml / application-prod.yml.
+#
+# Values come from environment variables (see .env.example); the dev profile
+# supplies safe local fallbacks so the app boots without a full .env.
+#
+# History: the project originally targeted PostgreSQL (per the tutorial) before
+# standardizing on MySQL. The old commented-out datasource blocks were removed
+# for clarity and remain in git history if PostgreSQL is ever revisited.
+# ─────────────────────────────────────────────────────────────────────────────
 
-# This is the MySQL config, following the tutorial.
-#spring:
-#  datasource:
-#    url: jdbc:mysql://127.0.0.1:3306/db2
-#    username: root
-#    password: password
-#  jpa:
-#    show-sql: true
-#    hibernate:
-#      ddl-auto: update
-#    properties:
-#      hibernate:
-#        globally_quoted_identifiers: true
-#        format_sql: true
-#    generate-ddl: true
-#  sql:
-#    init:
-#      mode: never
-#      continue-on-error: false
-#logging:
-#  level:
-#    org.springframework.boot: DEBUG
-#    org.hibernate: DEBUG
-#debug: true
-
-# This is the MySQL config, following the tutorial.
 jwt:
   secret: ${JWT_SECRET}
-  # myCrazySecretSecretKey
-  #jwt.secret: ${JWT_SECRET}
 
 server:
   port: ${CONTAINER_PORT:8080}
@@ -68,21 +24,31 @@ spring:
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}
   jpa:
-    show-sql: true
+    # SQL logging is OFF by default (prod-safe: avoids leaking query text and the
+    # per-statement overhead). Devs opt in with SHOW_SQL=true in their .env.
+    show-sql: ${SHOW_SQL:false}
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
         globally_quoted_identifiers: true
-        format_sql: true
+        format_sql: ${SHOW_SQL:false}
+      # Validation happens at the controller boundary via @Valid + GlobalExceptionHandler,
+      # not on every Hibernate flush — so a legitimate partial update never trips an
+      # entity-level constraint. Keeps a single, predictable place for 400s.
+      '[jakarta.persistence.validation.mode]': none
     generate-ddl: true
   sql:
     init:
-      # "never" means schema.sql is NOT run on startup — existing DB is used as-is.
-      # To apply schema changes (new columns, tables, etc.), either:
-      #   1. Run ALTER TABLE manually in your DB client, OR
-      #   2. Temporarily set the mode to "always", restart, then set back to "never".
-      # WARNING: "always" drops and recreates all tables, wiping all existing data.
+      # schema.sql (src/main/resources/schema.sql) is the single, idempotent definition of
+      # every JdbcTemplate-managed table. Flyway was removed — its baseline bookkeeping kept
+      # desyncing from the live database and blocking startup — and schema.sql replaces it.
+      #   mode: never  -> NOT run automatically; run it by hand to initialise a fresh database
+      #                   (e.g.  mysql -u root -p db2 < src/main/resources/schema.sql).
+      #   mode: always -> Spring Boot applies it on every startup. Safe to enable, because the
+      #                   script is idempotent (CREATE TABLE IF NOT EXISTS / INSERT ... ON
+      #                   DUPLICATE KEY) and contains NO DROP statements.
+      # Hibernate ddl-auto:update still owns the JPA customer/invoice/services tables.
       mode: never
       continue-on-error: true
   servlet:
@@ -114,22 +80,39 @@ spring:
             required: true
     verify:
       host: ${VERIFY_EMAIL_HOST}
-#logging:
-#  level:
-#    "[org.springframework.security, org.springframework.boot, org.hibernate]": DEBUG
-#
+# To enable verbose debug logging during development, uncomment:
 #logging:
 #  level:
 #    org.springframework.security: DEBUG
 #    org.springframework.web: DEBUG
-#    org.springframework.boot: DEBUG
 #    org.hibernate: DEBUG
-#  pattern:
-#    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n"
 
 ui:
   app:
     url: ${UI_APP_URL:http://localhost:4200}  # Use UI_APP_URL env var if set, otherwise default to http://localhost:3000
+
+app:
+  image:
+    # Filesystem directory where uploaded profile images are written and served from.
+    # Dev default lives under the user's home dir (cross-platform). In Docker/cloud,
+    # set IMAGE_STORAGE_PATH to a MOUNTED VOLUME (e.g. /app/data/images) so images
+    # survive container restarts — docker-compose maps the app-images volume there.
+    # This property is used by LocalImageStorageService and WebMvcConfig. Ignored when
+    # IMAGE_STORAGE_TYPE=s3 (images are stored in and served from S3 directly).
+    storage-path: ${IMAGE_STORAGE_PATH:${user.home}/securecapita/images}
+    # Storage backend selector: local (default) | s3
+    # Switch to s3 for any multi-instance or ephemeral-disk deployment (ECS Fargate, etc.).
+    # Activates S3ImageStorageService + AwsS3Config; requires aws.s3.bucket and aws.region.
+    storage-type: ${IMAGE_STORAGE_TYPE:local}
+
+# AWS configuration — only required when app.image.storage-type=s3.
+# Credentials are resolved by DefaultCredentialsProvider (env vars → ~/.aws → instance/task role).
+# For ECS Fargate, attach a task role with s3:PutObject + s3:GetObject on the bucket instead
+# of using static keys.
+aws:
+  region: ${AWS_REGION:us-east-1}
+  s3:
+    bucket: ${AWS_S3_BUCKET:}
 
 management:
   endpoints:

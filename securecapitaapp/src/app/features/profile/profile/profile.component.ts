@@ -10,8 +10,8 @@ import { NotificationsService } from '../../../service/notifications-service';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { ProfileInterface } from '../../../interface/appstates.interface';
 import { EventType } from '../../../enumeration/event-type.enum';
-import { RolesInterface } from '../../../interface/roles.interface';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { getEventDisplay } from '../../../utils/event-display.utils';
 import { UserInterface } from '../../../interface/user.interface';
 
 // TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
@@ -23,7 +23,7 @@ import { UserInterface } from '../../../interface/user.interface';
  * and manages local UI state such as loading and audit-log toggles.
  *
  * State is held in {@link profileState}, a single writable signal that every
- * update method (`updateProfile`, `updatePassword`, `updateRole`, etc.)
+ * update method (`updateProfile`, `updatePassword`, `updateAccountSettings`, etc.)
  * mutates via {@code .set()}. The previous per-method {@code toSignal()}
  * reassignment pattern hit NG0203 at runtime because {@code toSignal} is
  * not callable from event handlers — see notes on each method below.
@@ -49,6 +49,8 @@ export class ProfileComponent implements OnInit {
   });
   /** Exposes the `EventType` enum to the template for styling and displaying event information. */
   protected readonly EventType = EventType;
+  /** Exposes the event display helper to the template for icon/label/badge rendering. */
+  protected readonly getEventDisplay = getEventDisplay;
   /** A signal that controls the visibility of the user's activity logs section. */
   protected readonly showLogs = signal(true);
   /** A signal holding the list of permissions for the currently selected role. */
@@ -97,20 +99,6 @@ export class ProfileComponent implements OnInit {
           this.profileState.set({ dataState: DataState.ERROR, error, appData: this.data() });
         },
       });
-  }
-
-  /**
-   * Updates the permissions signal based on the selected role.
-   * When a user selects a different role in the UI, this method finds the corresponding role
-   * from the profile data and updates the `permissions` signal with the permissions of that role.
-   * @param roleName The name of the role selected by the user.
-   */
-  onRoleChange(roleName: string): void {
-    const roles = this.data()?.data?.roles;
-    const match = roles?.find((r: RolesInterface) => r.name === roleName);
-    if (match?.permission) {
-      this.permissions.set(match.permission.split(',').map((p: string) => p.trim()));
-    }
   }
 
   /**
@@ -186,37 +174,10 @@ export class ProfileComponent implements OnInit {
     }
   }
 
-  /**
-   * Submits the role-change form and reassigns the authenticated user's role.
-   *
-   * Calls {@code updateUserRole$} with the selected {@code roleName}, then mirrors
-   * the server-returned user back into the {@link data} signal and {@link profileState}
-   * so the Authorization tab reflects the new role and its permissions without a
-   * page reload.
-   *
-   * @param roleForm - the submitted NgForm containing the selected {@code roleName}
-   */
-  updateRole(roleForm: NgForm): void {
-    this.isLoading.set(true);
-    console.log(roleForm);
-    this.userService
-      .updateUserRole$(roleForm.value.roleName)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (response) => {
-          console.log('Role updated successfully:', response);
-          this.data.set({ ...response, data: response.data });
-          this.isLoading.set(false);
-          this.notification.onSuccess('Role updated successfully');
-          this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
-        },
-        error: (error: string) => {
-          this.isLoading.set(false);
-          this.notification.onError(error);
-          this.profileState.set({ dataState: DataState.LOADED, error, appData: this.data() });
-        },
-      });
-  }
+  // NOTE(FR-RBAC-4): the former updateRole/onRoleChange methods were removed along with
+  // the Authorization tab's role form. Self-service role changes are a privilege-escalation
+  // vector; role reassignment now lives in the admin Users dashboard, which calls the
+  // authority-gated /admin/user endpoints.
 
   /**
    * Updates the user's account settings (theme, notifications, etc.) via the
@@ -260,32 +221,10 @@ export class ProfileComponent implements OnInit {
       .includes(permission);
   }
 
-  /**
-   * Flips the authenticated user's MFA status via the backend toggle endpoint.
-   *
-   * The backend rejects the toggle if no phone number is set; the error
-   * propagates through the subscribe callback and surfaces in the template.
-   */
-  protected toggleMfa(): void {
-    this.isLoading.set(true);
-    this.userService
-      .toggleMFA$()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (response) => {
-          console.log('MFA Settings updated successfully:', response);
-          this.data.set({ ...response, data: response.data });
-          this.isLoading.set(false);
-          this.notification.onSuccess('MFA settings updated');
-          this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
-        },
-        error: (error: string) => {
-          this.isLoading.set(false);
-          this.notification.onError(error);
-          this.profileState.set({ dataState: DataState.LOADED, error, appData: this.data() });
-        },
-      });
-  }
+  // NOTE(M4): the toggleMfa() method moved to the Account Security Center
+  // (SecurityCenterComponent#toggleSmsMfa) along with the rest of second-factor
+  // management; the Authentication tab here is now a read-only status summary
+  // linking to /security.
 
   /**
    * Shows or hides the activity log panel.

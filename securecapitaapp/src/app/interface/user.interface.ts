@@ -21,6 +21,13 @@ export interface UserInterface {
   enabled: boolean;
   notLocked: boolean;
   using2FA: boolean;
+  /**
+   * True when a confirmed authenticator-app (TOTP) second factor is active
+   * (SRS FR-MFA-4). The login screen branches on this BEFORE {@code using2FA}:
+   * TOTP supersedes the SMS code path when both are enabled, matching the
+   * backend's precedence in {@code UserController#login}.
+   */
+  usingTotp: boolean;
   createdAt: Date;
   roleName: string;
   permissions: string;

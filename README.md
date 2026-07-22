@@ -4,6 +4,10 @@ A full-stack application combining **Angular 21** (frontend) and **Spring Boot 4
 
 ---
 
+![TesseraApp architecture](documentation/architectLayout.png)
+
+*High-level architecture: Angular client · Spring Boot server · MySQL, containerized with Docker. Full breakdown in [documentation/architecture.md](documentation/architecture.md).*
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -16,6 +20,21 @@ A full-stack application combining **Angular 21** (frontend) and **Spring Boot 4
 | Container | Docker (multi-stage build) |
 
 ---
+
+## Documentation
+
+In-depth guides live in [`documentation/`](documentation/):
+
+| Guide | What it covers |
+|-------|----------------|
+| [Getting Started](documentation/getting-started.md) | Fast path: setup → running → first login |
+| [Architecture](documentation/architecture.md) | Tiers, layers, request lifecycle, frontend |
+| [API Reference](documentation/api-reference.md) | Every REST endpoint, grouped by controller |
+| [Security](documentation/security.md) | JWT, refresh rotation, MFA, federation, RBAC |
+| [Database](documentation/database.md) | Schema, tables, relationships, reference data |
+| [Configuration](documentation/configuration.md) | Env vars, profiles, `application.yml` |
+| [Deployment](documentation/deployment.md) | Docker, Compose, Azure CI/CD, cloud |
+| [Developer Guide](documentation/developer-guide.md) | End-to-end deep dive + how to extend |
 
 ## Prerequisites
 
@@ -152,8 +171,8 @@ All configuration lives in `.env` at the project root. IntelliJ loads it via **R
 | `MAIL_PASSWORD` | Gmail App Password | *(required)* |
 | `MAIL_HOST` | SMTP host | `smtp.gmail.com` |
 | `MAIL_PORT` | SMTP port | `587` |
-| `VERIFY_EMAIL_HOST` | Base URL for email verification links | `http://localhost:8080` |
-| `UI_APP_URL` | Angular app URL (used for CORS) | `http://localhost:4200` |
+| `VERIFY_EMAIL_HOST` | Reserved for future use — verification links are currently built from `UI_APP_URL`, not this value | `http://localhost:8080` |
+| `UI_APP_URL` | Angular app URL — used for CORS **and** as the base for email verification links | `http://localhost:4200` |
 | `SPRING_ACTIVE_PROFILES` | Spring profile (`dev` or `prod`) | `dev` |
 
 > **Never commit `.env`** — it is gitignored. The sanitized **`.env.example`** (placeholders only) is the committed template; `.gitignore` excludes `.env` / `.env.*` but whitelists the example via `!.env.example`. Copy it to `.env` and fill in real values.
@@ -242,11 +261,13 @@ The app is structured for cloud deployment:
 - [ ] Set `useSSL=true` in `SPRING_DATASOURCE_URL` for managed cloud databases
 - [ ] Use a managed database (RDS, Cloud SQL, Aiven) instead of the Docker MySQL container
 - [ ] Set all required prod env vars via the platform (no `.env` file in cloud)
-- [ ] Consider moving to `ddl-auto: validate` with Flyway for schema migrations
+- [ ] Apply `src/main/resources/schema.sql` to the managed database before first launch (schema is script-managed; the previous Flyway setup was removed)
 
 ---
 
 ## API Reference
+
+> This is a summary of the most common endpoints. For the **complete, authoritative reference** — including TOTP MFA (`/user/totp/*`), session management (`/user/sessions`), federated login (`/oauth2/*`), and admin user management (`/admin/user/*`) — see **[documentation/api-reference.md](documentation/api-reference.md)**.
 
 ### Authentication
 
@@ -269,7 +290,6 @@ The app is structured for cloud deployment:
 | GET | `/user/events` | Paginated audit events |
 | PATCH | `/user/update` | Update profile fields |
 | PATCH | `/user/update/password` | Change password |
-| PATCH | `/user/update/role/{roleName}` | Change user role |
 | PATCH | `/user/update/settings` | Toggle enabled / locked |
 | PATCH | `/user/update/togglemfa` | Toggle 2FA |
 | PATCH | `/user/update/image` | Upload profile picture |
@@ -352,14 +372,14 @@ curl -X GET http://localhost:8080/user/refresh/token \
 
 ## Troubleshooting
 
-**`Could not resolve placeholder 'JWT_SECRET'`**
-Your `.env` file is missing or the variable isn't set. Check `.env` exists at the project root.
+**`Could not resolve placeholder 'JWT_SECRET'` (or `MYSQL_USERNAME`, etc.)**
+A **required** environment variable isn't set. This affects **prod/CI**, not local dev — the dev profile (`application-dev.yml`) ships literal defaults, so `mvn spring-boot:run` boots without `.env` (a running MySQL is still required). For prod, set the variable via the platform config, `start.sh`, or an exported `.env`.
 
 **`Communications link failure` / `No such host is known (mysql)`**
 `MYSQL_HOST` is set to `mysql` (Docker service name) but you're running outside Docker. Check `.env` has `MYSQL_HOST=127.0.0.1`.
 
-**`Circular placeholder reference`**
-A profile YAML is self-referencing a variable. See `application-dev.yml` — do not use `${VAR:default}` where the key and placeholder name are identical.
+**`Circular placeholder reference`** *(no longer expected)*
+Historically the profile YAMLs declared each variable self-referentially (`VAR: ${VAR:default}`), which loops when the env var is absent. They now use plain literals (dev) / direct env reads (prod), so this error should not occur. If you reintroduce a `${VAR:default}` whose key and placeholder name are identical, the loop returns — use a literal value instead.
 
 **Angular shows blank page after `docker compose up`**
 The multi-stage build may have failed silently. Run `docker compose logs app` to check. Run `docker compose up --build` with `--progress=plain` to see full Maven output.
@@ -428,6 +448,10 @@ git push
 ```
 
 ---
+
+## License
+
+Released under the [MIT License](LICENSE) © 2026 Bobby Oliver. See [`LICENSE`](LICENSE) for full terms.
 
 ## Disclaimer
 

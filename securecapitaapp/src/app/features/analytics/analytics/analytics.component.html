@@ -1,0 +1,308 @@
+<app-navbar [user]="user()"></app-navbar>
+
+<main class="sc-analytics">
+  <div class="container">
+
+    <!-- ── Header ──────────────────────────────────────────────────────── -->
+    <header class="sc-analytics__head sc-reveal">
+      <div>
+        <p class="eyebrow mb-1">Insights</p>
+        <h1 class="sc-analytics__title">Analytics Hub</h1>
+        <p class="sc-analytics__sub">Trends, performance, and growth across your entire platform.</p>
+      </div>
+      <div class="sc-analytics__actions">
+        @if (isAdmin) {
+          <a [routerLink]="['/billing']" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-cash-stack"></i> Billing Overview
+          </a>
+        }
+        <a [routerLink]="['/customers']" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-people-fill"></i> Customers
+        </a>
+        <a [routerLink]="['/invoices']" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-receipt-cutoff"></i> Invoices
+        </a>
+      </div>
+    </header>
+
+    <!-- ── KPI scorecard ────────────────────────────────────────────────── -->
+    <div class="sc-scorecard sc-reveal" style="--d: 40ms;">
+
+      <div class="sc-score-card" [class.sc-score-card--pos]="momCustomerGrowth() >= 0"
+                                 [class.sc-score-card--neg]="momCustomerGrowth() < 0">
+        <span class="sc-score-card__label eyebrow">Customer Growth (MoM)</span>
+        <span class="sc-score-card__value">
+          {{ momCustomerGrowth() >= 0 ? '+' : '' }}{{ momCustomerGrowth() | number: '1.1-1' }}%
+        </span>
+        <i class="bi sc-score-card__arrow"
+           [class.bi-arrow-up-right]="momCustomerGrowth() >= 0"
+           [class.bi-arrow-down-right]="momCustomerGrowth() < 0"></i>
+      </div>
+
+      <div class="sc-score-card" [class.sc-score-card--pos]="momRevenueGrowth() >= 0"
+                                 [class.sc-score-card--neg]="momRevenueGrowth() < 0">
+        <span class="sc-score-card__label eyebrow">Revenue Growth (MoM)</span>
+        <span class="sc-score-card__value">
+          {{ momRevenueGrowth() >= 0 ? '+' : '' }}{{ momRevenueGrowth() | number: '1.1-1' }}%
+        </span>
+        <i class="bi sc-score-card__arrow"
+           [class.bi-arrow-up-right]="momRevenueGrowth() >= 0"
+           [class.bi-arrow-down-right]="momRevenueGrowth() < 0"></i>
+      </div>
+
+      <div class="sc-score-card sc-score-card--neutral">
+        <span class="sc-score-card__label eyebrow">Collection Rate</span>
+        <span class="sc-score-card__value">{{ collectionRate() | number: '1.1-1' }}%</span>
+        <i class="bi bi-check-circle sc-score-card__arrow"></i>
+      </div>
+
+      <div class="sc-score-card sc-score-card--pipeline">
+        <span class="sc-score-card__label eyebrow">Pending Pipeline</span>
+        <span class="sc-score-card__value">${{ pendingPipelineValue() | number: '1.0-0' }}</span>
+        <i class="bi bi-hourglass-split sc-score-card__arrow"></i>
+      </div>
+
+    </div>
+
+    <!-- ── Dual-area trend chart ─────────────────────────────────────────── -->
+    <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 80ms;">
+      <div class="sc-panel__head">
+        <div>
+          <h2 class="sc-panel__title">Growth Trends</h2>
+          <p class="sc-panel__meta">Customer acquisition vs. monthly revenue (last 10 months)</p>
+        </div>
+        <div class="sc-trend-legend">
+          <span class="sc-trend-legend__item sc-trend-legend__item--cust">
+            <span class="sc-trend-legend__dot"></span> Customers
+          </span>
+          <span class="sc-trend-legend__item sc-trend-legend__item--rev">
+            <span class="sc-trend-legend__dot"></span> Revenue
+          </span>
+        </div>
+      </div>
+
+      @if (trendPoints().length >= 2) {
+        <div class="sc-dual-chart-wrap">
+          <svg viewBox="0 0 100 60" preserveAspectRatio="none" class="sc-dual-chart"
+               role="img" aria-label="Customer and revenue growth trend">
+
+            <!-- Horizontal grid lines -->
+            <line x1="0" y1="15" x2="100" y2="15" class="sc-grid-h" />
+            <line x1="0" y1="30" x2="100" y2="30" class="sc-grid-h" />
+            <line x1="0" y1="45" x2="100" y2="45" class="sc-grid-h" />
+
+            <!-- Revenue filled area -->
+            <defs>
+              <linearGradient id="grad-rev" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--ok)" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="var(--ok)" stop-opacity="0.02" />
+              </linearGradient>
+              <linearGradient id="grad-cust" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--accent-strong)" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="var(--accent-strong)" stop-opacity="0.02" />
+              </linearGradient>
+            </defs>
+
+            <path [attr.d]="revenueAreaPath()" fill="url(#grad-rev)" />
+            <path [attr.d]="customerAreaPath()" fill="url(#grad-cust)" />
+
+            <!-- Revenue line -->
+            <polyline [attr.points]="revenueLinePath()"
+                      fill="none" stroke="var(--ok)"
+                      stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round" />
+
+            <!-- Customer line -->
+            <polyline [attr.points]="customerLinePath()"
+                      fill="none" stroke="var(--accent-strong)"
+                      stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round" />
+
+            <!-- Dots at each data point -->
+            @for (pt of trendPoints(); track pt.label; let i = $index) {
+              <circle [attr.cx]="pt.x" [attr.cy]="pt.revY" r="1.2"
+                      fill="var(--ok)" class="sc-chart-dot" />
+              <circle [attr.cx]="pt.x" [attr.cy]="pt.custY" r="1.2"
+                      fill="var(--accent-strong)" class="sc-chart-dot" />
+            }
+          </svg>
+
+          <!-- X-axis labels -->
+          <div class="sc-dual-chart-labels">
+            @for (pt of trendPoints(); track pt.label) {
+              <span class="sc-dual-chart-label">{{ pt.label }}</span>
+            }
+          </div>
+        </div>
+      } @else {
+        <p class="text-muted small px-4 py-3 mb-0">Not enough data yet — needs at least 2 months of activity.</p>
+      }
+    </section>
+
+    <!-- ── Row: customer status donut + acquisition bars ─────────────────── -->
+    <div class="sc-two-col sc-reveal" style="--d: 120ms;">
+
+      <!-- Customer status donut -->
+      <section class="sc-panel sc-panel--flush">
+        <div class="sc-panel__head">
+          <div>
+            <h2 class="sc-panel__title">Customer Status</h2>
+            <p class="sc-panel__meta">{{ customerTotal() }} total</p>
+          </div>
+        </div>
+        @if (customerStatusSegments().length) {
+          <div class="sc-donut-wrap">
+            <div class="sc-donut-fig">
+              <svg viewBox="0 0 36 36" class="sc-donut" role="img" aria-label="Customer status">
+                <circle class="sc-donut__track" cx="18" cy="18" r="15.915"/>
+                @for (seg of customerStatusSegments(); track seg.label) {
+                  <circle class="sc-donut__seg" cx="18" cy="18" r="15.915"
+                          [attr.stroke]="seg.color"
+                          [attr.stroke-dasharray]="seg.dashArray"
+                          [attr.stroke-dashoffset]="seg.dashOffset"/>
+                }
+              </svg>
+              <div class="sc-donut__center">
+                <span class="sc-donut__total">{{ customerTotal() }}</span>
+                <span class="eyebrow">total</span>
+              </div>
+            </div>
+            <ul class="sc-legend">
+              @for (seg of customerStatusSegments(); track seg.label) {
+                <li class="sc-legend__item">
+                  <span class="sc-legend__dot" [style.background]="seg.color"></span>
+                  <span class="sc-legend__label">{{ seg.label }}</span>
+                  <span class="sc-legend__value">{{ seg.value }}</span>
+                  <span class="sc-legend__pct mono">{{ seg.percent | number: '1.0-0' }}%</span>
+                </li>
+              }
+            </ul>
+          </div>
+        } @else {
+          <p class="text-muted small px-4 py-3 mb-0">No customer data.</p>
+        }
+      </section>
+
+      <!-- Customer type split -->
+      <section class="sc-panel sc-panel--flush">
+        <div class="sc-panel__head">
+          <div>
+            <h2 class="sc-panel__title">Customer Types</h2>
+            <p class="sc-panel__meta">By segment</p>
+          </div>
+        </div>
+        <div class="sc-type-list">
+          @for (t of customerTypeSplit(); track t.label) {
+            <div class="sc-type-row">
+              <div class="sc-type-row__head">
+                <span class="sc-type-row__label">{{ t.label }}</span>
+                <span class="sc-type-row__count">{{ t.count }} <span class="text-muted">({{ t.pct | number: '1.0-0' }}%)</span></span>
+              </div>
+              <div class="sc-type-row__track">
+                <div class="sc-type-row__fill" [style.width.%]="t.pct" [style.background]="t.color"></div>
+              </div>
+            </div>
+          } @empty {
+            <p class="text-muted small px-4 py-3 mb-0">No data.</p>
+          }
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ── Customer acquisition timeline ────────────────────────────────── -->
+    <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 160ms;">
+      <div class="sc-panel__head">
+        <div>
+          <h2 class="sc-panel__title">Customer Acquisition</h2>
+          <p class="sc-panel__meta">New customers per month (last 8 months)</p>
+        </div>
+      </div>
+      @if (acquisitionBars().length) {
+        <div class="sc-bar-chart">
+          <div class="sc-bar-chart__grid">
+            @for (bar of acquisitionBars(); track bar.label) {
+              <div class="sc-bar-col">
+                <div class="sc-bar-col__fill sc-bar-col__fill--cust" [style.height.%]="bar.barHeight">
+                  <span class="sc-bar-col__tip">{{ bar.count }} new</span>
+                </div>
+                <span class="sc-bar-col__label">{{ bar.label }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      } @else {
+        <p class="text-muted small px-4 py-3 mb-0">No acquisition data yet.</p>
+      }
+    </section>
+
+    <!-- ── Stacked invoice-status bars ───────────────────────────────────── -->
+    <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 200ms;">
+      <div class="sc-panel__head">
+        <div>
+          <h2 class="sc-panel__title">Invoice Status Over Time</h2>
+          <p class="sc-panel__meta">Collection momentum — PAID / PENDING / OVERDUE per month</p>
+        </div>
+        <div class="sc-stack-legend">
+          <span class="sc-stack-legend__item sc-stack-legend__item--paid">Paid</span>
+          <span class="sc-stack-legend__item sc-stack-legend__item--pending">Pending</span>
+          <span class="sc-stack-legend__item sc-stack-legend__item--overdue">Overdue</span>
+        </div>
+      </div>
+      @if (stackedBars().length) {
+        <div class="sc-stacked-chart">
+          @for (bar of stackedBars(); track bar.label) {
+            <div class="sc-stacked-col">
+              <div class="sc-stacked-col__bar" [style.height.%]="bar.barHeight">
+                @if (bar.overduePct > 0) {
+                  <div class="sc-stacked-seg sc-stacked-seg--overdue" [style.height.%]="bar.overduePct"
+                       [title]="'Overdue: ' + bar.overdue"></div>
+                }
+                @if (bar.pendingPct > 0) {
+                  <div class="sc-stacked-seg sc-stacked-seg--pending" [style.height.%]="bar.pendingPct"
+                       [title]="'Pending: ' + bar.pending"></div>
+                }
+                @if (bar.paidPct > 0) {
+                  <div class="sc-stacked-seg sc-stacked-seg--paid" [style.height.%]="bar.paidPct"
+                       [title]="'Paid: ' + bar.paid"></div>
+                }
+              </div>
+              <span class="sc-stacked-col__label">{{ bar.label }}</span>
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="text-muted small px-4 py-3 mb-0">No invoice data yet.</p>
+      }
+    </section>
+
+    <!-- ── Service utilisation ────────────────────────────────────────────── -->
+    <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 240ms;">
+      <div class="sc-panel__head">
+        <div>
+          <h2 class="sc-panel__title">Service Utilisation</h2>
+          <p class="sc-panel__meta">Top 10 services by invoice frequency</p>
+        </div>
+        <a [routerLink]="['/services']" class="btn btn-outline-secondary btn-sm sc-panel__action">
+          View catalog <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+      @if (serviceUtil().length) {
+        <div class="sc-util-list">
+          @for (svc of serviceUtil(); track svc.name; let i = $index) {
+            <div class="sc-util-row">
+              <span class="sc-util-row__rank mono">#{{ i + 1 }}</span>
+              <span class="sc-util-row__name">{{ svc.name }}</span>
+              <div class="sc-util-row__track">
+                <div class="sc-util-row__fill" [style.width.%]="svc.barPct"></div>
+              </div>
+              <span class="sc-util-row__count">{{ svc.count }}×</span>
+              <span class="sc-util-row__total">${{ svc.total | number: '1.0-0' }}</span>
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="text-muted small px-4 py-3 mb-0">No service data yet.</p>
+      }
+    </section>
+
+  </div>
+</main>

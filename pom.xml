@@ -34,25 +34,20 @@
     </properties>
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <groupId>io.jsonwebtoken</groupId>
-                <artifactId>jjwt-api</artifactId>
-                <version>0.12.6</version>
-            </dependency>
-            <dependency>
-                <groupId>io.jsonwebtoken</groupId>
-                <artifactId>jjwt-impl</artifactId>
-                <version>0.12.6</version>
-            </dependency>
-            <dependency>
-                <groupId>io.jsonwebtoken</groupId>
-                <artifactId>jjwt-jackson</artifactId>
-                <version>0.12.6</version>
-            </dependency>
+            <!-- jjwt removed: only com.auth0:java-jwt is used in TokenProvider.
+                 Keeping these three as version pins served no purpose. -->
             <dependency>
                 <groupId>org.json</groupId>
                 <artifactId>json</artifactId>
                 <version>20240303</version>
+            </dependency>
+            <!-- AWS SDK v2 BOM — pins all AWS SDK modules to a consistent version -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>2.30.0</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -77,6 +72,14 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <!-- OAuth2 client (SRS CON-5 / FR-FED): Spring Security's standard implementation of the
+             OAuth2 Authorization Code flow for federated login via Google, GitHub, and Microsoft.
+             The bespoke work is limited to the token-exchange handler (OAuth2LoginSuccessHandler);
+             protocol handling, state validation, and code exchange are all framework-provided. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -143,6 +146,45 @@
             <artifactId>yauaa</artifactId>
             <version>7.24.0</version>
         </dependency>
+        <!-- ZXing (SRS FR-MFA-4): renders the otpauth:// provisioning URI as a QR code PNG
+             during TOTP enrollment. Generated server-side and returned as a base64 data URI
+             so the shared secret never leaves the application or requires a frontend QR
+             dependency. The TOTP algorithm itself (RFC 6238) is implemented in-house in
+             TotpUtils — only the QR rasterization is delegated to a library. -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>3.5.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>3.5.3</version>
+        </dependency>
+        <!-- Flyway removed: schema is now defined by src/main/resources/schema.sql (idempotent,
+             non-destructive). Flyway's baseline bookkeeping repeatedly desynced from the live
+             database and blocked startup, so it was dropped in favour of the simpler model. -->
+
+        <!-- Bucket4j: in-memory token-bucket rate limiting (SRS FR-TPF-3 / NFR-SEC-RL).
+             Core module only (no servlet dependency); the filter wiring is handled by
+             RateLimitFilter which extends OncePerRequestFilter. For distributed rate limiting
+             across multiple instances, replace the in-memory store with bucket4j-redis or
+             bucket4j-hazelcast without changing the filter logic. -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>8.10.1</version>
+        </dependency>
+
+        <!-- AWS SDK v2 S3 client — used by S3ImageStorageService when IMAGE_STORAGE_TYPE=s3.
+             Version is managed by the AWS BOM in dependencyManagement above. The client
+             is only instantiated (via AwsS3Config) when s3 mode is active, so local-dev
+             builds carry the dependency on the classpath but never open an S3 connection. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+
     </dependencies>
     <profiles>
         <profile>

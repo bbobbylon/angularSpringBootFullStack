@@ -1,0 +1,227 @@
+/* ============================================================================
+   Dashboard insights — admin analytics (donut + billing ratios) or, for
+   standard accounts, a quick-actions launcher. All color/spacing from the
+   global design tokens; the SVG donut is dependency-free.
+   ============================================================================ */
+:host {
+  display: block;
+}
+
+/* Two-up grid: donut panel + ratios panel (admin view) */
+.sc-insights {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--space-4);
+}
+@media (max-width: 900px) {
+  .sc-insights {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Donut ---- */
+.sc-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+.sc-donut-fig {
+  position: relative;
+  flex: none;
+  width: 150px;
+  height: 150px;
+}
+.sc-donut {
+  width: 100%;
+  height: 100%;
+  transform: rotate(0deg);
+}
+.sc-donut__track {
+  fill: none;
+  stroke: var(--surface-3);
+  stroke-width: 3.4;
+}
+.sc-donut__seg {
+  fill: none;
+  stroke-width: 3.4;
+  stroke-linecap: butt;
+  transition:
+    stroke-dasharray var(--dur-slow) var(--ease-out),
+    stroke-dashoffset var(--dur-slow) var(--ease-out);
+}
+.sc-donut__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+}
+.sc-donut__total {
+  font-family: var(--font-mono);
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-strong);
+}
+
+/* ---- Legend ---- */
+.sc-legend {
+  flex: 1 1 12rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.sc-legend__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.sc-legend__item:last-child {
+  border-bottom: 0;
+}
+.sc-legend__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.sc-legend__label {
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+.sc-legend__value {
+  color: var(--text-strong);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+.sc-legend__pct {
+  color: var(--text-faint);
+  font-size: var(--fs-eyebrow);
+  min-width: 2.6em;
+  text-align: right;
+}
+
+/* ---- Billing ratios ---- */
+.sc-ratio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.sc-ratio__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.sc-ratio__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-size: 1.2rem;
+}
+.sc-ratio__icon--info {
+  background: rgba(34, 211, 238, 0.14);
+  color: var(--info);
+}
+.sc-ratio__icon--ok {
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--ok);
+}
+.sc-ratio__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.sc-ratio__value {
+  font-family: var(--font-mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  line-height: 1.1;
+}
+
+/* ---- Quick actions (standard accounts) ---- */
+.sc-quick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+@media (max-width: 900px) {
+  .sc-quick {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .sc-quick {
+    grid-template-columns: 1fr;
+  }
+}
+.sc-quick__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: var(--space-4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--text);
+  transition:
+    transform var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.sc-quick__card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-ring);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+}
+.sc-quick__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-size: 1.3rem;
+}
+.sc-quick__icon--info {
+  background: rgba(34, 211, 238, 0.14);
+  color: var(--info);
+}
+.sc-quick__icon--ok {
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--ok);
+}
+.sc-quick__icon--warn {
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--warn);
+}
+.sc-quick__label {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.sc-quick__hint {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}

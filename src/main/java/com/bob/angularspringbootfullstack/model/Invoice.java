@@ -3,6 +3,9 @@ package com.bob.angularspringbootfullstack.model;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -60,6 +63,7 @@ public class Invoice {
     /**
      * Payment state of the invoice (e.g., "Pending", "Paid", "Overdue").
      */
+    @NotBlank(message = "Invoice status is required")
     private String status;
     /**
      * Denormalized foreign key to the owning customer, for direct queries.
@@ -72,6 +76,8 @@ public class Invoice {
     /**
      * Final total amount after any adjustments, discounts, or taxes are applied.
      */
+    @NotNull(message = "Total amount is required")
+    @PositiveOrZero(message = "Total amount cannot be negative")
     private Double totalAmount;
     /**
      * JPA relationship to the owning Customer. Excluded from JSON output to prevent

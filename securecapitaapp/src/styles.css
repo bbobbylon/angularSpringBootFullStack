@@ -1,5 +1,5 @@
 /* ============================================================================
-   SecureCapita — global stylesheet  (M0: design foundation)
+   TesseraApp — global stylesheet  (M0: design foundation)
 
    A design-token layer applied OVER Bootstrap 5.3. Tokens are declared as CSS
    custom properties and then mapped onto Bootstrap's own `--bs-*` variables (and
@@ -732,6 +732,38 @@ select,
 }
 .sc-linkbtn:hover { color: var(--accent-strong); }
 
+/* ---- Federated login entry points (SRS FR-FED / EIR-UI-1) ----
+   Rendered by login.component.html only when GET /oauth2/providers reports
+   configured providers. Uses Bootstrap bridge vars so both themes work. */
+.sc-fed-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  color: var(--bs-secondary-color);
+  font-size: var(--fs-sm);
+}
+.sc-fed-divider::before,
+.sc-fed-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--bs-border-color);
+}
+.sc-fed-buttons {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.sc-fed-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+
 /* ---- Entrance: one orchestrated, staggered page-load reveal ---- */
 .sc-reveal {
   opacity: 0;
@@ -744,4 +776,167 @@ select,
   .sc-reveal { animation: none; opacity: 1; transform: none; }
   .sc-pulse { animation: none; }
   .sc-submit:not(:disabled):hover .bi-arrow-right { transform: none; }
+}
+
+/* ===========================================================================
+   10. DATA SURFACES — shared dashboard/list chrome (M7)
+
+   Promoted out of home.component.css so every routed data page (home, customers,
+   invoices, detail views) renders the same panel, table, empty, and loading/error
+   treatment from one source — mirroring how the .sc-auth layer keeps the four auth
+   screens identical. All color/spacing comes from the design tokens above, so these
+   re-theme for dark/light automatically.
+   =========================================================================== */
+
+/* ---- Page shell ---- */
+.sc-page { padding: var(--space-6) 0 var(--space-8); }
+@media (max-width: 576px) { .sc-page { padding-top: var(--space-5); } }
+
+/* ---- Breadcrumb ---- */
+.sc-breadcrumb.breadcrumb {
+  --bs-breadcrumb-divider-color: var(--text-faint);
+  --bs-breadcrumb-item-active-color: var(--text-muted);
+  margin: 0 0 var(--space-4);
+  font-size: var(--fs-sm);
+}
+.sc-breadcrumb .breadcrumb-item a { color: var(--text-muted); }
+.sc-breadcrumb .breadcrumb-item a:hover { color: var(--accent); }
+
+/* ---- Page header (eyebrow + title + action) ---- */
+.sc-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-6);
+}
+.sc-head__title {
+  margin: 0;
+  font-size: var(--fs-h1);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.sc-head__sub { margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--fs-lg); }
+.sc-head__actions { display: inline-flex; align-items: center; gap: var(--space-3); flex: none; }
+
+/* ---- Elevated glass panel ---- */
+.sc-panel {
+  margin-top: var(--space-6);
+  padding: var(--space-5);
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.sc-panel--flush { margin-top: 0; }
+.sc-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+.sc-panel__title { margin: 0; font-size: var(--fs-h3); font-weight: 600; }
+.sc-panel__meta {
+  margin: 0.15rem 0 0;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--fs-eyebrow);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sc-panel__action { flex: none; display: inline-flex; align-items: center; gap: 0.4rem; }
+.sc-panel__foot {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--hairline);
+}
+
+/* ---- Table polish (rides on the global .table token overrides) ---- */
+.sc-panel .table { margin-bottom: 0; }
+.sc-panel .table > tbody > tr { transition: background-color var(--dur) var(--ease-out); }
+.sc-panel .table > :not(caption) > * > * {
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+/* ---- Initials avatar (customers without a photo) ---- */
+.sc-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+/* ---- Inline search field ---- */
+.sc-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 14rem;
+}
+.sc-search > i {
+  position: absolute;
+  left: 0.8rem;
+  color: var(--text-faint);
+  pointer-events: none;
+  font-size: 0.95rem;
+}
+.sc-search .form-control { padding-left: 2.3rem; }
+
+/* ---- Empty state ---- */
+.sc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-7) var(--space-4);
+}
+.sc-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--space-2);
+  border-radius: 50%;
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-size: 1.8rem;
+}
+.sc-empty__title { margin: 0; color: var(--text-strong); font-size: var(--fs-lg); font-weight: 600; }
+.sc-empty__hint { margin: 0 0 var(--space-3); max-width: 36ch; color: var(--text-muted); }
+
+/* ---- Loading / error states (replace bare "Loading..." text) ---- */
+.sc-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 60vh;
+  text-align: center;
+  color: var(--text-muted);
+}
+.sc-state .spinner-border { width: 2.4rem; height: 2.4rem; border-width: 3px; color: var(--accent); }
+.sc-state__icon {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(251, 113, 133, 0.14);
+  border: 1px solid rgba(251, 113, 133, 0.3);
+  color: var(--danger);
+  font-size: 1.6rem;
 }

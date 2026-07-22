@@ -10,30 +10,34 @@ import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.RoleService;
+import com.bob.angularspringbootfullstack.service.SessionService;
+import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.service.UserService;
-import com.bob.angularspringbootfullstack.tokenprovider.TokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.TimeUnit;
 
 import static com.bob.angularspringbootfullstack.constants.Constants.TOKEN_PREFIX;
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.*;
-import static com.bob.angularspringbootfullstack.utils.ExceptionUtils.processError;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getLoggedInUser;
 import static java.time.LocalTime.now;
@@ -57,7 +61,7 @@ import static org.springframework.security.authentication.UsernamePasswordAuthen
  *   <li><b>Re-fetch by email</b> — {@code getProfile} and {@code toggleMFA}
  *       call {@code getAuthenticatedUser(authentication).getEmail()} then do a
  *       secondary DB lookup by email.</li>
- *   <li><b>Re-fetch by ID</b> — {@code updateUserPassword}, {@code updateUserRole},
+ *   <li><b>Re-fetch by ID</b> — {@code updateUserPassword}
  *       and {@code updateAccountSettings} call
  *       {@code getAuthenticatedUser(authentication).getId()} then do a secondary
  *       DB lookup by ID.</li>
@@ -82,14 +86,27 @@ public class UserController {
     // there is a space after Bearer to split the header into two parts and extract the token more easily; this is a standard convention for Authorization headers and is required for the substring operation in refreshToken to work correctly
 
     private static final int DEFAULT_PAGE_SIZE = 10;
+    /** Maximum consecutive login failures allowed within the brute-force window (M6). */
+    private static final int BRUTE_FORCE_MAX = 5;
+    /** Sliding window length in minutes for the brute-force failure count (M6). */
+    private static final int BRUTE_FORCE_WINDOW_MINUTES = 15;
     private final UserService userService;
     private final RoleService roleService;
     private final AuthenticationManager authenticationManager;
-    private final TokenProvider tokenProvider;
     private final HttpServletRequest request;
-    private final HttpServletResponse response;
     private final ApplicationEventPublisher eventPublisher;
     private final EventService eventService;
+    private final TotpService totpService;
+    private final SessionService sessionService;
+
+    /**
+     * Filesystem directory profile images are served from; injected from
+     * {@code app.image.storage-path} (env {@code IMAGE_STORAGE_PATH}). Field injection
+     * mirrors the {@code @Value} pattern already used here and keeps the value out of
+     * the Lombok {@code @RequiredArgsConstructor}, which is reserved for bean deps.
+     */
+    @Value("${app.image.storage-path}")
+    private String imageStoragePath;
 
     /**
      * Registers a new user. Validates the payload, creates the user via
@@ -127,6 +144,10 @@ public class UserController {
      * along with a freshly issued access/refresh token pair. Used to complete
      * login for accounts with 2FA enabled.
      *
+     * <p>Token issuance goes through {@link SessionService#issueTokenPair} (plan.md M5)
+     * so the new session appears in the Security Center's device list and its refresh
+     * token participates in rotation/revocation like every other session.
+     *
      * @param email the email of the user verifying the code
      * @param code  the 2FA code received over SMS
      * @return 200 OK with user and tokens
@@ -136,10 +157,11 @@ public class UserController {
         try {
             UserDTO userDTO = userService.verifyCode(email, code);
             eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), LOGIN_ATTEMPT_SUCCESS));
+            SessionService.TokenPair tokens = sessionService.issueTokenPair(getUserPrincipal(userDTO), request);
             return ResponseEntity.ok(
                     HttpResponse.builder()
                             .timeStamp(now().toString())
-                            .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
+                            .data(of("user", userDTO, "access_token", tokens.accessToken(), "refresh_token", tokens.refreshToken()))
                             .message("Login successful!")
                             .status(OK)
                             .statusCode(OK.value())
@@ -171,8 +193,7 @@ public class UserController {
      * verified or already verified
      */
     @GetMapping("/verify/account/{key}")
-    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String yeet) throws InterruptedException {
-        TimeUnit.SECONDS.sleep(3); // Simulate a delay for testing the frontend loading state
+    public ResponseEntity<HttpResponse> verifyAccount(@PathVariable("key") String yeet) {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -201,6 +222,11 @@ public class UserController {
             throw new ApiException("Unauthorized request.");
         userService.updatePassword(dbUser.getId(), updatePasswordForm.getCurrentPassword(), updatePasswordForm.getNewPassword(), updatePasswordForm.getConfirmPassword());
         eventPublisher.publishEvent(new NewUserEvent(authUser.getEmail(), PASSWORD_UPDATE));
+        // The passwordChangedAt check already kills every outstanding JWT (FR-JWT-6);
+        // revoking the session rows keeps the Security Center's device list truthful,
+        // then a fresh session is opened so THIS browser stays signed in (plan.md M5).
+        sessionService.revokeAllSessions(dbUser.getId());
+        SessionService.TokenPair tokens = sessionService.issueTokenPair(getUserPrincipal(dbUser), request);
         long pwTotalElements = eventService.countEventsByUserId(dbUser.getId());
         int pwTotalPages = (int) Math.ceil((double) pwTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
@@ -212,44 +238,19 @@ public class UserController {
                                 entry("events", eventService.getEventsByUserId(dbUser.getId(), 0, DEFAULT_PAGE_SIZE)),
                                 entry("eventsTotalElements", pwTotalElements),
                                 entry("eventsTotalPages", pwTotalPages),
-                                entry("access_token", tokenProvider.createAccessToken(getUserPrincipal(dbUser))),
-                                entry("refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(dbUser)))))
+                                entry("access_token", tokens.accessToken()),
+                                entry("refresh_token", tokens.refreshToken())))
                         .message("Your password has been updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
     }
 
-    /**
-     * Reassigns the authenticated user's role to the given role name.
-     * Returns the refreshed user profile alongside the full roles catalogue so
-     * the frontend Authorization tab can update its selector without a separate
-     * request.
-     *
-     * @param authentication the current Spring Security authentication
-     * @param roleName       the target role name (e.g. "ROLE_ADMIN")
-     * @return 200 OK with the updated user and the full roles list
-     */
-    @PatchMapping("/update/role/{roleName}")
-    public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication, @PathVariable String roleName) {
-        UserDTO userDTO = getAuthenticatedUser(authentication);
-        userService.updateUserRole(userDTO.getId(), roleName);
-        eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), ROLE_UPDATE));
-        long roleTotalElements = eventService.countEventsByUserId(userDTO.getId());
-        int roleTotalPages = (int) Math.ceil((double) roleTotalElements / DEFAULT_PAGE_SIZE);
-        return ResponseEntity.ok(
-                HttpResponse.builder()
-                        .timeStamp(now().toString())
-                        .data(of("user", userService.getUserById(userDTO.getId()),
-                                "events", eventService.getEventsByUserId(userDTO.getId(), 0, DEFAULT_PAGE_SIZE),
-                                "eventsTotalElements", roleTotalElements,
-                                "eventsTotalPages", roleTotalPages,
-                                "roles", roleService.getAllRoles()))
-                        .message("Your role has been updated successfully!")
-                        .status(OK)
-                        .statusCode(OK.value())
-                        .build());
-    }
+    // NOTE(FR-RBAC-4): the former PATCH /user/update/role/{roleName} endpoint was removed.
+    // It let any authenticated user reassign their OWN role (no authority gate existed on
+    // PATCH routes), which is a privilege-escalation hole. Role reassignment is now an
+    // administrative operation only — see AdminUserController#updateUserRole, which requires
+    // the UPDATE:ROLE authority and forbids self-targeting.
 
     /**
      * Updates the authenticated user's account settings (enabled / non-locked flags).
@@ -284,16 +285,13 @@ public class UserController {
     /**
      * Flips the authenticated user's MFA (two-factor authentication) flag.
      * Requires a phone number to be set on the account; the service throws if one
-     * is missing. The 2-second sleep simulates backend latency for frontend
-     * loading-state testing and should be removed before production.
+     * is missing.
      *
      * @param authentication the current Spring Security authentication
      * @return 200 OK with the updated user and the full roles list
-     * //@throws InterruptedException if the sleep is interrupted
      */
     @PatchMapping("/update/togglemfa")
-    public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) { // throws InterruptedException {
-        //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+    public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) {
         UserDTO userDTO = userService.toggleMFA(getAuthenticatedUser(authentication).getEmail());
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), MFA_UPDATE));
         long mfaTotalElements = eventService.countEventsByUserId(userDTO.getId());
@@ -316,17 +314,13 @@ public class UserController {
     /**
      * Uploads and persists a new profile image for the authenticated user.
      * <p>
-     * Saves the uploaded file to the local filesystem under
-     * {@code ~/Downloads/images/{email}.png}, constructs a URL pointing to
-     * {@code GET /user/image/{email}.png}, and updates the user's
+     * Saves the uploaded file to the configurable storage directory
+     * ({@code app.image.storage-path}, env {@code IMAGE_STORAGE_PATH}; see
+     * {@code WebMvcConfig}), constructs a URL pointing to
+     * {@code GET /user/profile/image/{email}.png}, and updates the user's
      * {@code image_url} column in the database via {@code UserService.updateProfileImage}.
-     *
-     * <p>-----------------------------------------------------------------------
-     * TODO(dev-only): The save path is hardcoded to the developer's home directory
-     * and will not work in Docker or CI/CD. Replace with a configurable base path
-     * (e.g. an {@code @Value}-injected property) or migrate image storage to a
-     * cloud provider such as AWS S3.
-     * -----------------------------------------------------------------------
+     * The configurable path makes image storage portable across local dev, Docker,
+     * and cloud — in containers it points at a mounted volume so uploads survive restarts.
      *
      * @param authentication the current Spring Security authentication
      * @param image          the uploaded PNG file sent as {@code multipart/form-data}
@@ -334,8 +328,7 @@ public class UserController {
      * @return 200 OK with the updated user and the full roles list
      */
     @PatchMapping("/update/image")
-    public ResponseEntity<HttpResponse> updateProfileImage(Authentication authentication, @RequestParam("image") MultipartFile image) { //throws InterruptedException
-        //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+    public ResponseEntity<HttpResponse> updateProfileImage(Authentication authentication, @RequestParam("image") MultipartFile image) {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateProfileImage(userDTO, image);
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), PROFILE_PICTURE_UPDATE));
@@ -356,53 +349,52 @@ public class UserController {
     }
 
     /**
-     * Serves a profile image file from the local filesystem.
+     * Serves a profile image file from the configured image directory.
      * <p>
-     * Reads the file at {@code ~/Downloads/images/{fileName}} and returns the raw
-     * bytes with {@code Content-Type: image/png} so the browser renders it inline.
-     * The URL pattern {@code /user/image/**} is listed in {@code SecurityConfig.java}
-     * {@code PUBLIC_URLS}, so no authentication token is required — the browser's
-     * {@code <img>} tag can load it directly.
+     * Reads {@code {app.image.storage-path}/{fileName}} and returns the raw bytes with
+     * {@code Content-Type: image/png}. The URL pattern {@code /user/image/**} is in
+     * {@code Constants.PUBLIC_URLS}, so the browser's {@code <img>} tag can load it without
+     * a token.
+     * <p>
+     * Hardened: the resolved path is confined to the storage directory (path-traversal guard
+     * — a crafted {@code fileName} can no longer escape the folder), and a missing file
+     * returns {@code 404} instead of propagating a raw {@code IOException} as a 500.
      *
-     * <p>-----------------------------------------------------------------------
-     * TODO(dev-only): The file path is hardcoded to the developer's home directory.
-     * For deployment, replace with a configurable base path or serve images from
-     * a cloud provider. Also consider returning {@code 404} when the file does not
-     * exist rather than propagating the raw {@code IOException}.
-     * -----------------------------------------------------------------------
-     *
-     * @param fileName the image filename (e.g. {@code user@example.com.png})
-     *                 taken from the URL path variable
-     * @return the raw PNG bytes with {@code Content-Type: image/png}
-     * @throws Exception if the file cannot be read from disk
+     * @param fileName the image filename (e.g. {@code user@example.com.png}) from the URL
+     * @return 200 with PNG bytes, or 404 when the image does not exist
+     * @throws IOException if an existing, in-bounds file cannot be read
      */
     @GetMapping(value = "/image/{fileName}", produces = IMAGE_PNG_VALUE)
-    public byte[] getProfileImage(@PathVariable String fileName) throws Exception {
-        return Files.readAllBytes(Paths.get(System.getProperty("user.home") + "/Downloads/images/" + fileName));
+    public ResponseEntity<byte[]> getProfileImage(@PathVariable String fileName) throws IOException {
+        Path base = Paths.get(imageStoragePath).toAbsolutePath().normalize();
+        Path target = base.resolve(fileName).normalize();
+        // Confine the resolved path to the storage directory — defeats "../" traversal.
+        if (!target.startsWith(base) || !Files.exists(target)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(Files.readAllBytes(target));
     }
 
     /**
-     * Exchanges a valid refresh token for a new access token. Validates the
-     * Authorization header, extracts the subject, and returns a new
-     * access token alongside the same refresh token; otherwise returns 400.
+     * Exchanges a valid refresh token for a ROTATED token pair (plan.md M5,
+     * FR-JWT-5): the presented token's session row is retired and a new refresh
+     * token in the same family is returned alongside a fresh access token — the
+     * old refresh token is dead from this moment, and replaying it triggers
+     * reuse detection (the whole family is revoked).
      *
-     * @param request the HTTP request, expected to carry "Authorization: Bearer &lt;refresh&gt";
-     * @return 200 OK with the new access token, or 400 when the header/token is invalid
+     * <p>All validation lives in {@link SessionService#rotate}: JWT signature and
+     * expiry, the {@code passwordChangedAt} check, and the session-store verdicts
+     * (unknown, superseded, or revoked tokens are refused). Failures surface as
+     * {@code ApiException} through the global handler; only a structurally absent
+     * header short-circuits to 400 here.
+     *
+     * @param request the HTTP request, expected to carry "Authorization: Bearer &lt;refresh&gt;"
+     * @return 200 OK with the user and the rotated token pair, or 400 when the header is missing
      */
     @GetMapping("/refresh/token")
     public ResponseEntity<HttpResponse> sendNewRefreshToken(HttpServletRequest request) {
-        if (isHeaderAndTokenValid(request)) {
-            String refreshToken = request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length());
-            UserDTO userDTO = userService.getUserById(tokenProvider.getSubject(refreshToken, request));
-            return ResponseEntity.ok(
-                    HttpResponse.builder()
-                            .timeStamp(now().toString())
-                            .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", refreshToken))
-                            .message("New refresh token sent successfully!")
-                            .status(OK)
-                            .statusCode(OK.value())
-                            .build());
-        } else {
+        String header = request.getHeader(AUTHORIZATION);
+        if (header == null || !header.startsWith(TOKEN_PREFIX)) {
             return ResponseEntity.badRequest().body(
                     HttpResponse.builder()
                             .timeStamp(now().toString())
@@ -412,21 +404,15 @@ public class UserController {
                             .statusCode(BAD_REQUEST.value())
                             .build());
         }
-    }
-
-    /**
-     * Returns true when the request carries a "Bearer" Authorization header
-     * whose token verifies and matches its subject.
-     *
-     * @param request the HTTP request to inspect
-     * @return true if the header is present, well-formed, and the token is valid
-     */
-    private boolean isHeaderAndTokenValid(HttpServletRequest request) {
-        return request.getHeader(AUTHORIZATION) != null
-                && request.getHeader(AUTHORIZATION).startsWith(TOKEN_PREFIX)
-                && tokenProvider.isTokenValid(
-                tokenProvider.getSubject(request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length()), request),
-                request.getHeader(AUTHORIZATION).substring(TOKEN_PREFIX.length()));
+        SessionService.TokenPair tokens = sessionService.rotate(header.substring(TOKEN_PREFIX.length()), request);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", tokens.user(), "access_token", tokens.accessToken(), "refresh_token", tokens.refreshToken()))
+                        .message("New refresh token sent successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
     }
 
     /**
@@ -495,18 +481,25 @@ public class UserController {
 
     /**
      * Updates the authenticated user's profile with the supplied form data.
-     * The user ID is always sourced from the authenticated principal — the client-supplied value is ignored.
      * <p>
-     * //@param authentication the current authentication injected by Spring Security
+     * The target user ID is ALWAYS sourced from the authenticated principal — any {@code id}
+     * present in the request body is overwritten and ignored. This closes a broken
+     * object-level-authorization (IDOR) gap: because the {@code PATCH /**} rule in
+     * {@code SecurityConfig} only requires the {@code UPDATE:USER} authority that every
+     * {@code ROLE_USER} already holds, trusting a client-supplied id would let any
+     * authenticated user edit another user's profile. {@code getAuthenticatedUser} reads the
+     * {@link UserDTO} that {@code CustomAuthFilter} installed as the principal, so resolving
+     * the id requires no extra database round-trip.
      *
-     * @param user the validated update payload
+     * @param authentication the current authentication injected by Spring Security
+     * @param user           the validated update payload; its {@code id} is ignored and replaced
      * @return 200 OK with the updated user as a DTO
      */
     @PatchMapping("/update")
-    public ResponseEntity<HttpResponse> updateUser(/*Authentication authentication, */@RequestBody @Valid UpdateForm user) { //throws InterruptedException {
-        //UserDTO authenticatedUser = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
-        //user.setId(authenticatedUser.getId());
-        //TimeUnit.SECONDS.sleep(2); // Simulate a delay for testing the frontend loading state
+    public ResponseEntity<HttpResponse> updateUser(Authentication authentication, @RequestBody @Valid UpdateForm user) {
+        // Bind the update to the caller's OWN id, never the body's — the JWT principal is the
+        // single source of truth for whose row is modified (IDOR fix).
+        user.setId(getAuthenticatedUser(authentication).getId());
         UserDTO updatedUser = userService.updateUserDTO(user);
         eventPublisher.publishEvent(new NewUserEvent(updatedUser.getEmail(), PROFILE_UPDATE));
         long updateTotalElements = eventService.countEventsByUserId(updatedUser.getId());
@@ -631,32 +624,52 @@ public class UserController {
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
         UserDTO userDTO = authenticate(loginForm.getEmail(), loginForm.getPassword());
         //UserDTO userDTO = getLoggedInUser(authentication);
+        // MFA precedence (FR-MFA-4): a confirmed authenticator app supersedes the SMS code
+        // path — TOTP is the stronger factor, and sending an SMS a TOTP user will never
+        // type would only burn Twilio quota and confuse the login screen.
+        if (userDTO.isUsingTotp()) return sendTotpChallenge(userDTO);
         return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
     }
 
     /**
      * Validates the email and delegates credential verification to the {@link org.springframework.security.authentication.AuthenticationManager}.
      *
-     * <p>Before attempting authentication, a {@link EventType#LOGIN_ATTEMPT} event is published
-     * only if the email resolves to a known user — unknown emails are silently ignored to prevent
-     * user enumeration. On success, a {@link EventType#LOGIN_ATTEMPT_SUCCESS} event is published
-     * (unless 2FA is enabled, in which case success is recorded after code verification instead).
+     * <p><b>Anti-enumeration (FR-AUTH-4, NFR-SEC-7).</b> An unknown email and a wrong password
+     * MUST be indistinguishable to the caller. Two things make that true here: the account is
+     * resolved through {@link #findUserOrNull(String)} (which swallows the repository's
+     * {@code UsernameNotFoundException} to {@code null} instead of letting it escape as a 500),
+     * and every credential failure is rethrown as one generic {@code "Invalid email or password."}
+     * {@link ApiException} — the underlying exception message (which embeds the email) is never
+     * echoed to the client. Both cases therefore yield an identical 400 with an identical body.
+     * Disabled / locked accounts (FR-AUTH-5) keep their own actionable messages, since those are
+     * legitimate state signals rather than credential checks.
      *
-     * <p>On failure, a {@link EventType#LOGIN_ATTEMPT_FAILURE} event is published (again, only if
-     * the email was valid), {@code processError} writes the error to the response for legacy
-     * compatibility, and an {@link com.bob.angularspringbootfullstack.exception.ApiException} is
-     * rethrown so the caller stops processing and the global exception handler returns a structured
-     * JSON error to the frontend.
+     * <p>Audit events mirror the same rule (FR-AUDIT-3): {@link EventType#LOGIN_ATTEMPT} and
+     * {@link EventType#LOGIN_ATTEMPT_FAILURE} are recorded only for a KNOWN account, so the audit
+     * log itself never becomes an enumeration oracle. On success, {@link EventType#LOGIN_ATTEMPT_SUCCESS}
+     * is published unless 2FA is enabled (success is recorded after code verification instead).
      *
-     * @param email    the submitted email address; must resolve to an existing user for events to fire
+     * @param email    the submitted email address
      * @param password the submitted password
      * @return the authenticated {@link UserDTO} on success
      * @throws com.bob.angularspringbootfullstack.exception.ApiException on any authentication failure
      */
     private UserDTO authenticate(String email, String password) {
-        UserDTO userByEmail = userService.getUserByEmail(email);
+        // Resolve WITHOUT throwing on a miss: the repo raises UsernameNotFoundException for an
+        // unknown email, which (uncaught, outside the try) used to surface as a 500 whose
+        // devMessage leaked the email — an enumeration oracle. Null here keeps unknown emails on
+        // the exact same path as a wrong password.
+        UserDTO userByEmail = findUserOrNull(email);
         try {
-            if (null != userService.getUserByEmail(email)) {
+            // M6: reject the attempt early when the sliding-window failure count exceeds the
+            // threshold. Gated on a known account, so an unknown email falls through to the same
+            // generic credential failure below rather than revealing the account exists.
+            if (null != userByEmail &&
+                    eventService.countRecentFailuresByEmail(email, BRUTE_FORCE_WINDOW_MINUTES) >= BRUTE_FORCE_MAX) {
+                throw new ApiException("Too many failed login attempts. Please wait " +
+                        BRUTE_FORCE_WINDOW_MINUTES + " minutes before trying again.");
+            }
+            if (null != userByEmail) {
                 eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT));
             }
             Authentication authentication = authenticationManager.authenticate(unauthenticated(email, password));
@@ -665,15 +678,77 @@ public class UserController {
                 eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_SUCCESS));
             }
             return loggedInUser;
-        } catch (Exception e) {
-            if (null != userByEmail) {
-                eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_FAILURE));
-            }
-            // After running our front end, we are seeing that processError is preventing from the actual backend error message to show up on the front end error message (in the alert), so we have commented this out. The reason behind this is that the processError is writing the response to the HttpServletResponse, which is not compatible with our current front end error handling approach. By commenting this out, we allow the ApiException to be thrown and handled by our GlobalExceptionHandler, which will return a structured JSON response that our front end can easily parse and display the error message in an alert. If we were to keep processError, it would interfere with the normal flow of exception handling and prevent our front end from receiving the expected error response format.
-            processError(request, response, e);
+        } catch (ApiException e) {
+            // Brute-force rejection: its message is intentionally non-enumerating; surface as-is.
+            recordLoginFailure(userByEmail, email);
+            throw e;
+        } catch (DisabledException | LockedException e) {
+            // Legitimate account-state signals (FR-AUTH-5) — keep the actionable message.
+            recordLoginFailure(userByEmail, email);
             throw new ApiException(e.getMessage());
-
+        } catch (Exception e) {
+            // Bad password, unknown email, or anything else: ONE generic message so the cases are
+            // indistinguishable (FR-AUTH-4, NFR-SEC-7). Never echo the underlying exception text.
+            recordLoginFailure(userByEmail, email);
+            throw new ApiException("Invalid email or password.");
         }
+    }
+
+    /**
+     * Looks up a user by email for the login flow WITHOUT throwing when the email is unknown.
+     * <p>
+     * {@code UserService.getUserByEmail} (via {@code UserRepoImpl}) raises
+     * {@link UsernameNotFoundException} for a miss; swallowing it to {@code null} here is what lets
+     * an unknown email and a wrong password follow the identical failure path, so neither the
+     * status code, the response body, nor the audit trail reveals whether the account exists
+     * (FR-AUTH-4, NFR-SEC-7, FR-AUDIT-3).
+     *
+     * @param email the submitted email
+     * @return the matching {@link UserDTO}, or {@code null} when no account has that email
+     */
+    private UserDTO findUserOrNull(String email) {
+        try {
+            return userService.getUserByEmail(email);
+        } catch (UsernameNotFoundException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Publishes a {@link EventType#LOGIN_ATTEMPT_FAILURE} event only for a KNOWN account, so the
+     * audit log does not itself leak which emails are registered (FR-AUDIT-3).
+     *
+     * @param userByEmail the resolved account, or {@code null} for an unknown email
+     * @param email       the submitted email (event subject when the account is known)
+     */
+    private void recordLoginFailure(UserDTO userByEmail, String email) {
+        if (null != userByEmail) {
+            eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_FAILURE));
+        }
+    }
+
+    /**
+     * Mints a server-side MFA challenge for a TOTP-enabled user whose first factor just
+     * succeeded, and returns it to the SPA instead of tokens. The challenge — not the
+     * email — is what {@code POST /user/verify/totp} later accepts, because a TOTP code
+     * always exists on the user's device: without this server-side proof that the
+     * password step happened, a public verify endpoint would let anyone holding the
+     * authenticator skip the first factor entirely (contrast with the SMS flow, where
+     * the code's existence itself proves authentication succeeded).
+     *
+     * @param userDTO the user awaiting authenticator verification
+     * @return 200 OK with the user and the opaque {@code challenge}; no tokens (FR-MFA-3)
+     */
+    private ResponseEntity<HttpResponse> sendTotpChallenge(UserDTO userDTO) {
+        String challenge = totpService.createLoginChallenge(userDTO.getId());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userDTO, "challenge", challenge))
+                        .message("Enter the code from your authenticator app.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
     }
 
     /**
@@ -697,20 +772,23 @@ public class UserController {
     }
 
     /**
-     * Builds the standard login success response: the user plus a 230-minute
-     * access token and a 5-day refresh token created from a freshly loaded
-     * UserPrincipal.
+     * Builds the standard login success response: the user plus a 30-minute
+     * access token and a 5-day refresh token, issued through
+     * {@link SessionService#issueTokenPair} so the login opens a tracked,
+     * revocable session (plan.md M5). (Doc fix: this previously claimed 230
+     * minutes; {@code ACCESS_TOKEN_EXPIRE_TIME} is and was 1,800,000 ms = 30 min.)
      *
      * @param userDTO the successfully authenticated user
      * @return 200 OK with user data and both tokens
      */
     private ResponseEntity<HttpResponse> sendResponse(UserDTO userDTO) {
+        SessionService.TokenPair tokens = sessionService.issueTokenPair(getUserPrincipal(userDTO), request);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userDTO, "access_token", tokenProvider.createAccessToken(getUserPrincipal(userDTO)), "refresh_token", tokenProvider.createRefreshToken(getUserPrincipal(userDTO))))
+                        .data(of("user", userDTO, "access_token", tokens.accessToken(), "refresh_token", tokens.refreshToken()))
                         .message("Login successful!")
-                        .devMessage("AuthenticationManager succeeded; 230-min access token and 5-day refresh token issued via TokenProvider.")
+                        .devMessage("AuthenticationManager succeeded; 30-min access token and 5-day refresh token issued via SessionService (tracked session).")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

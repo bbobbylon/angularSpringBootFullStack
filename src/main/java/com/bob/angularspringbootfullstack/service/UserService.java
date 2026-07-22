@@ -7,6 +7,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collection;
+
 /**
  * UserService defines the business logic contract for user-related operations.
  * <p>
@@ -149,6 +151,28 @@ public interface UserService {
      * @param image   the uploaded image file from the multipart request
      */
     void updateProfileImage(UserDTO userDTO, MultipartFile image);
+
+    /**
+     * Pages through the user directory for the administrative dashboard (FR-ADMIN-1),
+     * filtered by a free-text term matched against name and email. Each returned DTO
+     * carries its role name and permission string so the admin UI can render and
+     * reassign roles without extra requests.
+     *
+     * @param searchTerm free-text filter; blank or null lists everyone
+     * @param page       0-indexed page number
+     * @param pageSize   rows per page
+     * @return the matching users on the requested page, newest accounts first
+     */
+    Collection<UserDTO> searchUsers(String searchTerm, int page, int pageSize);
+
+    /**
+     * Counts the users {@link #searchUsers} would match for the same term, so the
+     * admin UI can compute total pages.
+     *
+     * @param searchTerm free-text filter; blank or null counts everyone
+     * @return the total number of matching users
+     */
+    long countUsers(String searchTerm);
 }
 
 

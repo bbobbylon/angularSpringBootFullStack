@@ -50,7 +50,46 @@ public enum EventType {
     /**
      * Fired when the user enables or disables multifactor authentication.
      */
-    MFA_UPDATE("You have updated your multi-factor authentication settings :)");
+    MFA_UPDATE("You have updated your multi-factor authentication settings :)"),
+    /**
+     * Fired when a user signs in through a federated identity provider (Google,
+     * GitHub, or Microsoft) and the token-exchange point issues application JWTs
+     * (SRS FR-FED-4/5). Distinct from LOGIN_ATTEMPT_SUCCESS so the audit trail
+     * records the authentication method.
+     */
+    FEDERATED_LOGIN("You logged in with a federated identity provider :)"),
+    /**
+     * Fired when the user completes authenticator-app enrollment — the moment the
+     * pending TOTP secret is confirmed and recovery codes are issued (SRS FR-MFA-4).
+     * Distinct from MFA_UPDATE (the SMS toggle) so the audit trail records WHICH
+     * second factor changed.
+     */
+    TOTP_ENROLLED("You enrolled an authenticator app for multi-factor authentication :)"),
+    /**
+     * Fired when the user removes their authenticator app (after proving possession
+     * with a live TOTP or recovery code), returning the account to SMS MFA or
+     * single-factor.
+     */
+    TOTP_DISABLED("You removed your authenticator app from multi-factor authentication :)"),
+    /**
+     * Fired when a single-use recovery code (rather than a live authenticator code)
+     * satisfies a login challenge — security-relevant because each use permanently
+     * burns one of the user's fallback codes.
+     */
+    RECOVERY_CODE_USED("You signed in using a single-use recovery code :)"),
+    /**
+     * Fired when the user revokes one of their active sessions (or all other sessions
+     * via "log out everywhere") from the Account Security Center (plan.md M5). The
+     * revoked family can no longer refresh; its in-flight access token simply ages out
+     * within its 30-minute TTL.
+     */
+    SESSION_REVOKED("You revoked an active session on your account :)"),
+    /**
+     * Fired when a refresh token that was already rotated (or revoked) is presented
+     * again — the signature of token theft. The whole session family is revoked in
+     * response, forcing a fresh first-factor login (FR-JWT-5 reuse detection).
+     */
+    TOKEN_REUSE_DETECTED("A previously used refresh token was replayed; the affected session family was revoked for your security :|");
 
     /**
      * -- GETTER --

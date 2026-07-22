@@ -1,82 +1,138 @@
-.rounded {
-  -webkit-border-radius: 3px !important;
-  -moz-border-radius: 3px !important;
-  border-radius: 3px !important;
-}
+/* ============================================================================
+   Stats panel — dashboard "metric" cards.
 
-.mini-stat {
-  padding: 15px;
-  margin-bottom: 20px;
-}
-
-.mini-stat-icon {
-  width: 60px;
-  height: 60px;
-  display: inline-block;
-  line-height: 60px;
-  text-align: center;
-  font-size: 30px;
-  background: none repeat scroll 0% 0% #EEE;
-  border-radius: 100%;
-  float: left;
-  margin-right: 10px;
-  color: #FFF;
-}
-
-.mini-stat-info {
-  font-size: 12px;
-  padding-top: 2px;
-}
-
-span, p {
-  color: white;
-}
-
-.mini-stat-info span {
+   Rebuilt onto the global design-token layer (styles.css): no hardcoded colors,
+   no legacy social-brand classes. Each card carries a semantic accent via a
+   modifier class (--metric / --metric-soft / --metric-ring) so customers,
+   invoices, and billed read as three distinct security/finance signals while
+   still belonging to one system. Adapts to dark/light automatically because all
+   color comes from theme tokens.
+   ============================================================================ */
+:host {
   display: block;
-  font-size: 30px;
+}
+
+.sc-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+@media (max-width: 768px) {
+  .sc-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sc-metric {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+.sc-metric:hover {
+  transform: translateY(-3px);
+  border-color: var(--metric-ring);
+  box-shadow: var(--shadow-lg);
+  color: inherit;
+  text-decoration: none;
+}
+.sc-metric:hover .sc-metric__arrow {
+  opacity: 1;
+  transform: translate(2px, -50%);
+}
+
+/* Accent rail down the leading edge */
+.sc-metric::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--metric);
+}
+
+/* Soft radial bloom behind the icon for depth */
+.sc-metric::after {
+  content: '';
+  position: absolute;
+  top: -45%;
+  left: -8%;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--metric-soft), transparent 70%);
+  pointer-events: none;
+}
+
+.sc-metric__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: var(--radius);
+  background: var(--metric-soft);
+  color: var(--metric);
+  font-size: 1.55rem;
+}
+
+.sc-metric__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.sc-metric__value {
+  font-family: var(--font-mono);
+  font-size: 1.95rem;
   font-weight: 600;
-  margin-bottom: 5px;
-  margin-top: 7px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
 }
 
-/* ================ colors =====================*/
-.bg-facebook {
-  background-color: #285a71 !important;
-  border: 1px solid #3b5998;
-  color: white;
+/* Arrow icon that appears on hover */
+.sc-metric__arrow {
+  position: absolute;
+  right: var(--space-4);
+  top: 50%;
+  transform: translate(0, -50%);
+  font-size: 0.9rem;
+  color: var(--metric);
+  opacity: 0;
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+  pointer-events: none;
 }
 
-.fg-facebook {
-  color: #3b5998 !important;
+/* ---- Per-metric semantic accents (all from theme tokens) ---- */
+.sc-metric--accent {
+  --metric: var(--accent-strong);
+  --metric-soft: var(--accent-bg);
+  --metric-ring: var(--accent-ring);
 }
-
-.bg-twitter {
-  background-color: #04994e !important;
-  border: 1px solid #04994e;
-  color: white;
+.sc-metric--info {
+  --metric: var(--info);
+  --metric-soft: rgba(34, 211, 238, 0.14);
+  --metric-ring: rgba(34, 211, 238, 0.4);
 }
-
-.fg-twitter {
-  color: #00a0d1 !important;
+.sc-metric--ok {
+  --metric: var(--ok);
+  --metric-soft: rgba(52, 211, 153, 0.14);
+  --metric-ring: rgba(52, 211, 153, 0.4);
 }
-
-.bg-googleplus {
-  background-color: #81830b !important;
-  border: 1px solid #81830b;
-  color: white;
-}
-
-.fg-googleplus {
-  color: #db4a39 !important;
-}
-
-.bg-bitbucket {
-  background-color: #6218b0 !important;
-  border: 1px solid #6218b0;
-  color: white;
-}
-
-.fg-bitbucket {
-  color: #4f096a !important;
-}  

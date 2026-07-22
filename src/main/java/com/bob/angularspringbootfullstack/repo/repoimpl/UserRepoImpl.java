@@ -10,6 +10,7 @@ import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
 import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
+import com.bob.angularspringbootfullstack.service.ImageStorageService;
 import com.bob.angularspringbootfullstack.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,12 +30,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
@@ -45,7 +41,6 @@ import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.enumeration.VerificationType.ACCOUNT;
 import static com.bob.angularspringbootfullstack.enumeration.VerificationType.PASSWORD;
 import static com.bob.angularspringbootfullstack.query.UserQuery.*;
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static java.util.Map.of;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
@@ -108,6 +103,11 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     private final RoleRepo<Role> roleRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final NotificationService notificationService;
+    /**
+     * Abstraction over the profile-image storage backend (local filesystem or AWS S3).
+     * The active implementation is selected at startup based on {@code IMAGE_STORAGE_TYPE}.
+     */
+    private final ImageStorageService imageStorageService;
 
     /**
      * Frontend (Angular SPA) origin used when building user-facing verification links.
@@ -128,6 +128,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      */
     @Value("${ui.app.url:http://localhost:4200}")
     private String uiAppUrl;
+
 
     /**
      * Registers a new user under a transactional boundary.
@@ -250,15 +251,76 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
-     * Not yet implemented; returns an empty collection.
+     * Retrieves one page of the user directory with no filter applied.
+     * Delegates to {@link #searchUsers(String, int, int)} with a blank term so the
+     * pagination/ordering logic lives in exactly one place.
      *
      * @param page     0-indexed page number
      * @param pageSize page size
-     * @return an empty list
+     * @return the users on the requested page, newest accounts first
      */
     @Override
     public Collection<User> list(int page, int pageSize) {
-        return List.of();
+        return searchUsers("", page, pageSize);
+    }
+
+    /**
+     * Pages through the user directory for the administrative dashboard (FR-ADMIN-1).
+     * <p>
+     * The free-text term is wrapped in SQL wildcards here (not by callers) and matched
+     * against first name, last name, and email via {@code LIKE}. Page inputs are clamped
+     * defensively — negative pages become page 0 and the page size is bounded to 100 —
+     * so a hand-crafted request cannot turn the directory into an unbounded full-table
+     * dump (NFR-PERF-3).
+     *
+     * @param searchTerm free-text filter; blank or null lists everyone
+     * @param page       0-indexed page number (negative values are treated as 0)
+     * @param pageSize   rows per page (bounded to 1..100)
+     * @return the matching users on the requested page, newest accounts first
+     */
+    @Override
+    public Collection<User> searchUsers(String searchTerm, int page, int pageSize) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(pageSize, 1), 100);
+        try {
+            return jdbcTemplate.query(SELECT_USERS_PAGED_QUERY,
+                    of("searchTerm", toLikePattern(searchTerm),
+                            "pageSize", safeSize,
+                            "offset", safePage * safeSize),
+                    new UserRowMapper());
+        } catch (Exception exception) {
+            log.error("Error listing users (page {}, size {}, term '{}'): {}", safePage, safeSize, searchTerm, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving the user directory. Please try again.");
+        }
+    }
+
+    /**
+     * Counts the users matching the same directory filter as
+     * {@link #searchUsers(String, int, int)}, for total-pages metadata in the admin UI.
+     *
+     * @param searchTerm free-text filter; blank or null counts everyone
+     * @return the total number of matching users
+     */
+    @Override
+    public long countUsers(String searchTerm) {
+        try {
+            Long count = jdbcTemplate.queryForObject(COUNT_USERS_QUERY,
+                    of("searchTerm", toLikePattern(searchTerm)), Long.class);
+            return count == null ? 0 : count;
+        } catch (Exception exception) {
+            log.error("Error counting users for term '{}': {}", searchTerm, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving the user directory. Please try again.");
+        }
+    }
+
+    /**
+     * Normalizes a raw directory search term into the {@code LIKE} pattern both
+     * directory queries expect: trimmed and wrapped in {@code %} wildcards, with a
+     * blank/null term collapsing to {@code %%} (match everything). Centralized so the
+     * SELECT and COUNT queries can never disagree about how filtering works.
+     */
+    private static String toLikePattern(String searchTerm) {
+        return "%" + (isBlank(searchTerm) ? "" : searchTerm.trim()) + "%";
     }
 
     /**
@@ -685,53 +747,26 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      *                sees the new URL without a second DB fetch
      * @param image   the uploaded image file from the multipart request
      */
+    /**
+     * Stores the uploaded profile image via the active {@link ImageStorageService}
+     * (local filesystem or AWS S3 depending on {@code IMAGE_STORAGE_TYPE}) and persists
+     * the returned URL in the user's {@code image_url} column.
+     *
+     * <p>The URL returned by {@code imageStorageService.store()} is the canonical public
+     * address of the image — a local {@code /user/image/{email}.png} path for the local
+     * backend, or an S3 HTTPS URL for the S3 backend. Both formats are understood by
+     * the Angular frontend.
+     *
+     * @param userDTO the authenticated user whose image is changing; its {@code imageUrl}
+     *                field is updated in-place so the caller sees the new URL without a
+     *                second DB fetch
+     * @param image   the uploaded image file from the multipart request
+     */
     @Override
     public void updateProfileImage(UserDTO userDTO, MultipartFile image) {
-        String userImageURL = setUserImageUrl(userDTO.getEmail());
-        userDTO.setImageUrl(userImageURL);
-        saveImage(userDTO.getEmail(), image);
-        jdbcTemplate.update(UPDATE_USER_IMAGE_URL_QUERY, of("imageUrl", userImageURL, "userId", userDTO.getId()));
-    }
-
-    /**
-     * Builds the public URL for a user's profile image.
-     * The URL points to the public {@code GET /user/image/{email}.png} controller endpoint
-     * which reads the file from disk and returns its bytes — not the raw filesystem path.
-     *
-     * @param email the user's email address, used as the image filename
-     * @return the fully qualified URL the browser can use to load the image
-     */
-    private String setUserImageUrl(String email) {
-        return ServletUriComponentsBuilder.fromCurrentContextPath().path("/user/image/" + email + ".png").toUriString();
-    }
-
-    /**
-     * Writes the uploaded image file to {@code ~/Downloads/images/{email}.png}.
-     * Creates the target directory if it does not already exist.
-     * If a previous image exists for this user, it is overwritten ({@code REPLACE_EXISTING}).
-     *
-     * @param email the user's email address, used as the filename on disk
-     * @param image the uploaded image file from the multipart request
-     * @throws ApiException if the directory cannot be created or the file cannot be written
-     */
-    private void saveImage(String email, MultipartFile image) {
-        Path fileStorageLocation = Paths.get(System.getProperty("user.home") + "/Downloads/images").toAbsolutePath().normalize();
-        if (!Files.exists(fileStorageLocation)) {
-            try {
-                Files.createDirectories(fileStorageLocation);
-            } catch (Exception e) {
-                log.error("Could not create the directory where the uploaded files will be stored.", e);
-                throw new ApiException("Could not create the directory where the uploaded files will be stored..An error occurred while saving the image. Please try again.");
-            }
-            log.info("Created directory for profile images at: {}", fileStorageLocation);
-        }
-        try {
-            Files.copy(image.getInputStream(), fileStorageLocation.resolve(email + ".png"), REPLACE_EXISTING);
-            log.info("Profile image saved successfully for user with email: {}", email);
-        } catch (IOException e) {
-            log.error("An error occurred while saving the profile image for user with email '{}': {}", email, e.getMessage(), e);
-            throw new ApiException(e.getMessage());
-        }
+        String imageUrl = imageStorageService.store(userDTO.getEmail(), image);
+        userDTO.setImageUrl(imageUrl);
+        jdbcTemplate.update(UPDATE_USER_IMAGE_URL_QUERY, of("imageUrl", imageUrl, "userId", userDTO.getId()));
     }
 
     /**

@@ -49,7 +49,7 @@ export class NewCustomerComponent implements OnInit {
   @Input() user: UserInterface | undefined;
 
   /** Application title signal — retained for potential future page-title binding. */
-  readonly title = signal('securecapitaapp');
+  readonly title = signal('tesseraapp');
 
   /**
    * Placeholder for the current user's permission set.

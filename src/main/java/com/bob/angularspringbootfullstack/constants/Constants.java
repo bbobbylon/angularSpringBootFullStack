@@ -20,6 +20,15 @@ public class Constants {
                     "/user/new/password/**",
                     "/user/verify/account/**", "/user/refresh/token/**",
                     "/user/profile/image/**", "/user/image/**",
+                    // TOTP login completion (FR-MFA-4): the caller is mid-login and holds no
+                    // token; the server-side challenge minted at first-factor success is the
+                    // security boundary (see TotpService#verifyLoginChallenge).
+                    "/user/verify/totp/**",
+                    // Federated login (FR-FED): /oauth2/authorization/{provider} starts the
+                    // Authorization Code flow, /login/oauth2/code/{provider} is the provider
+                    // callback, and /oauth2/providers lets the SPA discover which providers
+                    // are configured. All are pre-authentication by definition.
+                    "/oauth2/**", "/login/oauth2/**",
             };
 
     /*
@@ -50,12 +59,25 @@ public class Constants {
     public static final String[] PUBLIC_ROUTES = {
             "/user/login", "/user/verify/code", "/user/register", "/actuator",
             "/user/refresh/token", "/user/image", "/user/verify/account",
-            "/user/verify/password", "/user/resetpassword", "/user/new/password"
+            "/user/verify/password", "/user/resetpassword", "/user/new/password",
+            // TOTP login completion (FR-MFA-4): the caller holds no token mid-login, so the
+            // filter must not attempt to parse a (possibly stale) Bearer header here.
+            "/user/verify/totp",
+            // Federated login (FR-FED): skipped here so a stale Bearer header from the SPA
+            // can never break the browser-redirect OAuth2 dance or provider discovery.
+            "/oauth2", "/login/oauth2"
     };
 
     public static final String BOBBYLON_LLC = "BOBBYLON_LLC";
     public static final String BOBS_MANAGEMENT = "BOBS_MANAGEMENT";
     public static final String AUTHORITIES = "authorities";
+    /**
+     * JWT claim carrying the refresh-session FAMILY id (plan.md M5, FR-JWT-5). Present on
+     * both token types: on the refresh token it pairs with the {@code jti} for rotation
+     * bookkeeping, and on the access token it lets the sessions endpoint (and the SPA,
+     * which can decode its own token) identify which listed session is "this one".
+     */
+    public static final String SESSION_FAMILY = "sid";
     public static final long ACCESS_TOKEN_EXPIRE_TIME = 1_800_000;
     public static final long REFRESH_TOKEN_EXPIRE_TIME = 432_000_000;
     public static final String TOKEN_UNVERIFIABLE = "Invalid JWT secret key";

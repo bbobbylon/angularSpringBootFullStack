@@ -1,20 +1,42 @@
 @if (profileState(); as state) {
   <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-  <section>
+  <main class="sc-page">
     <div class="container">
-      <nav aria-label="breadcrumb" style="margin-top: 8px;">
-        <ol class="breadcrumb">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb sc-breadcrumb">
           <li class="breadcrumb-item">
             <a [routerLink]="['/']">Home</a>
           </li>
-          <li class="breadcrumb-item active">Users</li>
           <li aria-current="page" class="breadcrumb-item active">
             {{ state?.appData?.data?.user?.firstName }} {{ state?.appData?.data?.user?.lastName }}
           </li>
         </ol>
       </nav>
 
-      <div class="bg-white shadow rounded-lg d-block d-sm-flex" style="border-radius: 8px;">
+      @if (profileState().dataState === DataState.LOADING) {
+        <!-- ── Profile loading skeleton ─────────────────────────────────── -->
+        <div class="sc-panel placeholder-glow" style="min-height: 400px;">
+          <div class="row align-items-center mb-4">
+            <div class="col-auto">
+              <span class="placeholder rounded-circle d-block" style="width: 100px; height: 100px;"></span>
+            </div>
+            <div class="col">
+              <span class="placeholder col-5 mb-2 d-block" style="height: 20px;"></span>
+              <span class="placeholder col-3 d-block" style="height: 14px;"></span>
+            </div>
+          </div>
+          <hr>
+          <div class="row mt-4">
+            <div class="col-md-6 mb-3"><span class="placeholder col-12 d-block" style="height: 40px; border-radius: 4px;"></span></div>
+            <div class="col-md-6 mb-3"><span class="placeholder col-12 d-block" style="height: 40px; border-radius: 4px;"></span></div>
+            <div class="col-md-6 mb-3"><span class="placeholder col-12 d-block" style="height: 40px; border-radius: 4px;"></span></div>
+            <div class="col-md-6 mb-3"><span class="placeholder col-12 d-block" style="height: 40px; border-radius: 4px;"></span></div>
+            <div class="col-12 mb-3"><span class="placeholder col-12 d-block" style="height: 80px; border-radius: 4px;"></span></div>
+            <div class="col-auto"><span class="placeholder d-block" style="width: 120px; height: 38px; border-radius: 4px;"></span></div>
+          </div>
+        </div>
+      } @else {
+      <div class="sc-panel d-block d-sm-flex" style="padding: 0; overflow: hidden;">
         <div class="profile-tab-nav border-right">
           <div class="p-4">
             <div class="img-circle text-center mb-3">
@@ -214,50 +236,32 @@
           <div aria-labelledby="security" class="tab-pane fade" id="security-tab" role="tabpanel"
                style="min-height: 510px;">
             <h3 class="mb-4">Authorization Settings</h3>
-            <form #roleForm="ngForm" (ngSubmit)="updateRole(roleForm)">
-              <div class="row">
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <label for="roleName" style="margin-bottom: 5px;">Role Name</label>
-                    <select
-                      (ngModelChange)="onRoleChange($event)"
-                      [disabled]="!hasPermission('CREATE:USER') || isLoading()"
-                      [ngModel]="state?.appData?.data?.user?.roleName"
-                      class="form-control select-cl" id="roleName" name="roleName" required>
-                      @for (role of state?.appData?.data?.roles; track role.name) {
-                        <option [ngValue]="role.name"
-                                [selected]="state?.appData?.data?.user?.roleName === role.name"
-                                class="select-cl">{{ role.name }}
-
-                        </option>
-                      }
-                    </select>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <p style="margin-bottom: 5px;">Role Permissions</p>
-                    @for (permission of permissions(); track permission) {
-                      <input [disabled]="true" [value]="permission" class="form-control"
-                             style="margin-bottom: 5px;" type="text">
-                    }
-                  </div>
+            <!-- Read-only by design (SRS FR-RBAC-4 / NFR-SEC-8): users cannot change their
+                 own role. Role reassignment is performed by an administrator from the
+                 Users dashboard, which calls the authority-gated /admin endpoints. -->
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="roleName" style="margin-bottom: 5px;">Role Name</label>
+                  <input [disabled]="true"
+                         [value]="state?.appData?.data?.user?.roleName"
+                         class="form-control" id="roleName" name="roleName" type="text">
+                  <small class="text-secondary d-block mt-2">
+                    Roles are assigned by an administrator. Contact an administrator if your
+                    role needs to change.
+                  </small>
                 </div>
               </div>
-              <div>
-                <button
-                  [disabled]="!hasPermission('CREATE:USER') || isLoading()"
-                  class="btn btn-primary" type="submit">
-                  @if (isLoading()) {
-                    <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                          style="margin-right: 5px;"></span>
-                    <span>Loading...</span>
-                  } @else {
-                    <span>Update</span>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <p style="margin-bottom: 5px;">Role Permissions</p>
+                  @for (permission of permissions(); track permission) {
+                    <input [disabled]="true" [value]="permission" class="form-control"
+                           style="margin-bottom: 5px;" type="text">
                   }
-                </button>
+                </div>
               </div>
-            </form>
+            </div>
           </div>
 
           <!-- Account tab -->
@@ -302,7 +306,9 @@
             </form>
           </div>
 
-          <!-- Authentication tab -->
+          <!-- Authentication tab — status summary; management lives in the Security
+               Center (plan.md M4), which owns the TOTP wizard, SMS toggle, and the
+               sessions & devices panel. -->
           <div aria-labelledby="notification" class="tab-pane fade" id="notification-tab" role="tabpanel"
                style="min-height: 510px;">
             <h3 class="mb-4">Authentication Settings</h3>
@@ -311,30 +317,48 @@
               <div class="list-group-item">
                 <div class="row align-items-center">
                   <div class="col">
-                    <strong class="mb-2">Multi-Factor Authentication</strong>
+                    <strong class="mb-2">Authenticator App (TOTP)</strong>
+                    @if (state?.appData?.data?.user?.usingTotp) {
+                      <span class="badge bg-success mx-3">Enabled</span>
+                    } @else {
+                      <span class="badge bg-warning mx-3">Not set up</span>
+                    }
+                    <p class="text-muted mb-0">
+                      Time-based one-time codes from an authenticator app — the strongest second factor available here.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="list-group-item">
+                <div class="row align-items-center">
+                  <div class="col">
+                    <strong class="mb-2">SMS Verification</strong>
                     @if (state?.appData?.data?.user?.using2FA) {
                       <span class="badge bg-success mx-3">Enabled</span>
                     } @else {
                       <span class="badge bg-warning mx-3">Disabled</span>
                     }
                     <p class="text-muted mb-0">
-                      Set up Multi-factor Authentication (MFA) to help keep your account more secure.
+                      One-time codes sent to your phone number.
                     </p>
-                  </div>
-                  <div class="col-auto">
-                    <button (click)="toggleMfa()"
-                            [disabled]="!hasPermission('UPDATE:USER') || isLoading()"
-                            class="btn btn-primary btn-sm">
-                      {{ state?.appData?.data?.user?.using2FA ? 'Disable' : 'Enable' }}
-                      @if (isLoading()) {
-                        <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                              style="margin-right: 5px;"></span>
-                      }
-                    </button>
                   </div>
                 </div>
               </div>
-
+              <div class="list-group-item">
+                <div class="row align-items-center">
+                  <div class="col">
+                    <strong class="mb-2">Security Center</strong>
+                    <p class="text-muted mb-0">
+                      Enroll or disable second factors and manage every device signed in to your account.
+                    </p>
+                  </div>
+                  <div class="col-auto">
+                    <a [routerLink]="['/security']" class="btn btn-primary btn-sm">
+                      <i class="bi bi-shield-lock" style="margin-right: 4px;"></i>Open Security Center
+                    </a>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -351,46 +375,25 @@
                 <table class="table table-hover">
                   <thead>
                   <tr>
+                    <th scope="col">Event</th>
                     <th scope="col">Device</th>
                     <th scope="col">IP Address</th>
                     <th scope="col">Date</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Description</th>
-                    <th scope="col">Action</th>
                   </tr>
                   </thead>
                   <tbody>
-                  <!--       @for (event of state?.appData?.data?.event
-                      -s; track event.createdAt) {   -->
                     @for (event of state?.appData?.data?.events; track $index) {
                       <tr>
-                        <td>{{ event.device }}</td>
-                        <td>{{ event.ipAddress }}</td>
-                        <td>{{ event.createdAt | date: 'MMMM d, y, h:mm a' }}</td>
                         <td>
-                          <span [class.bg-danger]="event.type === EventType.LOGIN_ATTEMPT_FAILURE"
-                                [class.bg-info]="event.type === EventType.ROLE_UPDATE
-                                                 || event.type === EventType.MFA_UPDATE"
-                                [class.bg-primary]="event.type === EventType.PROFILE_UPDATE
-                                                    || event.type === EventType.PROFILE_PICTURE_UPDATE"
-                                [class.bg-success]="event.type === EventType.LOGIN_ATTEMPT_SUCCESS
-                                                    || event.type === EventType.PASSWORD_UPDATE"
-                                [class.bg-warning]="event.type === EventType.LOGIN_ATTEMPT || event.type === EventType.ACCOUNT_SETTINGS_UPDATE "
-                                class="badge pill">
-                            {{ event.type }}
+                          <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
+                            <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
+                            {{ getEventDisplay(event.type).label }}
                           </span>
+                          <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
                         </td>
-                        <td>{{ event.description }}</td>
-                        <td>
-                          <!-- TODO(report-event): Wire up the Report button.
-                               On click, POST to a new backend endpoint (e.g. POST /user/events/{eventId}/report)
-                               that inserts a row into a `reported_events` table recording who reported it,
-                               which event was flagged, and a timestamp. The button should be disabled after
-                               a successful report so the same event cannot be submitted twice in one session. -->
-                          <button class="btn btn-sm" style="background-color: #fd5d0d; font-weight: 450;" type="button">
-                            Report
-                          </button>
-                        </td>
+                        <td style="font-size: 0.85rem;">{{ event.device }}</td>
+                        <td style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
+                        <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
                       </tr>
                     }
                   </tbody>
@@ -420,8 +423,9 @@
           </div>
         </div>
       }
+      } <!-- @else (LOADED) -->
     </div>
-  </section>
+  </main>
 }
 
 <!-- profile image change form -->

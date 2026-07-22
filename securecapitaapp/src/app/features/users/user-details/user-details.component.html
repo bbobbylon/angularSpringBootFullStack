@@ -1,0 +1,222 @@
+@if (userState(); as state) {
+  @switch (state.dataState) {
+    @case (DataState.LOADED) {
+      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <main class="sc-page">
+        <div class="container">
+          <nav aria-label="breadcrumb">
+            <ol class="breadcrumb sc-breadcrumb">
+              <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
+              <li class="breadcrumb-item"><a [routerLink]="['/users']">Users</a></li>
+              <li class="breadcrumb-item active">
+                {{ state?.appData?.data?.selectedUser?.firstName }} {{ state?.appData?.data?.selectedUser?.lastName }}
+              </li>
+            </ol>
+          </nav>
+
+          @if (isSelf()) {
+            <div class="alert alert-info" role="alert">
+              <i class="bi bi-info-circle" style="margin-right: 8px;"></i>
+              This is your own account. Role and account-state changes must be made by another
+              administrator; use your <a [routerLink]="['/profile']">profile</a> for self-service settings.
+            </div>
+          }
+
+          <div class="row mt-3">
+            <!-- Identity card -->
+            <div class="col-md-4">
+              <div class="card mb-3">
+                <div class="card-body text-center">
+                  @if (state?.appData?.data?.selectedUser?.imageUrl; as imageUrl) {
+                    <img [src]="imageUrl" alt="avatar"
+                         style="width:96px;height:96px;border-radius:50%;object-fit:cover;">
+                  }
+                  <h5 class="mt-3 mb-0">
+                    {{ state?.appData?.data?.selectedUser?.firstName }} {{ state?.appData?.data?.selectedUser?.lastName }}
+                  </h5>
+                  <p class="text-secondary mb-1">{{ state?.appData?.data?.selectedUser?.email }}</p>
+                  @if (state?.appData?.data?.selectedUser?.title) {
+                    <p class="text-secondary mb-1">{{ state?.appData?.data?.selectedUser?.title }}</p>
+                  }
+                  <span class="badge bg-primary">{{ state?.appData?.data?.selectedUser?.roleName }}</span>
+                  <span [ngClass]="state?.appData?.data?.selectedUser?.enabled ? 'bg-success' : 'bg-secondary'"
+                        class="badge" style="margin-left: 6px;">
+                    {{ state?.appData?.data?.selectedUser?.enabled ? 'ENABLED' : 'DISABLED' }}
+                  </span>
+                  <span [ngClass]="state?.appData?.data?.selectedUser?.notLocked ? 'bg-success' : 'bg-danger'"
+                        class="badge" style="margin-left: 6px;">
+                    {{ state?.appData?.data?.selectedUser?.notLocked ? 'UNLOCKED' : 'LOCKED' }}
+                  </span>
+                  <p class="text-secondary mt-3 mb-0" style="font-size: 0.85rem;">
+                    Joined {{ state?.appData?.data?.selectedUser?.createdAt | date: 'mediumDate' }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Management forms -->
+            <div class="col-md-8">
+              <!-- Role reassignment (FR-ADMIN-3, requires UPDATE:ROLE) -->
+              <div class="card mb-3">
+                <div class="card-body">
+                  <h5 class="mb-3"><i class="bi bi-shield-shaded" style="margin-right: 8px;"></i>Role</h5>
+                  <form #roleForm="ngForm" (ngSubmit)="updateRole(roleForm)">
+                    <div class="row align-items-end">
+                      <div class="col-md-8">
+                        <label class="form-label" for="roleName">Assigned role</label>
+                        <select [disabled]="!canEditRole || isSelf() || isLoading()"
+                                [ngModel]="state?.appData?.data?.selectedUser?.roleName"
+                                class="form-control select-cl" id="roleName" name="roleName" required>
+                          @for (role of state?.appData?.data?.roles; track role.name) {
+                            <option [ngValue]="role.name">{{ role.name }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="col-md-4">
+                        <button [disabled]="!canEditRole || isSelf() || isLoading()"
+                                class="btn btn-primary w-100" type="submit">
+                          @if (isLoading()) {
+                            <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
+                                  style="margin-right: 5px;"></span>
+                            <span>Saving...</span>
+                          } @else {
+                            <span>Update Role</span>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                    @if (!canEditRole) {
+                      <small class="text-secondary d-block mt-2">
+                        Your role does not include the UPDATE:ROLE authority.
+                      </small>
+                    }
+                  </form>
+                </div>
+              </div>
+
+              <!-- Account state (FR-ADMIN-4, requires UPDATE:USER) -->
+              <div class="card mb-3">
+                <div class="card-body">
+                  <h5 class="mb-3"><i class="bi bi-person-lock" style="margin-right: 8px;"></i>Account State</h5>
+                  <form #settingsForm="ngForm" (ngSubmit)="updateAccountSettings(settingsForm)">
+                    <div class="row align-items-end">
+                      <div class="col-md-8">
+                        <div class="form-check">
+                          <input [disabled]="!canEditSettings || isSelf() || isLoading()"
+                                 [ngModel]="state?.appData?.data?.selectedUser?.enabled"
+                                 class="form-check-input" id="enabled" name="enabled" type="checkbox">
+                          <label class="form-check-label" for="enabled">Account enabled (may log in)</label>
+                        </div>
+                        <div class="form-check">
+                          <input [disabled]="!canEditSettings || isSelf() || isLoading()"
+                                 [ngModel]="state?.appData?.data?.selectedUser?.notLocked"
+                                 class="form-check-input" id="notLocked" name="notLocked" type="checkbox">
+                          <label class="form-check-label" for="notLocked">Account unlocked</label>
+                        </div>
+                      </div>
+                      <div class="col-md-4">
+                        <button [disabled]="!canEditSettings || isSelf() || isLoading()"
+                                class="btn btn-primary w-100" type="submit">
+                          @if (isLoading()) {
+                            <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
+                                  style="margin-right: 5px;"></span>
+                            <span>Saving...</span>
+                          } @else {
+                            <span>Update State</span>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                    @if (!canEditSettings) {
+                      <small class="text-secondary d-block mt-2">
+                        Your role does not include the UPDATE:USER authority.
+                      </small>
+                    }
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Audit history (FR-ADMIN-2): paginated event history for this account -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card mb-4">
+                <div class="card-body">
+                  <h5 class="mb-3">
+                    <i class="bi bi-clock-history" style="margin-right: 8px;"></i>Activity History
+                    <span class="text-secondary" style="font-size: 0.85rem;">
+                      ({{ state?.appData?.data?.eventsTotalElements ?? 0 }} total event(s))
+                    </span>
+                  </h5>
+                  <table class="table table-hover">
+                    <thead>
+                    <tr>
+                      <th scope="col">Event</th>
+                      <th scope="col">Device</th>
+                      <th scope="col">IP Address</th>
+                      <th scope="col">Date</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                      @for (event of state?.appData?.data?.events; track $index) {
+                        <tr>
+                          <td>
+                            <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
+                              <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
+                              {{ getEventDisplay(event.type).label }}
+                            </span>
+                            <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
+                          </td>
+                          <td style="font-size: 0.85rem;">{{ event.device }}</td>
+                          <td style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
+                          <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td class="text-center text-muted" colspan="4">No recorded activity.</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+
+                  @if ((state?.appData?.data?.eventsTotalPages ?? 0) > 1) {
+                    <nav aria-label="Activity pagination">
+                      <ul class="pagination pagination-sm justify-content-end mb-0">
+                        <li [class.disabled]="currentEventPage() === 0" class="page-item">
+                          <button (click)="goToEventsPage(currentEventPage() - 1)" class="page-link">&laquo;</button>
+                        </li>
+                        @for (p of [].constructor(state?.appData?.data?.eventsTotalPages ?? 0); track $index; let i = $index) {
+                          <li class="page-item">
+                            <button (click)="goToEventsPage(i)"
+                                    [class.active]="i === currentEventPage()"
+                                    class="page-link">{{ i + 1 }}</button>
+                          </li>
+                        }
+                        <li [class.disabled]="currentEventPage() === (state?.appData?.data?.eventsTotalPages ?? 1) - 1" class="page-item">
+                          <button (click)="goToEventsPage(currentEventPage() + 1)" class="page-link">&raquo;</button>
+                        </li>
+                      </ul>
+                    </nav>
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    }
+    @case (DataState.LOADING) {
+      <div class="sc-state">
+        <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
+        <p class="mb-0">Loading account…</p>
+      </div>
+    }
+    @case (DataState.ERROR) {
+      <div class="sc-state">
+        <span class="sc-state__icon"><i class="bi bi-exclamation-triangle"></i></span>
+        <p class="mb-0">{{ state.error }}</p>
+      </div>
+    }
+  }
+}

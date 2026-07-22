@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, Input } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { StatsInterface } from '../../interface/stats.interface';
+import { UserService } from '../../service/user.service';
 
 /**
  * Renders the summary stats panel on the home dashboard.
@@ -17,7 +19,7 @@ import { StatsInterface } from '../../interface/stats.interface';
  */
 @Component({
   selector: 'app-stats',
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, RouterLink],
   templateUrl: './stats.component.html',
   styleUrl: './stats.component.css',
   standalone: true,
@@ -26,4 +28,15 @@ import { StatsInterface } from '../../interface/stats.interface';
 export class StatsComponent {
   /** Aggregated totals passed down from {@link HomeComponent} via the customer list response. */
   @Input() stats: StatsInterface | undefined;
+
+  /**
+   * Whether the current user has billing-admin access.
+   *
+   * Drives the Total Billed card's link destination — admins navigate to the
+   * detailed Billing Overview page; others fall back to the invoices list, which
+   * is always accessible and still relevant. Using the same authority set as
+   * {@link adminGuard} so the card only promises a route the guard will actually
+   * allow through.
+   */
+  readonly canViewBilling = inject(UserService).hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE', 'DELETE:USER');
 }

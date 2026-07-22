@@ -2,48 +2,104 @@
 <nav class="navbar navbar-expand-lg sc-navbar">
   <div class="container">
     <a [routerLink]="['/']" class="navbar-brand sc-brand">
-      <span class="sc-brand__mark"><i class="bi bi-shield-lock-fill"></i></span>
-      <span class="sc-brand__text">Secure<span class="sc-brand__accent">Capita</span></span>
+      <span class="sc-brand__mark"><i class="bi bi-hexagon-fill"></i></span>
+      <span class="sc-brand__text">Tessera<span class="sc-brand__accent">App</span></span>
     </a>
     <button aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"
             class="navbar-toggler" data-bs-target="#navbarSupportedContent" data-bs-toggle="collapse"
             type="button"><span class="navbar-toggler-icon"></span></button>
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
       <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+
+        <!-- Customers -->
         <li class="nav-item dropdown">
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
-             id="navbarDropdownCustomers"
-             role="button">
+             id="navbarDropdownCustomers" role="button">
             Customers
           </a>
           <ul aria-labelledby="navbarDropdownCustomers" class="dropdown-menu dropdown-menu-end">
-            <li><a [routerLink]="['/customer/new']" class="dropdown-item"><i class="bi bi-person-plus-fill"
-                                                                             style="padding-right: 8px;"></i>New
-              Customer</a></li>
-            <li><a [routerLink]="['/customers']" class="dropdown-item"><i class="bi bi-people-fill"
-                                                                          style="padding-right: 8px;"></i>All
-              Customers</a></li>
+            <li><a [routerLink]="['/customer/new']" class="dropdown-item">
+              <i class="bi bi-person-plus-fill" style="padding-right: 8px;"></i>New Customer</a>
+            </li>
+            <li><a [routerLink]="['/customers']" class="dropdown-item">
+              <i class="bi bi-people-fill" style="padding-right: 8px;"></i>All Customers</a>
+            </li>
           </ul>
         </li>
+
+        <!-- Invoices -->
         <li class="nav-item dropdown">
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
-             id="navbarDropdownInvoices"
-             role="button">
+             id="navbarDropdownInvoices" role="button">
             Invoices
           </a>
           <ul aria-labelledby="navbarDropdownInvoices" class="dropdown-menu dropdown-menu-end">
-            <li><a [routerLink]="['/invoice/new']" class="dropdown-item"><i class="bi bi-receipt"
-                                                                            style="padding-right: 8px;"></i>New Invoice</a>
+            <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
+              <i class="bi bi-receipt" style="padding-right: 8px;"></i>New Invoice</a>
             </li>
-            <li><a [routerLink]="['/invoices']" class="dropdown-item"><i class="bi bi-receipt-cutoff"
-                                                                         style="padding-right: 8px;"></i>All
-              Invoices</a></li>
+            <li><a [routerLink]="['/invoices']" class="dropdown-item">
+              <i class="bi bi-receipt-cutoff" style="padding-right: 8px;"></i>All Invoices</a>
+            </li>
           </ul>
         </li>
+
+        <!-- Services & Apps — available to all authenticated users -->
         <li class="nav-item dropdown">
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
-             id="navbarDropdownProfile"
-             role="button">
+             id="navbarDropdownServices" role="button">
+            Services
+          </a>
+          <ul aria-labelledby="navbarDropdownServices" class="dropdown-menu dropdown-menu-end">
+            <li><a [routerLink]="['/services']" class="dropdown-item">
+              <i class="bi bi-grid-1x2-fill" style="padding-right: 8px;"></i>Service Catalog</a>
+            </li>
+            <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
+              <i class="bi bi-plus-circle" style="padding-right: 8px;"></i>New Service Invoice</a>
+            </li>
+          </ul>
+        </li>
+
+        @if (canManageUsers) {
+          <!-- Admin section — staff-grade only (UPDATE:USER / UPDATE:ROLE).
+               adminGuard + the backend's /admin/** rules enforce the same check. -->
+          <li class="nav-item dropdown">
+            <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
+               id="navbarDropdownAdmin" role="button">
+              <i class="bi bi-shield-shaded" style="padding-right: 4px;"></i>Admin
+            </a>
+            <ul aria-labelledby="navbarDropdownAdmin" class="dropdown-menu dropdown-menu-end">
+              <!-- User management (list + per-user role assignment) -->
+              <li><a [routerLink]="['/users']" class="dropdown-item">
+                <i class="bi bi-people-fill" style="padding-right: 8px;"></i>User Directory</a>
+              </li>
+              @if (isSuperAdmin) {
+                <!-- Role assignment shortcut — super-admin only.
+                     Org admins can view users but cannot reassign roles across orgs. -->
+                <li><a [routerLink]="['/users']" class="dropdown-item">
+                  <i class="bi bi-person-badge-fill" style="padding-right: 8px;"></i>Assign Roles</a>
+                </li>
+              }
+              <!-- Permissions matrix — which authorities belong to which role -->
+              <li><a [routerLink]="['/roles']" class="dropdown-item">
+                <i class="bi bi-grid-3x3-gap-fill" style="padding-right: 8px;"></i>Roles &amp; Permissions</a>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <!-- Billing overview — revenue analytics for the current scope -->
+              <li><a [routerLink]="['/billing']" class="dropdown-item">
+                <i class="bi bi-graph-up-arrow" style="padding-right: 8px;"></i>Billing Overview</a>
+              </li>
+              <!-- Analytics hub — full trend charts and cross-cutting stats -->
+              <li><a [routerLink]="['/analytics']" class="dropdown-item">
+                <i class="bi bi-bar-chart-line-fill" style="padding-right: 8px;"></i>Analytics Hub</a>
+              </li>
+            </ul>
+          </li>
+        }
+
+        <!-- User profile dropdown -->
+        <li class="nav-item dropdown">
+          <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
+             id="navbarDropdownProfile" role="button">
             @if (user; as u) {
               @if (u.imageUrl) {
                 <div style="position: relative; width: 60px; height: 60px; border-radius: 50%; overflow: hidden;">
@@ -60,17 +116,21 @@
           </a>
           <ul aria-labelledby="navbarDropdownProfile" class="dropdown-menu dropdown-menu-end">
             @if (user; as u) {
-              <li><a [routerLink]="['/profile']" class="dropdown-item"><i class="bi bi-person-circle"
-                                                                          style="padding-right: 8px;"></i>{{ u.firstName }} {{ u.lastName }}</a>
+              <li><a [routerLink]="['/profile']" class="dropdown-item">
+                <i class="bi bi-person-circle" style="padding-right: 8px;"></i>{{ u.firstName }} {{ u.lastName }}</a>
+              </li>
+              <li><a [routerLink]="['/security']" class="dropdown-item">
+                <i class="bi bi-shield-lock" style="padding-right: 8px;"></i>Security Center</a>
               </li>
             }
             <li style="cursor: pointer;"><a (click)="logOut()" (keydown.enter)="logOut()" class="dropdown-item"
-                                            role="button" tabindex="0"><i
-              class="bi bi-box-arrow-in-right"
-              style="padding-right: 8px;"></i>Logout</a>
+                                            role="button" tabindex="0">
+              <i class="bi bi-box-arrow-in-right" style="padding-right: 8px;"></i>Logout</a>
             </li>
           </ul>
         </li>
+
+        <!-- Dark / light theme toggle -->
         <li class="nav-item d-flex align-items-center ms-lg-2">
           <button (click)="toggleTheme()" class="sc-theme-toggle" type="button"
                   [attr.aria-label]="theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
@@ -79,6 +139,7 @@
                [class.bi-moon-stars-fill]="theme() === 'light'"></i>
           </button>
         </li>
+
       </ul>
     </div>
   </div>

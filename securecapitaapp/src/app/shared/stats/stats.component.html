@@ -1,37 +1,39 @@
 @if (stats) {
-  <div class="row g-3">
-    <div class="col-md-4 col-sm-6 col-xs-12">
-      <div class="mini-stat clearfix bg-facebook rounded">
-        <span class="mini-stat-icon">
-          <i class="bi bi-people-fill fg-facebook"></i>
-        </span>
-        <div class="mini-stat-info text-end">
-          <span>{{ stats.totalCustomers }}</span>
-          Total Customers
-        </div>
+  <div class="sc-metrics">
+
+    <!-- Customers — primary accent (indigo) -->
+    <a class="sc-metric sc-metric--accent" [routerLink]="['/customers']"
+       aria-label="View all customers">
+      <span class="sc-metric__icon"><i class="bi bi-people-fill"></i></span>
+      <div class="sc-metric__body">
+        <span class="sc-metric__value">{{ stats.totalCustomers }}</span>
+        <span class="eyebrow">Total Customers</span>
       </div>
-    </div>
-    <div class="col-md-4 col-sm-6 col-xs-12">
-      <div class="mini-stat clearfix bg-googleplus rounded">
-        <span class="mini-stat-icon">
-          <i class="bi bi-receipt-cutoff fg-googleplus"></i>
-        </span>
-        <div class="mini-stat-info text-end">
-          <span>{{ stats.totalInvoices }}</span>
-          Total Invoices
-        </div>
+      <i class="bi bi-arrow-right sc-metric__arrow"></i>
+    </a>
+
+    <!-- Invoices — info (cyan) -->
+    <a class="sc-metric sc-metric--info" [routerLink]="['/invoices']"
+       aria-label="View all invoices">
+      <span class="sc-metric__icon"><i class="bi bi-receipt-cutoff"></i></span>
+      <div class="sc-metric__body">
+        <span class="sc-metric__value">{{ stats.totalInvoices }}</span>
+        <span class="eyebrow">Total Invoices</span>
       </div>
-    </div>
-    <div class="col-md-4 col-sm-6 col-xs-12">
-      <div class="mini-stat clearfix bg-twitter rounded">
-        <span class="mini-stat-icon">
-          <i class="bi bi-currency-dollar fg-twitter"></i>
-        </span>
-        <div class="mini-stat-info text-end">
-          <span>${{ stats.totalBilled | number: '1.2-2' }}</span>
-          Total Billed
-        </div>
+      <i class="bi bi-arrow-right sc-metric__arrow"></i>
+    </a>
+
+    <!-- Billed — success (green). Admins → /billing; others → /invoices -->
+    <a class="sc-metric sc-metric--ok"
+       [routerLink]="canViewBilling ? ['/billing'] : ['/invoices']"
+       [attr.aria-label]="canViewBilling ? 'View billing overview' : 'View all invoices'">
+      <span class="sc-metric__icon"><i class="bi bi-currency-dollar"></i></span>
+      <div class="sc-metric__body">
+        <span class="sc-metric__value">${{ stats.totalBilled | number: '1.2-2' }}</span>
+        <span class="eyebrow">Total Billed</span>
       </div>
-    </div>
+      <i class="bi bi-arrow-right sc-metric__arrow"></i>
+    </a>
+
   </div>
 }

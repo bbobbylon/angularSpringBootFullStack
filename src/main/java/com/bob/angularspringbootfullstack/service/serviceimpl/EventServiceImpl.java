@@ -7,6 +7,7 @@ import com.bob.angularspringbootfullstack.service.EventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 
 /**
@@ -43,6 +44,14 @@ public class EventServiceImpl implements EventService {
     @Override
     public long countEventsByUserId(Long userId) {
         return eventRepo.countEventsByUserId(userId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long countRecentFailuresByEmail(String email, int windowMinutes) {
+        return eventRepo.countRecentFailuresByEmail(email, LocalDateTime.now().minusMinutes(windowMinutes));
     }
 
     /**

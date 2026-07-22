@@ -1,0 +1,135 @@
+/* ============================================================================
+   Services Catalog page — all tokens from styles.css
+   ============================================================================ */
+:host { display: block; }
+
+.sc-catalog {
+  padding: var(--space-6) 0 var(--space-8);
+  min-height: 100vh;
+  background: var(--surface-0);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.sc-catalog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+.sc-catalog__title {
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  color: var(--text-strong);
+  margin: 0.25rem 0 0.4rem;
+  letter-spacing: -0.025em;
+}
+.sc-catalog__sub { color: var(--text-muted); margin: 0; font-size: var(--fs-sm); }
+.sc-catalog__actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+
+/* ── Summary bar ─────────────────────────────────────────────────────────── */
+.sc-catalog-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+}
+.sc-catalog-summary strong { color: var(--text-strong); }
+.sc-catalog-summary__sep { color: var(--hairline-strong); }
+
+/* ── Service card grid ───────────────────────────────────────────────────── */
+.sc-svc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+@media (max-width: 1024px) { .sc-svc-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px)  { .sc-svc-grid { grid-template-columns: 1fr; } }
+
+.sc-svc-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  transition:
+    transform var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.sc-svc-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-ring);
+  box-shadow: var(--shadow-lg);
+}
+
+.sc-svc-card__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+}
+.sc-svc-card__body { flex: 1; }
+.sc-svc-card__name {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 0 0 0.4rem;
+}
+.sc-svc-card__desc {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.55;
+}
+.sc-svc-card__desc--empty { color: var(--text-faint); font-style: italic; }
+
+.sc-svc-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--hairline);
+}
+.sc-svc-card__price {
+  font-family: var(--font-mono);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--ok);
+  letter-spacing: -0.01em;
+}
+
+/* ── Skeleton loader ─────────────────────────────────────────────────────── */
+.sc-catalog-loading__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+@media (max-width: 1024px) { .sc-catalog-loading__grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px)  { .sc-catalog-loading__grid { grid-template-columns: 1fr; } }
+
+.sc-svc-skeleton {
+  height: 180px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

@@ -1,0 +1,110 @@
+<section class="sc-trend-panel">
+  <!-- Toggle header -->
+  <button class="sc-trend-panel__toggle" (click)="toggleExpanded()" type="button"
+          [attr.aria-expanded]="expanded()">
+    <div class="sc-trend-panel__toggle-left">
+      <i class="bi bi-graph-up sc-trend-panel__toggle-icon sc-trend-panel__toggle-icon--rev"></i>
+      <span class="sc-trend-panel__toggle-label">Invoice Analytics</span>
+      @if (state().dataState === DataState.LOADING) {
+        <span class="sc-trend-panel__loading">Loading…</span>
+      } @else if (invoiceTotal() > 0) {
+        <span class="sc-trend-panel__count">{{ invoiceTotal() }} invoices analysed</span>
+      }
+    </div>
+    <i class="bi sc-trend-panel__chevron"
+       [class.bi-chevron-down]="!expanded()"
+       [class.bi-chevron-up]="expanded()"></i>
+  </button>
+
+  @if (expanded()) {
+    <div class="sc-trend-panel__body">
+
+      @if (state().dataState === DataState.LOADED && invoiceTotal() > 0) {
+        <!-- KPI strip -->
+        <div class="sc-inv-kpis">
+          <div class="sc-inv-kpi sc-inv-kpi--rev">
+            <span class="eyebrow">Total Revenue</span>
+            <span class="sc-inv-kpi__value">${{ totalRevenue() | number: '1.2-2' }}</span>
+          </div>
+          <div class="sc-inv-kpi sc-inv-kpi--avg">
+            <span class="eyebrow">Avg Invoice</span>
+            <span class="sc-inv-kpi__value">${{ avgInvoiceValue() | number: '1.2-2' }}</span>
+          </div>
+          <div class="sc-inv-kpi sc-inv-kpi--rate">
+            <span class="eyebrow">Collection Rate</span>
+            <span class="sc-inv-kpi__value">{{ collectionRate() | number: '1.1-1' }}%</span>
+          </div>
+        </div>
+
+        <div class="sc-trend-grid">
+
+          <!-- Revenue bar chart -->
+          <div class="sc-trend-cell sc-trend-cell--bars">
+            <p class="sc-trend-cell__title eyebrow">Revenue / Month</p>
+            <div class="sc-mini-bars">
+              @for (bar of revenueBars(); track bar.label) {
+                <div class="sc-mini-bar-col">
+                  <div class="sc-mini-bar-col__fill sc-mini-bar-col__fill--ok"
+                       [style.height.%]="bar.barHeight"
+                       [title]="bar.label + ': $' + bar.revenue + ' (' + bar.count + ' inv)'">
+                    <span class="sc-mini-bar-col__tip">${{ bar.revenue | number: '1.0-0' }}</span>
+                  </div>
+                  <span class="sc-mini-bar-col__label">{{ bar.label }}</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Status donut -->
+          <div class="sc-trend-cell">
+            <p class="sc-trend-cell__title eyebrow">Status Breakdown</p>
+            @if (statusSegments().length) {
+              <div class="sc-mini-donut-wrap">
+                <div class="sc-mini-donut-fig">
+                  <svg viewBox="0 0 36 36" class="sc-mini-donut" role="img">
+                    <circle class="sc-mini-donut__track" cx="18" cy="18" r="15.915"/>
+                    @for (seg of statusSegments(); track seg.label) {
+                      <circle class="sc-mini-donut__seg" cx="18" cy="18" r="15.915"
+                              [attr.stroke]="seg.color"
+                              [attr.stroke-dasharray]="seg.dashArray"
+                              [attr.stroke-dashoffset]="seg.dashOffset"/>
+                    }
+                  </svg>
+                  <div class="sc-mini-donut__center">
+                    <span class="sc-mini-donut__total">{{ invoiceTotal() }}</span>
+                  </div>
+                </div>
+                <ul class="sc-mini-legend">
+                  @for (seg of statusSegments(); track seg.label) {
+                    <li class="sc-mini-legend__item">
+                      <span class="sc-mini-legend__dot" [style.background]="seg.color"></span>
+                      <span>{{ seg.label }}</span>
+                      <span class="sc-mini-legend__pct mono">{{ seg.percent | number: '1.0-0' }}%</span>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+          </div>
+
+        </div>
+
+        <div class="sc-trend-panel__footer">
+          <a [routerLink]="['/analytics']" class="sc-trend-panel__link">
+            <i class="bi bi-graph-up-arrow"></i> Full analytics
+          </a>
+          <a [routerLink]="['/billing']" class="sc-trend-panel__link">
+            <i class="bi bi-cash-stack"></i> Billing overview
+          </a>
+        </div>
+      } @else if (state().dataState === DataState.LOADING) {
+        <div class="sc-trend-panel__skeleton">
+          <div class="sc-skeleton-bar"></div>
+          <div class="sc-skeleton-bar sc-skeleton-bar--short"></div>
+        </div>
+      } @else {
+        <p class="text-muted small mb-0 p-3">No analytics data available.</p>
+      }
+    </div>
+  }
+</section>

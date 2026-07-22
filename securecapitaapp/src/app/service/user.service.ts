@@ -4,10 +4,12 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { AccountType, NewPasswordFormInterface, ProfileInterface } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
+import { SessionsDataInterface, TotpEnableInterface, TotpSetupInterface, TotpStatusInterface } from '../interface/security.interface';
 import { UserInterface } from '../interface/user.interface';
 import { Key } from '../enumeration/key.enumeration';
 import { JwtHelperService } from '@auth0/angular-jwt';
 import { HttpCacheService } from './http-cache.service';
+import { environment } from '../../environments/environment';
 
 /**
  * Central HTTP service for all user-related API calls.
@@ -25,7 +27,7 @@ export class UserService {
   private http = inject(HttpClient);
   private readonly httpCache = inject(HttpCacheService);
   private jwtHelper = new JwtHelperService();
-  private readonly server: string = 'http://localhost:8080';
+  private readonly server = environment.apiUrl;
 
   /**
    * Verifies a user's 2FA code after login.
@@ -192,18 +194,9 @@ export class UserService {
       catchError(this.handleError),
     );
 
-  /**
-   * Reassigns the authenticated user's role to the given role name.
-   * The backend returns the refreshed user and the full roles list so the
-   * Authorization tab can update its selector without an additional request.
-   *
-   * @param roleName - the target role name (e.g. {@code 'ROLE_ADMIN'})
-   * @returns Observable of the API envelope containing the updated user and roles
-   */
-  updateUserRole$ = (roleName: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
-    this.http
-      .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/role/${roleName}`, {})
-      .pipe(tap(console.log), catchError(this.handleError));
+  // NOTE(FR-RBAC-4): updateUserRole$ was removed together with the backend's self-service
+  // PATCH /user/update/role endpoint — users cannot change their own role. Administrators
+  // reassign roles through AdminUserService against the /admin/user endpoints.
 
   /**
    * Persists the enabled and notLocked account-settings flags for the authenticated user.
@@ -245,8 +238,157 @@ export class UserService {
       .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/togglemfa`, {})
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * Completes a TOTP-gated login ({@code POST /user/verify/totp}, public). The
+   * {@code challenge} is the opaque first-factor proof returned by {@link login$} for
+   * accounts with an authenticator enrolled; pairing it with the code is what prevents
+   * a bare TOTP code from ever skipping the password step. POSTed as a body so neither
+   * value reaches URL or proxy logs. The route contains "verify", so the token
+   * interceptor correctly attaches no Authorization header.
+   *
+   * @param challenge - the challenge from the login (or federated callback) response
+   * @param code      - a 6-digit authenticator code or an unused recovery code
+   * @returns Observable emitting a ProfileInterface response containing tokens
+   */
+  verifyTotp$ = (challenge: string, code: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/totp`, { challenge, code })
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Starts authenticator enrollment ({@code POST /user/totp/setup}, authenticated).
+   * Returns the secret, otpauth URI, and a server-rendered QR data URI for the
+   * Security Center wizard. Safe to call again to restart with a fresh secret while
+   * enrollment is unconfirmed.
+   *
+   * @returns Observable of the API envelope carrying {@link TotpSetupInterface} fields
+   */
+  totpSetup$ = (): Observable<CustomHttpResponseInterface<TotpSetupInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<TotpSetupInterface>>(`${this.server}/user/totp/setup`, {})
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Confirms enrollment ({@code POST /user/totp/enable}, authenticated) by echoing a
+   * code from the freshly scanned authenticator. The response carries the plaintext
+   * recovery codes for their ONE AND ONLY display — the backend stores only hashes.
+   *
+   * @param code - the 6-digit code from the authenticator app
+   * @returns Observable of the API envelope with the updated user and recoveryCodes
+   */
+  totpEnable$ = (code: string): Observable<CustomHttpResponseInterface<TotpEnableInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<TotpEnableInterface>>(`${this.server}/user/totp/enable`, { code })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Disables the authenticator ({@code POST /user/totp/disable}, authenticated).
+   * Requires a live TOTP code or an unused recovery code — a session alone cannot
+   * strip the second factor.
+   *
+   * @param code - a current authenticator code or an unused recovery code
+   * @returns Observable of the API envelope with the updated user
+   */
+  totpDisable$ = (code: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/totp/disable`, { code })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Fetches authenticator status ({@code GET /user/totp/status}, authenticated) for the
+   * Security Center: enabled flag plus how many recovery codes remain unused.
+   *
+   * @returns Observable of the API envelope carrying {@link TotpStatusInterface} fields
+   */
+  totpStatus$ = (): Observable<CustomHttpResponseInterface<TotpStatusInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<TotpStatusInterface>>(`${this.server}/user/totp/status`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Lists the caller's live refresh sessions ({@code GET /user/sessions}) for the
+   * Security Center's devices panel, including which family is the current one.
+   *
+   * @returns Observable of the API envelope carrying sessions and currentFamily
+   */
+  sessions$ = (): Observable<CustomHttpResponseInterface<SessionsDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<SessionsDataInterface>>(`${this.server}/user/sessions`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Revokes one session ({@code DELETE /user/sessions/{family}}). The revoked device
+   * can no longer refresh; its access token ages out within 30 minutes.
+   *
+   * @param family - the session family from the {@link sessions$} response
+   * @returns Observable of the API envelope with the refreshed session list
+   */
+  revokeSession$ = (family: string): Observable<CustomHttpResponseInterface<SessionsDataInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<SessionsDataInterface>>(`${this.server}/user/sessions/${family}`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * "Log out everywhere else" ({@code DELETE /user/sessions}): revokes every session
+   * except the one this browser is using.
+   *
+   * @returns Observable of the API envelope with the refreshed session list
+   */
+  revokeOtherSessions$ = (): Observable<CustomHttpResponseInterface<SessionsDataInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<SessionsDataInterface>>(`${this.server}/user/sessions`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Fetches which federated identity providers are configured on the backend
+   * ({@code GET /oauth2/providers}, public). The login screen renders one button per
+   * returned id; an empty list (federated login not configured in this environment)
+   * renders no federated section at all.
+   *
+   * @returns Observable of the API envelope carrying {@code providers}, e.g. ['github']
+   */
+  federatedProviders$ = (): Observable<CustomHttpResponseInterface<{ providers: string[] }>> =>
+    this.http
+      .get<CustomHttpResponseInterface<{ providers: string[] }>>(`${this.server}/oauth2/providers`)
+      .pipe(tap(console.log), catchError(this.handleError));
+
+  /**
+   * Starts the federated login flow for the given provider by performing a full-page
+   * navigation to the backend's Spring Security initiation endpoint
+   * ({@code /oauth2/authorization/{provider}}). This is deliberately NOT an XHR — the
+   * OAuth2 Authorization Code flow is a chain of browser redirects (backend → provider
+   * consent screen → backend callback → SPA /oauth2/callback with tokens in the URL
+   * fragment), so the whole window must travel.
+   *
+   * @param provider - a registration id previously returned by {@link federatedProviders$}
+   */
+  initiateFederatedLogin(provider: string): void {
+    window.location.assign(`${this.server}/oauth2/authorization/${provider}`);
+  }
+
   isAuthenticated = (): boolean =>
     !!this.jwtHelper.decodeToken<string>(localStorage.getItem(Key.TOKEN) ?? '') && !this.jwtHelper.isTokenExpired(localStorage.getItem(Key.TOKEN) ?? '');
+
+  /**
+   * Returns whether the current access token grants at least one of the given authorities.
+   *
+   * Decodes the {@code authorities} array claim that the backend's {@code TokenProvider}
+   * embeds in every access token (the same claim Spring Security enforces server-side).
+   * Used by {@code adminGuard} and the navbar to decide whether to expose the admin
+   * Users dashboard. This is a usability gate only (NFR-SEC-4) — the backend re-checks
+   * the same authorities at the URL and method level on every request, so a tampered
+   * token changes what renders but never what the API permits.
+   *
+   * @param authorities - one or more authority strings (e.g. {@code 'UPDATE:ROLE'})
+   * @returns true if the token is present, unexpired, and carries any of the authorities
+   */
+  hasAnyAuthority = (...authorities: string[]): boolean => {
+    const token = localStorage.getItem(Key.TOKEN) ?? '';
+    if (!token || this.jwtHelper.isTokenExpired(token)) return false;
+    const decoded = this.jwtHelper.decodeToken<{ authorities?: string[] }>(token);
+    const granted = decoded?.authorities ?? [];
+    return authorities.some((authority) => granted.includes(authority));
+  };
 
   /**
    * Ends the user's session by clearing both JWT tokens from localStorage AND

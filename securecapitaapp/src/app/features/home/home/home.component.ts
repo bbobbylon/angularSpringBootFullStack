@@ -5,6 +5,7 @@ import { Router, RouterModule } from '@angular/router';
 import { catchError, combineLatest, map, of, startWith, switchMap } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { StatsComponent } from '../../../shared/stats/stats.component';
+import { InsightsComponent } from '../../../shared/insights/insights.component';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { CustomerListDataInterface } from '../../../interface/appstates.interface';
@@ -26,7 +27,7 @@ import { NotificationsService } from '../../../service/notifications-service';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [NgClass, RouterModule, NavbarComponent, StatsComponent, ExtractArrayValuePipe, NgOptimizedImage],
+  imports: [NgClass, RouterModule, NavbarComponent, StatsComponent, InsightsComponent, ExtractArrayValuePipe, NgOptimizedImage],
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,0 +1,12 @@
+/*
+ * Users directory styles.
+ *
+ * Intentionally minimal: layout, color, and typography come from the global
+ * design-token layer in src/styles.css (M0), and Bootstrap's table/badge
+ * components are themed there via the --bs-* variable bridge. Only view-specific
+ * tweaks belong in this file.
+ */
+
+.table-body tr {
+  vertical-align: middle;
+}

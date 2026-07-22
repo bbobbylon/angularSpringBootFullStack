@@ -56,7 +56,7 @@ public class EmailServiceImpl implements EmailService {
         msg.setTo(email);
         msg.setFrom("bobsangularemail@gmail.com");
         msg.setText(getEmailMessage(firstName, verificationURL, verificationType));
-        msg.setSubject(String.format("Secure Capita - %s Verification Email", StringUtils.capitalize(verificationType.name().toLowerCase())));
+        msg.setSubject(String.format("TesseraApp - %s Verification Email", StringUtils.capitalize(verificationType.name().toLowerCase())));
         mailSender.send(msg);
         log.info("Verification email ({}) dispatched to {}", verificationType.getType(), email);
     }
@@ -84,7 +84,7 @@ public class EmailServiceImpl implements EmailService {
                 return "Hello " + firstName + "\n\n Reset Password Request. Please click the link to begin the password reset flow.\n\n" + verificationURL + "\n\n If you did not request a password reset, please ignore this email.";
             }
             case ACCOUNT -> {
-                return "Hello " + firstName + "\n\n Welcome to Secure Capita! Please click the link to activate your account.\n\n" + verificationURL + "\n\n If you did not create an account, please ignore this email.";
+                return "Hello " + firstName + "\n\n Welcome to TesseraApp! Please click the link to activate your account.\n\n" + verificationURL + "\n\n If you did not create an account, please ignore this email.";
             }
             default -> throw new ApiException("Unable to send email. Please try again later.");
 

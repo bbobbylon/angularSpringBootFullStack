@@ -1,6 +1,9 @@
 package com.bob.angularspringbootfullstack.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -23,9 +26,20 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT;
 @JsonInclude(NON_DEFAULT)
 public class User {
     private Long id;
+    // Bean-validation constraints below run ONLY on the registration path
+    // (POST /user/register binds the body with @Valid User). Every other flow
+    // constructs User server-side without @Valid, so these never block internal
+    // updates. Validation is intentionally kept at the controller boundary —
+    // jakarta.persistence.validation.mode is set to none for the JPA entities.
+    @NotBlank(message = "First name is required")
     private String firstName;
+    @NotBlank(message = "Last name is required")
     private String lastName;
+    @NotBlank(message = "Email is required")
+    @Email(message = "A valid email address is required")
     private String email;
+    @NotBlank(message = "Password is required")
+    @Size(min = 8, message = "Password must be at least 8 characters")
     private String password;
     private String imageUrl;
     private String address;
@@ -35,6 +49,14 @@ public class User {
     private boolean enabled;
     private boolean isNotLocked;
     private boolean isUsing2FA;
+    /**
+     * Whether a CONFIRMED authenticator-app (TOTP) credential exists for this user
+     * (SRS FR-MFA-4). Denormalized from the {@code totpcredentials} table onto
+     * {@code users.using_totp} — kept in lockstep by {@code TotpServiceImpl} — so row
+     * mapping and DTO exposure need no join. When true, login challenges use the
+     * authenticator instead of the SMS code path ({@code isUsing2FA}).
+     */
+    private boolean usingTotp;
     private LocalDateTime createdAt;
     /**
      * Timestamp of the most recent password change.

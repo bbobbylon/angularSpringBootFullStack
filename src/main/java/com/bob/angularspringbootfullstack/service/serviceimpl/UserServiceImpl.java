@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collection;
+
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 
 /**
@@ -206,6 +208,39 @@ public class UserServiceImpl implements UserService {
     @Override
     public void updateProfileImage(UserDTO userDTO, MultipartFile image) {
         userRepo.updateProfileImage(userDTO, image);
+    }
+
+    /**
+     * Pages through the user directory for the administrative dashboard (FR-ADMIN-1).
+     * <p>
+     * Delegates filtering/pagination to the repository, then enriches each row with its
+     * role via {@link #mapToUserDTO(User)}. That role lookup is one extra query per row,
+     * which is acceptable at the bounded page size (default 10, hard cap 100 in the
+     * repository); switching to a single JOIN query is a known optimization if directory
+     * pages ever grow.
+     *
+     * @param searchTerm free-text filter; blank or null lists everyone
+     * @param page       0-indexed page number
+     * @param pageSize   rows per page
+     * @return the matching users on the requested page, newest accounts first
+     */
+    @Override
+    public Collection<UserDTO> searchUsers(String searchTerm, int page, int pageSize) {
+        return userRepo.searchUsers(searchTerm, page, pageSize).stream()
+                .map(this::mapToUserDTO)
+                .toList();
+    }
+
+    /**
+     * Counts the users matching the same directory filter as {@link #searchUsers},
+     * for total-pages metadata in the admin UI.
+     *
+     * @param searchTerm free-text filter; blank or null counts everyone
+     * @return the total number of matching users
+     */
+    @Override
+    public long countUsers(String searchTerm) {
+        return userRepo.countUsers(searchTerm);
     }
 
     /**

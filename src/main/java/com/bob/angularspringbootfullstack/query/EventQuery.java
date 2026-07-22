@@ -46,6 +46,22 @@ public class EventQuery {
             "FROM userevents uev JOIN users u ON u.id = uev.user_id WHERE u.id = :id";
 
     /**
+     * Counts {@code LOGIN_ATTEMPT_FAILURE} events for a given email address that
+     * occurred at or after {@code :since} (a UTC timestamp string in MySQL
+     * DATETIME format, e.g. {@code 2026-06-12 10:30:00}).
+     *
+     * <p>Used by the brute-force rate-limit check in
+     * {@link com.bob.angularspringbootfullstack.controller.UserController}: if this
+     * count reaches the threshold within the sliding window the login is refused
+     * without triggering a DB-level account lock (SRS FR-EXT-1 partial, M6).
+     */
+    public static final String COUNT_RECENT_FAILURES_BY_EMAIL_QUERY =
+            "SELECT COUNT(*) FROM userevents uev " +
+            "JOIN events ev ON ev.id = uev.event_id " +
+            "JOIN users u ON u.id = uev.user_id " +
+            "WHERE u.email = :email AND ev.type = 'LOGIN_ATTEMPT_FAILURE' AND uev.created_at >= :since";
+
+    /**
      * Inserts a new audit entry for a user identified by their email address.
      *
      * <p>Uses correlated subqueries to resolve the user ID and event type ID at

@@ -21,6 +21,13 @@ export interface LoginStateInterface {
   message?: string;
   isUsingMfa?: boolean;
   phone?: string;
+  /**
+   * Which second factor the MFA panel is collecting (SRS FR-MFA-2/4):
+   * 'sms' renders the "code sent to your phone" copy and submits to the SMS verify
+   * endpoint; 'totp' renders authenticator copy and submits the challenge + code to
+   * {@code POST /user/verify/totp}. Absent when MFA is not in play.
+   */
+  mfaMethod?: 'sms' | 'totp';
 }
 /**
  * Holds the authenticated user's full profile payload returned after a successful login.
@@ -38,6 +45,13 @@ export interface ProfileInterface {
   eventsTotalElements?: number;
   eventsTotalPages?: number;
   roles?: RolesInterface[];
+  /**
+   * Opaque first-factor proof returned by {@code POST /user/login} when the account
+   * has an authenticator enrolled (FR-MFA-4): the password step succeeded, but tokens
+   * are withheld until this challenge plus a TOTP/recovery code are presented to
+   * {@code POST /user/verify/totp}. Absent on every other response.
+   */
+  challenge?: string;
 }
 
 /**
@@ -70,6 +84,15 @@ export interface CustomerListDataInterface {
   page?: PageInterface<CustomerInterface>;
   stats?: StatsInterface;
   statsData?: StatsDataInterface;
+  /**
+   * System-wide customer count keyed by account status (e.g. {@code ACTIVE}, {@code PENDING}).
+   *
+   * Computed by the backend's {@code GROUP BY status} aggregation and embedded in the
+   * {@code /customer/list} and {@code /customer/stats} responses. Drives the home-dashboard
+   * status donut with whole-table accuracy rather than just the loaded page. Optional so
+   * older/cached responses without it degrade gracefully to the page-derived tally.
+   */
+  statusBreakdown?: Record<string, number>;
 }
 
 /**
@@ -82,6 +105,8 @@ export interface CustomerListDataInterface {
 export interface StatsDataInterface {
   user: UserInterface;
   stats: StatsInterface;
+  /** System-wide customer count keyed by account status; see {@link CustomerListDataInterface#statusBreakdown}. */
+  statusBreakdown?: Record<string, number>;
 }
 
 /**

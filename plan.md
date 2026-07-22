@@ -1,4 +1,4 @@
-# SecureCapita — Master's Project Plan
+# TesseraApp — Master's Project Plan
 
 > **A hybrid, zero-trust identity platform with a UI that *visualizes* the security domain.**
 > The graded auth/security engineering and the visual overhaul are the same project: the
@@ -46,14 +46,17 @@ The auth architecture is deliberately **hybrid: stateless tokens + a stateful tr
 - Password-change token invalidation (`passwordChangedAt`)
 - Audit logging with device + IP (`UserEvent`)
 - Anti-enumeration on auth flows · security response headers
+- **Federated OAuth2/OIDC login** (Google/GitHub/Microsoft, env-conditional) converging at a token-exchange point that issues our JWTs; MFA + disable/lock policy applied identically to federated sessions (SRS FR-FED)
+- **Admin user management** (`/admin/user/**` + `/users` dashboard) with FR-RBAC-4 closed (no self role-change anywhere)
+- **Organization-scoped administration** — `ROLE_ORGANIZATION_ADMIN` sees/manages only same-org users, 403 outside scope (SRS FR-ORG); schema via Flyway V1–V4
 
 **Known debt / gaps (track, address opportunistically):**
-- SMS-2FA is **stubbed** — the code is logged, not sent (the "MFA simulation"); → replaced by TOTP in M4
-- **Near-zero tests** (one context-load test; no frontend specs)
+- SMS-2FA dispatch remains **stubbed** (code logged, not sent) — acceptable now that TOTP (M4) is the production-grade factor; live SMS needs only Twilio creds + uncommenting the call
+- **Near-zero tests** (one context-load test; no frontend specs) — rotation/reuse, TOTP challenge binding, and org scoping are the priority candidates
 - Frontend **hardcodes `localhost:8080`** as the API base — portability gap
 - **Two JWT libraries** on the classpath (`jjwt` + `java-jwt`) — consolidation candidate
-- `ddl-auto: update` + `globally_quoted_identifiers` — README itself recommends Flyway + `validate` for prod
-- Access-token Javadoc wrongly says 230 min; the constant is **30 min** (fix the doc in M5)
+- `ddl-auto: update` + `globally_quoted_identifiers` — README itself recommends Flyway + `validate` for prod (identity/security tables are now Flyway V1–V6; the JPA customer/invoice tables are the remainder)
+- ~~Access-token Javadoc wrongly says 230 min~~ — fixed in M5 (`UserController#sendResponse` doc + devMessage now say 30 min)
 
 ---
 
@@ -73,12 +76,12 @@ Custom CSS-variable token layer mapped onto Bootstrap's `--bs-*` vars (`src/styl
 | # | Milestone | Status | Key work |
 |---|---|---|---|
 | M0 | Design foundation | ✅ done | tokens, dark/light, IBM Plex, navbar rebrand |
-| M1 | Auth screens + shell polish | 🔄 in progress | login redesigned ✓ · register/verify/reset · route transitions · skeleton loaders |
+| M1 | Auth screens + shell polish | 🔄 in progress | login/register/verify/reset redesigned ✓ · route transitions · skeleton loaders |
 | M2 | Security / activity dashboard | ⬜ | count-up stats, login chart, MFA ring, audit feed, device/IP list |
-| M3 | Roles × Permissions matrix | ⬜ | visualize RBAC; admin assigns roles/permissions |
-| M4 | TOTP authenticator MFA | ⬜ | replace stubbed SMS; QR enroll; **creates** the Account Security Center |
-| M5 | Sessions & device management | ⬜ | session/device list + revoke; refresh-token **rotation + reuse detection**; shorten/verify access TTL |
-| M6 | Risk-based step-up + lockout | ⬜ | new device/IP → re-verify; brute-force lockout |
+| M3 | Roles × Permissions matrix | ✅ done | admin Users dashboard shipped (`/users` list + `/users/:id` manage: role reassign, enable/lock, audit history; FR-ADMIN-1..5); FR-RBAC-4 self-elevation gap closed; SRS seven-role catalog via Flyway V2; visual matrix grid shipped (`RolesMatrixComponent`, `/roles`; read-only — assignment via the Users dashboard) |
+| M4 | TOTP authenticator MFA | ✅ done | in-house RFC-6238 (`TotpUtils`) + zxing QR enroll; challenge-bound verify; hashed recovery codes; **created** the Account Security Center (`/security`) |
+| M5 | Sessions & device management | ✅ done | `refreshsessions` (Flyway V6); rotation + family-wide **reuse detection** via `SessionService` (the single token-issuance seam); sessions panel + revoke / log-out-everywhere; 30-min TTL doc fixed |
+| M6 | Risk-based step-up + lockout | 🔄 partial | brute-force lockout shipped (login gate, SRS FR-EXT-1 partial); new device/IP → re-verify still open |
 | M7 | Micro-interactions & polish | ⬜ | Ctrl+K command palette, empty states, toast restyle |
 
 > The **Account Security Center** is not a milestone — it's the surface M4 creates and M5/M6 populate.
@@ -89,8 +92,8 @@ Custom CSS-variable token layer mapped onto Bootstrap's `--bs-*` vars (`src/styl
 
 ### M1 — Auth screens + shell polish  🔄
 - [x] **Login / MFA → "access console"** two-panel redesign (token-driven, dark/light, all bindings preserved; fixed `#0d6efd` drift)
-- [ ] **Register** — apply the same two-panel system; inline validation states
-- [ ] **Verify / reset-password** — match; clear success/expired-link states
+- [x] **Register** — two-panel "access console" redesign shipped; inline validation + "check your inbox" success state
+- [x] **Verify / reset-password** — shipped; clear success / expired-link states (`@switch` on `DataState`)
 - [ ] **Route transitions** via the already-installed `@angular/animations`
 - [ ] **Skeleton loaders** — also fixes the "renders nothing during `LOADING`" gap
 - [ ] *(Optional)* lift the navbar into the app shell so authed pages share one chrome
@@ -98,16 +101,16 @@ Custom CSS-variable token layer mapped onto Bootstrap's `--bs-*` vars (`src/styl
 ### M2 — Security / activity dashboard  ⬜
 Home becomes a security overview driven by `UserEvent`: animated stat counters (logins, active sessions, MFA %), a login-activity sparkline/chart, an MFA-coverage ring, a live audit feed, and a device/IP list. *Mostly existing data — minimal backend.*
 
-### M3 — Roles × Permissions matrix  ⬜
+### M3 — Roles × Permissions matrix  ✅
 Interactive grid of roles vs. permissions; admin toggles assignments. Ties into the planned **admin update endpoint** and **org-scoped access**.
 
-### M4 — TOTP authenticator MFA  ⬜
+### M4 — TOTP authenticator MFA  ✅
 Swap stubbed SMS for RFC-6238 TOTP: secret + QR enrollment, verify on login, recovery codes. Establishes the **Account Security Center** page.
 
-### M5 — Sessions, devices & token hardening  ⬜
+### M5 — Sessions, devices & token hardening  ✅
 The stateful half of the hybrid model: persist refresh tokens/sessions with device+IP, list + revoke ("log out everywhere"), implement **rotation with reuse-detection**, confirm the 30-min access TTL and fix the stale Javadoc.
 
-### M6 — Risk-based step-up + brute-force lockout  ⬜
+### M6 — Risk-based step-up + brute-force lockout  🔄
 Score each login against known device/IP history (from `UserEvent`); unknown context forces re-verification. Add lockout/backoff after repeated failures.
 
 ### M7 — Micro-interactions & final polish  ⬜

@@ -1,0 +1,116 @@
+@if (isAdmin) {
+  <!-- ===== Admin / staff view: operational analytics ===== -->
+  <div class="sc-insights">
+
+    <!-- Customer status distribution (donut) -->
+    <section class="sc-panel sc-panel--flush">
+      <div class="sc-panel__head">
+        <div>
+          <h2 class="sc-panel__title">Customer status</h2>
+          <p class="sc-panel__meta">{{ donutScope() }}</p>
+        </div>
+      </div>
+
+      @if (segments().length) {
+        <div class="sc-donut-wrap">
+          <div class="sc-donut-fig">
+            <svg viewBox="0 0 36 36" class="sc-donut" role="img" aria-label="Customer status distribution">
+              <circle class="sc-donut__track" cx="18" cy="18" r="15.915" />
+              @for (seg of segments(); track seg.label) {
+                <circle class="sc-donut__seg" cx="18" cy="18" r="15.915"
+                        [attr.stroke]="seg.color"
+                        [attr.stroke-dasharray]="seg.dashArray"
+                        [attr.stroke-dashoffset]="seg.dashOffset" />
+              }
+            </svg>
+            <div class="sc-donut__center">
+              <span class="sc-donut__total">{{ donutTotal() }}</span>
+              <span class="eyebrow">customers</span>
+            </div>
+          </div>
+
+          <ul class="sc-legend">
+            @for (seg of segments(); track seg.label) {
+              <li class="sc-legend__item">
+                <span class="sc-legend__dot" [style.background]="seg.color"></span>
+                <span class="sc-legend__label">{{ seg.label }}</span>
+                <span class="sc-legend__value">{{ seg.value }}</span>
+                <span class="sc-legend__pct mono">{{ seg.percent | number: '1.0-0' }}%</span>
+              </li>
+            }
+          </ul>
+        </div>
+      } @else {
+        <p class="text-muted mb-0">No customer records to chart yet.</p>
+      }
+    </section>
+
+    <!-- Billing ratios (derived from real totals) -->
+    <section class="sc-panel sc-panel--flush">
+      <div class="sc-panel__head">
+        <div>
+          <h2 class="sc-panel__title">Billing snapshot</h2>
+          <p class="sc-panel__meta">Portfolio averages</p>
+        </div>
+      </div>
+
+      <div class="sc-ratio">
+        <div class="sc-ratio__row">
+          <span class="sc-ratio__icon"><i class="bi bi-receipt"></i></span>
+          <div class="sc-ratio__body">
+            <span class="eyebrow">Avg. invoice value</span>
+            <span class="sc-ratio__value">${{ avgInvoiceValue() | number: '1.2-2' }}</span>
+          </div>
+        </div>
+        <div class="sc-ratio__row">
+          <span class="sc-ratio__icon sc-ratio__icon--info"><i class="bi bi-diagram-3"></i></span>
+          <div class="sc-ratio__body">
+            <span class="eyebrow">Invoices per customer</span>
+            <span class="sc-ratio__value">{{ invoicesPerCustomer() | number: '1.1-1' }}</span>
+          </div>
+        </div>
+        <div class="sc-ratio__row">
+          <span class="sc-ratio__icon sc-ratio__icon--ok"><i class="bi bi-cash-stack"></i></span>
+          <div class="sc-ratio__body">
+            <span class="eyebrow">Total billed</span>
+            <span class="sc-ratio__value">${{ (stats()?.totalBilled ?? 0) | number: '1.2-2' }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+} @else {
+  <!-- ===== Standard account view: quick actions ===== -->
+  <section class="sc-panel sc-panel--flush">
+    <div class="sc-panel__head">
+      <div>
+        <h2 class="sc-panel__title">Quick actions</h2>
+        <p class="sc-panel__meta">Jump back in</p>
+      </div>
+    </div>
+
+    <div class="sc-quick">
+      <a class="sc-quick__card" [routerLink]="['/customers']">
+        <span class="sc-quick__icon"><i class="bi bi-people-fill"></i></span>
+        <span class="sc-quick__label">Browse customers</span>
+        <span class="sc-quick__hint">View the full directory</span>
+      </a>
+      <a class="sc-quick__card" [routerLink]="['/invoices']">
+        <span class="sc-quick__icon sc-quick__icon--info"><i class="bi bi-receipt-cutoff"></i></span>
+        <span class="sc-quick__label">View invoices</span>
+        <span class="sc-quick__hint">Billing history &amp; status</span>
+      </a>
+      <a class="sc-quick__card" [routerLink]="['/security']">
+        <span class="sc-quick__icon sc-quick__icon--ok"><i class="bi bi-shield-lock-fill"></i></span>
+        <span class="sc-quick__label">Security center</span>
+        <span class="sc-quick__hint">MFA, sessions &amp; activity</span>
+      </a>
+      <a class="sc-quick__card" [routerLink]="['/profile']">
+        <span class="sc-quick__icon sc-quick__icon--warn"><i class="bi bi-person-circle"></i></span>
+        <span class="sc-quick__label">Your profile</span>
+        <span class="sc-quick__hint">Account &amp; preferences</span>
+      </a>
+    </div>
+  </section>
+}

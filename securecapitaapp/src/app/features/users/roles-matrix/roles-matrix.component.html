@@ -1,0 +1,103 @@
+<!--
+  Roles × Permissions Matrix (SRS M3, FR-RBAC-1/2).
+
+  Columns = every unique permission string across all roles (sorted).
+  Rows    = every role in the catalogue.
+  Cell    = checkmark when the role carries that permission, dash when not.
+
+  Read-only. Role and permission assignment lives in the admin user-detail view.
+-->
+<app-navbar [user]="user()"></app-navbar>
+<main class="sc-page">
+  <div class="container">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb sc-breadcrumb">
+        <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
+        <li class="breadcrumb-item"><a [routerLink]="['/users']">Admin</a></li>
+        <li aria-current="page" class="breadcrumb-item active">Roles Matrix</li>
+      </ol>
+    </nav>
+
+    <header class="sc-head sc-reveal">
+      <div>
+        <p class="eyebrow mb-1">Access control</p>
+        <h1 class="sc-head__title">Roles &times; Permissions</h1>
+        <p class="sc-head__sub">
+          Each column is a permission string enforced by Spring Security at the URL and method level (SRS FR-RBAC-2).
+          A checkmark means the role grants it; a dash means it does not.
+        </p>
+      </div>
+    </header>
+
+    @switch (dataState()) {
+
+      @case (DataState.LOADING) {
+        <div class="d-flex align-items-center gap-2 text-muted py-4">
+          <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+          <span>Loading roles catalogue…</span>
+        </div>
+      }
+
+      @case (DataState.ERROR) {
+        <div class="alert alert-danger">Could not load the roles catalogue. Please refresh.</div>
+      }
+
+      @case (DataState.LOADED) {
+        <div class="sc-panel sc-reveal" style="--d: 80ms; overflow: hidden;">
+          <div class="table-responsive">
+            <table class="table table-bordered table-hover mb-0" style="min-width: max-content;">
+              <thead class="table-dark">
+              <tr>
+                <th scope="col" style="min-width: 200px; position: sticky; left: 0; z-index: 2;"
+                    class="table-dark">
+                  Role
+                </th>
+                @for (perm of allPermissions(); track perm) {
+                  <th scope="col" style="font-size: 0.78rem; white-space: nowrap; padding: 8px 10px;"
+                      [title]="perm">
+                    <span class="badge bg-secondary">{{ perm }}</span>
+                  </th>
+                }
+              </tr>
+              </thead>
+              <tbody>
+                @for (role of roles(); track role.id) {
+                  <tr>
+                    <!-- Role name cell — sticky so it stays visible when scrolling horizontally -->
+                    <td style="position: sticky; left: 0; z-index: 1; font-weight: 500;"
+                        class="bg-body">
+                      <span class="badge bg-primary me-2">{{ role.name }}</span>
+                    </td>
+                    @for (perm of allPermissions(); track perm) {
+                      <td class="text-center" style="vertical-align: middle;">
+                        @if (hasPermission(role, perm)) {
+                          <i class="bi bi-check-circle-fill text-success" style="font-size: 1rem;"
+                             [title]="role.name + ' grants ' + perm"></i>
+                        } @else {
+                          <span class="text-muted" style="font-size: 0.85rem;" title="Not granted">–</span>
+                        }
+                      </td>
+                    }
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td [attr.colspan]="allPermissions().length + 1" class="text-center text-muted py-4">
+                      No roles found.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <p class="text-muted" style="font-size: 0.82rem;">
+          <i class="bi bi-info-circle me-1"></i>
+          Role assignments are managed from the
+          <a [routerLink]="['/users']">User Directory</a>.
+          Permission strings are defined in the backend role catalogue and enforced server-side on every request.
+        </p>
+      }
+    }
+  </div>
+</main>

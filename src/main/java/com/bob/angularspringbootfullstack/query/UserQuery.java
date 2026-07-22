@@ -137,5 +137,24 @@ public class UserQuery {
      */
     public static final String UPDATE_USER_IMAGE_URL_QUERY = "UPDATE users SET image_url = :imageUrl WHERE id = :userId";
 
+    /**
+     * Pages through the user directory for the administrative dashboard (FR-ADMIN-1),
+     * optionally filtered by a search term matched against first name, last name, and
+     * email. Callers pass {@code searchTerm} already wrapped in SQL wildcards
+     * ({@code %term%}); an unfiltered listing passes {@code %%}, which matches every row,
+     * so one query serves both the plain list and the search.
+     * Newest accounts first so recent registrations surface at the top.
+     * Parameters: searchTerm, pageSize, offset.
+     */
+    public static final String SELECT_USERS_PAGED_QUERY =
+            "SELECT * FROM users WHERE first_name LIKE :searchTerm OR last_name LIKE :searchTerm OR email LIKE :searchTerm " +
+            "ORDER BY created_at DESC, id DESC LIMIT :pageSize OFFSET :offset";
 
+    /**
+     * Counts the rows the paged directory query above would match, so the admin UI can
+     * compute total pages (NFR-PERF-3 pagination metadata). Must stay filter-compatible
+     * with {@link #SELECT_USERS_PAGED_QUERY}. Parameter: searchTerm (pre-wrapped in %).
+     */
+    public static final String COUNT_USERS_QUERY =
+            "SELECT COUNT(*) FROM users WHERE first_name LIKE :searchTerm OR last_name LIKE :searchTerm OR email LIKE :searchTerm";
 }

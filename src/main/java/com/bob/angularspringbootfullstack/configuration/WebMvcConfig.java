@@ -1,48 +1,48 @@
 package com.bob.angularspringbootfullstack.configuration;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.nio.file.Paths;
 
 
 /**
  * MVC resource handler configuration.
  * <p>
- * Maps the {@code /user/profile/image/**} URL path to the local filesystem
- * directory where profile images are stored ({@code ~/Downloads/images/}).
- * This allows the browser to load profile images directly via an
- * {@code <img>} src without going through a controller endpoint.
+ * Maps the {@code /user/profile/image/**} URL path to the filesystem directory
+ * where profile images are stored. The directory is resolved from the
+ * {@code app.image.storage-path} property (env {@code IMAGE_STORAGE_PATH}), so it
+ * is portable across local dev, Docker, and cloud — no hardcoded developer path.
+ * This lets the browser load images via a plain {@code <img>} src without hitting
+ * a controller.
  * <p>
- * The path is also listed in {@link SecurityConfig #PUBLIC_URLS} so Spring
- * Security permits unauthenticated GET requests to it.
- *
- * <p>-----------------------------------------------------------------------
- * TODO(dev-only): This resource handler is a local development workaround.
- * It maps a hardcoded path on the developer's machine (~/Downloads/images/)
- * and will not work in Docker or any CI/CD environment.
- * Replace with a proper {@code GET /user/profile/image/{email}} controller
- * endpoint that reads from a configurable path (e.g. an environment variable
- * or application.properties value), or migrate image storage to a cloud
- * provider such as AWS S3 so the backend is not responsible for serving
- * files at all.
- * -----------------------------------------------------------------------
+ * The path is also listed in {@code SecurityConfig.PUBLIC_URLS} so Spring Security
+ * permits unauthenticated GET requests to it.
  */
-
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
+
+    /** Filesystem directory holding profile images; see {@code app.image.storage-path}. */
+    @Value("${app.image.storage-path}")
+    private String imageStoragePath;
+
     /**
-     * Registers a resource handler that serves profile images from the local
-     * filesystem. Files are stored as {@code {email}.png} under
-     * {@code ~/Downloads/images/} and are accessible at
-     * {@code /user/profile/image/{email}.png}.
+     * Registers a resource handler that serves profile images ({@code {email}.png})
+     * from {@link #imageStoragePath} at {@code /user/profile/image/{email}.png}.
+     * The location is normalised to an absolute {@code file:} URI with a trailing
+     * slash so Spring resolves child resources correctly on every OS.
      *
      * @param registry the Spring MVC resource handler registry
      */
-
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // Normalise to forward slashes and force a trailing slash so Spring resolves
+        // child resources correctly (Path.toUri() can omit it for a not-yet-created dir).
+        String base = Paths.get(imageStoragePath).toAbsolutePath().normalize().toString().replace('\\', '/');
         registry.addResourceHandler("/user/profile/image/**")
-                .addResourceLocations("file:" + System.getProperty("user.home") + "/Downloads/images/");
+                .addResourceLocations("file:" + base + "/");
     }
 }
 

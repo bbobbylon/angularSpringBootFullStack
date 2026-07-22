@@ -1,18 +1,28 @@
-MYSQL_USERNAME: ${MYSQL_USERNAME:root}
-MYSQL_PASSWORD: ${MYSQL_PASSWORD:password}
-MYSQL_HOST: ${MYSQL_HOST:127.0.0.1}
-MYSQL_PORT: ${MYSQL_PORT:3306}
-MYSQL_DATABASE: ${MYSQL_DATABASE:db2}
+# ── Local development defaults ──────────────────────────────────────────────────────────
+# Every value below is a plain literal so the backend runs locally with ZERO configuration
+# (no .env required). Setting the matching environment variable still OVERRIDES any of these,
+# because OS environment variables take precedence over profile YAML during placeholder
+# resolution — so `start.sh` (which exports these) and a bare IDE run both work.
+#
+# Values are deliberately written as literals (e.g. `root`) rather than the self-referential
+# `${MYSQL_USERNAME:root}` form. A property whose placeholder names the property itself
+# resolves in a circle, and Boot 4 aborts startup with `Circular placeholder reference`
+# whenever the env var is absent — the very gotcha this file used to trip.
+MYSQL_USERNAME: root
+MYSQL_PASSWORD: password
+MYSQL_HOST: 127.0.0.1
+MYSQL_PORT: 3306
+MYSQL_DATABASE: db2
 
-CONTAINER_PORT: ${CONTAINER_PORT:8080}
+CONTAINER_PORT: 8080
 SPRING_ACTIVE_PROFILES: dev
 
-MAIL_USERNAME: ${MAIL_USERNAME:}
-MAIL_PASSWORD: ${MAIL_PASSWORD:}
-VERIFY_EMAIL_HOST: ${VERIFY_EMAIL_HOST:http://localhost:8080}
+MAIL_USERNAME: ""
+MAIL_PASSWORD: ""
+VERIFY_EMAIL_HOST: http://localhost:8080
 MAIL_HOST: smtp.gmail.com
 MAIL_PORT: 587
 
-UI_APP_URL: ${UI_APP_URL:http://localhost:4200}
+UI_APP_URL: http://localhost:4200
 
-JWT_SECRET: ${JWT_SECRET:devOnlySecretKeyDoNotUseInProductionMustBeLongEnough1}
+JWT_SECRET: devOnlySecretKeyDoNotUseInProductionMustBeLongEnough1

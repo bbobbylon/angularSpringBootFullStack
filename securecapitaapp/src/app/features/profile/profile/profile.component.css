@@ -45,9 +45,9 @@ a#notification.nav-link.active {
 
 .nav-pills a.nav-link {
   padding: 15px 20px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--hairline);
   border-radius: 0;
-  color: #333;
+  color: var(--text);
 }
 
 .nav-pills a.nav-link i {
@@ -74,8 +74,7 @@ a#notification.nav-link.active {
 
 .unclickable {
   pointer-events: none;
-  /* color: #AAA; */
-  background: #F5F5F5;
+  background: var(--surface-3);
 }
 
 .visually-hidden {

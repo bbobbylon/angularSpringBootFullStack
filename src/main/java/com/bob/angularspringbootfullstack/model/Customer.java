@@ -2,6 +2,8 @@ package com.bob.angularspringbootfullstack.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -60,14 +62,18 @@ public class Customer {
      * existing {@code customer_name} column that holds the actual data.
      */
     @Column(name = "customer_name")
+    @NotBlank(message = "Customer name is required")
     private String customerName;
     /**
      * Customer category (e.g., "Individual", "Business").
      */
+    @NotBlank(message = "Customer type is required")
     private String type;
     /**
      * Primary contact email address for the customer.
      */
+    @NotBlank(message = "Email is required")
+    @Email(message = "A valid email address is required")
     private String email;
     /**
      * Primary contact phone number for the customer.
@@ -80,6 +86,7 @@ public class Customer {
     /**
      * Account standing of the customer (e.g., "Active", "Inactive").
      */
+    @NotBlank(message = "Status is required")
     private String status;
     /**
      * URL pointing to the customer's profile picture or business logo.
