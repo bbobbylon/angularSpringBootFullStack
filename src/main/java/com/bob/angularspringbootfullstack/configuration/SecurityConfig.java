@@ -20,6 +20,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -123,11 +124,45 @@ class SecurityConfig {
             http
                     //this section is for customizing our HTTP security headers.
                     .headers(headers -> headers
+                            // X-Frame-Options: DENY — blocks clickjacking (the Angular SPA never
+                            // needs to be embedded in a frame).
                             .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
+                            // X-Content-Type-Options: nosniff — prevents MIME-type sniffing.
                             .contentTypeOptions(Customizer.withDefaults())
+                            // HSTS: tells browsers to always use HTTPS for 1 year, including
+                            // subdomains. Only effective under TLS (ignored over plain HTTP).
                             .httpStrictTransportSecurity(hsts -> hsts
                                     .includeSubDomains(true)
                                     .maxAgeInSeconds(31536000))
+                            // Content-Security-Policy: restricts which origins can load scripts,
+                            // styles, images, and API connections. 'unsafe-inline' for styles is
+                            // required because Angular injects component styles at runtime.
+                            // img-src includes https: to allow S3-hosted profile images when
+                            // IMAGE_STORAGE_TYPE=s3. Adjust connect-src when adding third-party
+                            // analytics or error-reporting endpoints.
+                            .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                    "default-src 'self'; " +
+                                    "script-src 'self'; " +
+                                    "style-src 'self' 'unsafe-inline'; " +
+                                    "img-src 'self' data: blob: https:; " +
+                                    "font-src 'self'; " +
+                                    "connect-src 'self'; " +
+                                    "frame-ancestors 'none'; " +
+                                    "base-uri 'self'; " +
+                                    "form-action 'self'"
+                            ))
+                            // Referrer-Policy: sends the full URL on same-origin navigations but
+                            // only the origin (no path/query) on cross-origin requests, preventing
+                            // sensitive path parameters from leaking to third-party pages.
+                            .referrerPolicy(rp -> rp.policy(
+                                    ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN
+                            ))
+                            // Permissions-Policy: disables browser features this SPA has no
+                            // legitimate need for. Reduces the attack surface if a dependency or
+                            // injected script attempts to access these APIs.
+                            .permissionsPolicy(pp -> pp.policy(
+                                    "camera=(), microphone=(), geolocation=(), payment=()"
+                            ))
                     )
                     .csrf(AbstractHttpConfigurer::disable)
                     .cors(configure -> configure.configurationSource(corsConfigurationSource()))

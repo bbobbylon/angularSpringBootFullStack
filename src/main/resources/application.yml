@@ -97,7 +97,22 @@ app:
     # Dev default lives under the user's home dir (cross-platform). In Docker/cloud,
     # set IMAGE_STORAGE_PATH to a MOUNTED VOLUME (e.g. /app/data/images) so images
     # survive container restarts — docker-compose maps the app-images volume there.
+    # This property is used by LocalImageStorageService and WebMvcConfig. Ignored when
+    # IMAGE_STORAGE_TYPE=s3 (images are stored in and served from S3 directly).
     storage-path: ${IMAGE_STORAGE_PATH:${user.home}/securecapita/images}
+    # Storage backend selector: local (default) | s3
+    # Switch to s3 for any multi-instance or ephemeral-disk deployment (ECS Fargate, etc.).
+    # Activates S3ImageStorageService + AwsS3Config; requires aws.s3.bucket and aws.region.
+    storage-type: ${IMAGE_STORAGE_TYPE:local}
+
+# AWS configuration — only required when app.image.storage-type=s3.
+# Credentials are resolved by DefaultCredentialsProvider (env vars → ~/.aws → instance/task role).
+# For ECS Fargate, attach a task role with s3:PutObject + s3:GetObject on the bucket instead
+# of using static keys.
+aws:
+  region: ${AWS_REGION:us-east-1}
+  s3:
+    bucket: ${AWS_S3_BUCKET:}
 
 management:
   endpoints:

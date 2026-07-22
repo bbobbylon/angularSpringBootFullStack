@@ -1,0 +1,27 @@
+{
+  "_comment": "ECS service configuration for TesseraApp. Register the task definition first, then use this to create or update the service. Replace all UPPER_CASE placeholders.",
+  "cluster":         "tessera-app-cluster",
+  "serviceName":     "tessera-app-service",
+  "taskDefinition":  "tessera-app",
+  "desiredCount":    1,
+  "launchType":      "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets":        ["subnet-XXXXXXXXXXXXXXXXX", "subnet-YYYYYYYYYYYYYYYYY"],
+      "securityGroups": ["sg-XXXXXXXXXXXXXXXXX"],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "loadBalancers": [
+    {
+      "targetGroupArn": "arn:aws:elasticloadbalancing:REGION:ACCOUNT_ID:targetgroup/tessera-app-tg/XXXXXXXXXXXXXXXXX",
+      "containerName":  "tessera-app",
+      "containerPort":  8080
+    }
+  ],
+  "healthCheckGracePeriodSeconds": 90,
+  "deploymentConfiguration": {
+    "maximumPercent":        200,
+    "minimumHealthyPercent": 50
+  }
+}

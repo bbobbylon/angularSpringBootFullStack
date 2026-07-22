@@ -151,3 +151,4 @@ application-prod.yml
 # Microsoft Office temp / lock files (e.g. ~WRL3006.tmp, ~$report.docx)
 ~$*
 ~WRL*.tmp
+/assignments
