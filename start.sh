@@ -35,7 +35,7 @@ OPEN_BROWSER_TIMEOUT=180
 # ── Internal config ────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
-ANGULAR_DIR="$SCRIPT_DIR/securecapitaapp"
+ANGULAR_DIR="$SCRIPT_DIR/tesseraapp"
 # Angular services hardcode localhost:8080 — Spring Boot must listen here in local mode
 LOCAL_BACKEND_PORT=8080
 

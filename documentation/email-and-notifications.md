@@ -3,7 +3,7 @@
 How TesseraApp talks to its users out-of-band and in-band: the two notification channels (email — wired; SMS — stubbed), the account-verification and password-reset email flows, where the message templates and strings live, how the clickable verification link is built from a bare-UUID key, the roles of `UI_APP_URL` and `VERIFY_EMAIL_HOST`, and the Angular toast service that surfaces feedback in the SPA.
 
 > **Audience:** anyone touching registration, password reset, MFA dispatch, or in-app feedback.
-> **Key source files:** `service/serviceimpl/NotificationServiceImpl.java` · `service/serviceimpl/EmailServiceImpl.java` · `repo/repoimpl/UserRepoImpl.java` (`getVerificationURL`) · `utils/SMSUtils.java` · `securecapitaapp/src/app/service/notifications-service.ts`
+> **Key source files:** `service/serviceimpl/NotificationServiceImpl.java` · `service/serviceimpl/EmailServiceImpl.java` · `repo/repoimpl/UserRepoImpl.java` (`getVerificationURL`) · `utils/SMSUtils.java` · `tesseraapp/src/app/service/notifications-service.ts`
 > **See also:** [configuration.md](configuration.md) (env vars / `application.yml`) · [security.md](security.md) (token/auth internals) · [api-reference.md](api-reference.md) (the endpoints that trigger these sends) · [flows/01-register-and-verify.md](flows/01-register-and-verify.md) (click-to-DB) · [flows/03-password-reset.md](flows/03-password-reset.md).
 
 > **Code wins over docs.** Every claim below carries a `file:line` citation. If a description here and the code ever disagree, **the code wins** and this doc should be fixed.
@@ -196,7 +196,7 @@ All values are environment-variable driven (12-factor); see [configuration.md](c
 
 ## 9. The frontend `notifications-service` (toasts)
 
-In-app feedback is a separate, in-band channel: `NotificationsService` (`securecapitaapp/src/app/service/notifications-service.ts:11`), a thin façade over ngx-toastr's `ToastrService`.
+In-app feedback is a separate, in-band channel: `NotificationsService` (`tesseraapp/src/app/service/notifications-service.ts:11`), a thin façade over ngx-toastr's `ToastrService`.
 
 | Method | Delegates to | Source |
 | --- | --- | --- |

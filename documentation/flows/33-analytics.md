@@ -5,7 +5,7 @@
 > leans on the list idiom already documented in [`30 §A`](./30-customers.md) and the dashboard's
 > stats handling in [`32-dashboard.md`](./32-dashboard.md).
 
-**Route:** `/analytics` → `AnalyticsComponent` (`securecapitaapp/src/app/features/analytics/analytics/analytics.component.ts`, `.html`)
+**Route:** `/analytics` → `AnalyticsComponent` (`tesseraapp/src/app/features/analytics/analytics/analytics.component.ts`, `.html`)
 **Guards:** `[authenticationGuard, adminGuard]` (`app.routes.ts:134-141`)
 **Primary endpoints:** `GET /customer/list?page=0&size=500` · `GET /customer/invoice/list?page=0&size=500` → `CustomerController`
 

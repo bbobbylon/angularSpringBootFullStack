@@ -220,7 +220,7 @@ src/main/java/com/bob/angularspringbootfullstack/
 ├── seed/              DemoDataSeeder (dev)
 └── constants/         Constants
 
-securecapitaapp/src/app/
+tesseraapp/src/app/
 ├── app.config.ts      standalone providers
 ├── app.routes.ts      lazy routes + guards
 ├── features/          auth, home, customers, invoices, users, security, profile

@@ -4,7 +4,7 @@
 #
 # 1. Create an Azure Container Registry (ACR)
 #    Portal > Create Resource > Container Registry
-#    Note the "Login server" value (e.g. securecapita.azurecr.io)
+#    Note the "Login server" value (e.g. tesseraapp.azurecr.io)
 #
 # 2. Create an Azure App Service (Linux, Docker Container)
 #    Portal > Create Resource > Web App
@@ -12,7 +12,7 @@
 #
 # 3. Create an Azure Database for MySQL Flexible Server
 #    Portal > Create Resource > Azure Database for MySQL
-#    Note the server hostname, create a database named "securecapita"
+#    Note the server hostname, create a database named "tesseraapp"
 #
 # 4. Add App Service Application Settings (Portal > App Service > Configuration):
 #    SPRING_DATASOURCE_URL      = jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/defaultdb?useSSL=true&requireSSL=true
@@ -21,8 +21,8 @@
 #
 # 5. Create two Service Connections in Azure DevOps
 #    Project Settings > Service Connections:
-#    a) Type: Docker Registry  → Azure Container Registry → name: securecapita-acr
-#    b) Type: Azure Resource Manager → Subscription scope → name: securecapita-azure-rm
+#    a) Type: Docker Registry  → Azure Container Registry → name: tesseraapp-acr
+#    b) Type: Azure Resource Manager → Subscription scope → name: tesseraapp-azure-rm
 #
 # 6. Update the four variables below to match your Azure resource names
 # ─────────────────────────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ resources:
 
 variables:
   dockerfilePath: 'Dockerfile'
-  imageRepository: 'securecapita'
+  imageRepository: 'tesseraapp'
   tag: '$(Build.BuildId)'
   acrServiceConnection: 'bobsDockerRegistryServiceConnection'  # step 5a above
   acrLoginServer: 'bobsangularapp-cnh8fzfxasa6feav.azurecr.io'  # step 1 above — ACR Login server

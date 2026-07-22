@@ -22,7 +22,7 @@ The day-to-day loop for working *in* TesseraApp: setting up IntelliJ IDEA or VS 
 
 ## 1. IDE setup (IntelliJ IDEA & VS Code)
 
-Two editors are supported; pick either. The backend is a standard Maven + Java 21 + Lombok project, the frontend a standard Angular 21 workspace under `securecapitaapp/`.
+Two editors are supported; pick either. The backend is a standard Maven + Java 21 + Lombok project, the frontend a standard Angular 21 workspace under `tesseraapp/`.
 
 ### IntelliJ IDEA
 
@@ -35,7 +35,7 @@ Two editors are supported; pick either. The backend is a standard Maven + Java 2
 
 > **Gotcha:** if you launch the backend from the IDE *without* the `.env` wired in, it still boots — the `dev` profile ships literal fallbacks (`application-dev.yml`) — but you must have a MySQL reachable at `127.0.0.1:3306` (see [§5](#5-where-schemasql-fits) and [configuration.md §8](configuration.md#8-configuration-gotchas-read-this)).
 
-For the Angular side, open `securecapitaapp/` as a separate window (or as a module) and use the bundled npm/Angular tooling; run scripts from the npm tool window.
+For the Angular side, open `tesseraapp/` as a separate window (or as a module) and use the bundled npm/Angular tooling; run scripts from the npm tool window.
 
 ### VS Code
 
@@ -75,7 +75,7 @@ chmod +x start.sh
 
 - **Loads `.env`** with `set -a; source .env; set +a` (start.sh:104–108) so every variable becomes a real OS env var Spring can read.
 - **Pins the backend port to 8080** — `export CONTAINER_PORT=8080` (start.sh:111) — because the Angular dev server's API base is `http://localhost:8080` (see [§4](#4-frontend-debugging)); whatever `CONTAINER_PORT` is in `.env` is overridden here.
-- **Auto-installs frontend deps** if `securecapitaapp/node_modules` is missing (start.sh:139–142).
+- **Auto-installs frontend deps** if `tesseraapp/node_modules` is missing (start.sh:139–142).
 - **Auto-opens the browser** once the app responds (`OPEN_BROWSER=true`, timeout `OPEN_BROWSER_TIMEOUT`, start.sh:32–33); set `OPEN_BROWSER=false` to suppress.
 - **Clean teardown on Ctrl+C** — the `cleanup` trap kills the Spring/Angular/browser PIDs and `docker compose stop mysql` when `DB=local` (start.sh:174–186).
 
@@ -104,7 +104,7 @@ Breakpoints need the JVM under the IDE's debugger, which means **running the bac
 # Terminal A — backend under the debugger:
 #   IntelliJ: Debug the Spring Boot run config (with .env wired in, §1)
 #   VS Code:  Spring Boot Dashboard ▸ Debug
-# Terminal B — frontend only (from securecapitaapp/):
+# Terminal B — frontend only (from tesseraapp/):
 npm install      # first time
 npm start        # ng serve on :4200, calls the API on :8080
 ```
@@ -142,7 +142,7 @@ The file swap is driven by `angular.json` `fileReplacements`, so components impo
 - **Toasts:** errors surface through `NotificationsService` (ngx-toastr); the user-facing message is the backend envelope's `reason` field, read in each service's `handleError`.
 - **Cache surprises:** GET responses are cached in memory by `cacheInterceptor` and invalidated wholesale on any mutation or logout. If a stale list won't refresh, that's the cache — call `httpCache.logCache()` from the console to inspect it.
 
-### Frontend quality commands (from `securecapitaapp/`)
+### Frontend quality commands (from `tesseraapp/`)
 
 ```bash
 npm test            # ng test (Vitest + jsdom)        package.json:9
@@ -207,7 +207,7 @@ Conventions that apply to every branch:
 | Backend compile + unit tests | `mvn test` | 6 test suites / 14 tests today: full context load, `CustomerServiceImpl`, global exception handler, login anti-enumeration regression, and an offline JPA↔`schema.sql` drift guard (`JpaSchemaSyncTest`). Security-critical-path tests (rotation/reuse, TOTP challenge binding, org scope) and frontend specs remain the priority gap. |
 | Backend package | `mvn package` | Builds the runnable jar (Angular is *not* bundled here — that happens only in the Docker multi-stage build). |
 | Dependency CVE scan | `mvn verify` (OWASP `dependency-check-maven`, pom.xml:224) | `failBuildOnCVSS=7` — fails the build on a high-severity CVE. |
-| Frontend tests / lint / format | `npm test` · `npm run lint` · `npm run format` (from `securecapitaapp/`) | Vitest + ESLint + Prettier. |
+| Frontend tests / lint / format | `npm test` · `npm run lint` · `npm run format` (from `tesseraapp/`) | Vitest + ESLint + Prettier. |
 | End-to-end smoke | `./start.sh` (`ENV=local`), then log in as `eve.admin@tessera.dev` / `TesseraDemo@1` | The fastest "does the whole thing still work" check. |
 
 > **Verifying a change:** prefer running the real app via `./start.sh` (foreground) over asserting from tests alone — confirm the actual screen/endpoint behaves. Ask before any destructive DB operation.

@@ -7,7 +7,7 @@
 > machinery where it matters.
 
 **Route:** `/billing` → `BillingComponent`
-(`securecapitaapp/src/app/features/billing/billing/billing.component.ts`, `.html`), guarded
+(`tesseraapp/src/app/features/billing/billing/billing.component.ts`, `.html`), guarded
 `canActivate: [authenticationGuard, adminGuard]` (`app.routes.ts:117-121`).
 **Primary endpoints:** `GET /customer/stats` · `GET /customer/invoice/list?page=0&size=200` →
 `CustomerController`. **There is no dedicated billing endpoint** — both are pre-existing customer

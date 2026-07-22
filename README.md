@@ -204,7 +204,7 @@ angularSpringBootFullStack/
 │           ├── application.yml         # Shared Spring config
 │           ├── application-dev.yml     # Dev profile (local defaults)
 │           └── application-prod.yml    # Prod profile (no defaults — all vars required)
-├── securecapitaapp/            # Angular 21 frontend
+├── tesseraapp/            # Angular 21 frontend
 │   └── src/app/
 │       ├── features/           # auth, home, customers, invoices, profile
 │       ├── service/            # HTTP services (UserService, CustomerService)
@@ -232,7 +232,7 @@ angularSpringBootFullStack/
 
 The Dockerfile uses a **three-stage multi-stage build**:
 
-1. **`node:22-alpine`** — builds the Angular app (`ng build --configuration production`), outputs to `dist/securecapitaapp/browser/`
+1. **`node:22-alpine`** — builds the Angular app (`ng build --configuration production`), outputs to `dist/tesseraapp/browser/`
 2. **`maven:3.9-eclipse-temurin-21`** — copies Angular dist into `src/main/resources/static/`, packages Spring Boot JAR with `-Pprod`
 3. **`eclipse-temurin:21-jre-alpine`** — runs the JAR as a non-root user, exposes port 8080
 

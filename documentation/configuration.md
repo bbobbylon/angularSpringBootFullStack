@@ -123,10 +123,10 @@ Uploaded profile images are written to and served from a single filesystem direc
 
 | Variable | Purpose | Dev default |
 |----------|---------|-------------|
-| `IMAGE_STORAGE_PATH` | Filesystem directory where uploaded profile images are written and served from | `~/securecapita/images` (i.e. `${user.home}/securecapita/images`) |
+| `IMAGE_STORAGE_PATH` | Filesystem directory where uploaded profile images are written and served from | `~/tesseraapp/images` (i.e. `${user.home}/tesseraapp/images`) |
 
 > **Docker / cloud:** point this at a **mounted volume** so images survive container restarts. `docker-compose.yml:30` sets `IMAGE_STORAGE_PATH: /app/data/images` and maps the named `app-images` volume there (`docker-compose.yml:32,39`). Leave it unset locally to fall back to the home-directory default.
-> **Note:** unlike the DB/JWT/mail secrets, this default lives in the **base** `application.yml` (not `application-dev.yml`), so the fallback applies under the `prod` profile too — a missing `IMAGE_STORAGE_PATH` will not fail fast; it silently uses `~/securecapita/images`. Always set it explicitly in containers.
+> **Note:** unlike the DB/JWT/mail secrets, this default lives in the **base** `application.yml` (not `application-dev.yml`), so the fallback applies under the `prod` profile too — a missing `IMAGE_STORAGE_PATH` will not fail fast; it silently uses `~/tesseraapp/images`. Always set it explicitly in containers.
 > **History:** this replaced a brittle hardcoded `~/Downloads/images` path that only worked on the original developer's machine (`UserRepoImpl.java:138`); any doc still citing `~/Downloads/images` (e.g. `developer-guide.md`, `flows/10-profile-and-account.md`) is stale — **the code wins**.
 
 ### Federated login (OAuth2 / OIDC) — optional

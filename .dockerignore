@@ -5,7 +5,7 @@
 .mvn
 documentation
 node_modules
-securecapitaapp/node_modules
-securecapitaapp/dist
+tesseraapp/node_modules
+tesseraapp/dist
 target
 *.md

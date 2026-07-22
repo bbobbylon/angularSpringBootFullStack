@@ -37,7 +37,7 @@ The auth architecture is deliberately **hybrid: stateless tokens + a stateful tr
 
 ## 3. Snapshot — where we are today
 
-**Stack:** Angular 21 SPA (`securecapitaapp/`) · Spring Boot 4 / Spring Security 7 / Java 21 (`src/`) · MySQL 8.4 · JDBC (not JPA repositories). Run via `start.sh` (`ENV=local|docker`, `DB=local|aiven`). Containerized (multi-stage Dockerfile) with an Azure pipeline.
+**Stack:** Angular 21 SPA (`tesseraapp/`) · Spring Boot 4 / Spring Security 7 / Java 21 (`src/`) · MySQL 8.4 · JDBC (not JPA repositories). Run via `start.sh` (`ENV=local|docker`, `DB=local|aiven`). Containerized (multi-stage Dockerfile) with an Azure pipeline.
 
 **Backend already provides — claim credit, don't rebuild:**
 - Stateless JWT (HMAC-SHA512), 30-min access + 5-day refresh, refresh endpoint

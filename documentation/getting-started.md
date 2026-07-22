@@ -155,7 +155,7 @@ Sometimes you want just one half (e.g., to attach a debugger):
 # Backend only — needs the env vars present (load .env or export them first)
 mvn spring-boot:run
 
-# Frontend only (from securecapitaapp/)
+# Frontend only (from tesseraapp/)
 npm install
 npm start            # dev server on http://localhost:4200, proxies API calls to :8080
 ```

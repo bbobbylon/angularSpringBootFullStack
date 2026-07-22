@@ -6,7 +6,7 @@
 > seen from a different angle.
 
 **Route:** `/services` → `ServicesCatalogComponent`
-(`securecapitaapp/src/app/features/services/services-catalog/services-catalog.component.ts`, `.html`).
+(`tesseraapp/src/app/features/services/services-catalog/services-catalog.component.ts`, `.html`).
 Guard: `[authenticationGuard]` only — **no** `adminGuard` (`app.routes.ts:124-131`).
 **Endpoint:** `GET /customer/invoice/new` → `CustomerController#newInvoice` (`CustomerController.java:242-254`).
 No dedicated services endpoint exists — the page is a typed read of the `availableServices` key that

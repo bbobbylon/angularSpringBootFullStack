@@ -28,7 +28,7 @@ aws ecr get-login-password --region "${REGION}" \
   | docker login --username AWS --password-stdin "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 
 echo "==> Building multi-stage Docker image (tag: ${IMAGE_TAG})..."
-# Build from the repo root so the Dockerfile can reference securecapitaapp/ and src/
+# Build from the repo root so the Dockerfile can reference tesseraapp/ and src/
 docker build \
   --tag "tessera-app:${IMAGE_TAG}" \
   --file Dockerfile \
