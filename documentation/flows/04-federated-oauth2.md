@@ -8,6 +8,15 @@
 **Backend:** `GET /oauth2/providers` (discovery) · `/oauth2/authorization/{provider}` (Spring initiation) ·
 `/login/oauth2/code/{provider}` (provider callback) → `OAuth2LoginSuccessHandler` — all public.
 
+> **⚙ Setup — enabling a provider.** This flow only runs once a provider is configured. A provider's
+> button renders **only** when its `CLIENT_ID` is set in `.env` (`OAuth2ClientConfig` builds registrations
+> from whichever creds are present); with none set, `GET /oauth2/providers` returns `[]` and no buttons
+> appear. Step-by-step for **GitHub, Google, and Microsoft** — including the exact callback URL to register
+> (`http://localhost:8080/login/oauth2/code/{provider}`) — is in
+> **[configuration.md → Federated login](../configuration.md#federated-login-oauth2--oidc--optional)**.
+> The UI is automatic: `LoginComponent` fetches the provider list on load and renders one button each
+> (`login.component.html:126-141`), so no frontend change is needed to add a provider.
+
 ---
 
 ## A · The whole redirect chain

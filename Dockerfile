@@ -3,9 +3,9 @@
 # Stage 1: Build Angular frontend
 FROM node:22-alpine AS frontend-build
 WORKDIR /build
-COPY securecapitaapp/package*.json ./
+COPY tesseraapp/package*.json ./
 RUN npm ci
-COPY securecapitaapp/ ./
+COPY tesseraapp/ ./
 RUN npm run build
 
 # Stage 2: Build Spring Boot JAR (Angular dist is embedded in static resources)
@@ -14,7 +14,7 @@ WORKDIR /build
 COPY pom.xml ./
 RUN mvn dependency:go-offline -B -q
 COPY src/ ./src/
-COPY --from=frontend-build /build/dist/securecapitaapp/browser/ ./src/main/resources/static/
+COPY --from=frontend-build /build/dist/tesseraapp/browser/ ./src/main/resources/static/
 RUN mvn package -DskipTests -Pprod -B
 
 # Stage 3: Runtime image — JRE only, no build tools

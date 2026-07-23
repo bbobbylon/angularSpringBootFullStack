@@ -60,7 +60,7 @@ The repo ships the Maven wrapper, so no local Maven install is required.
 
 ### Frontend (npm)
 
-From `securecapitaapp/`:
+From `tesseraapp/`:
 
 | Goal | Command |
 |------|---------|
@@ -178,7 +178,7 @@ How it works (`JpaSchemaSyncTest:91-120`): it drives JPA-standard schema-script 
 
 ## 7. Frontend testing (Angular 21 Vitest)
 
-**Status: ❌ zero specs.** There are no `*.spec.ts` files anywhere under `securecapitaapp/src/` (the only `.spec.ts` matches are inside `node_modules/`). `npm test` runs but discovers nothing.
+**Status: ❌ zero specs.** There are no `*.spec.ts` files anywhere under `tesseraapp/src/` (the only `.spec.ts` matches are inside `node_modules/`). `npm test` runs but discovers nothing.
 
 The harness, however, is configured and ready:
 
@@ -195,10 +195,10 @@ Because `vitest/globals` is configured, `describe/it/expect/vi` are available wi
 
 | Target | File | What to assert |
 |--------|------|----------------|
-| `tokenInterceptor` | `securecapitaapp/src/app/interceptor/token.interceptor.ts` | Public routes get **no** `Authorization` header; a 401 triggers a single-flight refresh-and-retry; concurrent 401s wait on the shared `BehaviorSubject` (no thundering herd) |
-| `cacheInterceptor` | `securecapitaapp/src/app/interceptor/cache.interceptor.ts` | GET caches by full URL; any non-GET evicts the **entire** cache; a cache hit short-circuits before `tokenInterceptor` runs (registration order is load-bearing, `app.config.ts`) |
-| `adminGuard` | `securecapitaapp/src/app/guard/admin.guard.ts` | Anonymous → redirect `/login`; authenticated-but-unauthorized → redirect `/`; `UPDATE:USER`/`UPDATE:ROLE` → allow |
-| `UserService` token side-effects | `securecapitaapp/src/app/service/user.service.ts` | `refreshToken$()`/`updatePassword$()` rewrite both tokens in `localStorage`; `logOut()` clears tokens **and** calls `httpCache.evictAll()`; `handleError` surfaces `error.error.reason` |
+| `tokenInterceptor` | `tesseraapp/src/app/interceptor/token.interceptor.ts` | Public routes get **no** `Authorization` header; a 401 triggers a single-flight refresh-and-retry; concurrent 401s wait on the shared `BehaviorSubject` (no thundering herd) |
+| `cacheInterceptor` | `tesseraapp/src/app/interceptor/cache.interceptor.ts` | GET caches by full URL; any non-GET evicts the **entire** cache; a cache hit short-circuits before `tokenInterceptor` runs (registration order is load-bearing, `app.config.ts`) |
+| `adminGuard` | `tesseraapp/src/app/guard/admin.guard.ts` | Anonymous → redirect `/login`; authenticated-but-unauthorized → redirect `/`; `UPDATE:USER`/`UPDATE:ROLE` → allow |
+| `UserService` token side-effects | `tesseraapp/src/app/service/user.service.ts` | `refreshToken$()`/`updatePassword$()` rewrite both tokens in `localStorage`; `logOut()` clears tokens **and** calls `httpCache.evictAll()`; `handleError` surfaces `error.error.reason` |
 
 Sketch using the configured globals + `HttpTestingController`:
 
@@ -248,7 +248,7 @@ Stated plainly: coverage is **modest** — 5 backend classes / 13 tests and 0 fr
 | **Organization-scoped** admin authorization | ❌ | `AdminUserController`, `OrganizationServiceImpl` | No test that out-of-scope access returns 403 / `APPLICATION_ADMIN` bypasses |
 | Real `SecurityConfig` matchers / `CustomAuthFilter` | ❌ | `configuration/`, `filter/` | Slice tests bypass the filter chain by design |
 | Brute-force per-account lockout | ❌ | `UserController.authenticate` + `EventService` | 5-failures/15-min window untested |
-| Frontend (interceptors, guards, services, components) | ❌ | `securecapitaapp/src/` | Zero specs despite a configured Vitest harness ([§7](#7-frontend-testing-angular-21-vitest)) |
+| Frontend (interceptors, guards, services, components) | ❌ | `tesseraapp/src/` | Zero specs despite a configured Vitest harness ([§7](#7-frontend-testing-angular-21-vitest)) |
 | HTTP-level integration (real requests, fixtures) | ❌ | — | No `TestRestTemplate`/Testcontainers layer |
 
 ### Roadmap to broaden (prioritized)

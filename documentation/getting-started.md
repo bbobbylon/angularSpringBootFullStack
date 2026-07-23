@@ -101,8 +101,8 @@ Details and the full table map: [database.md](database.md).
 Everything is driven by **`start.sh`**. Open it and set the two switches at the top:
 
 ```bash
-ENV=local     # local | docker
-DB=local      # local | aiven   (only relevant when ENV=local)
+ENV=local      # local | docker
+DB=native      # native | local | aiven   (only relevant when ENV=local)
 ```
 
 Then:
@@ -117,8 +117,11 @@ Spring Boot runs natively (hot-restart via DevTools) and Angular runs via `ng se
 
 | `DB` | What happens | Requires |
 |------|--------------|----------|
-| `local` | Starts a **MySQL Docker container** and waits for health | Docker running |
+| `native` *(default)* | Uses your **host's own MySQL** on `127.0.0.1:3306` (e.g. Windows service MySQL80); starts **no** container | Native MySQL running on 3306 |
+| `local` | Starts a **MySQL Docker container** and waits for health | Docker running, **and no native MySQL on 3306** |
 | `aiven` | Skips Docker; connects directly to **Aiven cloud MySQL** | `AIVEN_DB_*` set in `.env` |
+
+> ⚠ **Do not run `DB=local` (Docker MySQL) while a native MySQL is also on 3306** — they collide on the port, and the empty Docker container can *shadow* your real database, making it look wiped. `native` is the default for exactly this reason. Details: [database.md §17.3](database.md#173-the-port-3306-shadowing-trap-the-vanished-data-incident).
 
 ➡ **Open http://localhost:4200**
 
@@ -155,7 +158,7 @@ Sometimes you want just one half (e.g., to attach a debugger):
 # Backend only — needs the env vars present (load .env or export them first)
 mvn spring-boot:run
 
-# Frontend only (from securecapitaapp/)
+# Frontend only (from tesseraapp/)
 npm install
 npm start            # dev server on http://localhost:4200, proxies API calls to :8080
 ```

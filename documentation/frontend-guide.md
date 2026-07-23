@@ -3,11 +3,11 @@
 The Angular client from the inside: how the standalone app boots and wires its providers, the route → component map and which guard protects each page, the two HTTP interceptors and their load-bearing registration order, the cache strategy (TTL, keying, invalidation), every service's API surface, the guards, the `DataState`/signals state machine that drives every screen, and the enumerations + envelope interfaces that tie it to the backend.
 
 > **Audience:** frontend contributors and anyone tracing a request from a component to the wire.
-> **Frontend root:** `securecapitaapp/src/app/` · **Stack:** Angular 21 standalone (no NgModule) · Bootstrap 5.3 color-mode · stateless JWT in `localStorage`.
+> **Frontend root:** `tesseraapp/src/app/` · **Stack:** Angular 21 standalone (no NgModule) · Bootstrap 5.3 color-mode · stateless JWT in `localStorage`.
 > **Key source files:** `app.config.ts` · `app.routes.ts` · `interceptor/cache.interceptor.ts` · `interceptor/token.interceptor.ts` · `service/user.service.ts`
-> **See also:** [architecture.md §6](architecture.md#6-frontend-architecture) (frontend in the whole-system picture) · [security.md](security.md) (token/auth internals the interceptor relies on) · [api-reference.md](api-reference.md) (the backend endpoints these services call) · [flows/](flows/README.md) (click-to-DB sequence diagrams) · [`../securecapitaapp/README.md`](../securecapitaapp/README.md) (frontend quick start).
+> **See also:** [architecture.md §6](architecture.md#6-frontend-architecture) (frontend in the whole-system picture) · [security.md](security.md) (token/auth internals the interceptor relies on) · [api-reference.md](api-reference.md) (the backend endpoints these services call) · [flows/](flows/README.md) (click-to-DB sequence diagrams) · [`../tesseraapp/README.md`](../tesseraapp/README.md) (frontend quick start).
 
-> **Code wins over docs.** Every claim below is cited `file:line` relative to `securecapitaapp/src/app/` (or `securecapitaapp/src/` for environments). If a table here and the code ever disagree, **the code wins** — fix the doc.
+> **Code wins over docs.** Every claim below is cited `file:line` relative to `tesseraapp/src/app/` (or `tesseraapp/src/` for environments). If a table here and the code ever disagree, **the code wins** — fix the doc.
 
 ---
 
@@ -39,7 +39,7 @@ There is no `AppModule`. `appConfig` (an `ApplicationConfig`) is passed to `boot
 
 > **Gotcha — interceptor array order is a contract, not a style choice.** `[cacheInterceptor, tokenInterceptor]` (`app.config.ts:49`) means a cache hit short-circuits *before* any `Authorization` header is computed. See §4.
 
-**API base URL.** Every service reads `environment.apiUrl` (no hardcoded origin). Dev = `http://localhost:8080` (`securecapitaapp/src/environments/environment.ts:11`); production = `''` (relative, same-origin behind a reverse proxy) (`securecapitaapp/src/environments/environment.production.ts:12`). `angular.json` `fileReplacements` swaps the file at build time, so services import one symbol with no runtime branching.
+**API base URL.** Every service reads `environment.apiUrl` (no hardcoded origin). Dev = `http://localhost:8080` (`tesseraapp/src/environments/environment.ts:11`); production = `''` (relative, same-origin behind a reverse proxy) (`tesseraapp/src/environments/environment.production.ts:12`). `angular.json` `fileReplacements` swaps the file at build time, so services import one symbol with no runtime branching.
 
 ---
 

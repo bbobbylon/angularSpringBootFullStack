@@ -70,21 +70,21 @@ Everything below is a zoom-in on one of these hops.
 
 Components never call `HttpClient` directly. They call a method on a service that returns a
 typed `Observable` of the standard envelope. Example
-(`securecapitaapp/src/app/service/user.service.ts:117`):
+(`tesseraapp/src/app/service/user.service.ts:117`):
 
 ```ts
 profile$ = (): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
   this.http.get<...>(`${this.server}/user/profile`).pipe(tap(console.log), catchError(this.handleError));
 ```
 
-`this.server` is `environment.apiUrl` (`securecapitaapp/src/environments/environment.ts`) — the
+`this.server` is `environment.apiUrl` (`tesseraapp/src/environments/environment.ts`) — the
 hardcoded API base. `handleError` (`user.service.ts:419`) normalizes every failure into one
 `Error` carrying the server's `reason` string, so components handle errors uniformly.
 
 ### 2.2 The interceptor chain — order is load-bearing
 
 Both interceptors are registered, **in this order**, at
-`securecapitaapp/src/app/app.config.ts:49`:
+`tesseraapp/src/app/app.config.ts:49`:
 
 ```ts
 provideHttpClient(withInterceptors([cacheInterceptor, tokenInterceptor]))
@@ -369,7 +369,7 @@ its `tap`). The module-level `isTokenRefreshing` flag + `refreshTokenSubject`
 ## 8. The return trip: how the UI changes
 
 Components model their view as an explicit state machine using the `DataState` enum
-(`securecapitaapp/src/app/enumeration/datastate.enum.ts`): `LOADING` → `LOADED` | `ERROR`. The
+(`tesseraapp/src/app/enumeration/datastate.enum.ts`): `LOADING` → `LOADED` | `ERROR`. The
 template (`*.component.html`) switches on the current state with `@if`/`*ngIf`:
 
 ```mermaid

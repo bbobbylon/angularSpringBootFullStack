@@ -5,7 +5,7 @@ than merge it as one wall (or split it by layer, which breaks — the UI calls e
 exist), we merge it as **vertical slices**: each PR carries the backend, frontend, schema, and security
 config for *one capability*, so `master` is always shippable and each PR reviews as a coherent feature.
 
-> Verified 2026-06-18 by tracing frontend endpoint calls (`securecapitaapp/src/app/service/*` + feature
+> Verified 2026-06-18 by tracing frontend endpoint calls (`tesseraapp/src/app/service/*` + feature
 > components) against backend controller mappings (`src/main/java/.../controller/*`).
 
 ---

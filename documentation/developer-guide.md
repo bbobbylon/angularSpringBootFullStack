@@ -192,4 +192,4 @@ Choosing a path for new work: **identity/security/audit → JdbcTemplate** (expl
 | Change the schema | [database.md](database.md) + `schema.sql` |
 | Change a setting | [configuration.md](configuration.md) + `application*.yml` |
 | Ship it | [deployment.md](deployment.md) |
-| Work in the SPA | [../securecapitaapp/README.md](../securecapitaapp/README.md) |
+| Work in the SPA | [../tesseraapp/README.md](../tesseraapp/README.md) |

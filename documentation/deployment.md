@@ -26,8 +26,10 @@ How to package and run TesseraApp beyond local development: the Docker image, Do
 |--------|-----|-------|
 | Local full stack | `start.sh ENV=docker` → Docker Compose | App + MySQL containers; production-like |
 | Manual image | `docker build` + `docker run` | The self-contained JAR image |
-| Azure | `azure-pipelines.yml` → ACR + App Service | Auto-deploys on push to `master` |
-| Railway / Render / Fly.io / Cloud Run | the Dockerfile | Set env vars in the platform; use a managed DB |
+| **AWS** | `.github/workflows/deploy.yml` → ECR + ECS Fargate | GitHub Actions; secrets in AWS Secrets Manager; DB = Aiven. See [`aws/`](../aws/) |
+| **GCP** | `.github/workflows/deploy-gcp.yml` → Artifact Registry + **Cloud Run** | GitHub Actions; secrets in Secret Manager; DB = Aiven. Cloud Build + Cloud SQL boilerplate included. See [`gcp/`](../gcp/) |
+| Azure | `azure-pipelines.yml` → ACR + App Service | Auto-deploys on push to `master` (earlier path) |
+| Railway / Render / Fly.io | the Dockerfile | Set env vars in the platform; use a managed DB |
 
 The single deployable artifact is the **Docker image**: a slim JRE running one JAR that contains both the Spring Boot API and the compiled Angular app.
 
@@ -38,7 +40,7 @@ The single deployable artifact is the **Docker image**: a slim JRE running one J
 `Dockerfile` uses **three stages** so the final image carries no build tooling:
 
 ```
-Stage 1  node:22-alpine            → npm ci && npm run build   → dist/securecapitaapp/browser/
+Stage 1  node:22-alpine            → npm ci && npm run build   → dist/tesseraapp/browser/
 Stage 2  maven:3.9-temurin-21      → copy Angular dist into src/main/resources/static/
                                        mvn package -DskipTests -Pprod   → target/*.jar
 Stage 3  eclipse-temurin:21-jre-alpine
@@ -56,7 +58,7 @@ Key points:
 Build and run it directly:
 
 ```bash
-docker build -t securecapita:latest .
+docker build -t tesseraapp:latest .
 
 docker run -p 8080:8080 \
   -e SPRING_ACTIVE_PROFILES=prod \
@@ -66,7 +68,7 @@ docker run -p 8080:8080 \
   -e JWT_SECRET=<random> \
   -e CONTAINER_PORT=8080 \
   -e UI_APP_URL=https://your-app.example.com \
-  securecapita:latest
+  tesseraapp:latest
 ```
 
 > Remember to apply `schema.sql` to the target database once before first launch — the image does not run it (see [database.md](database.md)).
@@ -163,7 +165,7 @@ For all of them: set the env vars, point at a managed MySQL, and apply `schema.s
 - [ ] Mail + any OAuth/Twilio secrets set via the platform
 - [ ] `UI_APP_URL` set to the public frontend URL (drives CORS + email links)
 - [ ] Health probe → `GET /actuator/health`
-- [ ] Confirm the frontend's API base URL matches the deployed backend (see [frontend notes](../securecapitaapp/README.md))
+- [ ] Confirm the frontend's API base URL matches the deployed backend (see [frontend notes](../tesseraapp/README.md))
 
 > Note: the Angular services currently target `http://localhost:8080`; deploying to a different backend origin requires updating the frontend's environment files and rebuilding. This is a known rough edge.
 

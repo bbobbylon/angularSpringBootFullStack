@@ -273,6 +273,25 @@ OAuth2LoginSuccessHandler                           (the token-exchange seam, FR
 - Only the **provider name + stable subject id** are stored (`oauthproviderlinks`), never a third-party credential. `UNIQUE(provider, provider_subject)` makes find-or-create idempotent.
 - **Statelessness note:** the OAuth2 handshake briefly uses the servlet session to hold the CSRF `state` between redirect and callback; no `SecurityContext` is ever stored, and the session plays no part once our tokens are issued.
 
+### What this federation *is* — and what it is *not*
+
+"Federation" is an overloaded word; be precise about which one this is, because the provider consoles offer several similar-sounding features.
+
+**What this app does — inbound social login (OAuth 2.0 / OpenID Connect).** The app is the **Relying Party (OAuth client)**; the provider (Google / GitHub / Microsoft) is the **Identity Provider (IdP)** that authenticates the user and returns a signed **OIDC ID token**. The app verifies it and mints *its own* JWTs — it *delegates authentication inbound* to an external IdP. That's the "Sign in with Google/GitHub/Microsoft" button, and it is the entirety of this app's FR-FED feature. Setup is just an **OAuth Client ID** (provider console → credentials) + the callback `…/login/oauth2/code/{provider}`; Spring Security's OAuth2 client does the code exchange and JWKS signature validation, so no `passport`/`authlib`-style hand-rolling is needed.
+
+**What this app does NOT do — and must not be confused with:**
+
+| Feature (provider naming) | Direction of trust | Purpose | Relevant here? |
+|---|---|---|---|
+| **This app's federated login** (OAuth2/OIDC social login) | **inbound** — external IdP → *our app* | end-users sign into TesseraApp with a Google/GitHub/Microsoft account | ✅ yes |
+| **Google Cloud Workforce Identity Federation** | outbound — external IdP → *Google Cloud* | let enterprise employees from another IdP access **GCP** console/APIs | ❌ no (a GCP IAM product, unrelated to app login) |
+| **Google Cloud Workload Identity Federation** | outbound — external workload → *Google Cloud* | let CI/apps access **GCP** without service-account keys | ❌ no |
+| **SAML federation** | inbound (enterprise SSO) | XML-assertion SSO, common in enterprise | ❌ explicitly out of scope this revision (see [§12](#12-known-gaps--rejected-alternatives) — SAML) |
+
+> **The tell — ask "what resource is being protected?"** If it's *your app's login*, you want OAuth2/OIDC social login (what's built here). If it's *Google Cloud resources*, that's Workforce/Workload Identity Federation — a different product you'd only touch to manage GCP access, never to add a login button. Creating an **OAuth Client ID** (as done for Google/GitHub) is social login; configuring a **workforce/workload identity pool** is not.
+
+> **Consent-screen scope (Google):** because the app's OAuth consent screen is **External**, any Google account can sign in (verified by the fact that both a `@lewisu.edu` Workspace account and a personal `@gmail.com` account authenticate successfully). Switching the consent screen to **Internal** would restrict logins to a single Workspace org — a provider-console setting, not a code change.
+
 ---
 
 ## 10. Password & account security

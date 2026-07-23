@@ -1,0 +1,65 @@
+# cloudbuild.yaml — GCP-native CI/CD alternative to the GitHub Actions workflow.
+#
+# Build → push to Artifact Registry → deploy to Cloud Run, all inside Google Cloud.
+# This is BOILERPLATE for later; the active path is .github/workflows/deploy-gcp.yml.
+#
+# Run manually:
+#   gcloud builds submit --config gcp/cloudbuild.yaml \
+#     --substitutions=_REGION=us-central1,_REPO=tessera-app,_SERVICE=tessera-app,\
+# _AIVEN_HOST=<host>,_AIVEN_PORT=<port>,_AIVEN_DB=db3,_AIVEN_USER=avnadmin,_APP_DOMAIN=<url>
+#
+# Or wire a Cloud Build trigger to the repo (Console → Cloud Build → Triggers) with these
+# substitutions preset. Secrets come from Secret Manager via --set-secrets (created by
+# gcp/secrets-setup.sh); only the DB password + app secrets are sensitive.
+
+substitutions:
+  _REGION: us-central1
+  _REPO: tessera-app
+  _SERVICE: tessera-app
+  _RUNTIME_SA: ""            # tessera-run@<project>.iam.gserviceaccount.com
+  _AIVEN_HOST: ""
+  _AIVEN_PORT: "11275"
+  _AIVEN_DB: db3
+  _AIVEN_USER: avnadmin
+  _APP_DOMAIN: ""            # set to the Cloud Run URL after first deploy
+
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
+
+steps:
+  # 1. Build the image (reuses the repo's multi-stage Dockerfile).
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest"
+      - "."
+
+  # 2. Push both tags.
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "--all-tags", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}"]
+
+  # 3. Deploy to Cloud Run (env vars + Secret Manager references).
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - "${_SERVICE}"
+      - "--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
+      - "--region=${_REGION}"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--port=8080"
+      - "--service-account=${_RUNTIME_SA}"
+      - "--cpu=1"
+      - "--memory=1Gi"
+      - "--min-instances=0"
+      - "--max-instances=4"
+      - "--set-env-vars=^##^SPRING_ACTIVE_PROFILES=prod##SPRING_DATASOURCE_URL=jdbc:mysql://${_AIVEN_HOST}:${_AIVEN_PORT}/${_AIVEN_DB}?useSSL=true&requireSSL=true##SPRING_DATASOURCE_USERNAME=${_AIVEN_USER}##MAIL_HOST=smtp.gmail.com##MAIL_PORT=587##UI_APP_URL=${_APP_DOMAIN}##VERIFY_EMAIL_HOST=${_APP_DOMAIN}##CONTAINER_PORT=8080##IMAGE_STORAGE_PATH=/tmp/images##MICROSOFT_TENANT_ID=common"
+      - "--set-secrets=SPRING_DATASOURCE_PASSWORD=tessera-db-password:latest,JWT_SECRET=tessera-jwt-secret:latest,MAIL_USERNAME=tessera-mail-username:latest,MAIL_PASSWORD=tessera-mail-password:latest,GOOGLE_CLIENT_ID=tessera-google-client-id:latest,GOOGLE_CLIENT_SECRET=tessera-google-client-secret:latest,GITHUB_CLIENT_ID=tessera-github-client-id:latest,GITHUB_CLIENT_SECRET=tessera-github-client-secret:latest,MICROSOFT_CLIENT_ID=tessera-microsoft-client-id:latest,MICROSOFT_CLIENT_SECRET=tessera-microsoft-client-secret:latest,TWILIO_ACCOUNT_SID=tessera-twilio-sid:latest,TWILIO_AUTH_TOKEN=tessera-twilio-token:latest,TWILIO_FROM_NUMBER=tessera-twilio-from-number:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

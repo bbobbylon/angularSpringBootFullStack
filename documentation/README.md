@@ -28,7 +28,7 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | [frontend-guide.md](frontend-guide.md) | Angular internals — routes→components, the six services, guards, interceptors, `DataState`/signals state pattern |
 | [email-and-notifications.md](email-and-notifications.md) | Email (verification/reset) + SMS-stub + Angular toast notifications; the verification-link model |
 | [testing.md](testing.md) | Test inventory, how to run, how to write backend/frontend tests, the coverage roadmap |
-| [../securecapitaapp/README.md](../securecapitaapp/README.md) | Frontend (Angular) specifics |
+| [../tesseraapp/README.md](../tesseraapp/README.md) | Frontend (Angular) specifics |
 
 ## Suggested reading paths
 

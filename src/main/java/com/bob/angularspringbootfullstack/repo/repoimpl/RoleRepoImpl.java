@@ -7,6 +7,7 @@ import com.bob.angularspringbootfullstack.rowmapper.RoleRowMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -190,14 +191,31 @@ public class RoleRepoImpl implements RoleRepo<Role> {
      */
     @Override
     public Role getRoleByUserId(Long userId) {
-        log.info("Fetching role to user with ID {}", userId);
+        // ── TEMP DIAGNOSTIC (Users vs users casing) ──────────────────────────────────
+        // This is the ONLY query in the app that references a capitalized table (`JOIN Users`).
+        // On case-INSENSITIVE MySQL (native Windows, lower_case_table_names=1) it resolves to
+        // `users` and works. On case-SENSITIVE MySQL (Docker/Aiven, lower_case_table_names=0) it
+        // needs a real `Users` table/view or it throws BadSqlGrammarException. These logs make the
+        // outcome unmistakable in the backend console. Grep the log for "[ROLE-CASING]".
+        log.info("[ROLE-CASING] getRoleByUserId(userId={}) — executing: {}", userId, SELECT_ROLE_BY_ID_QUERY);
         try {
-            return jdbcTemplate.queryForObject(SELECT_ROLE_BY_ID_QUERY, of("id", userId), new RoleRowMapper());
+            Role role = jdbcTemplate.queryForObject(SELECT_ROLE_BY_ID_QUERY, of("id", userId), new RoleRowMapper());
+            log.info("[ROLE-CASING] SUCCESS — 'JOIN Users' RESOLVED on this database. userId={} -> role='{}' (id={}).",
+                    userId, role != null ? role.getName() : null, role != null ? role.getId() : null);
+            return role;
 
         } catch (EmptyResultDataAccessException e) {
+            // The query PARSED fine (casing is OK on this DB) — the user simply has no role row.
+            log.warn("[ROLE-CASING] QUERY OK, NO ROWS — casing is fine on this DB, but userId={} has no role assigned.", userId);
             throw new ApiException("Can't find role via name " + ROLE_USER.name());
+        } catch (BadSqlGrammarException e) {
+            // THIS is the casing failure: the DB is case-sensitive and has no `Users` object.
+            log.error("[ROLE-CASING] *** BAD SQL GRAMMAR — this is the 'Users' vs 'users' casing bug. *** " +
+                      "This database is case-SENSITIVE and has no table/view named 'Users'. " +
+                      "Fix: lowercase the query to 'JOIN users', or add a `Users` view. userId={}", userId, e);
+            throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
         } catch (Exception e) {
-            log.error(e.getMessage());
+            log.error("[ROLE-CASING] UNEXPECTED (not a casing issue) for userId={}: {}", userId, e.getMessage(), e);
             throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
         }
     }

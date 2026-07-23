@@ -99,7 +99,7 @@ app:
     # survive container restarts — docker-compose maps the app-images volume there.
     # This property is used by LocalImageStorageService and WebMvcConfig. Ignored when
     # IMAGE_STORAGE_TYPE=s3 (images are stored in and served from S3 directly).
-    storage-path: ${IMAGE_STORAGE_PATH:${user.home}/securecapita/images}
+    storage-path: ${IMAGE_STORAGE_PATH:${user.home}/tesseraapp/images}
     # Storage backend selector: local (default) | s3
     # Switch to s3 for any multi-instance or ephemeral-disk deployment (ECS Fargate, etc.).
     # Activates S3ImageStorageService + AwsS3Config; requires aws.s3.bucket and aws.region.

@@ -14,17 +14,24 @@
 #
 #  DB controls which database local mode connects to:
 #
+#    native — Use the native MySQL already installed on the host (Windows MySQL80,
+#             brew mysql, etc.) listening on ${MYSQL_HOST}:${MYSQL_PORT}. Does NOT
+#             start any Docker container. This is the DEFAULT so that a stopped
+#             native server is never silently shadowed by an empty Docker MySQL on
+#             the same port 3306 — the bug that made the real database "vanish".
+#
+#    local — Start a MySQL Docker container and connect to it. ONLY use this if you
+#            do NOT have a native MySQL on 3306; otherwise the two collide on the port.
+#
 #    aiven — Use Aiven cloud MySQL (no local Docker container needed).
 #            Requires Aiven credentials in .env SPRING_DATASOURCE_* vars.
-#
-#    local — Start a MySQL Docker container and connect to it.
 #
 #  Usage:
 #    chmod +x start.sh
 #    ./start.sh
 # ═══════════════════════════════════════════════════════════════════
 ENV=local
-DB=local   # aiven | local
+DB=aiven   # native | local | aiven
 
 # Auto-open the app in your default browser once it's responding (true | false).
 # OPEN_BROWSER_TIMEOUT caps how long to wait for the server before giving up —
@@ -35,7 +42,7 @@ OPEN_BROWSER_TIMEOUT=180
 # ── Internal config ────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
-ANGULAR_DIR="$SCRIPT_DIR/securecapitaapp"
+ANGULAR_DIR="$SCRIPT_DIR/tesseraapp"
 # Angular services hardcode localhost:8080 — Spring Boot must listen here in local mode
 LOCAL_BACKEND_PORT=8080
 
@@ -111,7 +118,19 @@ start_local() {
   export CONTAINER_PORT=$LOCAL_BACKEND_PORT
 
   # ── Database ─────────────────────────────────────────────────────
-  if [[ "$DB" == "local" ]]; then
+  if [[ "$DB" == "native" ]]; then
+    # Use the host's own MySQL (e.g. Windows service MySQL80) already bound to
+    # ${MYSQL_HOST}:${MYSQL_PORT}. Deliberately does NOT run `docker compose up mysql`,
+    # so an empty Docker container can never grab port 3306 and shadow the real data.
+    log "DB=native — using host MySQL at ${MYSQL_HOST}:${MYSQL_PORT} (no Docker container)."
+    if command -v nc >/dev/null 2>&1 && ! nc -z "${MYSQL_HOST}" "${MYSQL_PORT}" 2>/dev/null; then
+      warn "Nothing is listening on ${MYSQL_HOST}:${MYSQL_PORT}."
+      warn "Start your native MySQL first (Windows: run 'net start MySQL80' in an ADMIN terminal),"
+      warn "then re-run ./start.sh. Aborting so we don't boot against a dead datasource."
+      exit 1
+    fi
+    log "Host MySQL is reachable."
+  elif [[ "$DB" == "local" ]]; then
     log "Starting local MySQL container..."
     docker compose up -d mysql
 

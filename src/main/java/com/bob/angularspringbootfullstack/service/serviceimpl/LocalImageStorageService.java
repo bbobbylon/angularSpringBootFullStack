@@ -42,7 +42,7 @@ public class LocalImageStorageService implements ImageStorageService {
     /**
      * Root directory where profile images are written; resolved from
      * {@code app.image.storage-path} (env {@code IMAGE_STORAGE_PATH}).
-     * Defaults to {@code ~/securecapita/images} in the dev profile via {@code application.yml}.
+     * Defaults to {@code ~/tesseraapp/images} in the dev profile via {@code application.yml}.
      */
     @Value("${app.image.storage-path}")
     private String imageStoragePath;

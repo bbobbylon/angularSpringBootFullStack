@@ -1,0 +1,68 @@
+# cloudrun-service.yaml — Declarative Cloud Run service (Knative), as a template.
+#
+# An alternative to the imperative `gcloud run deploy` used by deploy-gcp.yml / cloudbuild.yaml.
+# Replace the ${...} tokens (envsubst) and apply with:
+#   envsubst < gcp/cloudrun-service.yaml > /tmp/service.yaml
+#   gcloud run services replace /tmp/service.yaml --region "$GCP_REGION"
+#
+# Secrets are pulled from Secret Manager (created by gcp/secrets-setup.sh); non-sensitive
+# config is inline env. Aiven is the datasource; only the password is a secret.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${CLOUD_RUN_SERVICE}          # e.g. tessera-app
+  labels:
+    app: tessera-app
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "4"
+    spec:
+      serviceAccountName: ${GCP_RUNTIME_SA}   # tessera-run@<project>.iam.gserviceaccount.com
+      containerConcurrency: 80
+      containers:
+        - image: ${IMAGE}                       # <region>-docker.pkg.dev/<project>/<repo>/<service>:<tag>
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          env:
+            # ── Non-sensitive config ───────────────────────────────────────────
+            - { name: SPRING_ACTIVE_PROFILES, value: "prod" }
+            - { name: SPRING_DATASOURCE_URL,  value: "jdbc:mysql://${AIVEN_HOST}:${AIVEN_PORT}/${AIVEN_DB}?useSSL=true&requireSSL=true" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "${AIVEN_USER}" }
+            - { name: MAIL_HOST, value: "smtp.gmail.com" }
+            - { name: MAIL_PORT, value: "587" }
+            - { name: UI_APP_URL, value: "${APP_DOMAIN}" }
+            - { name: VERIFY_EMAIL_HOST, value: "${APP_DOMAIN}" }
+            - { name: CONTAINER_PORT, value: "8080" }
+            - { name: IMAGE_STORAGE_PATH, value: "/tmp/images" }   # ⚠ ephemeral on Cloud Run — see gcp/README.md
+            - { name: MICROSOFT_TENANT_ID, value: "common" }
+            # ── Secrets (Secret Manager) ───────────────────────────────────────
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: tessera-db-password, key: latest } }
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: tessera-jwt-secret, key: latest } }
+            - name: MAIL_USERNAME
+              valueFrom: { secretKeyRef: { name: tessera-mail-username, key: latest } }
+            - name: MAIL_PASSWORD
+              valueFrom: { secretKeyRef: { name: tessera-mail-password, key: latest } }
+            - name: GOOGLE_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: tessera-google-client-id, key: latest } }
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: tessera-google-client-secret, key: latest } }
+            - name: GITHUB_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: tessera-github-client-id, key: latest } }
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: tessera-github-client-secret, key: latest } }
+            - name: MICROSOFT_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: tessera-microsoft-client-id, key: latest } }
+            - name: MICROSOFT_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: tessera-microsoft-client-secret, key: latest } }
+  traffic:
+    - percent: 100
+      latestRevision: true

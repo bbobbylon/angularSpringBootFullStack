@@ -5,7 +5,7 @@
 > machinery where it matters.
 
 **Route:** `/login` → `LoginComponent`
-(`securecapitaapp/src/app/features/auth/login/login.component.ts`, `.html`)
+(`tesseraapp/src/app/features/auth/login/login.component.ts`, `.html`)
 **Primary endpoints:** `POST /user/login` · `GET /user/verify/code/{email}/{code}` · `POST /user/verify/totp`
 
 `POST /user/login` **always returns `200`**. What differs is the `data` map — that single fact is
