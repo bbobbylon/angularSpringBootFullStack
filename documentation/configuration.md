@@ -140,7 +140,82 @@ A provider's login button appears only when its `CLIENT_ID` is set (the SPA disc
 | `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | Microsoft (Entra) app registration |
 | `MICROSOFT_TENANT_ID` | `common` \| `consumers` \| `organizations` \| tenant GUID |
 
-Register this callback in each provider console: `http://localhost:8080/login/oauth2/code/{provider}` where `{provider}` is `google`, `github`, or `microsoft`. See [security.md](security.md#federated-login) for the full flow.
+Register this callback in each provider console: `http://localhost:8080/login/oauth2/code/{provider}` where `{provider}` is `google`, `github`, or `microsoft`. See [security.md](security.md#federated-login) for the full flow and [flows/04-federated-oauth2.md](flows/04-federated-oauth2.md) for the click-to-token walkthrough.
+
+#### Step-by-step: enabling GitHub (the fastest provider)
+
+GitHub needs no domain verification, so it's the quickest to demo end-to-end:
+
+1. **Create the OAuth app.** GitHub → **Settings ▸ Developer settings ▸ OAuth Apps ▸ New OAuth App**.
+   - **Homepage URL:** `http://localhost:4200`
+   - **Authorization callback URL:** `http://localhost:8080/login/oauth2/code/github` — this must match **exactly** (scheme, host, port, path). This points at the **backend** (8080), not the SPA (4200), because Spring Security handles the OAuth callback.
+2. **Copy the credentials.** Register → copy the **Client ID**, then **Generate a new client secret** and copy it (shown once).
+3. **Put them in `.env`:**
+   ```bash
+   GITHUB_CLIENT_ID=Iv1.xxxxxxxxxxxx
+   GITHUB_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
+4. **Restart** the backend. Confirm the log now reads `Federated login providers configured: [github]` (not `none`).
+5. **Verify the wiring:**
+   - `GET http://localhost:8080/oauth2/providers` should return `{"data":{"providers":["github"]}, ...}`, and a **GitHub button** appears on the login screen automatically.
+   - After a successful GitHub login, a row lands in `oauthproviderlinks` (`SELECT * FROM oauthproviderlinks;`) linking your local user to the GitHub subject id — that's the find-or-create in action ([database.md §7](database.md#7-federated-identity)).
+
+> **How activation works:** each provider registers **only** when its `CLIENT_ID` is non-blank (`OAuth2ClientConfig` builds the `ClientRegistrationRepository` from whichever creds are present). With none set, a non-functional placeholder registration keeps the OAuth filter chain bootable while the login screen stays free of dead buttons. Google and Microsoft follow the identical pattern — fill in their `CLIENT_ID`/`CLIENT_SECRET` and restart.
+
+#### Step-by-step: enabling Google
+
+Google requires an OAuth **consent screen** in addition to the credentials, and gates non-test users until the app is published.
+
+1. **Google Cloud Console** (<https://console.cloud.google.com>) → create or select a project.
+2. **APIs & Services → OAuth consent screen** → choose **External** → fill in app name + user-support email + developer contact. Save.
+   - ⚠ **If the app stays in "Testing" mode**, only accounts you add under **Audience → Test users** can log in; everyone else gets `Error 403: access_denied`. Add your own Google account as a test user, or **Publish** the app.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID** → Application type: **Web application**.
+4. **Authorized redirect URIs → Add URI** — exactly (backend port, not the SPA):
+   ```
+   http://localhost:8080/login/oauth2/code/google
+   ```
+   (Authorized JavaScript origins are **not** required — this is a server-side Authorization Code flow, not implicit.)
+5. **Create** → copy the **Client ID** (`…apps.googleusercontent.com`) and **Client Secret**.
+6. Put them in `.env`:
+   ```bash
+   GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxx
+   ```
+7. **Restart** → log reads `Federated login providers configured: [github, google]`; a **Google** button joins the login screen. Google uses OIDC, so the id-token carries `sub` + `email` for find-or-create (`CommonOAuth2Provider.GOOGLE` preset in `OAuth2ClientConfig`).
+
+> **Consent-screen audience — Internal vs External (they're mutually exclusive).** The OAuth consent screen has one **audience** setting, not a pair of toggles, so you pick exactly one:
+> | Audience | Who can sign in | Notes |
+> |----------|-----------------|-------|
+> | **External** *(use this for open sign-up)* | **Any** Google account — your Workspace org **and** personal `@gmail.com` **and** other orgs | External is a **superset** — it already includes your org's users. In "Testing" status it's limited to added test users until you **Publish**; sensitive scopes trigger Google verification |
+> | **Internal** | **Only** users in the Workspace org that owns the project (e.g. `@lewisu.edu`) | The *restrictive* option; no Google verification needed. Only available when the project is owned by a Workspace org |
+>
+> You **cannot** enable both — "Internal" is org-only and "External" is everyone, so **External already covers "org + outsiders."** Only choose Internal to deliberately *exclude* non-org accounts. Switching External→Internal later immediately blocks every already-linked non-org user, so don't flip it once personal accounts have signed in.
+
+#### Step-by-step: enabling Microsoft (Entra ID)
+
+Microsoft has **no `CommonOAuth2Provider` preset**, so `OAuth2ClientConfig.microsoftRegistration()` declares the endpoints explicitly against the configured tenant (`login.microsoftonline.com/{tenant}`), using OIDC scopes and `client_secret_post` auth.
+
+1. **Entra admin center / Azure Portal → Microsoft Entra ID → App registrations → New registration**.
+2. **Name** it, and under **Supported account types** pick who can sign in:
+   - *Personal + work/school accounts* → set `MICROSOFT_TENANT_ID=common`
+   - *Any org (multi-tenant)* → `organizations`
+   - *Personal Microsoft accounts only* → `consumers`
+   - *Your single tenant only* → the **tenant GUID**
+3. **Redirect URI** → platform **Web** → exactly:
+   ```
+   http://localhost:8080/login/oauth2/code/microsoft
+   ```
+4. **Register**, then copy the **Application (client) ID**.
+5. **Certificates & secrets → New client secret** → copy the secret **Value** (not the Secret ID — it's shown once).
+6. Put them in `.env` (the tenant must match step 2):
+   ```bash
+   MICROSOFT_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+   MICROSOFT_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   MICROSOFT_TENANT_ID=common
+   ```
+7. **Restart** → log reads `Federated login providers configured: [github, google, microsoft]`; a **Microsoft** button appears. The registration requests `openid profile email` and reads the stable `sub` claim as the provider subject id.
+
+> **All three share the same callback shape** — `http://localhost:8080/login/oauth2/code/{provider}` — because that's Spring Security's default redirect template. In production, register the same path on your real host (e.g. `https://yourdomain/login/oauth2/code/google`) and keep `UI_APP_URL` pointed at the deployed SPA (used for the federated-login **failure** redirect).
 
 ### SMS 2FA (Twilio) — optional, stubbed
 
@@ -160,6 +235,8 @@ Register this callback in each provider console: `http://localhost:8080/login/oa
 | `AIVEN_DB_USERNAME` / `AIVEN_DB_PASSWORD` | Aiven credentials |
 
 `start.sh` uses these to assemble a TLS JDBC URL and point local Spring Boot at Aiven instead of the Docker container.
+
+> **Current cloud database:** `AIVEN_DB_NAME=db3` — a migrated copy of the local `db2`, with the case-sensitivity bridge applied (Aiven is case-sensitive; see [database.md §17.2](database.md#172-the-case-sensitivity-landmine-lower_case_table_names)). How it was created and how to re-migrate: [database.md §17.4](database.md#174-migrating-native--aiven-how-db3-was-created).
 
 ---
 
@@ -263,6 +340,12 @@ This flag makes Hibernate quote identifiers and **bypass the snake_case naming s
 `MYSQL_HOST=mysql` is the Docker *service* name. Running natively, set `MYSQL_HOST=127.0.0.1`.
 
 **5. Cloud DBs need TLS.** For managed databases (Aiven, RDS, Cloud SQL) set `useSSL=true&requireSSL=true` in `SPRING_DATASOURCE_URL`.
+
+**6. "All my data vanished" — Docker MySQL shadowing native MySQL on port 3306.**
+If you run `start.sh` with `DB=local`, it starts a **Docker** MySQL (empty, fresh volume) that seizes `127.0.0.1:3306` and *shadows* a native MySQL (e.g. Windows **MySQL80**) that would otherwise own the port. The app connects to `localhost:3306`, gets the empty Docker DB, and looks wiped — but your real data is safe in native MySQL, just not listening. **Fix:** use the default `DB=native` (never starts Docker MySQL), set the native service to auto-start (`sc config MySQL80 start= auto`), and never run both at once. Full incident write-up + recovery in [database.md §17.3](database.md#173-the-port-3306-shadowing-trap-the-vanished-data-incident).
+
+**7. `Table 'X.customer' doesn't exist` or `BadSqlGrammar [... JOIN Users ...]` on Docker/Aiven, but fine natively.**
+Case-sensitivity. Native Windows MySQL is case-**in**sensitive (`lower_case_table_names=1`); Docker and Aiven are case-**sensitive** (`=0`). The app mixes casings (`Customer`/`customer`, `Users`/`users`), which only collide on a case-sensitive server. **Fix:** the compatibility views documented in [database.md §17.2](database.md#172-the-case-sensitivity-landmine-lower_case_table_names), or the durable "lowercase everything" refactor noted there.
 
 ---
 

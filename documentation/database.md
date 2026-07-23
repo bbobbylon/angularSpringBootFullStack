@@ -25,6 +25,7 @@ The complete data model: the two persistence mechanisms, how the schema is creat
 14. [TOTP recovery codes (detail)](#14-totp-recovery-codes-detail)
 15. [Audit-event trigger reference](#15-audit-event-trigger-reference)
 16. [Schema evolution & migration](#16-schema-evolution--migration)
+17. [Which MySQL server? native vs Docker vs Aiven (case-sensitivity & port 3306)](#17-which-mysql-server-native-vs-docker-vs-aiven-case-sensitivity--port-3306)
 
 ---
 
@@ -441,3 +442,93 @@ There is **no down-migration mechanism** — that is the deliberate trade-off of
 | A data seed | Re-run `schema.sql` (idempotent) after editing the seed `INSERT` | `ON DUPLICATE KEY UPDATE` reconciles existing rows |
 
 > **Note — back up first.** Because rollback is manual SQL against a live database, take a dump before applying any destructive `ALTER`/`DROP`, and (per project rule) confirm any destructive DB operation with a human before running it.
+
+---
+
+## 17. Which MySQL server? native vs Docker vs Aiven (case-sensitivity & port 3306)
+
+This app can run against three different MySQL servers, and **they do not behave identically.** The differences here caused a multi-hour "all my data vanished" incident — read this before switching servers.
+
+### 17.1 The three run modes (`start.sh`)
+
+`start.sh` has a `DB=` switch that picks the datasource. **`native` is the default on purpose** (see §17.3):
+
+| `DB=` | What it connects to | Starts a container? | When to use |
+|-------|---------------------|---------------------|-------------|
+| **`native`** *(default)* | The host's own MySQL on `${MYSQL_HOST}:${MYSQL_PORT}` (e.g. Windows service **MySQL80**) | **No** | Normal local dev — your real data lives here |
+| `local` | A **Docker** MySQL container (`docker compose up mysql`) on port 3306 | Yes | Only if you have **no** native MySQL on 3306 |
+| `aiven` | Aiven cloud MySQL over TLS (`AIVEN_DB_*` in `.env`) | No | Testing against the cloud DB from your machine |
+
+You can run the app **locally but against the Aiven cloud DB** — that is exactly what `DB=aiven` does (local Spring Boot + Angular, remote datasource).
+
+### 17.2 The case-sensitivity landmine (`lower_case_table_names`)
+
+MySQL's `lower_case_table_names` setting decides whether table names are case-sensitive — and **it differs by platform**:
+
+| Server | `lower_case_table_names` | Table names are… | `Customer` vs `customer` |
+|--------|--------------------------|------------------|--------------------------|
+| **Native Windows MySQL80** | `1` | case-**IN**sensitive, stored lowercase | the **same** table |
+| **Docker / Linux MySQL** | `0` | case-**sensitive** | **two different** tables |
+| **Aiven MySQL** | `0` | case-**sensitive** | **two different** tables |
+
+This matters because the app is **internally inconsistent about casing** — and that inconsistency is invisible on native but explodes on Docker/Aiven:
+
+- **JPA** (via `globally_quoted_identifiers`, see §13) asks for capitalized `Customer` / `Invoice` / `Services`.
+- **Hand-written JDBC** (`CustomerQuery` — the stats & status-breakdown queries) asks for lowercase `customer` / `invoice`.
+- **`RoleQuery.SELECT_ROLE_BY_ID_QUERY`** joins capitalized **`Users`** (the one capitalized reference to the otherwise-lowercase `users` table).
+
+On native (case-insensitive) all of these resolve to one table, so it "just works." On a **case-sensitive** server, no single set of table names satisfies all three at once — you get `Table 'db3.customer' doesn't exist` or `BadSqlGrammarException [... JOIN Users ...]`.
+
+**How Aiven `db3` bridges it today (compatibility views):** the base tables are capitalized (for JPA) and lowercase **views** mirror them for the JDBC queries — so every casing resolves, exactly mimicking a case-insensitive server:
+
+| Base table (JPA writes/reads) | View (JDBC + `JOIN Users` read) |
+|-------------------------------|----------------------------------|
+| `Customer` | `customer` → `Customer` |
+| `Invoice` | `invoice` → `Invoice` |
+| `Services` | `services` → `Services` |
+| `users` (base) | `Users` → `users` |
+
+```sql
+-- The bridge applied to a case-sensitive server (Aiven db3):
+CREATE OR REPLACE VIEW `customer` AS SELECT * FROM `Customer`;
+CREATE OR REPLACE VIEW `invoice`  AS SELECT * FROM `Invoice`;
+CREATE OR REPLACE VIEW `services` AS SELECT * FROM `Services`;
+CREATE OR REPLACE VIEW `Users`    AS SELECT * FROM `users`;
+```
+
+> **Durable fix (recommended, not yet done):** make the app use **one casing everywhere** — add `@Table(name = "customer"/"invoice"/"services")` to the three entities, lowercase `RoleQuery`'s `JOIN Users` → `JOIN users`, update `schema.sql` + `JpaSchemaSyncTest`, then drop the shim views. That permanently removes the landmine so Docker/Aiven behave like native. Until then, the views are the bridge.
+
+### 17.3 The port-3306 shadowing trap (the "vanished data" incident)
+
+**Symptom:** the app suddenly shows an empty database, login fails, and MySQL Workbench shows unfamiliar capitalized `Customer`/`Invoice` tables.
+
+**Cause:** two MySQL servers both want `127.0.0.1:3306`, and **only one can own the port at a time.** If `start.sh` runs with `DB=local`, it launches a **Docker** MySQL (a fresh, empty volume) that grabs 3306 — *shadowing* your native MySQL80. The app connects to `localhost:3306`, gets the empty Docker DB, and it looks like everything was wiped. **Your real data is untouched** — it's in native MySQL80's data dir (`C:\ProgramData\MySQL\MySQL Server 8.0\Data\<db>`), just not listening on the port.
+
+**How to tell which server you're on:** capitalized `Customer`/`Invoice`/`Users` tables in your client = you're on a **case-sensitive** server (Docker or Aiven). All-lowercase = native.
+
+**Prevention (already in place):**
+- `start.sh` defaults to **`DB=native`**, which never starts the Docker MySQL.
+- Set the native service to auto-start so it always owns 3306 first: `sc config MySQL80 start= auto` (Windows, admin).
+- Never run `DB=local` (Docker MySQL) and native MySQL at the same time — they collide on 3306.
+
+**If you're already shadowed:** stop the Docker container (`docker stop <project>-mysql-1`), ensure MySQL80 is running (`net start MySQL80`, admin), and restart the app with `DB=native`. Nothing is lost.
+
+### 17.4 Migrating native → Aiven (how `db3` was created)
+
+The cloud copy (`db3`) was made with a plain dump + load, plus two Aiven-specific accommodations:
+
+```bash
+# 1. Dump native db2 (use --result-file so PowerShell doesn't corrupt encoding)
+mysqldump -u root -p --single-transaction --no-tablespaces --skip-column-statistics \
+  --set-gtid-purged=OFF --default-character-set=utf8mb4 --result-file=native_db2.sql db2
+
+# 2. Load into a NEW Aiven database (do NOT overwrite an existing one)
+#    Aiven quirks: `source` doesn't work in `-e`, so pipe via stdin; and Aiven enforces
+#    sql_require_primary_key=ON, which rejects invoiceserviceitems (no PK) unless relaxed.
+mysql -h <aiven-host> -P <port> -u avnadmin -p<pw> --ssl-mode=REQUIRED \
+  --init-command="SET SESSION sql_require_primary_key=0" db3 < native_db2.sql
+
+# 3. Apply the case-sensitivity bridge from §17.2 (rename JPA tables to capitalized + add views)
+```
+
+Then point the app at it: `AIVEN_DB_NAME=db3` in `.env` and `DB=aiven` in `start.sh`. See [configuration.md](configuration.md#aiven-cloud-mysql--only-when-startsh-dbaiven).

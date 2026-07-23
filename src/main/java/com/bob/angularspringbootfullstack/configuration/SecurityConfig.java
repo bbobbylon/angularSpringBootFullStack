@@ -25,6 +25,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -216,6 +217,18 @@ class SecurityConfig {
                     .addFilterBefore(customAuthFilter, UsernamePasswordAuthenticationFilter.class)
                     .exceptionHandling(ex -> ex
                             .accessDeniedHandler(customAccessDeniedHandler)
+                            // Force the custom 401 (JSON) entry point for EVERY unauthenticated request.
+                            // Rationale: enabling oauth2Login() installs a LoginUrlAuthenticationEntryPoint
+                            // that 302-redirects "browser-negotiated" requests to /login. For this stateless
+                            // JSON API served to an SPA on another origin, that redirect surfaces in the
+                            // browser as an opaque CORS failure (the /login response carries no CORS headers)
+                            // and, critically, defeats the frontend's token.interceptor auto-refresh, which
+                            // only retries on HTTP 401 — a 302 is never seen as one. Registering the custom
+                            // entry point for AnyRequestMatcher overrides oauth2Login's html redirect so an
+                            // expired/missing token always yields a clean 401 the SPA can silently refresh.
+                            // The federated-login *initiation* (/oauth2/authorization/**) is a public route
+                            // handled by Spring's redirect filter directly, so it never needs this entry point.
+                            .defaultAuthenticationEntryPointFor(customAuthenticationEntryPoint, AnyRequestMatcher.INSTANCE)
                             .authenticationEntryPoint(customAuthenticationEntryPoint)
                     );
 

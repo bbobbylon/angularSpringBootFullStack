@@ -26,8 +26,10 @@ How to package and run TesseraApp beyond local development: the Docker image, Do
 |--------|-----|-------|
 | Local full stack | `start.sh ENV=docker` → Docker Compose | App + MySQL containers; production-like |
 | Manual image | `docker build` + `docker run` | The self-contained JAR image |
-| Azure | `azure-pipelines.yml` → ACR + App Service | Auto-deploys on push to `master` |
-| Railway / Render / Fly.io / Cloud Run | the Dockerfile | Set env vars in the platform; use a managed DB |
+| **AWS** | `.github/workflows/deploy.yml` → ECR + ECS Fargate | GitHub Actions; secrets in AWS Secrets Manager; DB = Aiven. See [`aws/`](../aws/) |
+| **GCP** | `.github/workflows/deploy-gcp.yml` → Artifact Registry + **Cloud Run** | GitHub Actions; secrets in Secret Manager; DB = Aiven. Cloud Build + Cloud SQL boilerplate included. See [`gcp/`](../gcp/) |
+| Azure | `azure-pipelines.yml` → ACR + App Service | Auto-deploys on push to `master` (earlier path) |
+| Railway / Render / Fly.io | the Dockerfile | Set env vars in the platform; use a managed DB |
 
 The single deployable artifact is the **Docker image**: a slim JRE running one JAR that contains both the Spring Boot API and the compiled Angular app.
 
