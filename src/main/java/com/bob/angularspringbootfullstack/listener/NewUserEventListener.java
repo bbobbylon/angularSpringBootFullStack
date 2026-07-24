@@ -37,13 +37,35 @@ public class NewUserEventListener {
      * log captures exactly where and how the action was triggered.  Called
      * automatically by Spring whenever a {@link NewUserEvent} is published.
      *
+     * <p><b>Audit writes are best-effort and must never break the action that triggered them.</b>
+     * Spring's default event multicaster invokes listeners <em>synchronously on the publishing
+     * thread</em>, so an exception thrown here propagates straight back into the caller of
+     * {@code publishEvent(...)} — e.g. {@code UserController.authenticate} / {@code recordLoginFailure}
+     * or {@link com.bob.angularspringbootfullstack.handler.OAuth2LoginSuccessHandler}. Every audit
+     * write in the application funnels through this one listener, so a single failing insert (for
+     * instance a schema drift where {@code userevents.detail} is missing on a live DB that
+     * {@code schema.sql} never had run against it) would otherwise turn <em>every</em> login into an
+     * HTTP 500 — including the code path that records failed logins. We therefore swallow and log any
+     * failure: the user-facing action (sign-in, federated callback, profile update…) still succeeds,
+     * and the cost of a persistence hiccup degrades to a missing audit row rather than a broken app.
+     *
+     * <p>This is intentionally <em>not</em> {@code @Async}: the listener reads the request-scoped
+     * {@link HttpServletRequest} to capture the originating IP/device, and that scope does not exist
+     * on a background thread.
+     *
      * @param event the published event carrying the user's email and event type
      */
     @EventListener
     public void onNewUserEvent(NewUserEvent event) {
         log.info("NewUserEvent received for email: {}", event.getEmail());
-        // event.getDetail() is non-null only for events that carry extra context (FR-FED-5: the
-        // federated provider name); for every other event it is null and persists as a NULL column.
-        eventService.addUserEvent(event.getEmail(), event.getEventType(), getDevice(request), getIpAddress(request), event.getDetail());
+        try {
+            // event.getDetail() is non-null only for events that carry extra context (FR-FED-5: the
+            // federated provider name); for every other event it is null and persists as a NULL column.
+            eventService.addUserEvent(event.getEmail(), event.getEventType(), getDevice(request), getIpAddress(request), event.getDetail());
+        } catch (Exception ex) {
+            // Never rethrow: a failed audit write must not fail the user-facing action (see Javadoc).
+            log.error("Failed to persist audit event {} for {} — continuing without it. Cause: {}",
+                    event.getEventType(), event.getEmail(), ex.getMessage(), ex);
+        }
     }
 }

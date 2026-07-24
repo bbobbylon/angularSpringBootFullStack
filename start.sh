@@ -73,24 +73,35 @@ open_browser() {
   esac
 }
 
-# wait_and_open <url> — polls (in the background) until the URL responds, then
-# opens it. Honors OPEN_BROWSER and the OPEN_BROWSER_TIMEOUT cap; falls back to a
-# short fixed wait if curl isn't installed.
+# wait_and_open <url> [gate_url] — polls (in the background) until <url> responds AND,
+# if a second <gate_url> is given, until it responds too; then opens <url>. Honors
+# OPEN_BROWSER and the OPEN_BROWSER_TIMEOUT cap; falls back to a short fixed wait if curl
+# isn't installed.
+#
+# The optional gate exists so local mode can hold the browser back until the BACKEND is
+# actually serving, not just the fast-booting Angular dev server. Without it the login
+# page opens while Spring Boot is still starting, its GET /oauth2/providers call returns
+# nothing, and the federated-login buttons don't appear until a manual refresh. We poll
+# the providers endpoint itself (the exact call the login screen depends on) with a plain
+# `curl -s` — any HTTP response means the backend is up (Spring Boot starts Tomcat last),
+# so we intentionally do NOT use --fail, which would wait needlessly on a 401/429.
 wait_and_open() {
   local url="$1"
+  local gate="$2"
   [[ "$OPEN_BROWSER" == "true" ]] || return 0
   if command -v curl >/dev/null 2>&1; then
     local waited=0
-    until curl -s -o /dev/null --max-time 3 "$url"; do
+    until curl -s -o /dev/null --max-time 3 "$url" \
+          && { [[ -z "$gate" ]] || curl -s -o /dev/null --max-time 3 "$gate"; }; do
       sleep 2
       waited=$((waited + 2))
       if [[ $waited -ge $OPEN_BROWSER_TIMEOUT ]]; then
-        warn "App didn't respond at $url within ${OPEN_BROWSER_TIMEOUT}s — open it manually."
+        warn "App/backend didn't both respond within ${OPEN_BROWSER_TIMEOUT}s — open $url manually."
         return 0
       fi
     done
   else
-    sleep 15  # no curl — best-effort fixed wait for the server to come up
+    sleep 15  # no curl — best-effort fixed wait for the servers to come up
   fi
   log "Opening $url in your default browser..."
   open_browser "$url"
@@ -184,9 +195,12 @@ start_local() {
   log "  Press Ctrl+C to stop all services."
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # Open the frontend in the browser once it's actually serving (backgrounded;
-  # never blocks). Lands on the base URL, which redirects to /login when signed out.
-  wait_and_open "http://localhost:4200" &
+  # Open the frontend in the browser once BOTH it and the backend are serving
+  # (backgrounded; never blocks). The second URL gates on the backend's public
+  # /oauth2/providers endpoint so the login page's federated-login buttons are
+  # populated on first paint — no manual refresh while Spring Boot finishes booting.
+  # Lands on the base URL, which redirects to /login when signed out.
+  wait_and_open "http://localhost:4200" "http://localhost:$LOCAL_BACKEND_PORT/oauth2/providers" &
   BROWSER_PID=$!
 
   # ── Cleanup ──────────────────────────────────────────────────────

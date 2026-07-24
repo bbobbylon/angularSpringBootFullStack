@@ -1,0 +1,66 @@
+<!--
+  Command palette overlay. Rendered only while open() is true so it adds nothing to the
+  DOM (and runs no listeners on its own subtree) when idle. The backdrop closes on click;
+  the panel stops propagation so clicks inside it do not dismiss it.
+-->
+@if (open()) {
+  <div class="cmdk-backdrop" role="presentation" (click)="close()">
+    <div
+      class="cmdk-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
+      (click)="$event.stopPropagation()"
+    >
+      <!-- Search row -->
+      <div class="cmdk-input-row">
+        <i class="bi bi-search cmdk-input-icon" aria-hidden="true"></i>
+        <input
+          #searchInput
+          type="text"
+          class="cmdk-input"
+          placeholder="Search pages and actions…"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="cmdk-list"
+          autocomplete="off"
+          spellcheck="false"
+          [value]="query()"
+          (input)="onQueryChange(searchInput.value)"
+          (keydown)="onInputKeydown($event)"
+        />
+        <kbd class="cmdk-esc">Esc</kbd>
+      </div>
+
+      <!-- Results, grouped by section; each row's flat index drives the highlight -->
+      <ul id="cmdk-list" class="cmdk-list" role="listbox">
+        @for (group of grouped(); track group.section) {
+          <li class="cmdk-section" role="presentation">{{ group.section }}</li>
+          @for (item of group.items; track item.command.id) {
+            <li
+              class="cmdk-item"
+              role="option"
+              [class.is-active]="item.index === activeIndex()"
+              [attr.aria-selected]="item.index === activeIndex()"
+              (mouseenter)="highlight(item.index)"
+              (click)="run(item.command)"
+            >
+              <span class="cmdk-item__icon"><i class="bi {{ item.command.icon }}" aria-hidden="true"></i></span>
+              <span class="cmdk-item__label">{{ item.command.label }}</span>
+              <span class="cmdk-item__hint">{{ item.command.hint }}</span>
+            </li>
+          }
+        } @empty {
+          <li class="cmdk-empty" role="presentation">No matches for “{{ query() }}”</li>
+        }
+      </ul>
+
+      <!-- Keyboard legend -->
+      <div class="cmdk-footer">
+        <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+        <span><kbd>↵</kbd> open</span>
+        <span><kbd>esc</kbd> close</span>
+      </div>
+    </div>
+  </div>
+}
