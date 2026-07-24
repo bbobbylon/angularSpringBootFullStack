@@ -18,7 +18,7 @@ public class EventQuery {
      * table rather than a raw foreign key.
      */
     public static final String SELECT_EVENTS_BY_USER_ID_QUERY = "SELECT " +
-            "uev.id, uev.device, uev.ip_address, ev.type, ev.description, uev.created_at " +
+            "uev.id, uev.device, uev.ip_address, uev.detail, ev.type, ev.description, uev.created_at " +
             "FROM events ev JOIN userevents uev ON ev.id = uev.event_id " +
             "JOIN users u ON u.id = uev.user_id WHERE u.id = :id " +
             "ORDER BY uev.created_at DESC";
@@ -31,7 +31,7 @@ public class EventQuery {
      * calculated by the caller so the query stays parameter-only.
      */
     public static final String SELECT_EVENTS_BY_USER_ID_PAGINATED_QUERY = "SELECT " +
-            "uev.id, uev.device, uev.ip_address, ev.type, ev.description, uev.created_at " +
+            "uev.id, uev.device, uev.ip_address, uev.detail, ev.type, ev.description, uev.created_at " +
             "FROM events ev JOIN userevents uev ON ev.id = uev.event_id " +
             "JOIN users u ON u.id = uev.user_id WHERE u.id = :id " +
             "ORDER BY uev.created_at DESC LIMIT :size OFFSET :offset";
@@ -72,4 +72,18 @@ public class EventQuery {
      */
     public static final String INSERT_EVENT_BY_USER_ID_QUERY = "INSERT INTO userevents (user_id, event_id, device, ip_address) " +
             "VALUES ((SELECT id FROM users WHERE email = :email), (SELECT id FROM events WHERE type = :type), :device, :ipAddress)";
+
+    /**
+     * Inserts an audit entry (resolved by email, like {@link #INSERT_EVENT_BY_USER_ID_QUERY}) that
+     * additionally records a free-form {@code detail} value in the {@code userevents.detail} column.
+     *
+     * <p>Added for FR-FED-5: a {@code FEDERATED_LOGIN} row carries the provider name
+     * ({@code google} | {@code github} | {@code microsoft}) so the authentication method is fully
+     * captured in the audit trail, not merely in the server log. {@code :detail} is nullable, so
+     * this query is safe for any event type — callers with no extra context simply pass {@code null},
+     * which is why the bind must be done through a null-tolerant {@code MapSqlParameterSource} rather
+     * than {@code Map.of} (the latter rejects null values).
+     */
+    public static final String INSERT_EVENT_WITH_DETAIL_BY_EMAIL_QUERY = "INSERT INTO userevents (user_id, event_id, device, ip_address, detail) " +
+            "VALUES ((SELECT id FROM users WHERE email = :email), (SELECT id FROM events WHERE type = :type), :device, :ipAddress, :detail)";
 }

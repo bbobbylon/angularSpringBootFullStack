@@ -6,6 +6,7 @@ import com.bob.angularspringbootfullstack.rowmapper.UserEventRowMapper;
 import com.bob.angularspringbootfullstack.repo.EventRepo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -87,5 +88,22 @@ public class EventRepoImpl implements EventRepo {
     @Override
     public void addUserEvent(String email, EventType eventType, String device, String ipAddress) {
         jdbcTemplate.update(INSERT_EVENT_BY_USER_ID_QUERY, of("email", email, "type", eventType.toString(), "device", device, "ipAddress", ipAddress));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Uses a {@link MapSqlParameterSource} rather than {@code Map.of} because {@code detail} may
+     * be {@code null} (most event types carry none), and {@code Map.of} throws on null values.
+     */
+    @Override
+    public void addUserEvent(String email, EventType eventType, String device, String ipAddress, String detail) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("email", email)
+                .addValue("type", eventType.toString())
+                .addValue("device", device)
+                .addValue("ipAddress", ipAddress)
+                .addValue("detail", detail);
+        jdbcTemplate.update(INSERT_EVENT_WITH_DETAIL_BY_EMAIL_QUERY, params);
     }
 }

@@ -123,10 +123,27 @@ CREATE TABLE IF NOT EXISTS userevents
     event_id   BIGINT UNSIGNED NOT NULL,
     device     VARCHAR(100) DEFAULT NULL,
     ip_address VARCHAR(100) DEFAULT NULL,
+    -- Optional free-form context for an audit row (FR-FED-5): e.g. the federated provider
+    -- name ('google' | 'github' | 'microsoft') on a FEDERATED_LOGIN event. NULL for events
+    -- that need no extra detail.
+    detail     VARCHAR(255) DEFAULT NULL,
     created_at DATETIME     DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
+
+-- Idempotent add of userevents.detail for databases created before FR-FED-5 shipped. MySQL has
+-- no `ADD COLUMN IF NOT EXISTS`, so guard on information_schema and run the ALTER via a prepared
+-- statement only when the column is absent — safe to re-run, and destructive to nothing.
+SET @add_userevents_detail := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE userevents ADD COLUMN detail VARCHAR(255) DEFAULT NULL AFTER ip_address',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'userevents' AND COLUMN_NAME = 'detail');
+PREPARE add_userevents_detail_stmt FROM @add_userevents_detail;
+EXECUTE add_userevents_detail_stmt;
+DEALLOCATE PREPARE add_userevents_detail_stmt;
 
 -- ── Verification flows ─────────────────────────────────────────────────────────────────
 -- `url` stores a bare UUID verification key (NOT a full URL); the app builds the clickable

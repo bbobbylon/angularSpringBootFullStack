@@ -185,6 +185,7 @@ class SecurityConfig {
                             // (FR-RBAC-2).
                             .requestMatchers(PATCH, "/admin/user/*/role/**").hasAnyAuthority("UPDATE:ROLE")
                             .requestMatchers(PATCH, "/admin/user/*/settings").hasAnyAuthority("UPDATE:USER")
+                            .requestMatchers(PATCH, "/admin/user/*/update").hasAnyAuthority("UPDATE:USER")
                             .requestMatchers("/admin/**").hasAnyAuthority("UPDATE:USER", "UPDATE:ROLE")
                             // Self-service account security (FR-MFA-4 / plan.md M4-M5): managing
                             // one's OWN second factor and sessions must not require staff

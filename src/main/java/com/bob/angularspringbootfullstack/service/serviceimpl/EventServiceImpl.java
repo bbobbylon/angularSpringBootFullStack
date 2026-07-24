@@ -69,4 +69,12 @@ public class EventServiceImpl implements EventService {
     public void addUserEvent(String email, EventType eventType, String device, String ipAddress) {
         eventRepo.addUserEvent(email, eventType, device, ipAddress);
     }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void addUserEvent(String email, EventType eventType, String device, String ipAddress, String detail) {
+        eventRepo.addUserEvent(email, eventType, device, ipAddress, detail);
+    }
 }

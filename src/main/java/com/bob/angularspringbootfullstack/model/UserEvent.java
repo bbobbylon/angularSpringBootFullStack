@@ -40,6 +40,13 @@ public class UserEvent {
     private String description;
     /** The IP address from which the request originated. */
     private String ipAddress;
+    /**
+     * Optional free-form context for this audit row (FR-FED-5): the federated provider name
+     * ({@code google} | {@code github} | {@code microsoft}) on a {@code FEDERATED_LOGIN}, and
+     * {@code null} for events with no extra detail. Suppressed from JSON when null by
+     * {@code @JsonInclude(NON_DEFAULT)}.
+     */
+    private String detail;
     /** When the event was recorded. Used as the default sort column in the Activity Logs table. */
     private LocalDateTime createdAt;
 }

@@ -127,7 +127,9 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
                 return;
             }
 
-            eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), FEDERATED_LOGIN));
+            // FR-FED-5: record WHICH provider authenticated the user (google | github | microsoft)
+            // on the audit row itself, not just in the server log — the detail lands in userevents.detail.
+            eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), FEDERATED_LOGIN, provider));
             UserPrincipal principal = new UserPrincipal(toUser(userDTO), roleService.getRoleByUserId(userDTO.getId()));
             // SessionService (plan.md M5) opens a tracked, revocable session — federated
             // logins appear in the Security Center device list like in-house ones (FR-FED-4).

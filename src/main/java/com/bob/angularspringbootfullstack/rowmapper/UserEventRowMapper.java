@@ -37,6 +37,7 @@ public class UserEventRowMapper implements RowMapper<UserEvent> {
                 .description(rs.getString("description"))
                 .device(rs.getString("device"))
                 .ipAddress(rs.getString("ip_address"))
+                .detail(rs.getString("detail"))
                 .createdAt(rs.getTimestamp("created_at").toLocalDateTime())
                 .build();
     }

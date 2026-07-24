@@ -4,6 +4,7 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.SettingsForm;
+import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Collection;
 
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ACCOUNT_SETTINGS_UPDATE;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.PROFILE_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ROLE_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
@@ -260,6 +262,55 @@ public class AdminUserController {
                                 "selectedUser", userService.getUserById(id),
                                 "roles", roleService.getAllRoles()))
                         .message("User account settings updated successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Updates another user's profile fields on an administrator's behalf (FR-ADMIN, closes the
+     * {@code TODO(admin-update)} left in {@link UserController}).
+     *
+     * <p><b>Why the id is trusted here, unlike {@code PATCH /user/update}.</b> The self-service
+     * endpoint deliberately <em>ignores</em> the body id and binds to the JWT principal, because
+     * there a client-supplied id would be an IDOR (any {@code ROLE_USER} could edit anyone). This
+     * endpoint is the opposite by design: an administrator is <em>supposed</em> to target another
+     * user, so the {@code {id}} path variable is authoritative and is written onto the form,
+     * overwriting whatever the body carried. The gate that makes that safe is the
+     * {@code UPDATE:USER} authority (enforced at both the URL layer in {@code SecurityConfig} and
+     * the method layer via {@link PreAuthorize}, per FR-RBAC-2) plus the organization-scope check.
+     *
+     * <p>Self-targeting is refused so this admin path never becomes a second way for an
+     * administrator to edit their own account — that belongs to their profile screen — keeping the
+     * "admin endpoints act on <em>other</em> users" invariant intact. The change is audited against
+     * the target user (FR-ADMIN) and logged for the operator.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the target user's primary key (authoritative; overwrites any body id)
+     * @param form           the validated profile fields to apply
+     * @return 200 OK with the refreshed target user under {@code selectedUser} and the roles catalogue
+     */
+    @PreAuthorize("hasAuthority('UPDATE:USER')")
+    @PatchMapping("/{id}/update")
+    public ResponseEntity<HttpResponse> updateUserByAdmin(Authentication authentication,
+                                                          @PathVariable Long id,
+                                                          @RequestBody @Valid UpdateForm form) {
+        requireNotSelf(authentication, id, "Use your profile settings to edit your own account.");
+        requireOrganizationScope(authentication, id);
+        // Trust the PATH id (admin targets another user), NOT the body — the inverse of the IDOR
+        // fix on the self-service endpoint, and safe because UPDATE:USER + org scope gate this route.
+        form.setId(id);
+        UserDTO updated = userService.updateUserDTO(form);
+        eventPublisher.publishEvent(new NewUserEvent(updated.getEmail(), PROFILE_UPDATE));
+        log.info("Admin '{}' updated profile of user id {} (email={})",
+                getAuthenticatedUser(authentication).getEmail(), id, updated.getEmail());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", getAuthenticatedUser(authentication),
+                                "selectedUser", updated,
+                                "roles", roleService.getAllRoles()))
+                        .message("User profile updated successfully.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

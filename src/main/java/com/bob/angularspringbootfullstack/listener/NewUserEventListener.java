@@ -42,6 +42,8 @@ public class NewUserEventListener {
     @EventListener
     public void onNewUserEvent(NewUserEvent event) {
         log.info("NewUserEvent received for email: {}", event.getEmail());
-        eventService.addUserEvent(event.getEmail(), event.getEventType(), getDevice(request), getIpAddress(request));
+        // event.getDetail() is non-null only for events that carry extra context (FR-FED-5: the
+        // federated provider name); for every other event it is null and persists as a NULL column.
+        eventService.addUserEvent(event.getEmail(), event.getEventType(), getDevice(request), getIpAddress(request), event.getDetail());
     }
 }
