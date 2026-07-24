@@ -1,11 +1,13 @@
 package com.bob.angularspringbootfullstack.handler;
 
 import com.bob.angularspringbootfullstack.model.HttpResponse;
+import com.bob.angularspringbootfullstack.utils.AuthDiagnosticsLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 
@@ -50,6 +52,12 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
      */
     @Override
     public void handle(@NonNull HttpServletRequest request, HttpServletResponse response, @NonNull AccessDeniedException accessDeniedException) throws IOException {
+        // Console-only RBAC diagnostics: record WHO was forbidden from WHAT, with the authorities
+        // they actually held, so an operator can tell a missing role grant from a genuine over-reach.
+        // The SecurityContext is still populated on this thread (CustomAuthFilter set it earlier in
+        // the chain); the client-visible 403 body below is unchanged.
+        AuthDiagnosticsLogger.logForbidden(SecurityContextHolder.getContext().getAuthentication(), request);
+
         HttpResponse httpResponse = HttpResponse.builder()
                 .timeStamp(now().toString())
                 .reason("You don't have enough permission to access this resource!")

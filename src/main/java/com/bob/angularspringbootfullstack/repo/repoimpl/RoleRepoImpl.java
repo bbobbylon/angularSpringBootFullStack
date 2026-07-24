@@ -211,8 +211,8 @@ public class RoleRepoImpl implements RoleRepo<Role> {
         } catch (BadSqlGrammarException e) {
             // THIS is the casing failure: the DB is case-sensitive and has no `Users` object.
             log.error("[ROLE-CASING] *** BAD SQL GRAMMAR — this is the 'Users' vs 'users' casing bug. *** " +
-                      "This database is case-SENSITIVE and has no table/view named 'Users'. " +
-                      "Fix: lowercase the query to 'JOIN users', or add a `Users` view. userId={}", userId, e);
+                    "This database is case-SENSITIVE and has no table/view named 'Users'. " +
+                    "Fix: lowercase the query to 'JOIN users', or add a `Users` view. userId={}", userId, e);
             throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
         } catch (Exception e) {
             log.error("[ROLE-CASING] UNEXPECTED (not a casing issue) for userId={}: {}", userId, e.getMessage(), e);

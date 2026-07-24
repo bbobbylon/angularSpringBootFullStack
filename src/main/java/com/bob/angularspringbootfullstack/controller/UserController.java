@@ -35,9 +35,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import com.bob.angularspringbootfullstack.utils.AuthDiagnosticsLogger;
+
 import static com.bob.angularspringbootfullstack.constants.Constants.TOKEN_PREFIX;
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.*;
+import static com.bob.angularspringbootfullstack.utils.AuthDiagnosticsLogger.LoginDenialReason.BRUTE_FORCE_LOCKOUT;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getLoggedInUser;
 import static java.time.LocalTime.now;
@@ -519,13 +522,11 @@ public class UserController {
     }
 
 
-    // TODO(admin-update): Add a PATCH /user/admin/update/{userId} endpoint restricted to ADMIN role.
-    //   - Accept a userId path variable; trust it (don't overwrite from JWT) so an admin can target any user.
-    //   - Guard with @PreAuthorize or a permission check (e.g. UPDATE:USER authority).
-    //   - SUPER_ADMIN bypasses org check; ORG_ADMIN must share an active org with the target user
-    //     (see RoleRepoImpl#adminSharesOrgWithUser — throws 403 if no shared org found).
-    //   - Frontend skeleton: Home > Users > User's Name already exists; wire it to this endpoint.
-    //   - See RoleRepoImpl class Javadoc for full org-scoped RBAC design and schema.
+    // NOTE(admin-update): DONE. The admin "edit another user's profile" operation now lives at
+    // PATCH /admin/user/{id}/update in AdminUserController#updateUserByAdmin — it trusts the path id
+    // (not the JWT), is gated by UPDATE:USER at both the URL and method layers, is organization-scoped,
+    // refuses self-targeting, and audits the change against the target user. The frontend
+    // Home > Users > User's Name screen should wire its save action to that endpoint.
 
     /**
      * Starts the password reset flow for the given email by generating a
@@ -666,6 +667,11 @@ public class UserController {
             // generic credential failure below rather than revealing the account exists.
             if (null != userByEmail &&
                     eventService.countRecentFailuresByEmail(email, BRUTE_FORCE_WINDOW_MINUTES) >= BRUTE_FORCE_MAX) {
+                // Persist a hard lock so the account no longer auto-recovers when the window rolls off:
+                // once tripped, only an administrator can unlock it. The CLIENT message is unchanged
+                // (still the generic window-wait text) so this introduces no new enumeration signal —
+                // the lock is server-side state, surfaced only in the console.
+                lockAccountForBruteForce(userByEmail);
                 throw new ApiException("Too many failed login attempts. Please wait " +
                         BRUTE_FORCE_WINDOW_MINUTES + " minutes before trying again.");
             }
@@ -674,6 +680,9 @@ public class UserController {
             }
             Authentication authentication = authenticationManager.authenticate(unauthenticated(email, password));
             UserDTO loggedInUser = getLoggedInUser(authentication);
+            // Console-only RBAC visibility: record the resolved role + authorities that will be
+            // baked into the JWT. Never surfaced to the client (see AuthDiagnosticsLogger).
+            AuthDiagnosticsLogger.logGranted(email, loggedInUser, request);
             if (!loggedInUser.isUsing2FA()) {
                 eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_SUCCESS));
             }
@@ -681,15 +690,21 @@ public class UserController {
         } catch (ApiException e) {
             // Brute-force rejection: its message is intentionally non-enumerating; surface as-is.
             recordLoginFailure(userByEmail, email);
+            AuthDiagnosticsLogger.logDenied(email, userByEmail, BRUTE_FORCE_LOCKOUT, e, request);
             throw e;
         } catch (DisabledException | LockedException e) {
             // Legitimate account-state signals (FR-AUTH-5) — keep the actionable message.
             recordLoginFailure(userByEmail, email);
+            AuthDiagnosticsLogger.logDenied(email, userByEmail, AuthDiagnosticsLogger.classify(userByEmail, e), e, request);
             throw new ApiException(e.getMessage());
         } catch (Exception e) {
             // Bad password, unknown email, or anything else: ONE generic message so the cases are
             // indistinguishable (FR-AUTH-4, NFR-SEC-7). Never echo the underlying exception text.
+            // The TRUE reason is classified and logged server-side only — the client still gets the
+            // one generic message above; the console gets "unknown email" vs "bad password" vs
+            // "no role assigned" so operators can act on it.
             recordLoginFailure(userByEmail, email);
+            AuthDiagnosticsLogger.logDenied(email, userByEmail, AuthDiagnosticsLogger.classify(userByEmail, e), e, request);
             throw new ApiException("Invalid email or password.");
         }
     }
@@ -725,6 +740,29 @@ public class UserController {
         if (null != userByEmail) {
             eventPublisher.publishEvent(new NewUserEvent(email, EventType.LOGIN_ATTEMPT_FAILURE));
         }
+    }
+
+    /**
+     * Applies a persistent account lock once the brute-force threshold is reached (M6 hardening).
+     * <p>
+     * Sets {@code notLocked = false} while preserving the account's current {@code enabled} flag, so
+     * a locked account cannot recover simply by waiting out the {@value #BRUTE_FORCE_WINDOW_MINUTES}-minute
+     * window — an administrator must explicitly unlock it (via {@code AdminUserController#updateAccountSettings}).
+     * On the next attempt after the window clears, Spring's {@code DaoAuthenticationProvider} raises a
+     * {@link LockedException} during its pre-authentication checks, which surfaces the actionable
+     * "account is locked" signal (FR-AUTH-5).
+     * <p>
+     * The write is skipped when the account is already locked, to avoid redundant DB updates and
+     * repeated log lines on every subsequent hammering attempt.
+     *
+     * @param userByEmail the known account that just crossed the failure threshold (never {@code null} here)
+     */
+    private void lockAccountForBruteForce(UserDTO userByEmail) {
+        if (!userByEmail.isNotLocked()) {
+            return; // already locked — nothing to persist, and no need to re-log
+        }
+        userService.updateAccountSettings(userByEmail.getId(), userByEmail.isEnabled(), false);
+        AuthDiagnosticsLogger.logAutoLock(userByEmail, BRUTE_FORCE_MAX, BRUTE_FORCE_WINDOW_MINUTES, request);
     }
 
     /**

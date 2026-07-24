@@ -80,4 +80,19 @@ public interface EventRepo {
      * @param ipAddress the originating IP address
      */
     void addUserEvent(Long userId, EventType eventType, String device, String ipAddress);
+
+    /**
+     * Records a new audit entry (resolved by email) that also persists a free-form {@code detail}
+     * value to the {@code userevents.detail} column (FR-FED-5).
+     *
+     * <p>The bind must tolerate a {@code null} {@code detail}, so implementations use a
+     * {@code MapSqlParameterSource} rather than {@code Map.of}.
+     *
+     * @param email     the email of the user who triggered the event
+     * @param eventType the category of action that occurred
+     * @param device    the OS/browser/device string parsed from the User-Agent header
+     * @param ipAddress the originating IP address
+     * @param detail    free-form audit context (e.g. the federated provider name); may be {@code null}
+     */
+    void addUserEvent(String email, EventType eventType, String device, String ipAddress, String detail);
 }

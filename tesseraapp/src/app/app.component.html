@@ -1,1 +1,13 @@
-<router-outlet />
+<!--
+  The animation host carries [@.disabled] so that users who prefer reduced motion skip the
+  route cross-fade. The inner <main> holds the actual [@routeTransition] trigger and wraps
+  the single <router-outlet> that every feature view renders into.
+-->
+<div [@.disabled]="prefersReducedMotion">
+  <main [@routeTransition]="getRouteAnimationData()">
+    <router-outlet />
+  </main>
+</div>
+
+<!-- Always-mounted global command palette (⌘/Ctrl+K); self-gates on authentication. -->
+<app-command-palette />

@@ -12,7 +12,7 @@ import { DatePipe, DecimalPipe, NgClass } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
-import { CustomerService } from '../../../service/customer.service';
+import { AnalyticsService } from '../../../service/analytics.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
@@ -61,15 +61,19 @@ interface ServiceRow {
  * Billing overview page — analytics hub for admins.
  *
  * Visible only to users with UPDATE:USER / UPDATE:ROLE (org admins) or
- * DELETE:USER (super admins) — enforced by {@code adminGuard} in the route table
- * and double-checked server-side on every API call. The presentation layer alone
- * differs by role: super admins see a scope badge of "All Organizations"; org
- * admins see "Your Organization" (org-scoped backend filtering is a future backend
- * addition; both currently receive system-wide data).
+ * DELETE:USER (super admins) — enforced by {@code adminGuard} in the route table AND
+ * genuinely enforced server-side: this page's data comes from the admin-gated
+ * {@code /admin/analytics/**} surface ({@link AnalyticsService}), which SecurityConfig's
+ * {@code /admin/**} matcher plus a method-level {@code @PreAuthorize} lock to the same
+ * UPDATE:USER / UPDATE:ROLE authorities. A plain ROLE_USER who bypasses the route guard
+ * still receives a 403 from the API — the route gate and the API gate are in lockstep.
+ * The presentation layer alone differs by role: super admins see a scope badge of
+ * "All Organizations"; org admins see "Your Organization" (org-scoped backend filtering
+ * of the aggregates is a future addition; both currently receive system-wide data).
  *
- * Data comes from two existing endpoints — no new backend work required:
- * {@code GET /customer/stats} for KPI totals and
- * {@code GET /customer/invoice/list?page=0&size=200} for the detailed breakdown.
+ * Data comes from two admin-only endpoints:
+ * {@code GET /admin/analytics/summary} for KPI totals and
+ * {@code GET /admin/analytics/invoices?page=0&size=200} for the detailed breakdown.
  * All visual derivations (monthly bars, status donut, service rows) are computed
  * signals that recalculate automatically when either source updates.
  */
@@ -84,7 +88,7 @@ interface ServiceRow {
 export class BillingComponent implements OnInit {
   readonly DataState = DataState;
 
-  private readonly customerService = inject(CustomerService);
+  private readonly analytics = inject(AnalyticsService);
   private readonly userService = inject(UserService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
@@ -246,8 +250,8 @@ export class BillingComponent implements OnInit {
   );
 
   ngOnInit(): void {
-    this.customerService
-      .stats$()
+    this.analytics
+      .summary$()
       .pipe(
         map((response) => ({ dataState: DataState.LOADED, appData: response })),
         startWith({ dataState: DataState.LOADING }),
@@ -259,7 +263,7 @@ export class BillingComponent implements OnInit {
       )
       .subscribe((state) => this.statsState.set(state));
 
-    this.customerService
+    this.analytics
       .invoices$(0, 200)
       .pipe(
         map((response) => ({ dataState: DataState.LOADED, appData: response })),

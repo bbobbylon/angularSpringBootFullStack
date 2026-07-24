@@ -12,7 +12,7 @@ import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
-import { CustomerService } from '../../../service/customer.service';
+import { AnalyticsService } from '../../../service/analytics.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
@@ -68,9 +68,11 @@ interface ServiceUtil {
  *
  * Presents cross-entity data trends that span customers and invoices in a single
  * view. Loads two data sets in parallel (customers for growth analysis, invoices
- * for revenue analysis) and derives all visuals as computed signals — no separate
- * API endpoints are needed beyond the existing {@code /customer/list} and
- * {@code /customer/invoice/list}.
+ * for revenue analysis) and derives all visuals as computed signals. The data is
+ * fetched from the admin-only {@code /admin/analytics/**} surface ({@link
+ * AnalyticsService}) rather than the application-wide {@code /customer/**} endpoints,
+ * so access is genuinely enforced server-side (UPDATE:USER / UPDATE:ROLE), not just by
+ * the route's {@code adminGuard}.
  *
  * Charts rendered here:
  * <ul>
@@ -96,7 +98,7 @@ interface ServiceUtil {
 export class AnalyticsComponent implements OnInit {
   readonly DataState = DataState;
 
-  private readonly customerService = inject(CustomerService);
+  private readonly analytics = inject(AnalyticsService);
   private readonly userService = inject(UserService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
@@ -435,7 +437,7 @@ export class AnalyticsComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.customerService
+    this.analytics
       .customers$(0, 500)
       .pipe(
         map((r) => ({ dataState: DataState.LOADED, appData: r })),
@@ -448,7 +450,7 @@ export class AnalyticsComponent implements OnInit {
       )
       .subscribe((s) => this.customersState.set(s));
 
-    this.customerService
+    this.analytics
       .invoices$(0, 500)
       .pipe(
         map((r) => ({ dataState: DataState.LOADED, appData: r })),

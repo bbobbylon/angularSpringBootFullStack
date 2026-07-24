@@ -76,4 +76,20 @@ public interface EventService {
      * @param ipAddress the originating IP address
      */
     void addUserEvent(String email, EventType eventType, String device, String ipAddress);
+
+    /**
+     * Records an audit entry (resolved by email) with an extra {@code detail} value persisted to
+     * the {@code userevents.detail} column (FR-FED-5).
+     *
+     * <p>This is the seam the {@link com.bob.angularspringbootfullstack.listener.NewUserEventListener}
+     * now uses for every event; {@code detail} is the {@code NewUserEvent}'s optional context — the
+     * federated provider name on a {@code FEDERATED_LOGIN}, and {@code null} otherwise.
+     *
+     * @param email     the email of the user who triggered the action
+     * @param eventType the category of action that occurred
+     * @param device    the OS/browser/device string parsed from the User-Agent header
+     * @param ipAddress the originating IP address
+     * @param detail    free-form audit context (e.g. the federated provider name); may be {@code null}
+     */
+    void addUserEvent(String email, EventType eventType, String device, String ipAddress, String detail);
 }

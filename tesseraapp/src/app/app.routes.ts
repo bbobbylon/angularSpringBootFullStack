@@ -112,8 +112,10 @@ export const routes: Routes = [
     canActivate: [authenticationGuard],
     loadComponent: () => import('./features/invoices/invoice-detail/invoice-detail.component').then((m) => m.InvoiceDetailComponent),
   },
-  // Billing overview (SRS admin-only analytics): visible to UPDATE:USER / UPDATE:ROLE / DELETE:USER.
-  // adminGuard enforces the same authority check that protects /admin/** on the backend.
+  // Billing overview (SRS admin-only analytics). adminGuard is the usability gate; the
+  // real boundary is server-side: this page reads the admin-only /admin/analytics/**
+  // API, which SecurityConfig's /admin/** matcher (+ @PreAuthorize) locks to UPDATE:USER
+  // / UPDATE:ROLE. A user who bypasses this guard still gets 403 from the data API.
   {
     path: 'billing',
     canActivate: [authenticationGuard, adminGuard],
@@ -130,7 +132,9 @@ export const routes: Routes = [
       ),
   },
   // Analytics hub (admin-only) — dual-area trend chart, acquisition bars, stacked status
-  // breakdown, service utilisation. adminGuard mirrors billing — UPDATE:USER or higher.
+  // breakdown, service utilisation. adminGuard mirrors billing, and like billing the data
+  // is fetched from the admin-gated /admin/analytics/** API (UPDATE:USER / UPDATE:ROLE
+  // enforced server-side), so the guard is a usability aid, not the security boundary.
   {
     path: 'analytics',
     canActivate: [authenticationGuard, adminGuard],
