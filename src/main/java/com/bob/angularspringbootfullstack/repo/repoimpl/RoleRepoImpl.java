@@ -196,11 +196,13 @@ public class RoleRepoImpl implements RoleRepo<Role> {
         // On case-INSENSITIVE MySQL (native Windows, lower_case_table_names=1) it resolves to
         // `users` and works. On case-SENSITIVE MySQL (Docker/Aiven, lower_case_table_names=0) it
         // needs a real `Users` table/view or it throws BadSqlGrammarException. These logs make the
-        // outcome unmistakable in the backend console. Grep the log for "[ROLE-CASING]".
-        log.info("[ROLE-CASING] getRoleByUserId(userId={}) — executing: {}", userId, SELECT_ROLE_BY_ID_QUERY);
+        // outcome unmistakable in the backend console. The happy-path lines are DEBUG so they don't
+        // spam INFO logs on every login (role is looked up several times per sign-in); the failure
+        // paths below stay WARN/ERROR. Enable DEBUG on this class to trace casing if it ever recurs.
+        log.debug("[ROLE-CASING] getRoleByUserId(userId={}) — executing: {}", userId, SELECT_ROLE_BY_ID_QUERY);
         try {
             Role role = jdbcTemplate.queryForObject(SELECT_ROLE_BY_ID_QUERY, of("id", userId), new RoleRowMapper());
-            log.info("[ROLE-CASING] SUCCESS — 'JOIN Users' RESOLVED on this database. userId={} -> role='{}' (id={}).",
+            log.debug("[ROLE-CASING] SUCCESS — 'JOIN Users' RESOLVED on this database. userId={} -> role='{}' (id={}).",
                     userId, role != null ? role.getName() : null, role != null ? role.getId() : null);
             return role;
 

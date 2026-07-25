@@ -70,10 +70,6 @@ public class TokenProvider {
      * @return a signed JWT access token as a String
      */
     public String createAccessToken(UserPrincipal userPrincipal, String sessionFamily) {
-        System.out.println("##################");
-        System.out.println("Creating access token for user ID: " + userPrincipal.getUser().getId() + ", session family: " + sessionFamily);
-        System.out.println("Secret value is:" + secret);
-        System.out.println("##################");
         return JWT.create()
                 .withIssuer(BOBBYLON_LLC)
                 .withAudience(BOBS_MANAGEMENT)

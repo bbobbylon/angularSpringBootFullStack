@@ -13,6 +13,7 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | **Trace one feature end-to-end** | [flows/](flows/README.md) — every use case from button click → JWT/headers → controller → DB → UI change |
 | **Work in the codebase day-to-day** | [development-workflow.md](development-workflow.md) — IDE setup, the `start.sh` loop, debugging, branch workflow |
 | **See project status & what's planned** | [project-status-and-roadmap.md](project-status-and-roadmap.md) — proposed-vs-actual, known gaps, prioritized backlog |
+| **Look back at how it was built** | [history/PROJECT-HISTORY.md](history/PROJECT-HISTORY.md) — evolution narrative, M0–M7 milestones, retired-doc registry, branch snapshot |
 
 ## Reference guides
 

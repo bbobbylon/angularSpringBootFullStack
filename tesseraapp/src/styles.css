@@ -197,19 +197,6 @@ body {
     color var(--dur-slow) var(--ease-in-out);
 }
 
-/* Faint technical grid for depth — sits behind all content */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 44px 44px;
-}
-
 h1, h2, h3, h4, h5, h6 {
   color: var(--text-strong);
   font-weight: 600;

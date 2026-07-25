@@ -7,6 +7,7 @@ import { LoginStateInterface } from '../../../interface/appstates.interface';
 import { UserService } from '../../../service/user.service';
 import { Key } from '../../../enumeration/key.enumeration';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { retry } from 'rxjs';
 import { NotificationsService } from '../../../service/notifications-service';
 
 /**
@@ -71,10 +72,17 @@ export class LoginComponent implements OnInit {
     }
     this.userService
       .federatedProviders$()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        // The backend may still be booting when the login page first paints (or may restart while
+        // the page is open), which would leave the federated buttons missing until a manual refresh.
+        // Retry a few times so discovery self-heals once the backend is up. Complements the
+        // backend-ready gate in start.sh, and also covers IDE/separate launches and restarts.
+        retry({ count: 5, delay: 2000 }),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe({
         next: (response) => this.federatedProviders.set(response.data?.providers ?? []),
-        // Discovery failing must never block password login — just omit the buttons.
+        // Discovery ultimately failing must never block password login — just omit the buttons.
         error: () => this.federatedProviders.set([]),
       });
 

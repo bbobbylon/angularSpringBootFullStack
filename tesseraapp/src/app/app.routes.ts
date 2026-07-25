@@ -93,11 +93,13 @@ export const routes: Routes = [
   {
     path: 'users',
     canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'manage users' },
     loadComponent: () => import('./features/users/users/users.component').then((m) => m.UsersComponent),
   },
   {
     path: 'users/:id',
     canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'manage users' },
     loadComponent: () => import('./features/users/user-details/user-details.component').then((m) => m.UserDetailsComponent),
   },
   // Roles × Permissions Matrix (SRS M3, FR-RBAC-1/2). adminGuard mirrors the
@@ -105,6 +107,7 @@ export const routes: Routes = [
   {
     path: 'roles',
     canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'manage roles and permissions' },
     loadComponent: () => import('./features/users/roles-matrix/roles-matrix.component').then((m) => m.RolesMatrixComponent),
   },
   {
@@ -119,6 +122,7 @@ export const routes: Routes = [
   {
     path: 'billing',
     canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'view billing' },
     loadComponent: () => import('./features/billing/billing/billing.component').then((m) => m.BillingComponent),
   },
   // Service / app catalog — all authenticated users can browse available services and
@@ -138,6 +142,7 @@ export const routes: Routes = [
   {
     path: 'analytics',
     canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'view analytics' },
     loadComponent: () =>
       import('./features/analytics/analytics/analytics.component').then(
         (m) => m.AnalyticsComponent,

@@ -2,8 +2,6 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { UserService } from '../service/user.service';
 
-// TODO: add guards for admin roles
-
 /**
  * Route guard that blocks unauthenticated users from accessing protected routes.
  *

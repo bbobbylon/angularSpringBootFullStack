@@ -18,6 +18,25 @@ import static nl.basjes.parse.useragent.UserAgent.*;
  */
 public class RequestUtils {
 
+    /**
+     * Single shared user-agent analyzer, built once at class load and reused for every request.
+     *
+     * <p>{@link UserAgentAnalyzer} is expensive to construct — it loads ~114 rule files and builds
+     * a ~200k-entry matcher table (~700ms), and logs a version banner while doing so. Building one
+     * per call (the old behaviour) therefore both spammed the logs on every audited request and added
+     * that cost to each sign-in. A single static instance means the banner prints once at startup and
+     * lookups are cheap thereafter (a 10k-entry result cache absorbs repeats).
+     *
+     * <p><b>Thread-safety:</b> the caching analyzer is NOT safe for concurrent {@code parse()} — its
+     * result cache and matcher state are unsynchronized, so overlapping requests can corrupt it and
+     * throw intermittently. {@link #getDevice} therefore serialises access on this instance (see its
+     * note); a cached parse is microsecond-cheap, so the lock is effectively free.
+     */
+    private static final UserAgentAnalyzer USER_AGENT_ANALYZER = UserAgentAnalyzer.newBuilder()
+            .hideMatcherLoadStats()
+            .withCache(10_000)
+            .build();
+
 
     /**
      * Returns the real client IP address, accounting for reverse proxies.
@@ -49,16 +68,21 @@ public class RequestUtils {
      * string.  The result is formatted as {@code "OS - Browser - Device"}
      * (e.g. {@code "Windows 11 - Chrome - Desktop"}).
      *
-     * <p>Note: {@link UserAgentAnalyzer} is constructed on every call — acceptable
-     * for now but expensive under high load.  If this becomes a bottleneck,
-     * promote the analyzer to a singleton Spring bean.
+     * <p>Reuses the shared {@link #USER_AGENT_ANALYZER} rather than constructing one per call.
      *
      * @param request the current HTTP request
      * @return a formatted device description string
      */
     public static String getDevice(HttpServletRequest request) {
-        UserAgentAnalyzer userAgentAnalyzer = UserAgentAnalyzer.newBuilder().hideMatcherLoadStats().withCache(10000).build();
-        UserAgent agent = userAgentAnalyzer.parse(request.getHeader(USER_AGENT_HEADER));
-        return agent.getValue(OPERATING_SYSTEM_NAME) + " - " + agent.getValue(AGENT_NAME) + " - " + agent.getValue(DEVICE_NAME);
+        // Yauaa's caching UserAgentAnalyzer is NOT safe for concurrent parse(): the result cache and
+        // matcher state are unsynchronized, so overlapping requests (e.g. the burst of parallel calls a
+        // single page triggers) can corrupt the cache and throw intermittently. Serialise the whole
+        // interaction — parse plus field reads — on the shared analyzer. A cached parse is microsecond-
+        // cheap, so the lock costs effectively nothing, and it makes the one shared instance safe on
+        // every path, including SessionServiceImpl (login/refresh) where a throw would surface as a 500.
+        synchronized (USER_AGENT_ANALYZER) {
+            UserAgent agent = USER_AGENT_ANALYZER.parse(request.getHeader(USER_AGENT_HEADER));
+            return agent.getValue(OPERATING_SYSTEM_NAME) + " - " + agent.getValue(AGENT_NAME) + " - " + agent.getValue(DEVICE_NAME);
+        }
     }
 }

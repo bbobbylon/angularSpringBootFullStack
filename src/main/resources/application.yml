@@ -80,12 +80,16 @@ spring:
             required: true
     verify:
       host: ${VERIFY_EMAIL_HOST}
-# To enable verbose debug logging during development, uncomment:
-#logging:
-#  level:
-#    org.springframework.security: DEBUG
-#    org.springframework.web: DEBUG
-#    org.hibernate: DEBUG
+logging:
+  level:
+    # Yauaa (the user-agent parser) prints a multi-line version banner plus config-load lines at
+    # INFO whenever its analyzer initialises. RequestUtils now builds the analyzer once, so clamping
+    # this to WARN keeps that one-time startup output quiet without losing real warnings/errors.
+    nl.basjes.parse.useragent: WARN
+    # To enable verbose debug logging during development, uncomment:
+    #org.springframework.security: DEBUG
+    #org.springframework.web: DEBUG
+    #org.hibernate: DEBUG
 
 ui:
   app:

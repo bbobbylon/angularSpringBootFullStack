@@ -24,8 +24,13 @@
 -- all). Do NOT hand-edit those column names or types: a mismatch fails the prod boot.
 -- =====================================================================================
 
-CREATE SCHEMA IF NOT EXISTS db2;
-USE db2;
+-- PORTABLE BY DESIGN: no CREATE SCHEMA / USE here on purpose. Every statement below targets
+-- whichever database is ACTIVE on the connection that runs this script, so the SAME file
+-- initialises the local `db2` OR a cloud database such as Aiven `db3` — no hardcoded name to
+-- accidentally build tables in the wrong schema. Select the target before running:
+--   * CLI:  mysql -u <user> -p db2 < schema.sql      (the db-name argument = the active schema)
+--   * GUI:  make the database the active/default schema, then execute.
+-- A brand-new database must be created once, up front:  CREATE DATABASE db2;   (or db3, …).
 
 SET NAMES 'UTF8MB4';
 
@@ -88,15 +93,33 @@ CREATE TABLE IF NOT EXISTS events
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     type        VARCHAR(50)  NOT NULL,
     description VARCHAR(255) NOT NULL,
-    CONSTRAINT UQ_Events_Type UNIQUE (type),
-    CONSTRAINT CK_Events_Type CHECK (type IN
-        ('LOGIN_ATTEMPT', 'LOGIN_ATTEMPT_FAILURE', 'LOGIN_ATTEMPT_SUCCESS',
-         'PROFILE_UPDATE', 'PROFILE_PICTURE_UPDATE', 'ROLE_UPDATE',
-         'ACCOUNT_SETTINGS_UPDATE', 'PASSWORD_UPDATE', 'MFA_UPDATE',
-         'FEDERATED_LOGIN',
-         'TOTP_ENROLLED', 'TOTP_DISABLED', 'RECOVERY_CODE_USED',
-         'SESSION_REVOKED', 'TOKEN_REUSE_DETECTED'))
+    CONSTRAINT UQ_Events_Type UNIQUE (type)
 );
+
+-- events.type is guarded by a CHECK, but the valid-type set GROWS over time (TOTP, sessions,
+-- federation, token-reuse …). A CHECK baked into CREATE TABLE can't migrate: on a database
+-- created before a new type shipped, CREATE TABLE IF NOT EXISTS is a no-op, the OLD CHECK
+-- survives, and the new type is rejected on INSERT (MySQL error 3819 — the exact failure seen
+-- applying this against a pre-existing Aiven db3). So the CHECK is (re)applied idempotently here:
+-- drop whatever CHECK currently guards events.type — its name drifts across databases
+-- ('CK_Events_Type' on fresh installs, auto-named 'events_chk_1' on older ones) — then add the
+-- current definition. Existing rows are always a subset of the new set, so revalidation passes.
+SET @events_chk := (SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events'
+                      AND CONSTRAINT_TYPE = 'CHECK' LIMIT 1);
+SET @drop_events_chk := IF(@events_chk IS NULL, 'DO 0',
+                           CONCAT('ALTER TABLE events DROP CHECK `', @events_chk, '`'));
+PREPARE drop_events_chk_stmt FROM @drop_events_chk;
+EXECUTE drop_events_chk_stmt;
+DEALLOCATE PREPARE drop_events_chk_stmt;
+
+ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
+    ('LOGIN_ATTEMPT', 'LOGIN_ATTEMPT_FAILURE', 'LOGIN_ATTEMPT_SUCCESS',
+     'PROFILE_UPDATE', 'PROFILE_PICTURE_UPDATE', 'ROLE_UPDATE',
+     'ACCOUNT_SETTINGS_UPDATE', 'PASSWORD_UPDATE', 'MFA_UPDATE',
+     'FEDERATED_LOGIN',
+     'TOTP_ENROLLED', 'TOTP_DISABLED', 'RECOVERY_CODE_USED',
+     'SESSION_REVOKED', 'TOKEN_REUSE_DETECTED'));
 
 INSERT INTO events (type, description)
 VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
@@ -259,9 +282,22 @@ CREATE TABLE IF NOT EXISTS organizations
     name       VARCHAR(100) NOT NULL,
     status     VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
     created_at DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT UQ_Organizations_Name UNIQUE (name),
-    CONSTRAINT CK_Organizations_Status CHECK (status IN ('ACTIVE', 'INACTIVE'))
+    CONSTRAINT UQ_Organizations_Name UNIQUE (name)
 );
+
+-- Same idempotent CHECK-rebuild pattern as events.type (see that block for the full rationale):
+-- re-apply the status CHECK so a pre-existing organizations table can't reject a newly added
+-- status value on INSERT. Cheap insurance — the status set is stable today ('ACTIVE','INACTIVE').
+SET @orgs_chk := (SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizations'
+                    AND CONSTRAINT_TYPE = 'CHECK' LIMIT 1);
+SET @drop_orgs_chk := IF(@orgs_chk IS NULL, 'DO 0',
+                         CONCAT('ALTER TABLE organizations DROP CHECK `', @orgs_chk, '`'));
+PREPARE drop_orgs_chk_stmt FROM @drop_orgs_chk;
+EXECUTE drop_orgs_chk_stmt;
+DEALLOCATE PREPARE drop_orgs_chk_stmt;
+
+ALTER TABLE organizations ADD CONSTRAINT CK_Organizations_Status CHECK (status IN ('ACTIVE', 'INACTIVE'));
 
 INSERT INTO organizations (name, status)
 VALUES ('Tessera', 'ACTIVE'),
