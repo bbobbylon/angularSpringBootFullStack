@@ -89,7 +89,19 @@ public enum EventType {
      * again — the signature of token theft. The whole session family is revoked in
      * response, forcing a fresh first-factor login (FR-JWT-5 reuse detection).
      */
-    TOKEN_REUSE_DETECTED("A previously used refresh token was replayed; the affected session family was revoked for your security :|");
+    TOKEN_REUSE_DETECTED("A previously used refresh token was replayed; the affected session family was revoked for your security :|"),
+    /**
+     * Fired when a sign-in passes its first factor but does not match the account's own history
+     * of devices and network locations (SRS FR-TPF-1). The login is escalated to step-up
+     * re-verification rather than refused, so this event records a <em>challenge</em>, not a
+     * rejection — a legitimate user on a new laptop produces one of these every time.
+     *
+     * <p>The row's {@code detail} column carries which signals fired and which step-up applied
+     * (e.g. {@code "a new device → step-up: EMAIL_CODE"}), which is what lets the security
+     * dashboard distinguish "caught and handled with an authenticator" from "caught and fell back
+     * to an emailed code".
+     */
+    SUSPICIOUS_LOGIN("We noticed a sign-in that didn't match your usual device or location, so we asked for extra verification :|");
 
     /**
      * -- GETTER --

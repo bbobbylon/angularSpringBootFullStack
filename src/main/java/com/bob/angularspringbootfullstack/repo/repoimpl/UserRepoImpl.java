@@ -420,19 +420,34 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      */
     @Override
     public void sendVerificationCode(UserDTO userDTO) {
+        log.info("User with email '{}' is using 2FA/MFA: sending verification code.", userDTO.getEmail());
+        String verificationCode = issueVerificationCode(userDTO);
+        // Dispatch sits outside issueVerificationCode (and outside its try) on purpose: the
+        // notification service is async and swallows its own failures, so wrapping it added no
+        // protection while making an SMS problem look like a database problem in the logs.
+        notificationService.sendTwoFactorCode(userDTO.getFirstName(), userDTO.getPhoneNumber(), verificationCode);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Delete-then-insert (rather than an upsert) because {@code twofactorverifications} carries a
+     * UNIQUE constraint on {@code user_id}: a user may have at most one outstanding code, so
+     * requesting a new one must invalidate the previous one. That property is what makes the same
+     * store safe to share between the SMS 2FA flow and the FR-TPF-1 step-up flow.
+     */
+    @Override
+    public String issueVerificationCode(UserDTO userDTO) {
         String expirationDate = format(addDays(new Date(), 1), DATE_FORMAT);
         String verificationCode = randomAlphanumeric(7).toUpperCase();
-
         try {
-            log.info("User with email '{}' is using 2FA/MFA: sending verification code.", userDTO.getEmail());
             jdbcTemplate.update(DELETE_2FA_CODE_BY_USER_ID, of("id", userDTO.getId()));
             jdbcTemplate.update(INSERT_2FA_CODE_BY_USER_ID_QUERY, of("userId", userDTO.getId(), "code", verificationCode, "expirationDate", expirationDate));
-
-            notificationService.sendTwoFactorCode(userDTO.getFirstName(), userDTO.getPhoneNumber(), verificationCode);
-            log.debug("2FA code successfully delete/replaced on user with email: {}", userDTO.getEmail());
+            log.debug("Verification code successfully delete/replaced on user with email: {}", userDTO.getEmail());
+            return verificationCode;
         } catch (Exception exception) {
-            log.error("Unexpected error retrieving user by email '{}': {}", userDTO.getEmail(), exception.getMessage(), exception);
-            throw new ApiException("An unexpected error occurred while retrieving user by email: " + userDTO.getEmail());
+            log.error("Unexpected error issuing a verification code for email '{}': {}", userDTO.getEmail(), exception.getMessage(), exception);
+            throw new ApiException("An unexpected error occurred while issuing a verification code.");
         }
     }
 

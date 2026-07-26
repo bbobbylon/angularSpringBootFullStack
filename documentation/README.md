@@ -26,6 +26,7 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | [database.md](database.md) | Persistence model, every table, relationships, role + event reference data |
 | [configuration.md](configuration.md) | Environment variables, Spring profiles, annotated `application.yml`, gotchas |
 | [deployment.md](deployment.md) | Docker image, Compose, Azure CI/CD, cloud platforms |
+| [cicd-setup.md](cicd-setup.md) | **CI/CD hub** — pipeline setup for **AWS, Google Cloud, and Azure** side by side, the shared build→registry→runtime shape, required secrets, and which security controls only become effective once deployed |
 | [frontend-guide.md](frontend-guide.md) | Angular internals — routes→components, the six services, guards, interceptors, `DataState`/signals state pattern |
 | [email-and-notifications.md](email-and-notifications.md) | Email (verification/reset) + SMS-stub + Angular toast notifications; the verification-link model |
 | [testing.md](testing.md) | Test inventory, how to run, how to write backend/frontend tests, the coverage roadmap |
@@ -37,7 +38,7 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 - **Tracing a feature or bug:** [flows/](flows/README.md) → `00-anatomy-of-a-request.md` (the shared spine) → the specific flow doc for your screen
 - **Reviewing security:** security.md → `SecurityConfig.java` / `TokenProvider.java` / `SessionServiceImpl.java`
 - **Integrating a client:** api-reference.md → security.md (§3 tokens)
-- **Deploying:** configuration.md → deployment.md → database.md (apply `schema.sql`)
+- **Deploying:** configuration.md → deployment.md → **cicd-setup.md** (pick a cloud) → database.md (apply `schema.sql`)
 
 ---
 

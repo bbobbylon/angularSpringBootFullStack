@@ -1,7 +1,9 @@
 package com.bob.angularspringbootfullstack.controller;
 
+import com.bob.angularspringbootfullstack.dto.LoginRiskAssessment;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.EventType;
+import com.bob.angularspringbootfullstack.enumeration.StepUpMethod;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.*;
@@ -9,6 +11,7 @@ import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.EventService;
+import com.bob.angularspringbootfullstack.service.LoginRiskService;
 import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.TotpService;
@@ -101,6 +104,8 @@ public class UserController {
     private final EventService eventService;
     private final TotpService totpService;
     private final SessionService sessionService;
+    /** Login-anomaly detection and its step-up escalation (FR-TPF-1); consulted on every sign-in. */
+    private final LoginRiskService loginRiskService;
 
     /**
      * Filesystem directory profile images are served from; injected from
@@ -618,6 +623,19 @@ public class UserController {
      * When 2FA is enabled, the response only signals that a verification code was sent; otherwise
      * it returns the user along with a fresh access and refresh token pair.
      *
+     * <p><b>Risk-adaptive step-up (FR-TPF-1).</b> Once the first factor succeeds, the sign-in is
+     * compared against this account's own history via {@link LoginRiskService#assess}. The verdict
+     * never changes <em>whether</em> an enrolled second factor is challenged — a TOTP or SMS user is
+     * challenged either way — it only decides what happens to an account with <em>no</em> second
+     * factor: an ordinary-looking login proceeds straight to tokens, while a flagged one is
+     * escalated to {@link StepUpMethod#EMAIL_CODE} so a stolen password alone is not enough.
+     *
+     * <p>The assessment is therefore run before the branches rather than inside the last one, so
+     * every outcome records <em>which</em> step-up covered the risk (see
+     * {@link LoginRiskService#recordSuspiciousLogin}, a no-op when nothing was flagged). Note the
+     * client cannot tell an anomaly-driven email challenge from an ordinary 2FA prompt: both return
+     * the same shape, with no risk signal echoed back (see {@link LoginRiskAssessment}).
+     *
      * @param loginForm validated email and password
      * @return 200 OK with either a "code sent" message or login data
      */
@@ -625,11 +643,27 @@ public class UserController {
     public ResponseEntity<HttpResponse> login(@RequestBody @Valid LoginForm loginForm) {
         UserDTO userDTO = authenticate(loginForm.getEmail(), loginForm.getPassword());
         //UserDTO userDTO = getLoggedInUser(authentication);
+        // Side-effect free, and safe to run on every login: it neither writes nor sends anything,
+        // so the branches below stay free to decide what the verdict actually means.
+        LoginRiskAssessment assessment = loginRiskService.assess(userDTO, request);
         // MFA precedence (FR-MFA-4): a confirmed authenticator app supersedes the SMS code
         // path — TOTP is the stronger factor, and sending an SMS a TOTP user will never
         // type would only burn Twilio quota and confuse the login screen.
-        if (userDTO.isUsingTotp()) return sendTotpChallenge(userDTO);
-        return userDTO.isUsing2FA() ? sendVerificationCode(userDTO) : sendResponse(userDTO);
+        if (userDTO.isUsingTotp()) {
+            loginRiskService.recordSuspiciousLogin(userDTO, assessment, StepUpMethod.TOTP);
+            return sendTotpChallenge(userDTO);
+        }
+        if (userDTO.isUsing2FA()) {
+            loginRiskService.recordSuspiciousLogin(userDTO, assessment, StepUpMethod.SMS_CODE);
+            return sendVerificationCode(userDTO);
+        }
+        if (assessment.elevated()) {
+            // No enrolled second factor and the sign-in looks unfamiliar: this is the one branch
+            // FR-TPF-1 actually adds. Without it, a leaked password would open a session outright.
+            loginRiskService.recordSuspiciousLogin(userDTO, assessment, StepUpMethod.EMAIL_CODE);
+            return sendStepUpCode(userDTO, assessment);
+        }
+        return sendResponse(userDTO);
     }
 
     /**
@@ -804,6 +838,39 @@ public class UserController {
                         .timeStamp(now().toString())
                         .data(of("user", userDTO))
                         .message("2FA verification code was sent!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Emails a one-time code to an account whose sign-in was flagged as anomalous but which has no
+     * enrolled second factor, and withholds tokens until that code is presented (FR-TPF-1).
+     *
+     * <p>The code is minted and stored by the <em>same</em> {@code twofactorverifications} row the
+     * SMS flow uses, so it is completed through the existing
+     * {@code GET /user/verify/code/{email}/{code}} endpoint — no second verification endpoint, no
+     * second expiry rule, and the single-outstanding-code guarantee (delete-then-insert on a UNIQUE
+     * {@code user_id}) applies unchanged.
+     *
+     * <p><b>What the client is told.</b> The body carries {@code stepUp: true} so the SPA knows to
+     * render the code panel for a user whose {@code using2FA} flag is false — a purely mechanical
+     * hint, not a risk disclosure. It deliberately does <em>not</em> carry the reason: that travels
+     * to the account owner's inbox and the audit log instead, channels an attacker holding only a
+     * stolen password cannot read. The user-visible message stays generic for the same reason.
+     *
+     * @param userDTO    the account that passed its first factor but must now prove possession
+     * @param assessment the verdict, whose {@link LoginRiskAssessment#describe()} summary explains
+     *                   the challenge in the email body only
+     * @return 200 OK with the user and the {@code stepUp} marker; no tokens
+     */
+    private ResponseEntity<HttpResponse> sendStepUpCode(UserDTO userDTO, LoginRiskAssessment assessment) {
+        userService.sendStepUpCode(userDTO, assessment.describe());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userDTO, "stepUp", true))
+                        .message("For your security, we emailed you a verification code. Enter it to finish signing in.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
