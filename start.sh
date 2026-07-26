@@ -209,9 +209,24 @@ start_local() {
   log "  Backend  : ${BLUE}http://localhost:$LOCAL_BACKEND_PORT${NC}"
   if [[ "$LAN" == "true" ]]; then
     # Best-effort LAN IPv4 lookup so the phone URL can be printed rather than hunted for.
-    # Tries ipconfig (Git Bash on Windows) then hostname -I (Linux/WSL); either may be
-    # absent, in which case the fallback tells the user where to look it up themselves.
-    lan_ip="$(ipconfig 2>/dev/null | grep -A4 -i 'wireless\|ethernet' | grep -i 'IPv4' | head -n1 | sed 's/.*: //' | tr -d '\r')"
+    #
+    # VIRTUAL ADAPTERS MUST BE SKIPPED. A dev box typically has several, and on Windows the
+    # Hyper-V "vEthernet (Default Switch)" adapter (172.x) sorts BEFORE the real NIC in
+    # ipconfig output — so naively taking the first IPv4 prints an address reachable only by
+    # this machine and its VMs. A phone that tries it just times out, with nothing to
+    # indicate the address itself was the problem. Docker, VMware, VirtualBox and Bluetooth
+    # PAN adapters all create the same trap.
+    #
+    # So: walk the adapter blocks, mark the virtual ones, and take the first IPv4 belonging
+    # to a real one. Falls back to hostname -I (Linux/WSL), then to a hint if neither exists.
+    lan_ip="$(ipconfig 2>/dev/null | tr -d '\r' | awk '
+      /adapter/ {
+        skip = 0
+        if ($0 ~ /vEthernet|Loopback|VirtualBox|VMware|Bluetooth|Docker|Hyper-V/) skip = 1
+        next
+      }
+      !skip && /IPv4 Address/ { sub(/.*: */, ""); print; exit }
+    ')"
     [[ -z "$lan_ip" ]] && lan_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
     if [[ -n "$lan_ip" ]]; then
       log "  On phone : ${BLUE}http://${lan_ip}:4200${NC}  (same wifi; allow TCP 4200+$LOCAL_BACKEND_PORT in Windows Firewall)"

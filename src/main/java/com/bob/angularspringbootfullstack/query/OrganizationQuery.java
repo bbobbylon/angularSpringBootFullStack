@@ -24,6 +24,23 @@ public class OrganizationQuery {
             "WHERE a.user_id = :adminId AND b.user_id = :targetId AND a.active = TRUE AND b.active = TRUE";
 
     /**
+     * Lists the organization ids a user actively belongs to — the tenant filter for org-scoped
+     * <em>reporting</em> (FR-ORG-2).
+     *
+     * <p>The other queries in this class answer "are these two users in scope of each other?",
+     * which suits per-user administrative actions. Aggregates need the complementary shape: the
+     * set of organizations to restrict rows to, so the filter can be pushed into the SQL that does
+     * the counting rather than applied after the fact. Summing system-wide totals and then trying
+     * to subtract what the caller may not see is not possible — a total carries no attribution —
+     * so the scope has to reach the {@code WHERE} clause.
+     *
+     * <p>Returns an empty set for a user with no active memberships, which callers must treat as
+     * "sees nothing" rather than "sees everything". Parameter: userId.
+     */
+    public static final String SELECT_ACTIVE_ORGANIZATION_IDS_BY_USER_QUERY =
+            "SELECT organization_id FROM userorganizations WHERE user_id = :userId AND active = TRUE";
+
+    /**
      * The org-scoped variant of {@link UserQuery#SELECT_USERS_PAGED_QUERY}: pages through
      * only the users who share an active organization with the administrator, with the
      * same free-text LIKE filter and newest-first ordering, so the admin directory looks

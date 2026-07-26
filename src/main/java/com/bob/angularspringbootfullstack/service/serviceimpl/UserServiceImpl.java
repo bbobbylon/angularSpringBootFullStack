@@ -29,7 +29,9 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepo<User> userRepo;
     private final RoleRepo<Role> roleRepo;
-    /** Delivery channel for the FR-TPF-1 step-up code (email, not SMS — see {@link #sendStepUpCode}). */
+    /**
+     * Delivery c./shannel for the FR-TPF-1 step-up code (email, not SMS — see {@link #sendStepUpCode}).
+     */
     private final NotificationService notificationService;
 
     /**

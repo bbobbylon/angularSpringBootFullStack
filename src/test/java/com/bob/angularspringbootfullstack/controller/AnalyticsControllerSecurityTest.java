@@ -4,6 +4,7 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.Invoice;
 import com.bob.angularspringbootfullstack.service.CustomerService;
+import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,9 +82,21 @@ class AnalyticsControllerSecurityTest {
             return mock(UserService.class);
         }
 
+        /**
+         * Organization lookup for FR-ORG-2 scoping. The default mock returns an empty list for any
+         * user, which is harmless here: this suite's principal carries no role name, so
+         * {@code resolveScope} classifies it as UNSCOPED and never consults this bean. It exists
+         * to satisfy the constructor — these tests assert the authority gate, not the scope.
+         */
         @Bean
-        AnalyticsController analyticsController(CustomerService customerService, UserService userService) {
-            return new AnalyticsController(customerService, userService);
+        OrganizationService organizationService() {
+            return mock(OrganizationService.class);
+        }
+
+        @Bean
+        AnalyticsController analyticsController(CustomerService customerService, UserService userService,
+                                                OrganizationService organizationService) {
+            return new AnalyticsController(customerService, userService, organizationService);
         }
     }
 

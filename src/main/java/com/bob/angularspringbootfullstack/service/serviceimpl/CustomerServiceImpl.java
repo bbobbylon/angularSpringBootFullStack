@@ -17,11 +17,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static com.bob.angularspringbootfullstack.query.CustomerQuery.CUSTOMER_STATUS_BREAKDOWN_BY_ORGANIZATION_QUERY;
 import static com.bob.angularspringbootfullstack.query.CustomerQuery.CUSTOMER_STATUS_BREAKDOWN_QUERY;
+import static com.bob.angularspringbootfullstack.query.CustomerQuery.STATS_BY_ORGANIZATION_QUERY;
 import static com.bob.angularspringbootfullstack.query.CustomerQuery.STATS_QUERY;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
 import static org.springframework.data.domain.PageRequest.of;
@@ -217,6 +220,73 @@ public class CustomerServiceImpl implements CustomerService {
             }
             return breakdown;
         });
+    }
+
+    // ── Organization-scoped reporting (FR-ORG-2) ────────────────────────────────────────────
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Page<Customer> getCustomersForOrganizations(Collection<Long> organizationIds, int page, int size) {
+        requireScope(organizationIds);
+        return customerRepo.findByOrganizationIdIn(organizationIds, of(page, size));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Page<Invoice> getInvoicesForOrganizations(Collection<Long> organizationIds, int page, int size) {
+        requireScope(organizationIds);
+        return invoiceRepo.findByOrganizationIdIn(organizationIds, of(page, size));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Stats getStatsForOrganizations(Collection<Long> organizationIds) {
+        requireScope(organizationIds);
+        return jdbcTemplate.queryForObject(STATS_BY_ORGANIZATION_QUERY,
+                Map.of("orgIds", organizationIds), new StatsRowMapper());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Map<String, Integer> getCustomerStatusBreakdownForOrganizations(Collection<Long> organizationIds) {
+        requireScope(organizationIds);
+        return jdbcTemplate.query(CUSTOMER_STATUS_BREAKDOWN_BY_ORGANIZATION_QUERY,
+                Map.of("orgIds", organizationIds), rs -> {
+                    Map<String, Integer> breakdown = new LinkedHashMap<>();
+                    while (rs.next()) {
+                        String status = rs.getString("status");
+                        breakdown.put(status != null ? status : "UNKNOWN", rs.getInt("count"));
+                    }
+                    return breakdown;
+                });
+    }
+
+    /**
+     * Rejects an absent or empty organization scope before it reaches the database.
+     *
+     * <p>This is a fail-closed guard, not a convenience check. An empty {@code IN ()} list is
+     * invalid SQL in MySQL, so the immediate consequence would be a 500 — but the reason it throws
+     * rather than being smoothed over is what matters: the only sensible readings of "no
+     * organizations" are "show nothing" or "show everything", and silently choosing the second is
+     * exactly the leak this feature closes. Callers must decide explicitly, and
+     * {@code AnalyticsController} does so by returning an empty result set rather than calling
+     * these methods at all.
+     *
+     * @param organizationIds the scope supplied by the caller
+     * @throws ApiException when the scope is null or empty
+     */
+    private static void requireScope(Collection<Long> organizationIds) {
+        if (organizationIds == null || organizationIds.isEmpty()) {
+            throw new ApiException("An organization scope is required for this report.");
+        }
     }
 
 }

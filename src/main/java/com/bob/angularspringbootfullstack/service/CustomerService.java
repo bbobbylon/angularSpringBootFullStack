@@ -6,6 +6,7 @@ import com.bob.angularspringbootfullstack.model.Services;
 import com.bob.angularspringbootfullstack.model.Stats;
 import org.springframework.data.domain.Page;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -145,4 +146,53 @@ public interface CustomerService {
      * @return an ordered map of status → customer count across the whole table
      */
     Map<String, Integer> getCustomerStatusBreakdown();
+
+    // ── Organization-scoped reporting (FR-ORG-2) ────────────────────────────────────────────
+    // These mirror the four methods above but restrict every row to customers owned by the
+    // caller's organizations. They are deliberately SEPARATE methods rather than an extra
+    // nullable parameter on the existing ones: a null "no scope" argument would make the
+    // unrestricted case the default that any caller gets by forgetting to pass anything, and a
+    // security boundary should not be something you opt into. Call sites now state which view
+    // they want, and AnalyticsController is the one place that decides which applies.
+    //
+    // Every method requires a NON-EMPTY collection. An empty organization set means the caller
+    // belongs to no active organization and must see nothing, which is the caller's decision to
+    // enforce — quietly returning system-wide data on empty is precisely the failure this
+    // feature exists to prevent, and an empty SQL `IN ()` list is invalid anyway.
+
+    /**
+     * Paginated customers owned by the given organizations.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @param page            zero-based page index
+     * @param size            records per page
+     * @return a page of customers restricted to those organizations
+     */
+    Page<Customer> getCustomersForOrganizations(Collection<Long> organizationIds, int page, int size);
+
+    /**
+     * Paginated invoices billed to customers owned by the given organizations.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @param page            zero-based page index
+     * @param size            records per page
+     * @return a page of invoices restricted to those organizations
+     */
+    Page<Invoice> getInvoicesForOrganizations(Collection<Long> organizationIds, int page, int size);
+
+    /**
+     * Aggregated dashboard statistics restricted to the given organizations.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @return counts and billed total covering only those organizations
+     */
+    Stats getStatsForOrganizations(Collection<Long> organizationIds);
+
+    /**
+     * Customer status breakdown restricted to the given organizations.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @return an ordered map of status → customer count within those organizations
+     */
+    Map<String, Integer> getCustomerStatusBreakdownForOrganizations(Collection<Long> organizationIds);
 }

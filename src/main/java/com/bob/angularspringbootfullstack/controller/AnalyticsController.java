@@ -1,10 +1,16 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
+import com.bob.angularspringbootfullstack.model.Invoice;
+import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.service.CustomerService;
+import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -13,8 +19,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 
+import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpStatus.OK;
@@ -54,10 +63,21 @@ import static org.springframework.http.HttpStatus.OK;
  * <p>Each endpoint returns the project's standard {@link HttpResponse} envelope and
  * deliberately reuses the <em>same data keys</em> the shared {@code /customer/**}
  * endpoints emit ({@code stats}, {@code page}, {@code invoices}), so the Angular
- * components consume these admin URLs with no interface changes. The rollups remain
- * system-wide for now; org-scoping the aggregates (so an org admin sees only their
- * organization's numbers) is tracked as future work, consistent with the current
- * behaviour of the rest of the admin surface.
+ * components consume these admin URLs with no interface changes.
+ *
+ * <p><b>Organization scoping (FR-ORG-2).</b> Authority answers <em>whether</em> a caller may open
+ * these dashboards; it says nothing about <em>whose</em> numbers they contain. Until customers
+ * carried an owning organization there was no way to express the difference, so every
+ * {@code ROLE_ORGANIZATION_ADMIN} saw system-wide totals — including the customer counts and
+ * revenue of organizations they have no relationship with. That is now closed: a scoped caller's
+ * rollups are restricted to the organizations they actively belong to, while {@code ROLE_ADMIN}
+ * and {@code ROLE_APPLICATION_ADMIN} remain unscoped (FR-ORG-3), matching how
+ * {@link AdminUserController} already treats the user directory.
+ *
+ * <p>The restriction is applied inside the SQL rather than to the returned rows. An aggregate has
+ * already discarded its attribution by the time it is a number — there is no way to subtract
+ * another organization's contribution from a {@code SUM} after the fact — and filtering a page
+ * after retrieval would corrupt {@code totalElements} and return short pages.
  */
 @RestController
 @RequestMapping(path = "/admin/analytics")
@@ -66,6 +86,8 @@ public class AnalyticsController {
 
     private final CustomerService customerService;
     private final UserService userService;
+    /** Resolves which organizations a scoped caller may see (FR-ORG-2). */
+    private final OrganizationService organizationService;
 
     /**
      * KPI summary for the Billing overview: system-wide totals plus the per-status
@@ -78,12 +100,25 @@ public class AnalyticsController {
     @GetMapping("/summary")
     @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
     public ResponseEntity<HttpResponse> getSummary(@AuthenticationPrincipal UserDTO user) {
+        Collection<Long> scope = resolveScope(user);
+        Stats stats;
+        Map<String, Integer> statusBreakdown;
+        if (scope == null) {
+            stats = customerService.getStats();
+            statusBreakdown = customerService.getCustomerStatusBreakdown();
+        } else if (scope.isEmpty()) {
+            stats = new Stats();
+            statusBreakdown = Map.of();
+        } else {
+            stats = customerService.getStatsForOrganizations(scope);
+            statusBreakdown = customerService.getCustomerStatusBreakdownForOrganizations(scope);
+        }
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "stats", customerService.getStats(),
-                                "statusBreakdown", customerService.getCustomerStatusBreakdown()))
+                                "stats", stats,
+                                "statusBreakdown", statusBreakdown))
                         .message("Analytics summary retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -104,13 +139,32 @@ public class AnalyticsController {
     public ResponseEntity<HttpResponse> getCustomers(@AuthenticationPrincipal UserDTO user,
                                                      @RequestParam Optional<Integer> page,
                                                      @RequestParam Optional<Integer> size) {
+        Collection<Long> scope = resolveScope(user);
+        int pageIndex = page.orElse(0);
+        int pageSize = size.orElse(20);
+        Page<Customer> customers;
+        Stats stats;
+        Map<String, Integer> statusBreakdown;
+        if (scope == null) {
+            customers = customerService.getCustomers(pageIndex, pageSize);
+            stats = customerService.getStats();
+            statusBreakdown = customerService.getCustomerStatusBreakdown();
+        } else if (scope.isEmpty()) {
+            customers = Page.empty(PageRequest.of(pageIndex, pageSize));
+            stats = new Stats();
+            statusBreakdown = Map.of();
+        } else {
+            customers = customerService.getCustomersForOrganizations(scope, pageIndex, pageSize);
+            stats = customerService.getStatsForOrganizations(scope);
+            statusBreakdown = customerService.getCustomerStatusBreakdownForOrganizations(scope);
+        }
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "page", customerService.getCustomers(page.orElse(0), size.orElse(20)),
-                                "stats", customerService.getStats(),
-                                "statusBreakdown", customerService.getCustomerStatusBreakdown()))
+                                "page", customers,
+                                "stats", stats,
+                                "statusBreakdown", statusBreakdown))
                         .message("Analytics customers retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -131,14 +185,54 @@ public class AnalyticsController {
     public ResponseEntity<HttpResponse> getInvoices(@AuthenticationPrincipal UserDTO user,
                                                     @RequestParam Optional<Integer> page,
                                                     @RequestParam Optional<Integer> size) {
+        Collection<Long> scope = resolveScope(user);
+        int pageIndex = page.orElse(0);
+        int pageSize = size.orElse(20);
+        Page<Invoice> invoices;
+        if (scope == null) {
+            invoices = customerService.getInvoices(pageIndex, pageSize);
+        } else if (scope.isEmpty()) {
+            invoices = Page.empty(PageRequest.of(pageIndex, pageSize));
+        } else {
+            invoices = customerService.getInvoicesForOrganizations(scope, pageIndex, pageSize);
+        }
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "invoices", customerService.getInvoices(page.orElse(0), size.orElse(20))))
+                                "invoices", invoices))
                         .message("Analytics invoices retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
+    }
+
+    /**
+     * Resolves the organization restriction that applies to this caller's reports (FR-ORG-2).
+     *
+     * <p>Returns {@code null} for the unscoped tiers ({@code ROLE_ADMIN},
+     * {@code ROLE_APPLICATION_ADMIN}), which see every organization's data — the same rule
+     * {@link AdminUserController#isOrganizationScoped} applies to the user directory, kept
+     * deliberately in one shape so "who is scoped?" has a single answer across the admin surface.
+     *
+     * <p>For {@code ROLE_ORGANIZATION_ADMIN} it returns that admin's active organization ids,
+     * <em>which may be empty</em>. Empty is a meaningful verdict, not an error: an administrator
+     * belonging to no active organization may see nothing, and callers render zeros rather than
+     * falling back to system-wide data. Collapsing the empty case into "unscoped" would hand the
+     * global view to precisely the account with the least established membership.
+     *
+     * <p>The three-way return ({@code null} / empty / populated) is why callers branch explicitly
+     * rather than passing this straight through: an empty collection cannot be handed to the
+     * scoped service methods, since SQL has no valid {@code IN ()} and the service fails closed
+     * on it by design.
+     *
+     * @param caller the authenticated principal from the JWT
+     * @return {@code null} when the caller is unscoped, otherwise their active organization ids
+     */
+    private Collection<Long> resolveScope(UserDTO caller) {
+        if (!ROLE_ORGANIZATION_ADMIN.name().equals(caller.getRoleName())) {
+            return null;
+        }
+        return organizationService.findActiveOrganizationIds(caller.getId());
     }
 }

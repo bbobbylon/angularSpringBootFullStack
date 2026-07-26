@@ -7,6 +7,7 @@ import com.bob.angularspringbootfullstack.model.Invoice;
 import com.bob.angularspringbootfullstack.report.CustomerReport;
 import com.bob.angularspringbootfullstack.report.InvoiceReport;
 import com.bob.angularspringbootfullstack.service.CustomerService;
+import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,12 @@ public class CustomerController {
      * Used to embed the authenticated user in every response envelope.
      */
     private final UserService userService;
+    /**
+     * Resolves the creator's organization so new customers are owned from the moment they exist
+     * (FR-ORG-2). Without this, every customer created after the org-scoping change would be
+     * orphaned and invisible to the scoped dashboards that are supposed to report on it.
+     */
+    private final OrganizationService organizationService;
 
     /**
      * Returns aggregated dashboard statistics: total customers, total invoices,
@@ -164,7 +171,18 @@ public class CustomerController {
     }
 
     /**
-     * Creates a new customer record.
+     * Creates a new customer record, stamped with the creator's organization (FR-ORG-2).
+     *
+     * <p>The owning organization is taken from the <em>authenticated principal</em>, never from the
+     * request body. A client-supplied {@code organizationId} would let any user file a customer
+     * into an organization they do not belong to — writing rows into another tenant's dashboards —
+     * so the value is overwritten here regardless of what was posted.
+     *
+     * <p>A creator belonging to several organizations is attributed to the lowest id, and one
+     * belonging to none leaves the customer unowned (invisible to scoped reporting, visible to the
+     * unscoped admin tiers). Both are placeholders for an explicit organization picker on the
+     * new-customer form; picking deterministically here is what keeps newly created rows from
+     * silently vanishing from the creator's own dashboard in the meantime.
      *
      * @param user     the authenticated user making the request
      * @param customer the customer data to create
@@ -172,6 +190,10 @@ public class CustomerController {
      */
     @PostMapping("/create")
     public ResponseEntity<HttpResponse> createCustomer(@AuthenticationPrincipal UserDTO user, @RequestBody @Valid Customer customer) {
+        customer.setOrganizationId(
+                organizationService.findActiveOrganizationIds(user.getId()).stream()
+                        .min(Long::compareTo)
+                        .orElse(null));
         return ResponseEntity.created(URI.create("")).body(
                 HttpResponse.builder()
                         .timeStamp(now().toString())

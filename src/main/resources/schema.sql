@@ -216,17 +216,54 @@ CREATE TABLE IF NOT EXISTS twofactorverifications
 -- which also fixes the create order: Customer → Invoice → invoiceserviceitems.
 CREATE TABLE IF NOT EXISTS `Customer`
 (
-    `createdAt`     datetime(6),
-    `id`            bigint       NOT NULL AUTO_INCREMENT,
-    `address`       varchar(255),
-    `customer_name` varchar(255) NOT NULL,
-    `email`         varchar(255) NOT NULL,
-    `imageUrl`      varchar(255),
-    `phoneNumber`   varchar(255),
-    `status`        varchar(255) NOT NULL,
-    `type`          varchar(255) NOT NULL,
+    `createdAt`       datetime(6),
+    `id`              bigint       NOT NULL AUTO_INCREMENT,
+    `address`         varchar(255),
+    `customer_name`   varchar(255) NOT NULL,
+    `email`           varchar(255) NOT NULL,
+    `imageUrl`        varchar(255),
+    `organization_id` bigint,
+    `phoneNumber`     varchar(255),
+    `status`          varchar(255) NOT NULL,
+    `type`            varchar(255) NOT NULL,
     PRIMARY KEY (`id`)
 ) engine = InnoDB;
+
+-- Idempotent add of Customer.organization_id for databases created before org-scoped reporting
+-- (FR-ORG-2) shipped. Same guard pattern as userevents.detail above: MySQL has no
+-- `ADD COLUMN IF NOT EXISTS`, so check information_schema and run the ALTER through a prepared
+-- statement only when the column is absent.
+--
+-- Deliberately NOT a foreign key. `organizations` is owned by the JDBC half of the schema while
+-- `Customer` is generated from the JPA entity and policed by Hibernate's ddl-auto: validate; a
+-- constraint spanning the two would be invisible to the entity mapping and would make the
+-- JpaSchemaSyncTest drift guard meaningless. The relationship is enforced in the service layer,
+-- which is also where the "which organization may this caller see?" decision already lives.
+SET @add_customer_org := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE `Customer` ADD COLUMN `organization_id` bigint DEFAULT NULL AFTER `imageUrl`',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Customer' AND COLUMN_NAME = 'organization_id');
+PREPARE add_customer_org_stmt FROM @add_customer_org;
+EXECUTE add_customer_org_stmt;
+DEALLOCATE PREPARE add_customer_org_stmt;
+
+-- Backfill: adopt every unowned customer into the lowest-numbered ACTIVE organization.
+--
+-- Existing rows predate the concept of customer ownership, so there is no recorded answer to
+-- "whose customer is this?" — the honest choices are to guess once, here, or to leave them NULL
+-- and invisible to every scoped administrator. Adopting them preserves the behaviour those rows
+-- were created under (visible to the operators who have been managing them) instead of silently
+-- emptying the dashboards of an established deployment.
+--
+-- Scoped to NULL rows only, so it is safe to re-run and never reassigns a customer that has since
+-- been given a real owner. If more than one organization is in play, review the result and
+-- reassign afterwards; this statement will not touch those rows again.
+UPDATE `Customer`
+SET `organization_id` = (SELECT MIN(id) FROM organizations WHERE status = 'ACTIVE')
+WHERE `organization_id` IS NULL
+  AND EXISTS (SELECT 1 FROM organizations WHERE status = 'ACTIVE');
 
 CREATE TABLE IF NOT EXISTS `Invoice`
 (
