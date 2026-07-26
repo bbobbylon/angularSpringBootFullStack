@@ -119,7 +119,8 @@ ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
      'ACCOUNT_SETTINGS_UPDATE', 'PASSWORD_UPDATE', 'MFA_UPDATE',
      'FEDERATED_LOGIN',
      'TOTP_ENROLLED', 'TOTP_DISABLED', 'RECOVERY_CODE_USED',
-     'SESSION_REVOKED', 'TOKEN_REUSE_DETECTED'));
+     'SESSION_REVOKED', 'TOKEN_REUSE_DETECTED',
+     'SUSPICIOUS_LOGIN'));
 
 INSERT INTO events (type, description)
 VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
@@ -136,7 +137,8 @@ VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
        ('TOTP_DISABLED', 'You removed your authenticator app from multi-factor authentication :)'),
        ('RECOVERY_CODE_USED', 'You signed in using a single-use recovery code :)'),
        ('SESSION_REVOKED', 'You revoked an active session on your account :)'),
-       ('TOKEN_REUSE_DETECTED', 'A previously used refresh token was replayed; the affected session family was revoked for your security :|') AS new
+       ('TOKEN_REUSE_DETECTED', 'A previously used refresh token was replayed; the affected session family was revoked for your security :|'),
+       ('SUSPICIOUS_LOGIN', 'We noticed a sign-in that didn''t match your usual device or location, so we asked for extra verification :|') AS new
 ON DUPLICATE KEY UPDATE description = new.description;
 
 CREATE TABLE IF NOT EXISTS userevents

@@ -6,6 +6,7 @@ import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
 import com.bob.angularspringbootfullstack.repo.UserRepo;
+import com.bob.angularspringbootfullstack.service.NotificationService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,8 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepo<User> userRepo;
     private final RoleRepo<Role> roleRepo;
+    /** Delivery channel for the FR-TPF-1 step-up code (email, not SMS — see {@link #sendStepUpCode}). */
+    private final NotificationService notificationService;
 
     /**
      * Creates a new user.
@@ -64,6 +67,20 @@ public class UserServiceImpl implements UserService {
     @Override
     public void sendVerificationCode(UserDTO userDTO) {
         userRepo.sendVerificationCode(userDTO);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The two halves live in different layers on purpose: the repository mints and persists the
+     * code (data), while choosing to deliver it over <em>email</em> rather than SMS is a business
+     * decision and therefore belongs here. That is also why this method — unlike
+     * {@link #sendVerificationCode} — does not simply delegate to a single repository call.
+     */
+    @Override
+    public void sendStepUpCode(UserDTO userDTO, String reasonSummary) {
+        String code = userRepo.issueVerificationCode(userDTO);
+        notificationService.sendStepUpCode(userDTO.getFirstName(), userDTO.getEmail(), code, reasonSummary);
     }
 
     /**

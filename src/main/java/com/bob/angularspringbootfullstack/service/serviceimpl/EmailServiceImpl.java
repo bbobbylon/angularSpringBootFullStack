@@ -62,6 +62,55 @@ public class EmailServiceImpl implements EmailService {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>Like {@link #sendVerificationEmail}, exceptions propagate rather than being swallowed —
+     * {@code NotificationServiceImpl} owns the failure logging, and for this flow it additionally
+     * writes the code to the server log so a developer running without SMTP configured can still
+     * complete a step-up challenge.
+     */
+    @Override
+    public void sendStepUpCodeEmail(String firstName, String email, String code, String reasonSummary) {
+        SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setTo(email);
+        msg.setFrom("bobsangularemail@gmail.com");
+        msg.setSubject("TesseraApp - Verify this sign-in");
+        msg.setText("Hello " + firstName + "\n\n"
+                + "We noticed a sign-in to your TesseraApp account from " + reasonSummary + ", "
+                + "so we asked for one extra step before letting it through.\n\n"
+                + "Your verification code is: " + code + "\n\n"
+                + "Enter it on the verification screen to finish signing in. The code expires in 24 hours "
+                + "and can be used once.\n\n"
+                + "If this wasn't you, do NOT enter the code. Someone else knows your password — "
+                + "change it immediately and consider enabling an authenticator app under Security Center.");
+        mailSender.send(msg);
+        log.info("Step-up verification code dispatched to {}", email);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Carries no code: the recipient is already completing a second-factor challenge on a
+     * channel they control. Its only job is to explain <em>why</em> that challenge appeared.
+     */
+    @Override
+    public void sendSecurityAlertEmail(String firstName, String email, String reasonSummary) {
+        SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setTo(email);
+        msg.setFrom("bobsangularemail@gmail.com");
+        msg.setSubject("TesseraApp - Unusual sign-in attempt");
+        msg.setText("Hello " + firstName + "\n\n"
+                + "Someone signed in to your TesseraApp account from " + reasonSummary + ". "
+                + "Because it didn't match your usual sign-in pattern, we required your second factor "
+                + "before granting access.\n\n"
+                + "If that was you, no action is needed.\n\n"
+                + "If it wasn't, your password is compromised even though the sign-in was blocked at the "
+                + "second factor. Change it now, and review your active sessions under Security Center.");
+        mailSender.send(msg);
+        log.info("Security alert email dispatched to {}", email);
+    }
+
+    /**
      * Selects the plain-text body template for the given verification flow and
      * substitutes the recipient's first name and verification URL into it.
      * <p>

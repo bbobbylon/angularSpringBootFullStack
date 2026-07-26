@@ -52,4 +52,30 @@ public interface NotificationService {
      * @param code        the 7-character 2FA code the recipient must enter
      */
     void sendTwoFactorCode(String firstName, String phoneNumber, String code);
+
+    /**
+     * Emails a one-time step-up code to an account whose sign-in was flagged as anomalous and
+     * which has no enrolled second factor (SRS FR-TPF-1).
+     *
+     * <p>Email — not SMS — is the channel here: it is the address the account is keyed on and is
+     * guaranteed present, whereas a phone number is optional and the Twilio path only dispatches
+     * when credentials are configured. A step-up that cannot be delivered would lock the
+     * legitimate user out of their own account.
+     *
+     * @param firstName     recipient's first name, used in the greeting
+     * @param email         recipient's email address
+     * @param code          the one-time verification code
+     * @param reasonSummary human-readable description of what looked unusual
+     */
+    void sendStepUpCode(String firstName, String email, String code, String reasonSummary);
+
+    /**
+     * Emails a security alert for a flagged sign-in that was challenged by an already-enrolled
+     * second factor (SRS FR-TPF-1).
+     *
+     * @param firstName     recipient's first name, used in the greeting
+     * @param email         recipient's email address
+     * @param reasonSummary human-readable description of what looked unusual
+     */
+    void sendSecurityAlert(String firstName, String email, String reasonSummary);
 }

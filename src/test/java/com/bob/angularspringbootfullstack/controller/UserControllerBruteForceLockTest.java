@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.controller;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.GlobalExceptionHandler;
 import com.bob.angularspringbootfullstack.service.EventService;
+import com.bob.angularspringbootfullstack.service.LoginRiskService;
 import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.TotpService;
@@ -65,9 +66,12 @@ class UserControllerBruteForceLockTest {
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
         TotpService totpService = mock(TotpService.class);
         SessionService sessionService = mock(SessionService.class);
+        // FR-TPF-1: unused here — every attempt in this class fails the first factor, so the
+        // anomaly check (which runs only after authentication succeeds) is never reached.
+        LoginRiskService loginRiskService = mock(LoginRiskService.class);
 
         UserController controller = new UserController(userService, roleService, authenticationManager,
-                request, eventPublisher, eventService, totpService, sessionService);
+                request, eventPublisher, eventService, totpService, sessionService, loginRiskService);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())

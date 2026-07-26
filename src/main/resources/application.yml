@@ -109,6 +109,50 @@ app:
     # Activates S3ImageStorageService + AwsS3Config; requires aws.s3.bucket and aws.region.
     storage-type: ${IMAGE_STORAGE_TYPE:local}
 
+  cors:
+    # Browser origins allowed to call this API, comma-separated. Consumed by
+    # AngularSpringBootFullStackApplication#corsFilter via setAllowedOriginPatterns, so
+    # `*` wildcards are legal here even though allowCredentials(true) is on.
+    #
+    # The default below is DEV-oriented: it allows localhost plus the three RFC-1918
+    # private ranges on any port, which is what lets you open the app from a phone on
+    # your own wifi (the phone's origin is http://192.168.x.x:4200, not localhost).
+    # Reaching those origins already requires being on the same LAN, so this widens the
+    # browser check to match a boundary the network is already enforcing.
+    #
+    # PRODUCTION MUST OVERRIDE THIS with an explicit origin list — see
+    # application-prod.yml. A deployed API that trusts private-range patterns would be
+    # relying on a network boundary its clients are not behind.
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:http://localhost:[*],http://127.0.0.1:[*],http://192.168.*.*:[*],http://10.*.*.*:[*],http://172.16.*.*:[*]}
+
+  security:
+    # How many reverse proxies sit between the internet and this app, i.e. how many hops append
+    # to X-Forwarded-For on the way in. Read by TrustedProxyConfigurer → RequestUtils.
+    #
+    # 0 (the default) means "no proxy" and causes X-Forwarded-For to be IGNORED. That is not a
+    # limitation, it is the point: the header is caller-supplied, so trusting it when nothing
+    # rewrites it lets any client choose the address recorded against it — which would let a
+    # caller rotate forged addresses past the rate limiter and forge a "familiar" network past
+    # the FR-TPF-1 anomaly check.
+    #
+    # Set to the real hop count when deploying behind a load balancer — typically 1 for a single
+    # ALB or Cloud Run front end, 2 with a CDN in front of that. Getting it WRONG IN EITHER
+    # DIRECTION is harmful: too low collapses every user into the load balancer's address (the
+    # rate limiter then throttles all users as one), too high trusts an attacker-supplied entry.
+    trusted-proxy-count: ${TRUSTED_PROXY_COUNT:0}
+
+    anomaly:
+      # Login-anomaly detection + step-up re-verification (SRS FR-TPF-1), read by
+      # LoginRiskServiceImpl. Set ANOMALY_DETECTION_ENABLED=false to revert login to its
+      # pre-FR-TPF-1 behaviour (first factor → existing 2FA branch → tokens) without
+      # removing the code path — useful when demoing the app from a fresh network where
+      # every sign-in would legitimately look new.
+      enabled: ${ANOMALY_DETECTION_ENABLED:true}
+      # How many DISTINCT device/network fingerprints form an account's baseline. The
+      # backing query groups by fingerprint, so this bounds distinct devices, not rows —
+      # a user cannot age their own baseline out by signing in repeatedly from one machine.
+      history-limit: ${ANOMALY_HISTORY_LIMIT:50}
+
 # AWS configuration — only required when app.image.storage-type=s3.
 # Credentials are resolved by DefaultCredentialsProvider (env vars → ~/.aws → instance/task role).
 # For ECS Fargate, attach a task role with s3:PutObject + s3:GetObject on the bucket instead
