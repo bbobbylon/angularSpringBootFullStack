@@ -157,12 +157,25 @@
             <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
           </a>
 
-          <p class="eyebrow">Two-factor verification</p>
+          <p class="eyebrow">
+            {{ state.mfaMethod === 'email' ? 'Extra verification' : 'Two-factor verification' }}
+          </p>
           <h2 class="sc-auth__title">Enter your code</h2>
           @if (state.mfaMethod === 'totp') {
             <p class="sc-auth__hint">
               Enter the 6-digit code from your authenticator app
               — or one of your recovery codes.
+            </p>
+          } @else if (state.mfaMethod === 'email') {
+            <!--
+              Risk step-up (FR-TPF-1). The copy states that an extra check was required but never
+              what triggered it: the specific signal (new device / new network) goes only to the
+              account holder's inbox and the audit log, so someone who reached this screen with a
+              stolen password learns nothing about how the detection works.
+            -->
+            <p class="sc-auth__hint">
+              This sign-in needed an extra check, so we emailed a one-time code to your
+              address on file. Enter it to finish signing in.
             </p>
           } @else {
             <p class="sc-auth__hint">

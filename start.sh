@@ -33,6 +33,20 @@
 ENV=local
 DB=aiven   # native | local | aiven
 
+# Serve the Angular dev server on ALL network interfaces instead of localhost only
+# (true | false), so you can open the app from a phone or tablet on the same wifi.
+#
+# Off by default: binding to 0.0.0.0 exposes an unauthenticated dev server (and its
+# source maps) to everyone on the network, which is not something to leave on by accident.
+#
+# With LAN=true the script prints the URL to use. Two things must also be true:
+#   1. Windows Firewall must allow inbound TCP 4200 and 8080 (see documentation/getting-started.md).
+#   2. Your phone must be on the SAME network — a "guest" wifi SSID, or a router with
+#      AP/client isolation enabled, will block it no matter what this script does.
+# The frontend derives the API URL from the browser's own hostname (see
+# environment.ts), so no rebuild or extra config is needed for the API half.
+LAN=true
+
 # Auto-open the app in your default browser once it's responding (true | false).
 # OPEN_BROWSER_TIMEOUT caps how long to wait for the server before giving up —
 # raise it for first-time `docker` builds (they compile the Angular app + JAR).
@@ -171,9 +185,15 @@ start_local() {
     cd "$ANGULAR_DIR" && npm install && cd "$SCRIPT_DIR"
   fi
 
-  log "Starting Angular dev server on port 4200..."
   cd "$ANGULAR_DIR"
-  npm run start &
+  if [[ "$LAN" == "true" ]]; then
+    # Bind 0.0.0.0 so devices on the same wifi can reach the dev server (see LAN= above).
+    log "Starting Angular dev server on port 4200 (LAN mode — all interfaces)..."
+    npm run start:lan &
+  else
+    log "Starting Angular dev server on port 4200..."
+    npm run start &
+  fi
   ANGULAR_PID=$!
   cd "$SCRIPT_DIR"
 
@@ -187,6 +207,18 @@ start_local() {
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   log "  Frontend : ${BLUE}http://localhost:4200${NC}"
   log "  Backend  : ${BLUE}http://localhost:$LOCAL_BACKEND_PORT${NC}"
+  if [[ "$LAN" == "true" ]]; then
+    # Best-effort LAN IPv4 lookup so the phone URL can be printed rather than hunted for.
+    # Tries ipconfig (Git Bash on Windows) then hostname -I (Linux/WSL); either may be
+    # absent, in which case the fallback tells the user where to look it up themselves.
+    lan_ip="$(ipconfig 2>/dev/null | grep -A4 -i 'wireless\|ethernet' | grep -i 'IPv4' | head -n1 | sed 's/.*: //' | tr -d '\r')"
+    [[ -z "$lan_ip" ]] && lan_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    if [[ -n "$lan_ip" ]]; then
+      log "  On phone : ${BLUE}http://${lan_ip}:4200${NC}  (same wifi; allow TCP 4200+$LOCAL_BACKEND_PORT in Windows Firewall)"
+    else
+      log "  On phone : same wifi → http://<your-PC-IPv4>:4200  (find it with: ipconfig)"
+    fi
+  fi
   if [[ "$DB" == "aiven" ]]; then
     log "  Database : ${BLUE}Aiven cloud MySQL${NC}"
   else

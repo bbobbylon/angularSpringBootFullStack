@@ -211,18 +211,55 @@
                   <span class="badge bg-warning mx-2">Disabled</span>
                 }
                 <p class="text-muted mb-0">
-                  One-time codes sent to your phone. Requires a phone number on your profile.
+                  One-time codes sent to your phone.
+                  @if (!user()?.phoneNumber) {
+                    <span>Add a phone number to turn this on.</span>
+                  }
                   @if (user()?.usingTotp) {
                     <span class="d-block mt-1">Your authenticator app takes precedence while it is enabled.</span>
                   }
                 </p>
               </div>
               <div class="col-auto">
-                <button (click)="toggleSmsMfa()" [disabled]="isLoading()" class="btn btn-outline-primary btn-sm" type="button">
+                <button (click)="toggleSmsMfa()" [disabled]="isLoading() || phonePromptOpen()" class="btn btn-outline-primary btn-sm" type="button">
                   {{ user()?.using2FA ? 'Disable' : 'Enable' }}
                 </button>
               </div>
             </div>
+
+            <!--
+              Inline phone capture. Shown instead of the backend's "a phone number is
+              required" error when the user tries to enable SMS without one on file:
+              the missing prerequisite is offered as the next step rather than reported
+              as a failure. Saving it enables SMS in the same action.
+            -->
+            @if (phonePromptOpen()) {
+              <form #phoneForm="ngForm" (ngSubmit)="savePhoneAndEnableSms(phoneForm)" class="mt-3" novalidate>
+                <label class="form-label" for="smsPhoneNumber">Phone number</label>
+                <div class="row g-2 align-items-start">
+                  <div class="col-12 col-sm-auto flex-grow-1" style="max-width: 320px;">
+                    <input id="smsPhoneNumber" name="phoneNumber" ngModel required
+                           type="tel" inputmode="tel" autocomplete="tel"
+                           pattern="^\+?[0-9. ()-]{7,25}$"
+                           placeholder="+1 555 010 1234"
+                           [disabled]="isLoading()"
+                           class="form-control form-control-sm" />
+                    <small class="text-muted">We'll text your one-time codes here. This also saves to your profile.</small>
+                  </div>
+                  <div class="col-auto">
+                    <button [disabled]="isLoading() || phoneForm.invalid" class="btn btn-primary btn-sm" type="submit">
+                      {{ isLoading() ? 'Saving…' : 'Save & enable' }}
+                    </button>
+                  </div>
+                  <div class="col-auto">
+                    <button (click)="cancelPhonePrompt(phoneForm)" [disabled]="isLoading()"
+                            class="btn btn-outline-secondary btn-sm" type="button">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </form>
+            }
           </div>
         </div>
       </div>
