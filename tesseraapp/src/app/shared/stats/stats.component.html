@@ -1,5 +1,5 @@
 @if (stats) {
-  <div class="sc-metrics">
+  <div *transloco="let t" class="sc-metrics">
 
     <!-- Customers — primary accent (indigo) -->
     <a class="sc-metric sc-metric--accent" [routerLink]="['/customers']"
@@ -7,7 +7,7 @@
       <span class="sc-metric__icon"><i class="bi bi-people-fill"></i></span>
       <div class="sc-metric__body">
         <span class="sc-metric__value">{{ stats.totalCustomers }}</span>
-        <span class="eyebrow">Total Customers</span>
+        <span class="eyebrow">{{ t('stats.totalCustomers') }}</span>
       </div>
       <i class="bi bi-arrow-right sc-metric__arrow"></i>
     </a>
@@ -18,7 +18,7 @@
       <span class="sc-metric__icon"><i class="bi bi-receipt-cutoff"></i></span>
       <div class="sc-metric__body">
         <span class="sc-metric__value">{{ stats.totalInvoices }}</span>
-        <span class="eyebrow">Total Invoices</span>
+        <span class="eyebrow">{{ t('stats.totalInvoices') }}</span>
       </div>
       <i class="bi bi-arrow-right sc-metric__arrow"></i>
     </a>
@@ -30,7 +30,7 @@
       <span class="sc-metric__icon"><i class="bi bi-currency-dollar"></i></span>
       <div class="sc-metric__body">
         <span class="sc-metric__value">${{ stats.totalBilled | number: '1.2-2' }}</span>
-        <span class="eyebrow">Total Billed</span>
+        <span class="eyebrow">{{ t('stats.totalBilled') }}</span>
       </div>
       <i class="bi bi-arrow-right sc-metric__arrow"></i>
     </a>

@@ -2,20 +2,20 @@
   @switch (state.dataState) {
     @case (DataState.LOADED) {
       <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-      <main class="sc-page">
+      <main *transloco="let t" class="sc-page">
         <div class="container">
 
           <nav aria-label="breadcrumb">
             <ol class="breadcrumb sc-breadcrumb">
               <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
-              <li class="breadcrumb-item active" aria-current="page">Users</li>
+              <li class="breadcrumb-item active" aria-current="page">{{ t('users.breadcrumb') }}</li>
             </ol>
           </nav>
 
           <header class="sc-head sc-reveal">
             <div>
-              <p class="eyebrow mb-1">Administration</p>
-              <h1 class="sc-head__title">User directory</h1>
+              <p class="eyebrow mb-1">{{ t('users.eyebrow') }}</p>
+              <h1 class="sc-head__title">{{ t('users.title') }}</h1>
               <p class="sc-head__sub">{{ state?.appData?.data?.usersTotalElements ?? 0 }} account(s) in the directory</p>
             </div>
             <div class="sc-head__actions">
@@ -23,7 +23,7 @@
                 <i class="bi bi-search"></i>
                 <input #searchForm (input)="onSearchInput(searchForm.value)"
                        class="form-control form-control-sm" id="userSearch"
-                       placeholder="Name or email" type="text" aria-label="Search users" />
+                       [placeholder]="t('users.searchPlaceholder')" type="text" [attr.aria-label]="t('users.searchAria')" />
               </label>
             </div>
           </header>
@@ -35,13 +35,13 @@
                   <thead>
                   <tr>
                     <th class="text-center" scope="col">ID</th>
-                    <th scope="col">Photo</th>
-                    <th scope="col">Name</th>
-                    <th scope="col">Email</th>
-                    <th scope="col">Role</th>
+                    <th scope="col">{{ t('common.photo') }}</th>
+                    <th scope="col">{{ t('common.name') }}</th>
+                    <th scope="col">{{ t('common.email') }}</th>
+                    <th scope="col">{{ t('users.role') }}</th>
                     <th scope="col">MFA</th>
-                    <th scope="col">Status</th>
-                    <th class="text-end" scope="col">Action</th>
+                    <th scope="col">{{ t('common.status') }}</th>
+                    <th class="text-end" scope="col">{{ t('common.action') }}</th>
                   </tr>
                   </thead>
                   <tbody class="table-body">
@@ -116,7 +116,7 @@
                     <li
                       [ngClass]="(state?.appData?.data?.usersTotalPages ?? 0) - 1 === currentPage$() ? ' disabled' : ''"
                       class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">Next &raquo;</button>
+                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">{{ t('common.next') }} &raquo;</button>
                     </li>
                   </ul>
                 </nav>
@@ -124,8 +124,8 @@
             } @else {
               <div class="sc-empty">
                 <span class="sc-empty__icon"><i class="bi bi-people"></i></span>
-                <p class="sc-empty__title">No users found</p>
-                <p class="sc-empty__hint">No accounts match your search. Try a different name or email.</p>
+                <p class="sc-empty__title">{{ t('users.emptyTitle') }}</p>
+                <p class="sc-empty__hint">{{ t('users.emptyHint') }}</p>
               </div>
             }
           </section>
@@ -134,9 +134,11 @@
       </main>
     }
     @case (DataState.LOADING) {
-      <div class="sc-state">
-        <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
-        <p class="mb-0">Loading users…</p>
+      <!-- Its own Transloco scope: this branch renders outside the <main> that carries the
+           page-level scope, so it cannot see that block's `t`. -->
+      <div *transloco="let t" class="sc-state">
+        <div class="spinner-border" role="status"><span class="visually-hidden">{{ t('common.loading') }}</span></div>
+        <p class="mb-0">{{ t('users.loading') }}</p>
       </div>
     }
     @case (DataState.ERROR) {

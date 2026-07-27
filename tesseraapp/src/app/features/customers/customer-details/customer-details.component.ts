@@ -15,6 +15,7 @@ import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { NotificationsService } from '../../../service/notifications-service';
 import { UserService } from '../../../service/user.service';
 import { RequiresAuthorityDirective } from '../../../directive/has-authority.directive';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Customer detail view showing a single customer's profile fields, invoice count, and invoice history.
@@ -26,7 +27,7 @@ import { RequiresAuthorityDirective } from '../../../directive/has-authority.dir
  */
 @Component({
   selector: 'app-customer-details',
-  imports: [NgClass, DatePipe, RouterModule, FormsModule, NavbarComponent, ExtractArrayValuePipe, RequiresAuthorityDirective],
+  imports: [NgClass, DatePipe, RouterModule, FormsModule, NavbarComponent, ExtractArrayValuePipe, RequiresAuthorityDirective, TranslocoDirective],
   templateUrl: './customer-details.component.html',
   standalone: true,
   styleUrl: './customer-details.component.css',

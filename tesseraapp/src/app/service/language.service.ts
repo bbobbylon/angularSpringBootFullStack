@@ -44,6 +44,10 @@ export class LanguageService {
   readonly available: readonly LanguageOption[] = [
     { code: 'en', label: 'English', short: 'EN' },
     { code: 'es', label: 'Español', short: 'ES' },
+    { code: 'fr', label: 'Français', short: 'FR' },
+    { code: 'de', label: 'Deutsch', short: 'DE' },
+    { code: 'pt', label: 'Português', short: 'PT' },
+    { code: 'zh', label: '中文', short: '中' },
   ];
 
   private readonly _current = signal<string>('en');

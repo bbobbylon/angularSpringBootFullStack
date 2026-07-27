@@ -14,6 +14,7 @@ import { saveAs } from 'file-saver';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { InvoiceTrendComponent } from '../../../shared/charts/invoice-trend/invoice-trend.component';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * All-invoice list view with pagination.
@@ -28,7 +29,7 @@ import { InvoiceTrendComponent } from '../../../shared/charts/invoice-trend/invo
  */
 @Component({
   selector: 'app-invoices',
-  imports: [NgClass, RouterModule, NavbarComponent, DatePipe, InvoiceTrendComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, DatePipe, InvoiceTrendComponent, TranslocoDirective],
   templateUrl: './invoices.component.html',
   styleUrl: './invoices.component.css',
   standalone: true,

@@ -4,9 +4,9 @@ import { UserService } from '../service/user.service';
 /**
  * Normalises the several shapes an authority input may take into a flat list.
  *
- * Templates are allowed to write a single authority (`*hasAuthority="'UPDATE:CUSTOMER'"`), an
- * array (`*hasAuthority="['UPDATE:USER', 'UPDATE:CUSTOMER']"`), or a comma-separated string
- * (`*hasAuthority="'UPDATE:USER, UPDATE:CUSTOMER'"`) — the last of which matches how the backend
+ * Templates are allowed to write a single authority (`*appHasAuthority="'UPDATE:CUSTOMER'"`), an
+ * array (`*appHasAuthority="['UPDATE:USER', 'UPDATE:CUSTOMER']"`), or a comma-separated string
+ * (`*appHasAuthority="'UPDATE:USER, UPDATE:CUSTOMER'"`) — the last of which matches how the backend
  * itself stores a role's permissions in the `roles.permission` column, so a developer copying a
  * string out of `schema.sql` gets the behaviour they expect rather than a silent never-match.
  *
@@ -34,10 +34,10 @@ function toAuthorities(value: string | string[] | null | undefined): string[] {
  *
  * <h3>Usage</h3>
  * ```html
- * <button *hasAuthority="'UPDATE:CUSTOMER'" type="submit">Save</button>
+ * <button *appHasAuthority="'UPDATE:CUSTOMER'" type="submit">Save</button>
  *
  * <!-- with a read-only substitute rather than a hole in the layout -->
- * <button *hasAuthority="'UPDATE:CUSTOMER'; else readOnlyNotice" type="submit">Save</button>
+ * <button *appHasAuthority="'UPDATE:CUSTOMER'; else readOnlyNotice" type="submit">Save</button>
  * <ng-template #readOnlyNotice>
  *   <p class="text-muted">Read-only — contact your administrator to request edit access.</p>
  * </ng-template>
@@ -70,7 +70,7 @@ function toAuthorities(value: string | string[] | null | undefined): string[] {
  * A polling or signal-driven check would add reactivity to a value that does not move.
  */
 @Directive({
-  selector: '[hasAuthority]',
+  selector: '[appHasAuthority]',
   standalone: true,
 })
 export class HasAuthorityDirective {
@@ -89,19 +89,19 @@ export class HasAuthorityDirective {
    * server would not agree with.
    */
   @Input()
-  set hasAuthority(value: string | string[] | null | undefined) {
+  set appHasAuthority(value: string | string[] | null | undefined) {
     this.authorities = toAuthorities(value);
     this.render();
   }
 
   /**
    * Optional fallback template shown when the user lacks every listed authority — the
-   * `*hasAuthority="'X'; else someTemplate"` form. Angular derives this setter name by
+   * `*appHasAuthority="'X'; else someTemplate"` form. Angular derives this setter name by
    * concatenating the selector with the microsyntax keyword, which is why it must be
-   * `hasAuthorityElse` exactly.
+   * `appHasAuthorityElse` exactly.
    */
   @Input()
-  set hasAuthorityElse(template: TemplateRef<unknown> | null) {
+  set appHasAuthorityElse(template: TemplateRef<unknown> | null) {
     this.elseTemplate = template;
     this.render();
   }
@@ -142,7 +142,7 @@ export class HasAuthorityDirective {
  *
  * <h3>Usage</h3>
  * ```html
- * <button [requiresAuthority]="'UPDATE:CUSTOMER'" deniedAction="update customers" type="submit">
+ * <button [appRequiresAuthority]="'UPDATE:CUSTOMER'" deniedAction="update customers" type="submit">
  *   Save
  * </button>
  * ```
@@ -166,7 +166,7 @@ export class HasAuthorityDirective {
  * Same NFR-SEC-4 caveat as {@link HasAuthorityDirective}: cosmetic only, the server is the boundary.
  */
 @Directive({
-  selector: '[requiresAuthority]',
+  selector: '[appRequiresAuthority]',
   standalone: true,
 })
 export class RequiresAuthorityDirective implements OnInit {
@@ -175,7 +175,7 @@ export class RequiresAuthorityDirective implements OnInit {
   private readonly userService = inject(UserService);
 
   /** The authority (or authorities) required to use this control; any one suffices. */
-  @Input({ required: true }) requiresAuthority: string | string[] = [];
+  @Input({ required: true }) appRequiresAuthority: string | string[] = [];
 
   /**
    * The capability named in the tooltip, phrased as a verb phrase to slot into the sentence
@@ -194,7 +194,7 @@ export class RequiresAuthorityDirective implements OnInit {
    * worse than either state.
    */
   ngOnInit(): void {
-    const authorities = toAuthorities(this.requiresAuthority);
+    const authorities = toAuthorities(this.appRequiresAuthority);
     if (authorities.length === 0 || this.userService.hasAnyAuthority(...authorities)) return;
 
     const element = this.elementRef.nativeElement;

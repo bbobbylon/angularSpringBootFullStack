@@ -12,6 +12,7 @@ import { GlobalStateInterface } from '../../../interface/global-state.interface'
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { ServicesInterface } from '../../../interface/services.interface';
 import { UserInterface } from '../../../interface/user.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Administrative management of the services catalog — {@code /services/manage}
@@ -39,7 +40,7 @@ import { UserInterface } from '../../../interface/user.interface';
 @Component({
   selector: 'app-services-admin',
   standalone: true,
-  imports: [NavbarComponent, RouterLink, DecimalPipe, FormsModule],
+  imports: [NavbarComponent, RouterLink, DecimalPipe, FormsModule, TranslocoDirective],
   templateUrl: './services-admin.component.html',
   styleUrl: './services-admin.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

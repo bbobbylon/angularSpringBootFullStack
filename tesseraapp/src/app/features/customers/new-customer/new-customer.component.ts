@@ -10,6 +10,7 @@ import { CustomerListDataInterface } from '../../../interface/appstates.interfac
 import { CustomerService } from '../../../service/customer.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * New customer creation form component.
@@ -27,7 +28,7 @@ import { NotificationsService } from '../../../service/notifications-service';
  */
 @Component({
   selector: 'app-new-customer',
-  imports: [RouterModule, FormsModule, NavbarComponent],
+  imports: [RouterModule, FormsModule, NavbarComponent, TranslocoDirective],
   templateUrl: './new-customer.component.html',
   standalone: true,
   styleUrls: ['./new-customer.component.css'],

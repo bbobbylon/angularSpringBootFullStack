@@ -12,6 +12,7 @@ import { UserInterface } from '../../../interface/user.interface';
 import { SessionInterface, TotpSetupInterface } from '../../../interface/security.interface';
 import { UserEventsInterface } from '../../../interface/user-events.interface';
 import { getEventDisplay } from '../../../utils/event-display.utils';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Account Security Center (plan.md M4 creates this surface; M5 populates it).
@@ -31,7 +32,7 @@ import { getEventDisplay } from '../../../utils/event-display.utils';
 @Component({
   selector: 'app-security-center',
   standalone: true,
-  imports: [FormsModule, RouterLink, DatePipe, NavbarComponent],
+  imports: [FormsModule, RouterLink, DatePipe, NavbarComponent, TranslocoDirective],
   templateUrl: './security-center.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

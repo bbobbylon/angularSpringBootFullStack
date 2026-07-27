@@ -21,6 +21,7 @@ import { CustomHttpResponseInterface } from '../../../interface/customhttprespon
 import { NewInvoiceDataInterface } from '../../../interface/appstates.interface';
 import { ServicesInterface } from '../../../interface/services.interface';
 import { UserInterface } from '../../../interface/user.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Service/app catalog page — {@code /services}.
@@ -38,7 +39,7 @@ import { UserInterface } from '../../../interface/user.interface';
 @Component({
   selector: 'app-services-catalog',
   standalone: true,
-  imports: [NavbarComponent, RouterLink, DecimalPipe],
+  imports: [NavbarComponent, RouterLink, DecimalPipe, TranslocoDirective],
   templateUrl: './services-catalog.component.html',
   styleUrl: './services-catalog.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -13,6 +13,7 @@ import { EventType } from '../../../enumeration/event-type.enum';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { getEventDisplay } from '../../../utils/event-display.utils';
 import { UserInterface } from '../../../interface/user.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 // TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
 
@@ -31,7 +32,7 @@ import { UserInterface } from '../../../interface/user.interface';
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [FormsModule, RouterLink, DatePipe, NgClass, NavbarComponent],
+  imports: [FormsModule, RouterLink, DatePipe, NgClass, NavbarComponent, TranslocoDirective],
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,23 +1,22 @@
 <app-navbar [user]="user()"></app-navbar>
 
-<main class="sc-svcadmin">
+<main *transloco="let t" class="sc-svcadmin">
   <div class="container">
 
     <header class="sc-svcadmin__head sc-reveal">
       <div>
-        <p class="eyebrow mb-1">Administration</p>
-        <h1 class="sc-svcadmin__title">Manage Services</h1>
+        <p class="eyebrow mb-1">{{ t('servicesAdmin.eyebrow') }}</p>
+        <h1 class="sc-svcadmin__title">{{ t('servicesAdmin.title') }}</h1>
         <p class="sc-svcadmin__sub">
-          Add, edit, and retire the offerings available on new invoices. Retired services stay here
-          so they can be brought back — nothing is ever deleted.
+          {{ t('servicesAdmin.subtitle') }}
         </p>
       </div>
       <div class="sc-svcadmin__actions">
         <a [routerLink]="['/services']" class="btn btn-outline-secondary btn-sm">
-          <i class="bi bi-grid-1x2-fill"></i> Public Catalog
+          <i class="bi bi-grid-1x2-fill"></i> {{ t('servicesAdmin.publicCatalog') }}
         </a>
         <button (click)="startCreate()" class="btn btn-primary btn-sm" type="button">
-          <i class="bi bi-plus-lg"></i> Add Service
+          <i class="bi bi-plus-lg"></i> {{ t('servicesAdmin.addService') }}
         </button>
       </div>
     </header>
@@ -45,36 +44,36 @@
       @case (DataState.LOADED) {
 
         <div class="sc-svcadmin__summary sc-reveal" style="--d: 40ms;">
-          <span><strong>{{ activeServices().length }}</strong> offered</span>
+          <span><strong>{{ activeServices().length }}</strong> {{ t('servicesAdmin.summary.offered') }}</span>
           <span class="sc-svcadmin__sep">·</span>
-          <span><strong>{{ retiredServices().length }}</strong> retired</span>
+          <span><strong>{{ retiredServices().length }}</strong> {{ t('servicesAdmin.summary.retired') }}</span>
           <span class="sc-svcadmin__sep">·</span>
-          <span>Catalog value <strong>${{ catalogValue() | number: '1.2-2' }}</strong></span>
+          <span>{{ t('servicesAdmin.summary.catalogValue') }} <strong>${{ catalogValue() | number: '1.2-2' }}</strong></span>
         </div>
 
         <!-- ── Add form ─────────────────────────────────────────────────── -->
         @if (isCreating()) {
           <section class="sc-panel sc-svcadmin__form sc-reveal">
-            <h2 class="h5 mb-3">Add a service</h2>
+            <h2 class="h5 mb-3">{{ t('servicesAdmin.addTitle') }}</h2>
             <form #createForm="ngForm" (ngSubmit)="create(createForm)">
               <div class="row g-3">
                 <div class="col-md-4">
-                  <label class="form-label" for="create-name">Name</label>
+                  <label class="form-label" for="create-name">{{ t('servicesAdmin.name') }}</label>
                   <input class="form-control" id="create-name" name="name" ngModel required type="text" />
                 </div>
                 <div class="col-md-5">
-                  <label class="form-label" for="create-description">Description</label>
+                  <label class="form-label" for="create-description">{{ t('servicesAdmin.description') }}</label>
                   <input class="form-control" id="create-description" name="description" ngModel type="text" />
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label" for="create-price">Base price</label>
+                  <label class="form-label" for="create-price">{{ t('servicesAdmin.basePrice') }}</label>
                   <input class="form-control" id="create-price" min="0" name="price" ngModel step="0.01" type="number" />
                 </div>
               </div>
               <div class="sc-svcadmin__form-actions">
-                <button (click)="cancel()" class="btn btn-outline-secondary btn-sm" type="button">Cancel</button>
+                <button (click)="cancel()" class="btn btn-outline-secondary btn-sm" type="button">{{ t('common.cancel') }}</button>
                 <button [disabled]="createForm.invalid || isSaving()" class="btn btn-primary btn-sm" type="submit">
-                  @if (isSaving()) { <span>Saving…</span> } @else { <span>Add service</span> }
+                  @if (isSaving()) { <span>{{ t('common.saving') }}</span> } @else { <span>{{ t('servicesAdmin.addService') }}</span> }
                 </button>
               </div>
             </form>
@@ -86,19 +85,19 @@
           @if (services().length === 0) {
             <div class="sc-svcadmin__empty">
               <i class="bi bi-grid-3x3" aria-hidden="true"></i>
-              <p class="mb-1">The catalog is empty.</p>
-              <p class="text-muted small mb-0">Add your first service to make it selectable on new invoices.</p>
+              <p class="mb-1">{{ t('servicesAdmin.emptyTitle') }}</p>
+              <p class="text-muted small mb-0">{{ t('servicesAdmin.emptyHint') }}</p>
             </div>
           } @else {
             <div class="table-responsive">
               <table class="table sc-svcadmin__table align-middle">
                 <thead>
                 <tr>
-                  <th scope="col">Service</th>
-                  <th scope="col">Description</th>
-                  <th class="text-end" scope="col">Base price</th>
-                  <th scope="col">Status</th>
-                  <th class="text-end" scope="col">Actions</th>
+                  <th scope="col">{{ t('nav.services') }}</th>
+                  <th scope="col">{{ t('servicesAdmin.description') }}</th>
+                  <th class="text-end" scope="col">{{ t('servicesAdmin.basePrice') }}</th>
+                  <th scope="col">{{ t('common.status') }}</th>
+                  <th class="text-end" scope="col">{{ t('common.actions') }}</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -136,8 +135,7 @@
                               </div>
                             </div>
                             <p class="text-muted small mb-0 mt-2">
-                              Editing a service does not change invoices already raised — they keep the
-                              name and price captured at the time.
+                              {{ t('servicesAdmin.editNote') }}
                             </p>
                           </form>
                         </td>
@@ -146,31 +144,31 @@
                       <tr [class.is-retired]="service.active === false">
                         <td class="sc-svcadmin__name">{{ service.name }}</td>
                         <td class="small text-muted">
-                          {{ service.description || 'No description provided.' }}
+                          {{ service.description || t('servicesAdmin.noDescription') }}
                         </td>
                         <td class="text-end">${{ service.price | number: '1.2-2' }}</td>
                         <td>
                           @if (service.active === false) {
-                            <span class="sc-svcadmin__chip sc-svcadmin__chip--retired">Retired</span>
+                            <span class="sc-svcadmin__chip sc-svcadmin__chip--retired">{{ t('servicesAdmin.retired') }}</span>
                           } @else {
-                            <span class="sc-svcadmin__chip sc-svcadmin__chip--live">Offered</span>
+                            <span class="sc-svcadmin__chip sc-svcadmin__chip--live">{{ t('servicesAdmin.offered') }}</span>
                           }
                         </td>
                         <td class="text-end">
                           <div class="d-inline-flex gap-2">
                             <button (click)="startEdit(service)" [disabled]="isSaving()"
                                     class="btn btn-outline-secondary btn-sm" type="button">
-                              <i class="bi bi-pencil"></i> Edit
+                              <i class="bi bi-pencil"></i> {{ t('common.edit') }}
                             </button>
                             @if (service.active === false) {
                               <button (click)="toggleActive(service)" [disabled]="isSaving()"
                                       class="btn btn-outline-success btn-sm" type="button">
-                                <i class="bi bi-arrow-counterclockwise"></i> Reinstate
+                                <i class="bi bi-arrow-counterclockwise"></i> {{ t('servicesAdmin.reinstate') }}
                               </button>
                             } @else {
                               <button (click)="toggleActive(service)" [disabled]="isSaving()"
                                       class="btn btn-outline-warning btn-sm" type="button">
-                                <i class="bi bi-archive"></i> Retire
+                                <i class="bi bi-archive"></i> {{ t('servicesAdmin.retire') }}
                               </button>
                             }
                           </div>

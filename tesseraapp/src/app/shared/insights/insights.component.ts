@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { UserService } from '../../service/user.service';
 import { StatsInterface } from '../../interface/stats.interface';
 import { CustomerInterface } from '../../interface/customer.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * One slice of the customer-status donut.
@@ -39,7 +40,7 @@ interface DonutSegment {
 @Component({
   selector: 'app-insights',
   standalone: true,
-  imports: [DecimalPipe, RouterLink],
+  imports: [DecimalPipe, RouterLink, TranslocoDirective],
   templateUrl: './insights.component.html',
   styleUrl: './insights.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

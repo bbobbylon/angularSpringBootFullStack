@@ -25,6 +25,7 @@ import {
 import { CustomerInterface } from '../../../interface/customer.interface';
 import { InvoiceInterface } from '../../../interface/invoice.interface';
 import { UserInterface } from '../../../interface/user.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /** One point on the dual-trend SVG line/area chart. */
 interface TrendPoint {
@@ -90,7 +91,7 @@ interface ServiceUtil {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [NavbarComponent, RouterLink, DecimalPipe],
+  imports: [NavbarComponent, RouterLink, DecimalPipe, TranslocoDirective],
   templateUrl: './analytics.component.html',
   styleUrl: './analytics.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

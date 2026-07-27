@@ -7,6 +7,7 @@ import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { UserInterface } from '../../../interface/user.interface';
 import { RolesInterface } from '../../../interface/roles.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Roles × Permissions Matrix (SRS M3, FR-RBAC-1/2).
@@ -26,7 +27,7 @@ import { RolesInterface } from '../../../interface/roles.interface';
 @Component({
   selector: 'app-roles-matrix',
   standalone: true,
-  imports: [RouterLink, NavbarComponent],
+  imports: [RouterLink, NavbarComponent, TranslocoDirective],
   templateUrl: './roles-matrix.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

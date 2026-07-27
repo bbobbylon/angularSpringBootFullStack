@@ -1,6 +1,6 @@
 import { Component, Type } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { HasAuthorityDirective, RequiresAuthorityDirective } from './has-authority.directive';
 import { UserService } from '../service/user.service';
@@ -49,12 +49,12 @@ describe('capability gating directives', () => {
 
   const html = (fixture: ComponentFixture<unknown>): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  describe('*hasAuthority', () => {
+  describe('*appHasAuthority', () => {
     @Component({
       standalone: true,
       imports: [HasAuthorityDirective],
       template: `
-        <button *hasAuthority="'UPDATE:CUSTOMER'" id="save">Save</button>
+        <button *appHasAuthority="'UPDATE:CUSTOMER'" id="save">Save</button>
       `,
     })
     class SingleAuthorityHost {}
@@ -63,7 +63,7 @@ describe('capability gating directives', () => {
       standalone: true,
       imports: [HasAuthorityDirective],
       template: `
-        <button *hasAuthority="['UPDATE:CUSTOMER', 'UPDATE:USER']; else readOnly" id="save">Save</button>
+        <button *appHasAuthority="['UPDATE:CUSTOMER', 'UPDATE:USER']; else readOnly" id="save">Save</button>
         <ng-template #readOnly><p id="notice">Read-only</p></ng-template>
       `,
     })
@@ -72,7 +72,7 @@ describe('capability gating directives', () => {
     @Component({
       standalone: true,
       imports: [HasAuthorityDirective],
-      template: `<button *hasAuthority="'UPDATE:USER, UPDATE:CUSTOMER'" id="save">Save</button>`,
+      template: `<button *appHasAuthority="'UPDATE:USER, UPDATE:CUSTOMER'" id="save">Save</button>`,
     })
     class CommaSeparatedHost {}
 
@@ -115,12 +115,12 @@ describe('capability gating directives', () => {
     });
   });
 
-  describe('[requiresAuthority]', () => {
+  describe('[appRequiresAuthority]', () => {
     @Component({
       standalone: true,
       imports: [RequiresAuthorityDirective],
       template: `
-        <button [requiresAuthority]="'UPDATE:CUSTOMER'" deniedAction="update customers" id="save" type="submit">
+        <button [appRequiresAuthority]="'UPDATE:CUSTOMER'" deniedAction="update customers" id="save" type="submit">
           Save
         </button>
       `,
@@ -130,7 +130,7 @@ describe('capability gating directives', () => {
     @Component({
       standalone: true,
       imports: [RequiresAuthorityDirective],
-      template: `<a [requiresAuthority]="'UPDATE:CUSTOMER'" href="/customer/new" id="link">New</a>`,
+      template: `<a [appRequiresAuthority]="'UPDATE:CUSTOMER'" href="/customer/new" id="link">New</a>`,
     })
     class AnchorHost {}
 

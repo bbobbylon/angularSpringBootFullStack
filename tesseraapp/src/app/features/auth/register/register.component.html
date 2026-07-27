@@ -7,19 +7,19 @@
   Every form binding (ngModel names, validators, ngSubmit, disabled guards,
   routerLinks, and the registerSuccess branch) is preserved from the original.
 -->
-<div class="sc-auth">
+<div *transloco="let t" class="sc-auth">
 
   <!-- ── Left: branded security console ────────────────────────────────────── -->
   <aside class="sc-auth__aside">
     <div class="sc-auth__aside-inner">
       <a class="sc-auth__brand" routerLink="/login">
         <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
-        <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+        <span class="sc-auth__brand-text">Tessera<span class="text-accent">App</span></span>
       </a>
 
       <div class="sc-auth__lede">
-        <p class="eyebrow sc-reveal" style="--d: 0ms">Zero-trust identity platform</p>
-        <h1 class="sc-auth__headline sc-reveal" style="--d: 60ms">Create your<br />secure identity.</h1>
+        <p class="eyebrow sc-reveal" style="--d: 0ms">{{ t('authPanel.platform') }}</p>
+        <h1 class="sc-auth__headline sc-reveal" style="--d: 60ms" [innerHTML]="t('authPanel.headlineRegister')"></h1>
         <p class="sc-auth__sub sc-reveal" style="--d: 120ms">
           One account, protected end to end — signed sessions, hashed credentials,
           and a full audit trail from your very first sign-in.
@@ -30,36 +30,36 @@
         <li class="sc-trust__item sc-reveal" style="--d: 220ms">
           <i class="bi bi-fingerprint"></i>
           <div>
-            <span class="sc-trust__title">HMAC-SHA512 signed tokens</span>
-            <span class="sc-trust__meta">Stateless JWT · 30-min access</span>
+            <span class="sc-trust__title">{{ t('authPanel.tokens') }}</span>
+            <span class="sc-trust__meta">{{ t('authPanel.tokensMeta') }}</span>
           </div>
         </li>
         <li class="sc-trust__item sc-reveal" style="--d: 280ms">
           <i class="bi bi-lock-fill"></i>
           <div>
-            <span class="sc-trust__title">BCrypt-hashed credentials</span>
-            <span class="sc-trust__meta">Never stored in plaintext</span>
+            <span class="sc-trust__title">{{ t('authPanel.bcrypt') }}</span>
+            <span class="sc-trust__meta">{{ t('authPanel.bcryptMeta') }}</span>
           </div>
         </li>
         <li class="sc-trust__item sc-reveal" style="--d: 340ms">
           <i class="bi bi-broadcast-pin"></i>
           <div>
-            <span class="sc-trust__title">Device &amp; IP audit</span>
-            <span class="sc-trust__meta">Logged on every security event</span>
+            <span class="sc-trust__title">{{ t('authPanel.audit') }}</span>
+            <span class="sc-trust__meta">{{ t('authPanel.auditMeta') }}</span>
           </div>
         </li>
         <li class="sc-trust__item sc-reveal" style="--d: 400ms">
           <i class="bi bi-patch-check-fill"></i>
           <div>
-            <span class="sc-trust__title">Email-verified accounts</span>
-            <span class="sc-trust__meta">Confirm ownership before access</span>
+            <span class="sc-trust__title">{{ t('authPanel.emailVerified') }}</span>
+            <span class="sc-trust__meta">{{ t('authPanel.emailVerifiedMeta') }}</span>
           </div>
         </li>
       </ul>
 
       <div class="sc-auth__status sc-reveal" style="--d: 480ms">
         <span class="sc-pulse"></span>
-        <span class="mono">Zero-trust gateway · operational</span>
+        <span class="mono">{{ t('authPanel.gateway') }}</span>
       </div>
     </div>
   </aside>
@@ -76,29 +76,29 @@
             <span class="sc-auth__brand-text">Tessera<span class="text-accent">App</span></span>
           </a>
 
-          <p class="eyebrow">Create account</p>
-          <h2 class="sc-auth__title">Join TesseraApp</h2>
-          <p class="sc-auth__hint">A few details and you're set — we'll email a link to verify your account.</p>
+          <p class="eyebrow">{{ t('register.eyebrow') }}</p>
+          <h2 class="sc-auth__title">{{ t('register.title') }}</h2>
+          <p class="sc-auth__hint">{{ t('register.hint') }}</p>
 
           @if (state.dataState === DataState.ERROR) {
             <div class="alert sc-alert alert-dismissible fade show" role="alert">
               <i class="bi bi-exclamation-octagon-fill"></i>
               <span>{{ state.error }}</span>
-              <button aria-label="Close" class="btn-close" data-bs-dismiss="alert" type="button"></button>
+              <button [attr.aria-label]="t('login.close')" class="btn-close" data-bs-dismiss="alert" type="button"></button>
             </div>
           }
 
           <form #registerForm="ngForm" (ngSubmit)="register(registerForm)" class="sc-form" novalidate>
             <div class="sc-field-row">
               <div class="sc-field">
-                <label class="form-label" for="firstName">First name</label>
+                <label class="form-label" for="firstName">{{ t('register.firstName') }}</label>
                 <span class="sc-field__icon"><i class="bi bi-person"></i></span>
                 <input id="firstName" name="firstName" ngModel required minlength="2" type="text"
                        autocomplete="given-name" placeholder="Ada"
                        [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
               </div>
               <div class="sc-field">
-                <label class="form-label" for="lastName">Last name</label>
+                <label class="form-label" for="lastName">{{ t('register.lastName') }}</label>
                 <span class="sc-field__icon"><i class="bi bi-person"></i></span>
                 <input id="lastName" name="lastName" ngModel required minlength="2" type="text"
                        autocomplete="family-name" placeholder="Lovelace"
@@ -107,18 +107,18 @@
             </div>
 
             <div class="sc-field">
-              <label class="form-label" for="email">Email address</label>
+              <label class="form-label" for="email">{{ t('auth.email') }}</label>
               <span class="sc-field__icon"><i class="bi bi-envelope"></i></span>
               <input id="email" name="email" ngModel required minlength="3" type="email"
-                     autocomplete="email" placeholder="you@company.com"
+                     autocomplete="email" [placeholder]="t('login.emailPlaceholder')"
                      [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
             </div>
 
             <div class="sc-field">
-              <label class="form-label" for="password">Password</label>
+              <label class="form-label" for="password">{{ t('auth.password') }}</label>
               <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
               <input id="password" name="password" ngModel required minlength="4" type="password"
-                     autocomplete="new-password" placeholder="At least 4 characters"
+                     autocomplete="new-password" [placeholder]="t('register.passwordPlaceholder')"
                      [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
             </div>
 
@@ -127,9 +127,9 @@
               class="btn btn-primary sc-submit" type="submit">
               @if (state.dataState === DataState.LOADING) {
                 <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"></span>
-                <span>Creating account…</span>
+                <span>{{ t('register.creating') }}</span>
               } @else {
-                <span>Create account</span>
+                <span>{{ t('register.createAccount') }}</span>
                 <i class="bi bi-arrow-right"></i>
               }
             </button>
@@ -137,9 +137,9 @@
 
           <div class="sc-auth__links">
             <a [routerLink]="['/login']"
-               [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'">Have an account? Sign in</a>
+               [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'">{{ t('register.haveAccount') }}</a>
             <a [routerLink]="['/resetpassword']"
-               [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'">Forgot password?</a>
+               [style.pointer-events]="state.dataState === DataState.LOADING ? 'none' : 'auto'">{{ t('register.forgotPassword') }}</a>
           </div>
         </div>
       }
@@ -154,9 +154,9 @@
 
           <div class="sc-auth__success">
             <span class="sc-auth__success-mark"><i class="bi bi-check-lg"></i></span>
-            <h2 class="sc-auth__title">Check your inbox</h2>
+            <h2 class="sc-auth__title">{{ t('register.checkInbox') }}</h2>
             <p class="sc-auth__hint">{{ state.message }}</p>
-            <p class="sc-auth__hint">We've emailed a verification link — confirm it to activate your account.</p>
+            <p class="sc-auth__hint">{{ t('register.checkInboxHint') }}</p>
           </div>
 
           <div class="sc-auth__links">

@@ -17,6 +17,7 @@ import {
   SuspiciousLoginInterface,
 } from '../../../interface/security-overview.interface';
 import { UserInterface } from '../../../interface/user.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /** One plotted day of the login-outcome trend, with SVG coordinates pre-computed. */
 interface TrendColumn {
@@ -71,7 +72,7 @@ interface TrendColumn {
 @Component({
   selector: 'app-security-overview',
   standalone: true,
-  imports: [NavbarComponent, RouterLink, DecimalPipe, DatePipe],
+  imports: [NavbarComponent, RouterLink, DecimalPipe, DatePipe, TranslocoDirective],
   templateUrl: './security-overview.component.html',
   styleUrl: './security-overview.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

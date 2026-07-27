@@ -11,6 +11,7 @@ import { InvoiceLineItemInterface } from '../../../interface/invoice.interface';
 import { ServicesInterface } from '../../../interface/services.interface';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * New invoice creation form.
@@ -24,7 +25,7 @@ import { NotificationsService } from '../../../service/notifications-service';
  */
 @Component({
   selector: 'app-new-invoice',
-  imports: [RouterModule, FormsModule, NavbarComponent],
+  imports: [RouterModule, FormsModule, NavbarComponent, TranslocoDirective],
   templateUrl: './new-invoice.component.html',
   styleUrl: './new-invoice.component.css',
   standalone: true,

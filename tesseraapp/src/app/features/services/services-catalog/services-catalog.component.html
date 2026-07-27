@@ -1,25 +1,25 @@
 <app-navbar [user]="user()"></app-navbar>
 
-<main class="sc-catalog">
+<main *transloco="let t" class="sc-catalog">
   <div class="container">
 
     <!-- ── Header ──────────────────────────────────────────────────────── -->
     <header class="sc-catalog__head sc-reveal">
       <div>
-        <p class="eyebrow mb-1">Marketplace</p>
-        <h1 class="sc-catalog__title">Services &amp; Apps</h1>
+        <p class="eyebrow mb-1">{{ t('servicesCatalog.eyebrow') }}</p>
+        <h1 class="sc-catalog__title">{{ t('servicesCatalog.title') }}</h1>
         <p class="sc-catalog__sub">
-          Browse available services and create an invoice to get started.
+          {{ t('servicesCatalog.subtitle') }}
         </p>
       </div>
       <div class="sc-catalog__actions">
         @if (isAdmin) {
           <a [routerLink]="['/billing']" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-graph-up-arrow"></i> Billing Overview
+            <i class="bi bi-graph-up-arrow"></i> {{ t('nav.billingOverview') }}
           </a>
         }
         <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm">
-          <i class="bi bi-receipt"></i> New Invoice
+          <i class="bi bi-receipt"></i> {{ t('nav.newInvoice') }}
         </a>
       </div>
     </header>
@@ -48,11 +48,11 @@
       @if (services().length) {
         <div class="sc-catalog-summary sc-reveal" style="--d: 40ms;">
           <span class="sc-catalog-summary__count">
-            <strong>{{ services().length }}</strong> services available
+            <strong>{{ services().length }}</strong> {{ t('servicesCatalog.servicesAvailable') }}
           </span>
           <span class="sc-catalog-summary__sep">·</span>
           <span class="sc-catalog-summary__total">
-            Catalog value: <strong>${{ catalogTotal() | number: '1.2-2' }}</strong>
+            {{ t('servicesCatalog.catalogValue') }}: <strong>${{ catalogTotal() | number: '1.2-2' }}</strong>
           </span>
         </div>
 
@@ -67,13 +67,13 @@
                 @if (svc.description) {
                   <p class="sc-svc-card__desc">{{ svc.description }}</p>
                 } @else {
-                  <p class="sc-svc-card__desc sc-svc-card__desc--empty">No description provided.</p>
+                  <p class="sc-svc-card__desc sc-svc-card__desc--empty">{{ t('servicesAdmin.noDescription') }}</p>
                 }
               </div>
               <div class="sc-svc-card__foot">
                 <span class="sc-svc-card__price">${{ svc.price | number: '1.2-2' }}</span>
                 <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm sc-svc-card__cta">
-                  <i class="bi bi-receipt"></i> Create Invoice
+                  <i class="bi bi-receipt"></i> {{ t('servicesCatalog.createInvoice') }}
                 </a>
               </div>
             </article>
@@ -82,8 +82,8 @@
       } @else {
         <div class="sc-empty sc-reveal">
           <span class="sc-empty__icon"><i class="bi bi-grid-3x3"></i></span>
-          <p class="sc-empty__title">No services in catalog</p>
-          <p class="sc-empty__hint">The service catalog is empty. Add services via the admin panel or directly in the database.</p>
+          <p class="sc-empty__title">{{ t('servicesCatalog.emptyTitle') }}</p>
+          <p class="sc-empty__hint">{{ t('servicesCatalog.emptyHint') }}</p>
         </div>
       }
     }

@@ -21,6 +21,7 @@ import { CustomHttpResponseInterface } from '../../../interface/customhttprespon
 import { InvoiceListDataInterface, StatsDataInterface } from '../../../interface/appstates.interface';
 import { InvoiceInterface } from '../../../interface/invoice.interface';
 import { UserInterface } from '../../../interface/user.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * One segment of the invoice-status donut ring.
@@ -80,7 +81,7 @@ interface ServiceRow {
 @Component({
   selector: 'app-billing',
   standalone: true,
-  imports: [NavbarComponent, RouterLink, DecimalPipe, DatePipe, NgClass],
+  imports: [NavbarComponent, RouterLink, DecimalPipe, DatePipe, NgClass, TranslocoDirective],
   templateUrl: './billing.component.html',
   styleUrl: './billing.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

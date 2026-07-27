@@ -2,7 +2,7 @@
   @switch (state.dataState) {
     @case (DataState.LOADED) {
       <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-      <main class="sc-page">
+      <main *transloco="let t" class="sc-page">
         <div class="container">
 
           <nav aria-label="breadcrumb">
@@ -14,18 +14,18 @@
 
           <header class="sc-head sc-reveal">
             <div>
-              <p class="eyebrow mb-1">Directory</p>
-              <h1 class="sc-head__title">Customers</h1>
+              <p class="eyebrow mb-1">{{ t('customers.eyebrow') }}</p>
+              <h1 class="sc-head__title">{{ t('customers.title') }}</h1>
             </div>
             <div class="sc-head__actions">
               <label class="sc-search">
                 <i class="bi bi-search"></i>
                 <input #searchForm (input)="onSearchInput(searchForm.value)"
                        class="form-control form-control-sm" id="customerName"
-                       placeholder="Search by name" type="text" aria-label="Search customers" />
+                       [placeholder]="t('customers.searchByName')" type="text" [attr.aria-label]="t('customers.searchAria')" />
               </label>
               <a [routerLink]="['/customer/new']" class="btn btn-primary btn-sm sc-panel__action">
-                <i class="bi bi-person-plus"></i> New customer
+                <i class="bi bi-person-plus"></i> {{ t('home.newCustomer') }}
               </a>
             </div>
           </header>
@@ -38,14 +38,14 @@
                 <table class="table table-hover align-middle">
                   <thead>
                   <tr>
-                    <th class="text-center" scope="col">ID</th>
-                    <th scope="col">Photo</th>
-                    <th scope="col">Name</th>
-                    <th scope="col">Email</th>
-                    <th scope="col">Phone</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Type</th>
-                    <th class="text-end" scope="col">Action</th>
+                    <th class="text-center" scope="col">{{ t('common.id') }}</th>
+                    <th scope="col">{{ t('common.photo') }}</th>
+                    <th scope="col">{{ t('common.name') }}</th>
+                    <th scope="col">{{ t('common.email') }}</th>
+                    <th scope="col">{{ t('common.phone') }}</th>
+                    <th scope="col">{{ t('common.status') }}</th>
+                    <th scope="col">{{ t('common.type') }}</th>
+                    <th class="text-end" scope="col">{{ t('common.action') }}</th>
                   </tr>
                   </thead>
                   <tbody class="table-body">
@@ -80,7 +80,7 @@
                         <td class="text-muted">{{ customer.type }}</td>
                         <td class="text-end">
                           <button [routerLink]="['/customers', customer.id]" class="btn btn-info btn-sm" type="button">
-                            View
+                            {{ t('common.view') }}
                           </button>
                         </td>
                       </tr>
@@ -90,10 +90,10 @@
               </div>
 
               <div class="sc-panel__foot d-flex justify-content-end">
-                <nav aria-label="Page navigation">
+                <nav [attr.aria-label]="t('common.pageNavigation')">
                   <ul class="pagination justify-content-end mb-0">
                     <li [ngClass]="0 === currentPage$() ? ' disabled' : ''" class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; Prev</button>
+                      <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; {{ t('common.prev') }}</button>
                     </li>
                     @for (pageNumber of (state?.appData?.data?.page?.page?.totalPages ?? 0) | ExtractArrayValue: 'number'; track i; let i = $index) {
                       <li class="page-item pointer">
@@ -106,7 +106,7 @@
                     <li
                       [ngClass]="(state?.appData?.data?.page?.page?.totalPages ?? 0) - 1 === currentPage$() ? ' disabled' : ''"
                       class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">Next &raquo;</button>
+                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">{{ t('common.next') }} &raquo;</button>
                     </li>
                   </ul>
                 </nav>
@@ -114,8 +114,8 @@
             } @else {
               <div class="sc-empty">
                 <span class="sc-empty__icon"><i class="bi bi-search"></i></span>
-                <p class="sc-empty__title">No customers found</p>
-                <p class="sc-empty__hint">Try a different search term, or add a new customer to the directory.</p>
+                <p class="sc-empty__title">{{ t('customers.emptyTitle') }}</p>
+                <p class="sc-empty__hint">{{ t('customers.emptyHint') }}</p>
                 <a [routerLink]="['/customer/new']" class="btn btn-primary btn-sm">
                   <i class="bi bi-person-plus"></i> Add a customer
                 </a>

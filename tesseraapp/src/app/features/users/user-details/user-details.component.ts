@@ -15,6 +15,7 @@ import { AdminUserService } from '../../../service/admin-user.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { getEventDisplay } from '../../../utils/event-display.utils';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Single-user management view — the detail half of the Users dashboard
@@ -34,7 +35,7 @@ import { getEventDisplay } from '../../../utils/event-display.utils';
 @Component({
   selector: 'app-user-details',
   standalone: true,
-  imports: [FormsModule, RouterLink, DatePipe, NgClass, NavbarComponent],
+  imports: [FormsModule, RouterLink, DatePipe, NgClass, NavbarComponent, TranslocoDirective],
   templateUrl: './user-details.component.html',
   styleUrl: './user-details.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

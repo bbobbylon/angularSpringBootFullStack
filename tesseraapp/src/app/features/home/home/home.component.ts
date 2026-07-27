@@ -15,6 +15,7 @@ import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { HttpEvent, HttpEventType } from '@angular/common/http';
 import { saveAs } from 'file-saver';
 import { NotificationsService } from '../../../service/notifications-service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Main dashboard component displayed after login.
@@ -27,7 +28,7 @@ import { NotificationsService } from '../../../service/notifications-service';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [NgClass, RouterModule, NavbarComponent, StatsComponent, InsightsComponent, ExtractArrayValuePipe, NgOptimizedImage],
+  imports: [NgClass, RouterModule, NavbarComponent, StatsComponent, InsightsComponent, ExtractArrayValuePipe, NgOptimizedImage, TranslocoDirective],
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -15,6 +15,7 @@ import { NotificationsService } from '../../../service/notifications-service';
 import { FormsModule, NgForm } from '@angular/forms';
 import { UserService } from '../../../service/user.service';
 import { RequiresAuthorityDirective } from '../../../directive/has-authority.directive';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Single-invoice view — {@code /invoice/:id/:invoiceNumber}.
@@ -33,7 +34,7 @@ import { RequiresAuthorityDirective } from '../../../directive/has-authority.dir
  */
 @Component({
   selector: 'app-invoice-detail',
-  imports: [NgClass, DatePipe, DecimalPipe, RouterModule, NavbarComponent, FormsModule, RequiresAuthorityDirective],
+  imports: [NgClass, DatePipe, DecimalPipe, RouterModule, NavbarComponent, FormsModule, RequiresAuthorityDirective, TranslocoDirective],
   templateUrl: './invoice-detail.component.html',
   styleUrl: './invoice-detail.component.css',
   standalone: true,

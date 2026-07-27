@@ -76,7 +76,16 @@ export const appConfig: ApplicationConfig = {
      */
     provideTransloco({
       config: {
-        availableLangs: ['en', 'es'],
+        // Kept in step with LanguageService.available — that service owns the user-facing list
+        // (labels, ordering, the short navbar code); this array is what Transloco will accept as
+        // an active language. A code in one and not the other is the failure mode: present here
+        // but not there is unreachable, present there but not here is silently refused.
+        //
+        // RTL locales (ar, he) are deliberately absent. They need dir="rtl" on the document plus
+        // a pass converting the stylesheet's physical properties (margin-left, float, text-align:
+        // left) to logical ones — shipping one before that work renders a visibly broken page,
+        // which serves an Arabic speaker worse than not offering Arabic at all.
+        availableLangs: ['en', 'es', 'fr', 'de', 'pt', 'zh'],
         defaultLang: 'en',
         fallbackLang: 'en',
         missingHandler: { useFallbackTranslation: true },

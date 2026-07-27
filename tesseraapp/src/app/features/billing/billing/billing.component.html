@@ -1,13 +1,13 @@
 <app-navbar [user]="user()"></app-navbar>
 
-<main class="sc-billing">
+<main class="sc-billing" *transloco="let t">
   <div class="container">
 
     <!-- ── Page header ─────────────────────────────────────────────────── -->
     <header class="sc-billing__head sc-reveal">
       <div>
-        <p class="eyebrow mb-1">Billing</p>
-        <h1 class="sc-billing__title">Revenue Overview</h1>
+        <p class="eyebrow mb-1">{{ t('billing.eyebrow') }}</p>
+        <h1 class="sc-billing__title">{{ t('billing.title') }}</h1>
         <div class="sc-scope-wrap">
           <span class="sc-scope-badge">
             <i class="bi bi-building"></i>
@@ -37,36 +37,36 @@
         <span class="sc-kpi__icon"><i class="bi bi-cash-stack"></i></span>
         <div class="sc-kpi__body">
           <span class="sc-kpi__value">${{ totalBilled() | number: '1.2-2' }}</span>
-          <span class="eyebrow">Total Billed</span>
+          <span class="eyebrow">{{ t('billing.totalBilled') }}</span>
         </div>
-        <span class="sc-kpi__tag">Revenue</span>
+        <span class="sc-kpi__tag">{{ t('billing.revenue') }}</span>
       </div>
 
       <div class="sc-kpi sc-kpi--invoices">
         <span class="sc-kpi__icon"><i class="bi bi-receipt-cutoff"></i></span>
         <div class="sc-kpi__body">
           <span class="sc-kpi__value">{{ totalInvoices() | number }}</span>
-          <span class="eyebrow">Total Invoices</span>
+          <span class="eyebrow">{{ t('billing.totalInvoices') }}</span>
         </div>
-        <span class="sc-kpi__tag">All time</span>
+        <span class="sc-kpi__tag">{{ t('billing.allTime') }}</span>
       </div>
 
       <div class="sc-kpi sc-kpi--avg">
         <span class="sc-kpi__icon"><i class="bi bi-graph-up-arrow"></i></span>
         <div class="sc-kpi__body">
           <span class="sc-kpi__value">${{ avgInvoiceValue() | number: '1.2-2' }}</span>
-          <span class="eyebrow">Avg Invoice Value</span>
+          <span class="eyebrow">{{ t('billing.avgInvoice') }}</span>
         </div>
-        <span class="sc-kpi__tag">Per invoice</span>
+        <span class="sc-kpi__tag">{{ t('billing.perInvoice') }}</span>
       </div>
 
       <div class="sc-kpi sc-kpi--rate">
         <span class="sc-kpi__icon"><i class="bi bi-check-circle"></i></span>
         <div class="sc-kpi__body">
           <span class="sc-kpi__value">{{ collectionRate() | number: '1.1-1' }}%</span>
-          <span class="eyebrow">Collection Rate</span>
+          <span class="eyebrow">{{ t('billing.collectionRate') }}</span>
         </div>
-        <span class="sc-kpi__tag">Paid / total</span>
+        <span class="sc-kpi__tag">{{ t('billing.paidTotal') }}</span>
       </div>
 
     </div>
@@ -78,7 +78,7 @@
       <section class="sc-panel sc-panel--flush sc-charts-row__donut">
         <div class="sc-panel__head">
           <div>
-            <h2 class="sc-panel__title">Invoice Status</h2>
+            <h2 class="sc-panel__title">{{ t('billing.invoiceStatus') }}</h2>
             <p class="sc-panel__meta">{{ statusTotal() }} total</p>
           </div>
         </div>
@@ -97,7 +97,7 @@
               </svg>
               <div class="sc-donut__center">
                 <span class="sc-donut__total">{{ statusTotal() }}</span>
-                <span class="eyebrow">invoices</span>
+                <span class="eyebrow">{{ t('billing.invoicesLabel') }}</span>
               </div>
             </div>
 
@@ -113,7 +113,7 @@
             </ul>
           </div>
         } @else {
-          <p class="text-muted small mb-0 px-1">No invoice data yet.</p>
+          <p class="text-muted small mb-0 px-1">{{ t('billing.noInvoiceData') }}</p>
         }
       </section>
 
@@ -121,8 +121,8 @@
       <section class="sc-panel sc-panel--flush sc-charts-row__bars">
         <div class="sc-panel__head">
           <div>
-            <h2 class="sc-panel__title">Monthly Revenue</h2>
-            <p class="sc-panel__meta">Last 6 months</p>
+            <h2 class="sc-panel__title">{{ t('billing.monthlyRevenue') }}</h2>
+            <p class="sc-panel__meta">{{ t('billing.last6') }}</p>
           </div>
         </div>
 
@@ -140,7 +140,7 @@
             </div>
           </div>
         } @else {
-          <p class="text-muted small mb-0 px-1">No monthly data available.</p>
+          <p class="text-muted small mb-0 px-1">{{ t('billing.noMonthly') }}</p>
         }
       </section>
 
@@ -150,8 +150,8 @@
     <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 120ms;">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">Revenue by Service</h2>
-          <p class="sc-panel__meta">Top 8 services by billed amount</p>
+          <h2 class="sc-panel__title">{{ t('billing.revenueByService') }}</h2>
+          <p class="sc-panel__meta">{{ t('billing.top8') }}</p>
         </div>
       </div>
 
@@ -172,7 +172,7 @@
           }
         </div>
       } @else {
-        <p class="text-muted small mb-0 px-1">No service data available.</p>
+        <p class="text-muted small mb-0 px-1">{{ t('billing.noServiceData') }}</p>
       }
     </section>
 
@@ -180,8 +180,8 @@
     <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 160ms;">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">Recent Invoices</h2>
-          <p class="sc-panel__meta">Latest 6 by invoice date</p>
+          <h2 class="sc-panel__title">{{ t('billing.recentInvoices') }}</h2>
+          <p class="sc-panel__meta">{{ t('billing.latest6') }}</p>
         </div>
         <a [routerLink]="['/invoices']" class="btn btn-outline-secondary btn-sm sc-panel__action">
           View all <i class="bi bi-arrow-right"></i>
@@ -193,11 +193,11 @@
           <table class="table table-hover align-middle mb-0">
             <thead>
               <tr>
-                <th scope="col">Invoice #</th>
-                <th scope="col">Status</th>
-                <th scope="col">Services</th>
-                <th class="text-end" scope="col">Amount</th>
-                <th class="text-end" scope="col">Date</th>
+                <th scope="col">{{ t('invoices.invoiceNumber') }}</th>
+                <th scope="col">{{ t('common.status') }}</th>
+                <th scope="col">{{ t('billing.services') }}</th>
+                <th class="text-end" scope="col">{{ t('common.amount') }}</th>
+                <th class="text-end" scope="col">{{ t('common.date') }}</th>
                 <th class="text-end" scope="col"></th>
               </tr>
             </thead>
@@ -218,7 +218,7 @@
                   <td class="text-end text-muted">{{ inv.invoiceDate | date: 'MMM d, y' }}</td>
                   <td class="text-end">
                     <a [routerLink]="['/invoice', inv.id, inv.invoiceNumber]"
-                       class="btn btn-sm btn-outline-secondary">View</a>
+                       class="btn btn-sm btn-outline-secondary">{{ t('common.view') }}</a>
                   </td>
                 </tr>
               }
@@ -228,8 +228,8 @@
       } @else {
         <div class="sc-empty">
           <span class="sc-empty__icon"><i class="bi bi-receipt"></i></span>
-          <p class="sc-empty__title">No invoices yet</p>
-          <p class="sc-empty__hint">Create your first invoice to start tracking revenue.</p>
+          <p class="sc-empty__title">{{ t('billing.emptyTitle') }}</p>
+          <p class="sc-empty__hint">{{ t('billing.emptyHint') }}</p>
           <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm">
             <i class="bi bi-receipt"></i> New Invoice
           </a>

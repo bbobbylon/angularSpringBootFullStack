@@ -18,6 +18,7 @@ import { GlobalStateInterface } from '../../../interface/global-state.interface'
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { CustomerListDataInterface } from '../../../interface/appstates.interface';
 import { CustomerInterface } from '../../../interface/customer.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Self-contained customer analytics panel embedded on the Customers list page.
@@ -34,7 +35,7 @@ import { CustomerInterface } from '../../../interface/customer.interface';
 @Component({
   selector: 'app-customer-trend',
   standalone: true,
-  imports: [DecimalPipe, RouterLink],
+  imports: [DecimalPipe, RouterLink, TranslocoDirective],
   templateUrl: './customer-trend.component.html',
   styleUrl: './customer-trend.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
