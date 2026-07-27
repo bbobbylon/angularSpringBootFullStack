@@ -41,7 +41,7 @@
                   <form #invoiceForm="ngForm" (ngSubmit)="createNewInvoice(invoiceForm)">
                     <div class="row">
                       <div class="col-md-12" style="margin-bottom: 15px">
-                        <label>{{ t('billing.services') }}</label>
+                        <span class="form-label d-block" id="ni-services-label">{{ t('billing.services') }}</span>
                         @for (line of serviceLines; track $index; let i = $index) {
                           <div class="d-flex gap-2 mb-2">
                             <select

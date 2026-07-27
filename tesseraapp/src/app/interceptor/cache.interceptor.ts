@@ -76,8 +76,7 @@ export const cacheInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, n
    */
   const cachedResponse = httpCache.get(req.url) as HttpResponse<unknown> | undefined;
   if (cachedResponse) {
-    console.log('Found a Response in the Cache', cachedResponse);
-    httpCache.logCache();
+    // console.log('Found a Response in the Cache', cachedResponse);
     return of(cachedResponse);
   }
 
@@ -122,7 +121,7 @@ function storeCacheResponse(req: HttpRequest<unknown>, next: HttpHandlerFn, http
   return next(req).pipe(
     tap((response) => {
       if (response instanceof HttpResponse && req.method !== 'DELETE') {
-        console.log('Caching the Response', response);
+        // console.log('Caching the Response', response);
         httpCache.put(req.url, response as HttpResponse<never>);
       }
     }),

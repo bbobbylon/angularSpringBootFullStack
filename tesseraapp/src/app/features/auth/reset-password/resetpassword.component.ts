@@ -47,7 +47,7 @@ export class ResetPasswordComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log(response);
+          // console.log(response);
           resetPasswordForm.reset();
           this.notification.onSuccess(response.message);
           this.resetPasswordState.set({ dataState: DataState.LOADED, resetPasswordSuccess: true, message: response.message });

@@ -16,6 +16,7 @@ import { HttpEvent, HttpEventType } from '@angular/common/http';
 import { saveAs } from 'file-saver';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 /**
  * Main dashboard component displayed after login.
@@ -49,6 +50,8 @@ export class HomeComponent implements OnInit {
   protected readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
+  /** Translates toast copy at call time, so a language switch applies to the next toast. */
+  private readonly transloco = inject(TranslocoService);
   private readonly avatarColors = ['0D8ABC', '2ECC71', 'E74C3C', '9B59B6', 'F39C12', '1ABC9C', 'E67E22'];
   private data = signal<CustomHttpResponseInterface<CustomerListDataInterface> | undefined>(undefined);
   private readonly _currentPage$ = toObservable(this.currentPage);
@@ -69,7 +72,7 @@ export class HomeComponent implements OnInit {
         switchMap(([page, size]) =>
           this.customerService.customers$(page, size).pipe(
             map((response) => {
-              console.log('Fetched customer data:', response);
+              // console.log('Fetched customer data:', response);
               this.data.set(response);
               return { dataState: DataState.LOADED, appData: response };
             }),
@@ -94,13 +97,13 @@ export class HomeComponent implements OnInit {
    * into progress bar state while the transfer is in flight.
    */
   report(): void {
-    console.log('report clicked');
+    // console.log('report clicked');
     this.homeState.set({ dataState: DataState.LOADING, appData: this.data() });
     this.customerService
       .downloadCustomerReport$()
       .pipe(
         map((response) => {
-          console.log(response);
+          // console.log(response);
           this.reportProgress(response);
           return { dataState: DataState.LOADED, appData: this.data() };
         }),
@@ -193,15 +196,15 @@ export class HomeComponent implements OnInit {
         });
         break;
       case HttpEventType.ResponseHeader:
-        console.log('Received Response headers!', httpEvent);
+        // console.log('Received Response headers!', httpEvent);
         break;
       case HttpEventType.Response:
         saveAs(new File([httpEvent.body as Blob], 'customer_report.xlsx', { type: `${httpEvent.headers.get('Content-Type')};charset=utf-8` }));
-        this.notification.onSuccess('Report downloaded successfully');
+        this.notification.onSuccess(this.transloco.translate('toasts.reportDownloaded'));
         this.fileStatus.set(undefined);
         break;
       default:
-        console.log(httpEvent);
+        // console.log(httpEvent);
         break;
     }
   }

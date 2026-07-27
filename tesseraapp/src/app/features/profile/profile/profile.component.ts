@@ -14,6 +14,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { getEventDisplay } from '../../../utils/event-display.utils';
 import { UserInterface } from '../../../interface/user.interface';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 // TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
 
@@ -70,6 +71,8 @@ export class ProfileComponent implements OnInit {
   private readonly userService = inject(UserService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
+  /** Translates toast copy at call time, so a language switch applies to the next toast. */
+  private readonly transloco = inject(TranslocoService);
   /** Caches the most recent successful API response so all update methods can stay in LOADED state while requests are in flight. */
   private data = signal<CustomHttpResponseInterface<ProfileInterface> | undefined>(undefined);
 
@@ -87,7 +90,8 @@ export class ProfileComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log('Fetched profile data:', response);
+          // DEBUG ONLY — DO NOT SHIP ENABLED: prints credentials/PII to the console.
+          // console.log('Fetched profile data:', response);
           this.data.set(response);
           this.isLoading.set(false);
           this.permissions.set(response.data!.user!.permissions!.split(',').map((p: string) => p.trim()));
@@ -115,18 +119,18 @@ export class ProfileComponent implements OnInit {
   updateProfile(profileForm: NgForm): void {
     this.isLoading.set(true);
     const currentUser = this.data()?.data?.user;
-    console.log('Current user data before update:', currentUser);
+    // console.log('Current user data before update:', currentUser);
     const updatedUser = { ...currentUser, ...profileForm.value };
-    console.log('Updated user data to be sent to server:', updatedUser);
+    // console.log('Updated user data to be sent to server:', updatedUser);
     this.userService
       .update$(updatedUser)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log('Profile updated successfully:', response);
+          // console.log('Profile updated successfully:', response);
           this.data.set({ ...response, data: response.data });
           this.isLoading.set(false);
-          this.notification.onSuccess('Profile updated successfully');
+          this.notification.onSuccess(this.transloco.translate('toasts.profileUpdated'));
           this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
@@ -155,11 +159,11 @@ export class ProfileComponent implements OnInit {
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (response) => {
-            console.log('Profile updated successfully:', response);
+            // console.log('Profile updated successfully:', response);
             this.data.set({ ...response, data: response.data });
             passwordForm.reset();
             this.isLoading.set(false);
-            this.notification.onSuccess('Password updated successfully');
+            this.notification.onSuccess(this.transloco.translate('toasts.passwordUpdated'));
             this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
           },
           error: (error: string) => {
@@ -188,16 +192,16 @@ export class ProfileComponent implements OnInit {
    */
   updateAccountSettings(settingsForm: NgForm): void {
     this.isLoading.set(true);
-    console.log(settingsForm);
+    // console.log(settingsForm);
     this.userService
       .updateAccountSettings$(settingsForm.value)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log('Account Settings updated successfully:', response);
+          // console.log('Account Settings updated successfully:', response);
           this.data.set({ ...response, data: response.data });
           this.isLoading.set(false);
-          this.notification.onSuccess('Settings updated successfully');
+          this.notification.onSuccess(this.transloco.translate('toasts.settingsUpdated'));
           this.profileState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {
@@ -283,7 +287,7 @@ export class ProfileComponent implements OnInit {
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (response) => {
-            console.log('MFA Settings updated successfully:', response);
+            // console.log('MFA Settings updated successfully:', response);
             this.data.set({
               ...response,
               data: { ...response.data!, user: { ...response.data!.user!, imageUrl: `${response.data!.user!.imageUrl}?time=${new Date().getTime()}` } },

@@ -53,7 +53,7 @@ export class RegisterComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log(response);
+          // console.log(response);
           registerForm.reset();
           this.notification.onSuccess(response.message);
           this.registerState.set({ dataState: DataState.LOADED, registerSuccess: true, message: response.message });

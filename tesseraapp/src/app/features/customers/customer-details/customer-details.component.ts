@@ -16,6 +16,7 @@ import { NotificationsService } from '../../../service/notifications-service';
 import { UserService } from '../../../service/user.service';
 import { RequiresAuthorityDirective } from '../../../directive/has-authority.directive';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 /**
  * Customer detail view showing a single customer's profile fields, invoice count, and invoice history.
@@ -51,6 +52,8 @@ export class CustomerDetailsComponent implements OnInit {
   private data = signal<CustomHttpResponseInterface<CustomerStateInterface> | undefined>(undefined);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
+  /** Translates toast copy at call time, so a language switch applies to the next toast. */
+  private readonly transloco = inject(TranslocoService);
   private readonly userService = inject(UserService);
   /**
    * Whether this account may persist customer edits — the capability behind every disabled
@@ -69,7 +72,12 @@ export class CustomerDetailsComponent implements OnInit {
    * Computed once at construction because the answer lives in the access token, which does not
    * change while this view is mounted. NFR-SEC-4: cosmetic only — the server re-checks.
    */
-  protected readonly canUpdateCustomer = this.userService.hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER');
+  // A getter, not a field: authority flags must follow the CURRENT token. Evaluated once at
+  // construction they latch whatever was true then — and on a page refresh that is usually an
+  // expired token, i.e. "no authorities at all". UserService memoises the decode.
+  protected get canUpdateCustomer(): boolean {
+    return this.userService.hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER');
+  }
   /**
    * Tracks whether a form submission is in progress.
    *
@@ -93,7 +101,7 @@ export class CustomerDetailsComponent implements OnInit {
   ngOnInit(): void {
     this.customerService.customerId$(this.id).pipe(
       map((response) => {
-        console.log('Fetched customer detail data:', response);
+        // console.log('Fetched customer detail data:', response);
         this.data.set(response);
         return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>;
       }),
@@ -122,13 +130,13 @@ export class CustomerDetailsComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log('Updating customer detail data:', response);
+          // console.log('Updating customer detail data:', response);
           this.isLoading.set(false);
           this.data.set({
             ...response,
             data: { ...response.data!, customers: { ...response.data!.customers, invoices: this.data()?.data?.customers?.invoices } },
           });
-          this.notification.onSuccess('Customer updated successfully');
+          this.notification.onSuccess(this.transloco.translate('toasts.customerUpdated'));
           this.customerState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {

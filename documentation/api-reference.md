@@ -79,8 +79,15 @@ The `/user/totp/**` routes are explicitly `authenticated()` (no staff authority)
 | GET | `/user/sessions` | Authenticated | `{ sessions, currentFamily }` |
 | DELETE | `/user/sessions/{family}` | Authenticated | `{ sessions, currentFamily }` (revoke one) |
 | DELETE | `/user/sessions` | Authenticated | `{ sessions, currentFamily }` ("log out everywhere else") |
+| POST | `/user/sessions/logout` | Authenticated | — (ends *this* session server-side) |
+| GET | `/user/sessions/providers` | Authenticated | `{ providers }` — identity providers linked to the caller's own account |
+| DELETE | `/user/sessions/providers/{provider}` | Authenticated | `{ providers }` — disconnect one provider |
 
 `currentFamily` is the `sid` of the caller's own session, so the SPA can badge "this device" and exclude it from mass logout. See [security.md §7](security.md#7-refresh-session-rotation--reuse-detection).
+
+`POST /logout` revokes the caller's own refresh family. Without it, signing out cleared the SPA's `localStorage` and told the server nothing, so the session stayed live for its full five days.
+
+The provider routes back the Security Center's **Connected accounts** panel. Both are scoped to the JWT principal — the account is never taken from the request — so there is no way to express "unlink somebody else's provider". `DELETE` is refused when the provider is the account's **last remaining sign-in method** (no password *and* no second provider), because removing it would lock the user out with no self-service path back. The response carries no `provider_subject`: that identifier is the durable key the find-or-create lookup matches on and the UI has no use for it.
 
 ---
 
@@ -98,6 +105,63 @@ Inactive until provider credentials are set. See [security.md §9](security.md#9
 
 ---
 
+## Security dashboard — `SecurityDashboardController` (`/admin/security`)
+
+The review surface for the anomaly detection in [security.md §10](security.md). Detection writes
+`SUSPICIOUS_LOGIN` rows; this is what lets anyone read them.
+
+| Method | Path | Auth | Returns (`data`) |
+|--------|------|------|------------------|
+| GET | `/admin/security/overview?days` | `UPDATE:USER`/`UPDATE:ROLE` | `{ user, overview }` |
+
+`days` defaults to 7 and is **clamped server-side to 1–90** — it is caller-supplied input to a set of
+aggregate queries, and an unclamped `?days=100000` is a denial of service that needs no vulnerability.
+
+The whole screen is one response on purpose. Six endpoints would give six different instants of the
+same database with no way to tell which panel was stale.
+
+`overview` contains:
+
+| Field | Meaning |
+|---|---|
+| `windowDays`, `scoped` | the window covered, and whether these are org-scoped figures rather than platform-wide |
+| `eventCounts` | totals per security event type; **every tracked type is present, at zero if unused**, so "0 suspicious logins" is a statement rather than a missing tile |
+| `suspiciousLogins` | flagged sign-ins, newest first, including the `detail` string naming which signals fired and which step-up applied |
+| `trend` | per-day login outcomes, **gap-filled** — a quiet day the database has no rows for still appears, or a Monday burst renders as a gentle slope |
+| `restrictedAccounts` | locked *and* not-enabled accounts together: both present to the help desk as "I can't get in" |
+| `mfaAdoption` | mutually exclusive counts summing to `totalUsers`, plus `mfaCoveragePercent` |
+| `activeSessions`, `accountsWithSessions` | read as a ratio — 80 sessions across 75 accounts is ordinary, 80 across 4 is not |
+
+Org-scoped like the analytics: a `ROLE_ORGANIZATION_ADMIN` sees only their own organizations, and an
+admin with **no active memberships sees zeros, not everything** — the service fails closed before any
+query runs.
+
+---
+
+## Services catalog — `ServicesCatalogController` (`/admin/services`)
+
+Administrative CRUD for the catalog. Browsing stays on the public path (`GET /customer/invoice/new`),
+which returns **active services only**; these routes return retired entries too, because an
+administrator needs to see why something vanished from the invoice form and be able to reinstate it.
+
+| Method | Path | Auth | Body | Returns (`data`) |
+|--------|------|------|------|------------------|
+| GET | `/admin/services/list` | `UPDATE:USER`/`UPDATE:ROLE` | — | `{ user, services }` (includes retired) |
+| GET | `/admin/services/get/{serviceId}` | `UPDATE:USER`/`UPDATE:ROLE` | — | `{ user, service }` |
+| POST | `/admin/services/create` | `UPDATE:USER`/`UPDATE:ROLE` | `Services` | `201` `{ user, service }` (submitted id ignored) |
+| PUT | `/admin/services/update/{serviceId}` | `UPDATE:USER`/`UPDATE:ROLE` | `Services` | `{ user, service }` |
+| PATCH | `/admin/services/{serviceId}/active/{active}` | `UPDATE:USER`/`UPDATE:ROLE` | — | `{ user, service }` (retire / reinstate) |
+
+**Retire, never delete.** There is deliberately no `DELETE`. Invoices copy a service's name and price
+into their own line items when raised, so removing the row would not corrupt historical invoices —
+but it would erase the catalog's own history and turn "bring that offering back" into a retyping
+exercise. Editing a service likewise never restates an invoice already issued.
+
+Both controllers sit under `/admin/**`, so SecurityConfig's existing matcher gates them with **no new
+request matcher to mis-order**, and `@PreAuthorize` repeats the check at the method level.
+
+---
+
 ## Administration — `AdminUserController` (`/admin/user`)
 
 All routes require `UPDATE:USER` **or** `UPDATE:ROLE`; the two `PATCH`es are stricter. For a `ROLE_ORGANIZATION_ADMIN` the directory and every action are **scoped to shared organizations** (out-of-scope → `403`); `ROLE_ADMIN`/`ROLE_APPLICATION_ADMIN` are unscoped.
@@ -109,6 +173,7 @@ All routes require `UPDATE:USER` **or** `UPDATE:ROLE`; the two `PATCH`es are str
 | GET | `/admin/user/{id}/events?page&size` | `UPDATE:USER`/`UPDATE:ROLE` | — | `{ events, eventsTotalElements, eventsTotalPages }` |
 | PATCH | `/admin/user/{id}/role/{roleName}` | **`UPDATE:ROLE`** | — | `{ user, selectedUser, roles }` (forbids self-targeting) |
 | PATCH | `/admin/user/{id}/settings` | **`UPDATE:USER`** | `SettingsForm { enabled, notLocked }` | `{ user, selectedUser, roles }` (forbids self-targeting) |
+| PATCH | `/admin/user/{id}/update` | **`UPDATE:USER`** | `UpdateForm` | `{ user, selectedUser, roles }` — edit another user's profile; the `{id}` path variable overwrites any body id |
 
 > `user` = the calling admin (for the navbar); `selectedUser` = the managed user. Mutations are audited against the **target** user.
 
@@ -131,7 +196,9 @@ All require authentication. `GET` needs `READ:USER`/`READ:CUSTOMER`; `POST` need
 | GET | `/customer/invoice/list?page&size` | `READ:*` | — | `{ user, invoices }` |
 | GET | `/customer/invoice/new` | `READ:*` | — | `{ user, customers, availableServices }` |
 | GET | `/customer/invoice/get/{invoiceId}` | `READ:*` | — | `{ user, invoice, customer }` |
-| POST | `/customer/invoice/addtocustomer/{customerId}` | `UPDATE:*` | `Invoice` | `{ user, customers }` |
+| POST | `/customer/invoice/addtocustomer/{customerId}` | `UPDATE:*` | `Invoice` | `{ user, customers }` (creates a new invoice, already attached) |
+| PUT | `/customer/invoice/{invoiceId}/addtocustomer/{customerId}` | `UPDATE:*` | — | `{ user, invoice }` — attach an **existing** draft invoice to a customer |
+| PATCH | `/customer/invoice/update/{invoiceId}` | `UPDATE:CUSTOMER`/`UPDATE:USER` | `Invoice` | `{ user, invoice }` — edit status, dates, amounts |
 | GET | `/customer/invoice/download/report` | `READ:*` | — | XLSX attachment |
 
 ---

@@ -38,38 +38,38 @@
                     <div class="row">
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
-                          <label>{{ t('common.name') }}</label>
-                          <input class="form-control" name="customerName" ngModel required type="text" />
+                          <label for="nc-customerName">{{ t('common.name') }}</label>
+                          <input class="form-control" id="nc-customerName" name="customerName" ngModel required type="text" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
-                          <label>{{ t('common.email') }}</label>
-                          <input class="form-control" name="email" ngModel required type="text" />
+                          <label for="nc-email">{{ t('common.email') }}</label>
+                          <input class="form-control" id="nc-email" name="email" ngModel required type="text" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
                           <label for="address">{{ t('profile.address') }}</label>
-                          <input class="form-control" name="address" ngModel required type="text" />
+                          <input class="form-control" id="address" name="address" ngModel required type="text" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
-                          <label>{{ t('common.phone') }}</label>
-                          <input class="form-control" name="phoneNumber" ngModel required type="text" />
+                          <label for="nc-phoneNumber">{{ t('common.phone') }}</label>
+                          <input class="form-control" id="nc-phoneNumber" name="phoneNumber" ngModel required type="text" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
-                        <label>{{ t('common.type') }}</label>
-                        <select class="form-control" name="type" ngModel="INDIVIDUAL" required>
+                        <label for="nc-type">{{ t('common.type') }}</label>
+                        <select class="form-control" id="nc-type" name="type" ngModel="INDIVIDUAL" required>
                           <option value="INDIVIDUAL">INDIVIDUAL</option>
                           <option [selected]="true">INSTITUTION</option>
                         </select>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
-                        <label>{{ t('common.status') }}</label>
-                        <select class="form-control" name="status" ngModel="ACTIVE" required>
+                        <label for="nc-status">{{ t('common.status') }}</label>
+                        <select class="form-control" id="nc-status" name="status" ngModel="ACTIVE" required>
                           <option [selected]="true" value="ACTIVE">ACTIVE</option>
                           <option value="BANNED">BANNED</option>
                           <option value="PENDING">PENDING</option>
@@ -78,8 +78,8 @@
                       </div>
                       <div class="col-md-12">
                         <div class="form-group">
-                          <label>{{ t('newCustomer.imageUrl') }}</label>
-                          <input class="form-control" name="imageUrl" ngModel required type="text" />
+                          <label for="nc-imageUrl">{{ t('newCustomer.imageUrl') }}</label>
+                          <input class="form-control" id="nc-imageUrl" name="imageUrl" ngModel required type="text" />
                         </div>
                       </div>
                     </div>

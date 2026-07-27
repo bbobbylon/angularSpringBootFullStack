@@ -11,6 +11,7 @@ import { CustomerService } from '../../../service/customer.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 /**
  * New customer creation form component.
@@ -68,6 +69,8 @@ export class NewCustomerComponent implements OnInit {
   protected isLoading = signal(false);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
+  /** Translates toast copy at call time, so a language switch applies to the next toast. */
+  private readonly transloco = inject(TranslocoService);
   /**
    * Caches the most recent successful API response so the form stays in
    * {@code DataState.LOADED} while a create request is in flight.
@@ -89,7 +92,7 @@ export class NewCustomerComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log('Fetched New customer data:', response);
+          // console.log('Fetched New customer data:', response);
           this.data.set(response);
           this.newCustomerState.set({ dataState: DataState.LOADED, appData: response });
         },
@@ -118,11 +121,11 @@ export class NewCustomerComponent implements OnInit {
       .newCustomer$(newCustomerForm.value)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (response) => {
-          console.log('Fetched customer data:', response);
+        next: () => {
+          // console.log('Fetched customer data:', response);
           newCustomerForm.reset({ type: 'INDIVIDUAL', status: 'ACTIVE' });
           this.isLoading.set(false);
-          this.notification.onSuccess('Customer created successfully');
+          this.notification.onSuccess(this.transloco.translate('toasts.customerCreated'));
           this.newCustomerState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {

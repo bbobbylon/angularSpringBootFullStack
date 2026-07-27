@@ -15,6 +15,7 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { InvoiceTrendComponent } from '../../../shared/charts/invoice-trend/invoice-trend.component';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 /**
  * All-invoice list view with pagination.
@@ -58,6 +59,8 @@ export class InvoicesComponent implements OnInit {
   private readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
+  /** Translates toast copy at call time, so a language switch applies to the next toast. */
+  private readonly transloco = inject(TranslocoService);
   /**
    * Caches the most recent successful API response so pagination updates can return
    * {@code DataState.LOADED} immediately as the {@code startWith} value while the next
@@ -159,15 +162,15 @@ export class InvoicesComponent implements OnInit {
         });
         break;
       case HttpEventType.ResponseHeader:
-        console.log('Received Response headers!', httpEvent);
+        // console.log('Received Response headers!', httpEvent);
         break;
       case HttpEventType.Response:
         saveAs(new File([httpEvent.body as Blob], 'invoice_report.xlsx', { type: `${httpEvent.headers.get('Content-Type')};charset=utf-8` }));
-        this.notification.onSuccess('Report downloaded successfully');
+        this.notification.onSuccess(this.transloco.translate('toasts.reportDownloaded'));
         this.fileStatus.set(undefined);
         break;
       default:
-        console.log(httpEvent);
+        // console.log(httpEvent);
         break;
     }
   }

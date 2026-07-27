@@ -12,6 +12,7 @@ import { ServicesInterface } from '../../../interface/services.interface';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 /**
  * New invoice creation form.
@@ -58,6 +59,8 @@ export class NewInvoiceComponent implements OnInit {
   protected readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
+  /** Translates toast copy at call time, so a language switch applies to the next toast. */
+  private readonly transloco = inject(TranslocoService);
   /**
    * Caches the most recent successful API response so the form stays in
    * {@code DataState.LOADED} while a create request is in flight.
@@ -149,12 +152,12 @@ export class NewInvoiceComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log(response);
+          // console.log(response);
           invoiceForm.reset({ status: 'PENDING' });
           this.serviceLines = [{ name: '', price: 0 }];
           this.isLoading.set(false);
           this.data.set(response);
-          this.notification.onSuccess('Invoice created successfully');
+          this.notification.onSuccess(this.transloco.translate('toasts.invoiceCreated'));
           this.newInvoiceState.set({ dataState: DataState.LOADED, appData: this.data() });
         },
         error: (error: string) => {

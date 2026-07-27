@@ -56,3 +56,22 @@ export interface SessionsDataInterface {
    */
   currentFamily: string;
 }
+
+/**
+ * One identity provider connected to the signed-in account (ROADMAP §1.4).
+ *
+ * Mirrors the backend {@code FederatedIdentityService.ProviderLink}. Deliberately carries no
+ * provider subject: that identifier is the durable key the find-or-create lookup matches on, the
+ * UI has no use for it, and so it never leaves the database.
+ */
+export interface ProviderLinkInterface {
+  /** Registration id — {@code 'google'}, {@code 'github'}, or {@code 'microsoft'}. */
+  provider: string;
+  /** ISO timestamp of when the connection was made. */
+  linkedAt: string;
+}
+
+/** The {@code data} block of the connected-accounts responses. */
+export interface ProviderLinksDataInterface {
+  providers: ProviderLinkInterface[];
+}

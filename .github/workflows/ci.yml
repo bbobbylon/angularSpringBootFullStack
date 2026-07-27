@@ -116,7 +116,18 @@ jobs:
       - name: Audit dependencies
         run: npm audit --audit-level=high
 
-      # The 15 Vitest specs existed but were never run here, so a broken spec could merge
+      # Lint now GATES. It could not before: the workspace carried 12 standing errors (10 of them
+      # real accessibility defects — labels with no control association, click handlers with no
+      # keyboard equivalent), so a gate here would have been red from day one and promptly
+      # ignored. Those are fixed, so the rule can finally be enforced rather than aspirational.
+      #
+      # Deliberately placed BEFORE the tests: lint failures are cheap to produce and cheap to
+      # read, and there is no value in spending a test run to tell someone about a missing
+      # `for` attribute.
+      - name: Lint
+        run: npm run lint
+
+      # The Vitest specs existed but were never run here, so a broken spec could merge
       # while CI stayed green — the harness was proving nothing. --no-watch is required:
       # the default watch mode never exits and would hang the runner until timeout.
       - name: Test (Vitest, headless)

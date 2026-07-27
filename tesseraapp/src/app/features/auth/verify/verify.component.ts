@@ -64,12 +64,12 @@ export class VerifyComponent implements OnInit {
     this.activatedRoute.paramMap
       .pipe(
         switchMap((params: ParamMap) => {
-          console.log(this.activatedRoute);
+          // console.log(this.activatedRoute);
           //TODO implement a better way to determine which URL we are on, instead of using window.location.href
           const type: AccountType = this.getAccountType(window.location.href);
           return this.userService.verifyAccount$(params.get(this.ACCOUNT_KEY)!, type).pipe(
             map((response) => {
-              console.log(response);
+              // console.log(response);
               if (type === 'password') {
                 this.userSubject.set(response.data?.user ?? null);
               }
