@@ -14,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -120,6 +121,46 @@ public class SessionController {
                         .message(revoked > 0
                                 ? "Logged out of " + revoked + " other session(s)."
                                 : "No other active sessions to log out of.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Ends <em>this</em> session server-side — the missing half of "log out".
+     *
+     * <p>Signing out previously cleared the SPA's {@code localStorage} and told the server
+     * nothing, so the refresh session stayed live for its full five days. Two consequences
+     * followed. A token captured before sign-out kept working, because logging out revoked
+     * nothing it could not simply keep using. And the Security Center's device list filled with
+     * one live entry per past login, which made the panel that exists to answer "where am I
+     * signed in?" unable to answer it — four rows for one laptop is noise, not information.
+     *
+     * <p>Revokes only the caller's own family, so other devices stay signed in — that is the
+     * distinction from {@link #revokeOtherSessions}, and the reason this is not simply
+     * "revoke everything". A caller whose token carries no family (pre-M5) has no session row to
+     * revoke; the call still succeeds, because a client that has already discarded its tokens is
+     * logged out either way and an error here would be about nothing it can act on.
+     *
+     * <p>The access token itself is not invalidated — it is stateless and expires on its own
+     * within 30 minutes. What this stops is the ability to <em>renew</em>, which is what turns a
+     * stolen refresh token into indefinite access.
+     *
+     * @param authentication the current Spring Security authentication
+     * @return 200 OK confirming the session was ended
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<HttpResponse> logout(Authentication authentication) {
+        UserDTO userDTO = getAuthenticatedUser(authentication);
+        String family = currentFamilyOrEmpty();
+        if (!family.isEmpty()) {
+            sessionService.revokeSession(userDTO.getId(), family);
+            eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), SESSION_REVOKED));
+        }
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .message("You have been signed out.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
