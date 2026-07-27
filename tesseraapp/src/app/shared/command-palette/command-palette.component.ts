@@ -12,6 +12,7 @@ import {
 import { Router } from '@angular/router';
 import { UserService } from '../../service/user.service';
 import { ThemeService } from '../../service/theme.service';
+import { TranslocoService } from '@jsverse/transloco';
 
 /**
  * A single actionable entry in the command palette.
@@ -29,7 +30,7 @@ interface Command {
   /** Bootstrap-icon class (e.g. {@code 'bi-people-fill'}). */
   readonly icon: string;
   /** Grouping bucket for the sectioned list. */
-  readonly section: 'Navigate' | 'Actions';
+  readonly section: string;
   /** Effect to run when the entry is chosen. */
   readonly run: () => void;
 }
@@ -66,6 +67,7 @@ export class CommandPaletteComponent {
   private readonly router = inject(Router);
   private readonly userService = inject(UserService);
   private readonly themeService = inject(ThemeService);
+  private readonly transloco = inject(TranslocoService);
 
   /** Whether the overlay is currently visible. */
   protected readonly open = signal(false);
@@ -195,6 +197,26 @@ export class CommandPaletteComponent {
     command.run();
   }
 
+  /**
+   * Closes the palette when the click landed on the backdrop itself rather than inside the dialog.
+   *
+   * <p>Replaces a {@code (click)="$event.stopPropagation()"} that used to sit on the panel purely
+   * to stop inner clicks from bubbling out and dismissing the palette. Testing the target here
+   * removes that second handler entirely: a click inside the dialog simply is not a backdrop
+   * click, so there is nothing to cancel. One less interactive element, and one less thing for a
+   * future edit to get wrong.
+   *
+   * <p>Keyboard dismissal is unaffected and lives elsewhere — Escape is caught document-wide by
+   * {@link onDocumentKeydown}, so the palette closes regardless of what holds focus.
+   *
+   * @param event the click event from the backdrop
+   */
+  protected onBackdropClick(event: Event): void {
+    if (event.target === event.currentTarget) {
+      this.close();
+    }
+  }
+
   /** Highlights an entry (used by mouse hover to keep pointer and keyboard in sync). */
   protected highlight(index: number): void {
     this.activeIndex.set(index);
@@ -214,17 +236,23 @@ export class CommandPaletteComponent {
    * staff-grade authority, and the theme/logout actions always close the list.
    */
   private buildCommands(): Command[] {
+    // Resolved once per open rather than per entry: the palette is rebuilt every time it opens,
+    // so this picks up a language change without needing the command list to be reactive.
+    const t = (key: string): string => this.transloco.translate(key);
+    const navigate = t('palette.sectionNavigate');
+    const actions = t('palette.sectionActions');
+
     const go = (path: string) => (): void => {
       void this.router.navigate([path]);
     };
 
     const commands: Command[] = [
-      { id: 'home', label: 'Home', hint: 'Dashboard overview', icon: 'bi-grid-1x2-fill', section: 'Navigate', run: go('/') },
-      { id: 'customers', label: 'All Customers', hint: 'Browse customer directory', icon: 'bi-people-fill', section: 'Navigate', run: go('/customers') },
-      { id: 'invoices', label: 'All Invoices', hint: 'Browse invoices', icon: 'bi-receipt-cutoff', section: 'Navigate', run: go('/invoices') },
-      { id: 'services', label: 'Service Catalog', hint: 'Browse services & apps', icon: 'bi-grid-1x2', section: 'Navigate', run: go('/services') },
-      { id: 'profile', label: 'Profile', hint: 'Your account', icon: 'bi-person-circle', section: 'Navigate', run: go('/profile') },
-      { id: 'security', label: 'Security Center', hint: 'MFA & active sessions', icon: 'bi-shield-lock', section: 'Navigate', run: go('/security') },
+      { id: 'home', label: t('palette.home'), hint: t('palette.homeHint'), icon: 'bi-grid-1x2-fill', section: navigate, run: go('/') },
+      { id: 'customers', label: t('palette.customers'), hint: t('palette.customersHint'), icon: 'bi-people-fill', section: navigate, run: go('/customers') },
+      { id: 'invoices', label: t('palette.invoices'), hint: t('palette.invoicesHint'), icon: 'bi-receipt-cutoff', section: navigate, run: go('/invoices') },
+      { id: 'services', label: t('palette.services'), hint: t('palette.servicesHint'), icon: 'bi-grid-1x2', section: navigate, run: go('/services') },
+      { id: 'profile', label: t('palette.profile'), hint: t('palette.profileHint'), icon: 'bi-person-circle', section: navigate, run: go('/profile') },
+      { id: 'security', label: t('palette.security'), hint: t('palette.securityHint'), icon: 'bi-shield-lock', section: navigate, run: go('/security') },
     ];
 
     // Creation commands require write authority (ROADMAP §2 — capability-level RBAC gating).
@@ -235,30 +263,30 @@ export class CommandPaletteComponent {
     // offers a destination the menu hides is the same bug told twice.
     if (this.userService.hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER')) {
       commands.push(
-        { id: 'new-customer', label: 'New Customer', hint: 'Create a customer', icon: 'bi-person-plus-fill', section: 'Navigate', run: go('/customer/new') },
-        { id: 'new-invoice', label: 'New Invoice', hint: 'Create an invoice', icon: 'bi-receipt', section: 'Navigate', run: go('/invoice/new') },
+        { id: 'new-customer', label: t('palette.newCustomer'), hint: t('palette.newCustomerHint'), icon: 'bi-person-plus-fill', section: navigate, run: go('/customer/new') },
+        { id: 'new-invoice', label: t('palette.newInvoice'), hint: t('palette.newInvoiceHint'), icon: 'bi-receipt', section: navigate, run: go('/invoice/new') },
       );
     }
 
     if (this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')) {
       commands.push(
-        { id: 'users', label: 'User Directory', hint: 'Admin · manage users', icon: 'bi-people-fill', section: 'Navigate', run: go('/users') },
-        { id: 'roles', label: 'Roles & Permissions', hint: 'Admin · RBAC matrix', icon: 'bi-grid-3x3-gap-fill', section: 'Navigate', run: go('/roles') },
-        { id: 'billing', label: 'Billing Overview', hint: 'Admin · revenue analytics', icon: 'bi-graph-up-arrow', section: 'Navigate', run: go('/billing') },
-        { id: 'analytics', label: 'Analytics Hub', hint: 'Admin · trends & stats', icon: 'bi-bar-chart-line-fill', section: 'Navigate', run: go('/analytics') },
-        { id: 'security-overview', label: 'Security Overview', hint: 'Admin · anomalies & MFA coverage', icon: 'bi-shield-exclamation', section: 'Navigate', run: go('/security-overview') },
-        { id: 'manage-services', label: 'Manage Services', hint: 'Admin · catalog CRUD', icon: 'bi-sliders', section: 'Navigate', run: go('/services/manage') },
+        { id: 'users', label: t('palette.users'), hint: t('palette.usersHint'), icon: 'bi-people-fill', section: navigate, run: go('/users') },
+        { id: 'roles', label: t('palette.roles'), hint: t('palette.rolesHint'), icon: 'bi-grid-3x3-gap-fill', section: navigate, run: go('/roles') },
+        { id: 'billing', label: t('palette.billing'), hint: t('palette.billingHint'), icon: 'bi-graph-up-arrow', section: navigate, run: go('/billing') },
+        { id: 'analytics', label: t('palette.analytics'), hint: t('palette.analyticsHint'), icon: 'bi-bar-chart-line-fill', section: navigate, run: go('/analytics') },
+        { id: 'security-overview', label: t('palette.securityOverview'), hint: t('palette.securityOverviewHint'), icon: 'bi-shield-exclamation', section: navigate, run: go('/security-overview') },
+        { id: 'manage-services', label: t('palette.manageServices'), hint: t('palette.manageServicesHint'), icon: 'bi-sliders', section: navigate, run: go('/services/manage') },
       );
     }
 
     commands.push(
-      { id: 'toggle-theme', label: 'Toggle Theme', hint: 'Switch dark / light', icon: 'bi-circle-half', section: 'Actions', run: () => this.themeService.toggle() },
+      { id: 'toggle-theme', label: t('palette.toggleTheme'), hint: t('palette.toggleThemeHint'), icon: 'bi-circle-half', section: actions, run: () => this.themeService.toggle() },
       {
         id: 'logout',
-        label: 'Log Out',
-        hint: 'End your session',
+        label: t('palette.logout'),
+        hint: t('palette.logoutHint'),
         icon: 'bi-box-arrow-right',
-        section: 'Actions',
+        section: actions,
         run: () => {
           this.userService.logOut();
           void this.router.navigate(['/login']);

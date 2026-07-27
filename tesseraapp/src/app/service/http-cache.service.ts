@@ -53,7 +53,7 @@ export class HttpCacheService {
    * @param httpResponse - the complete response object returned by {@link HttpClient}
    */
   put = (key: string, httpResponse: HttpResponse<never>): void => {
-    console.log('Caching our HTTP Response: ', httpResponse);
+    // console.log('Caching our HTTP Response: ', httpResponse);
     this.httpResponseCache[key] = httpResponse;
   };
 
@@ -68,7 +68,7 @@ export class HttpCacheService {
    * @returns the cached {@link HttpResponse}, or {@code undefined} on a miss
    */
   get = (key: string): HttpResponse<never> | null | undefined => {
-    console.log('Getting ' + key);
+    // console.log('Getting ' + key);
     return this.httpResponseCache[key];
   };
 
@@ -90,17 +90,9 @@ export class HttpCacheService {
    * dataset stale and a full refresh is required.
    */
   evictAll = (): void => {
-    console.log('Clearing the entire cache');
+    // console.log('Clearing the entire cache');
     this.httpResponseCache = {};
   };
 
-  /**
-   * Logs the full contents of the cache to the browser console.
-   *
-   * Debug utility only — use this during development to inspect what is
-   * currently stored before deciding whether to evict or keep entries.
-   */
-  logCache = (): void => {
-    console.log(this.httpResponseCache);
-  };
+    // console.log(this.httpResponseCache);
 }

@@ -4,13 +4,22 @@
   the panel stops propagation so clicks inside it do not dismiss it.
 -->
 @if (open()) {
-  <div class="cmdk-backdrop" role="presentation" (click)="close()">
+  <!--
+    Click-to-dismiss backdrop. onBackdropClick checks the event target, so a click inside the
+    dialog is simply not a backdrop click — which is why the panel needs no stopPropagation
+    handler of its own.
+
+    No keyboard handler here on purpose: Escape is caught document-wide by
+    @HostListener('document:keydown') on the component, so the palette closes regardless of what
+    holds focus. This element is role="presentation" and never takes focus, so a keydown bound to
+    it could not fire.
+  -->
+  <div class="cmdk-backdrop" role="presentation" (click)="onBackdropClick($event)">
     <div
       class="cmdk-panel"
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
-      (click)="$event.stopPropagation()"
     >
       <!-- Search row -->
       <div class="cmdk-input-row">
@@ -44,6 +53,9 @@
               [attr.aria-selected]="item.index === activeIndex()"
               (mouseenter)="highlight(item.index)"
               (click)="run(item.command)"
+              (keydown.enter)="run(item.command)"
+              (keydown.space)="run(item.command)"
+              tabindex="-1"
             >
               <span class="cmdk-item__icon"><i class="bi {{ item.command.icon }}" aria-hidden="true"></i></span>
               <span class="cmdk-item__label">{{ item.command.label }}</span>

@@ -18,11 +18,12 @@ import { environment } from '../../environments/environment';
  * of locked accounts and the IP addresses of flagged sign-ins, which is reconnaissance material if
  * it ever escaped its audience.
  *
- * <p>Deliberately no {@code tap(console.log)} — unlike the older services in this project, which
- * log every response for debugging. Logging this payload would write every flagged sign-in, IP
- * address, and locked account into the browser console, where it persists in the devtools buffer
- * and in any screen recording of a demo. The rest of the app's console noise is harmless; this
- * would not be.
+ * <p>Deliberately no response logging. Writing this payload to the console would put every
+ * flagged sign-in, IP address, and locked account into the devtools buffer — and into any screen
+ * recording of a demo. The rest of the application no longer logs responses either (the
+ * {@code tap(console.log)} that used to sit on every service was removed once it became clear it
+ * was emitting access and refresh tokens verbatim), so this is now the house rule rather than an
+ * exception to it.
  */
 @Injectable({
   providedIn: 'root',

@@ -4,7 +4,13 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { AccountType, NewPasswordFormInterface, ProfileInterface } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
-import { SessionsDataInterface, TotpEnableInterface, TotpSetupInterface, TotpStatusInterface } from '../interface/security.interface';
+import {
+  ProviderLinksDataInterface,
+  SessionsDataInterface,
+  TotpEnableInterface,
+  TotpSetupInterface,
+  TotpStatusInterface,
+} from '../interface/security.interface';
 import { UserInterface } from '../interface/user.interface';
 import { Key } from '../enumeration/key.enumeration';
 import { JwtHelperService } from '@auth0/angular-jwt';
@@ -13,6 +19,14 @@ import { environment } from '../../environments/environment';
 
 /**
  * Central HTTP service for all user-related API calls.
+ *
+ * <p><b>About the commented-out {@code tap(console.log)} operators below.</b> They are kept
+ * for local debugging and must stay commented in anything that ships. Several of these calls
+ * — {@code login$}, {@code refreshToken$}, {@code updatePassword$}, {@code verifyTotp$} —
+ * resolve to envelopes containing {@code access_token} and {@code refresh_token}, and
+ * {@code profile$} resolves to the full user record. Angular does not strip {@code console.log}
+ * from production builds, so enabling one of these writes a usable bearer token into the
+ * browser console, where it persists in the devtools buffer and in any screen recording.
  *
  * Each method returns a typed Observable wrapping the server's standard
  * CustomHttpResponseInterface envelope. Errors are normalised by handleError
@@ -39,12 +53,12 @@ export class UserService {
   verifyCode$ = (email: string, code: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/code/${email}/${code}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   verifyAccount$ = (key: string, type: AccountType): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/${type}/${key}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Completes the forgot-password reset flow by submitting a new password for the
@@ -63,7 +77,7 @@ export class UserService {
   setNewPassword$ = (form: NewPasswordFormInterface): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .put<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/new/password`, form)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Authenticates the user with email and password.
@@ -76,7 +90,7 @@ export class UserService {
   login$ = (email: string, password: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/login`, { email, password })
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Registers a new user account.
@@ -91,7 +105,7 @@ export class UserService {
   register$ = (user: UserInterface & { password: string }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/register`, user)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Initiates a password reset by sending a reset link to the given email address.
@@ -106,7 +120,7 @@ export class UserService {
   requestPasswordReset$ = (email: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/resetpassword/${email}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches the currently authenticated user's profile from the backend.
@@ -115,7 +129,7 @@ export class UserService {
    * @returns Observable emitting a ProfileInterface response containing the user object
    */
   profile$ = (): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
-    this.http.get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/profile`).pipe(tap(console.log), catchError(this.handleError));
+    this.http.get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/profile`).pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches one page of audit events for the authenticated user.
@@ -127,10 +141,10 @@ export class UserService {
    * @param size - number of events per page (default 10)
    * @returns Observable emitting a ProfileInterface response containing only events and pagination metadata
    */
-  userEvents$ = (page: number, size: number = 10): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+  userEvents$ = (page: number, size = 10): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/events?page=${page}&size=${size}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Submits updated profile fields for the authenticated user.
@@ -141,7 +155,7 @@ export class UserService {
   update$ = (user: UserInterface): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update`, user)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Exchanges the stored refresh token for a new access/refresh token pair.
@@ -157,7 +171,7 @@ export class UserService {
       >(`${this.server}/user/refresh/token`, { headers: { Authorization: `Bearer ${localStorage.getItem(Key.REFRESH_TOKEN)}` } })
       .pipe(
         tap((response) => {
-          console.log('Received refresh token response:', response);
+          // console.log('Received refresh token response:', response);
           localStorage.removeItem(Key.TOKEN);
           localStorage.removeItem(Key.REFRESH_TOKEN);
           localStorage.setItem(Key.TOKEN, response.data!.access_token);
@@ -209,7 +223,7 @@ export class UserService {
   updateAccountSettings$ = (settingsForm: { enabled: boolean; notLocked: boolean }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/settings`, settingsForm)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Uploads a new profile image for the authenticated user.
@@ -224,7 +238,7 @@ export class UserService {
   updateProfileImage$ = (formData: FormData): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/image`, formData)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Flips the authenticated user's MFA (two-factor authentication) flag.
@@ -236,7 +250,7 @@ export class UserService {
   toggleMFA$ = (): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/update/togglemfa`, {})
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Completes a TOTP-gated login ({@code POST /user/verify/totp}, public). The
@@ -253,7 +267,7 @@ export class UserService {
   verifyTotp$ = (challenge: string, code: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/totp`, { challenge, code })
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Starts authenticator enrollment ({@code POST /user/totp/setup}, authenticated).
@@ -266,7 +280,7 @@ export class UserService {
   totpSetup$ = (): Observable<CustomHttpResponseInterface<TotpSetupInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<TotpSetupInterface>>(`${this.server}/user/totp/setup`, {})
-      .pipe(catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Confirms enrollment ({@code POST /user/totp/enable}, authenticated) by echoing a
@@ -279,7 +293,7 @@ export class UserService {
   totpEnable$ = (code: string): Observable<CustomHttpResponseInterface<TotpEnableInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<TotpEnableInterface>>(`${this.server}/user/totp/enable`, { code })
-      .pipe(catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Disables the authenticator ({@code POST /user/totp/disable}, authenticated).
@@ -292,7 +306,7 @@ export class UserService {
   totpDisable$ = (code: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/totp/disable`, { code })
-      .pipe(catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches authenticator status ({@code GET /user/totp/status}, authenticated) for the
@@ -303,7 +317,7 @@ export class UserService {
   totpStatus$ = (): Observable<CustomHttpResponseInterface<TotpStatusInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<TotpStatusInterface>>(`${this.server}/user/totp/status`)
-      .pipe(catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Lists the caller's live refresh sessions ({@code GET /user/sessions}) for the
@@ -314,7 +328,7 @@ export class UserService {
   sessions$ = (): Observable<CustomHttpResponseInterface<SessionsDataInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<SessionsDataInterface>>(`${this.server}/user/sessions`)
-      .pipe(catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Revokes one session ({@code DELETE /user/sessions/{family}}). The revoked device
@@ -326,7 +340,7 @@ export class UserService {
   revokeSession$ = (family: string): Observable<CustomHttpResponseInterface<SessionsDataInterface>> =>
     this.http
       .delete<CustomHttpResponseInterface<SessionsDataInterface>>(`${this.server}/user/sessions/${family}`)
-      .pipe(catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * "Log out everywhere else" ({@code DELETE /user/sessions}): revokes every session
@@ -337,7 +351,37 @@ export class UserService {
   revokeOtherSessions$ = (): Observable<CustomHttpResponseInterface<SessionsDataInterface>> =>
     this.http
       .delete<CustomHttpResponseInterface<SessionsDataInterface>>(`${this.server}/user/sessions`)
-      .pipe(catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Lists the identity providers connected to the caller's own account
+   * ({@code GET /user/sessions/providers}, authenticated) — ROADMAP §1.4.
+   *
+   * Distinct from {@link federatedProviders$}, which is public and answers a different question:
+   * that one lists what this *deployment* supports, this one lists what *you* have connected.
+   *
+   * @returns Observable of the envelope carrying {@code providers}
+   */
+  connectedProviders$ = (): Observable<CustomHttpResponseInterface<ProviderLinksDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<ProviderLinksDataInterface>>(`${this.server}/user/sessions/providers`)
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Disconnects one provider from the caller's own account
+   * ({@code DELETE /user/sessions/providers/{provider}}).
+   *
+   * The account is taken from the JWT server-side, so this cannot be pointed at anyone else. The
+   * backend refuses when the provider is the account's last remaining sign-in method; that arrives
+   * here as a normal error whose message names the remedy.
+   *
+   * @param provider - the registration id to disconnect
+   * @returns Observable of the envelope carrying the refreshed {@code providers} list
+   */
+  unlinkProvider$ = (provider: string): Observable<CustomHttpResponseInterface<ProviderLinksDataInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<ProviderLinksDataInterface>>(`${this.server}/user/sessions/providers/${provider}`)
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches which federated identity providers are configured on the backend
@@ -350,7 +394,7 @@ export class UserService {
   federatedProviders$ = (): Observable<CustomHttpResponseInterface<{ providers: string[] }>> =>
     this.http
       .get<CustomHttpResponseInterface<{ providers: string[] }>>(`${this.server}/oauth2/providers`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Starts the federated login flow for the given provider by performing a full-page
@@ -383,12 +427,42 @@ export class UserService {
    * @returns true if the token is present, unexpired, and carries any of the authorities
    */
   hasAnyAuthority = (...authorities: string[]): boolean => {
-    const token = localStorage.getItem(Key.TOKEN) ?? '';
-    if (!token || this.jwtHelper.isTokenExpired(token)) return false;
-    const decoded = this.jwtHelper.decodeToken<{ authorities?: string[] }>(token);
-    const granted = decoded?.authorities ?? [];
+    const granted = this.grantedAuthorities();
     return authorities.some((authority) => granted.includes(authority));
   };
+
+  /** The token string the memo below was built from, so a rotated token invalidates it. */
+  private cachedToken = '';
+  /** Decoded authorities for {@link cachedToken}. */
+  private cachedAuthorities: string[] = [];
+
+  /**
+   * The authorities carried by the access token currently in storage.
+   *
+   * <p>Re-read on every call rather than snapshotted, because callers evaluate this on each change
+   * detection and the token underneath them changes: it is rotated by the interceptor's silent
+   * refresh, and — critically — it is often already EXPIRED at the moment a page is refreshed. A
+   * value captured once at component construction would answer "no authorities" for the whole
+   * lifetime of that component, which is what used to hide the admin menus after a reload.
+   *
+   * <p>Memoised on the token string so the repeated calls a template makes cost one string compare
+   * rather than a base64 decode and a JSON parse each time.
+   *
+   * @returns the granted authority strings, empty when there is no usable token
+   */
+  private grantedAuthorities(): string[] {
+    const token = localStorage.getItem(Key.TOKEN) ?? '';
+    if (!token || this.jwtHelper.isTokenExpired(token)) {
+      this.cachedToken = '';
+      this.cachedAuthorities = [];
+      return this.cachedAuthorities;
+    }
+    if (token !== this.cachedToken) {
+      this.cachedToken = token;
+      this.cachedAuthorities = this.jwtHelper.decodeToken<{ authorities?: string[] }>(token)?.authorities ?? [];
+    }
+    return this.cachedAuthorities;
+  }
 
   /**
    * Ends the user's session by clearing both JWT tokens from localStorage AND
@@ -415,7 +489,12 @@ export class UserService {
     // alarming and untrue.
     this.http
       .post<CustomHttpResponseInterface<void>>(`${this.server}/user/sessions/logout`, {})
-      .subscribe({ error: () => {} });
+      .subscribe({
+        // Intentionally empty: the local sign-out below must happen regardless, and there is no
+        // action the user could take about a failed fire-and-forget revoke. Named rather than a
+        // bare {} so the silence reads as a decision instead of an oversight.
+        error: () => undefined,
+      });
     localStorage.removeItem(Key.TOKEN);
     localStorage.removeItem(Key.REFRESH_TOKEN);
     this.httpCache.evictAll();
@@ -437,9 +516,9 @@ export class UserService {
     } else {
       if (error.error?.reason) {
         errorMessage = error.error.reason as string;
-        console.log(error.error);
-        console.log(errorMessage);
-        console.log(error);
+        // console.log(error.error);
+        // console.log(errorMessage);
+        // console.log(error);
       } else {
         errorMessage = `Server returned code: ${error.status}, error message is: ${error.message}`;
       }

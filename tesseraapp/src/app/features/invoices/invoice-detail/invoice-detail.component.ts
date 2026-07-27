@@ -61,7 +61,12 @@ export class InvoiceDetailComponent implements OnInit {
    * authorities rather than a role name means {@code ROLE_MODERATOR} — which may edit customers
    * but is not staff — keeps the ability it was granted.
    */
-  protected readonly canEditInvoice = this.userService.hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER');
+  // A getter, not a field: authority flags must follow the CURRENT token. Evaluated once at
+  // construction they latch whatever was true then — and on a page refresh that is usually an
+  // expired token, i.e. "no authorities at all". UserService memoises the decode.
+  protected get canEditInvoice(): boolean {
+    return this.userService.hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER');
+  }
 
   /** Whether the edit panel is open. Closed by default: this page is primarily a document. */
   protected readonly isEditing = signal(false);

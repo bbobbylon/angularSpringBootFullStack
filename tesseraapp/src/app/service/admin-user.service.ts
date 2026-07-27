@@ -1,7 +1,9 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
+// To re-enable the commented `tap(console.log)` calls below, add `tap` back here:
+// import { catchError, tap } from 'rxjs/operators';
+import { catchError } from 'rxjs/operators';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { AdminUserDetailInterface, AdminUserListInterface } from '../interface/admin.interface';
 import { environment } from '../../environments/environment';
@@ -40,7 +42,7 @@ export class AdminUserService {
       .get<CustomHttpResponseInterface<AdminUserListInterface>>(
         `${this.server}/admin/user/list?page=${page}&size=${size}&searchTerm=${encodeURIComponent(searchTerm)}`,
       )
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches the single-user management view: profile, role, account state, and the
@@ -52,7 +54,7 @@ export class AdminUserService {
   user$ = (id: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Reassigns another user's role (FR-ADMIN-3). The backend requires the
@@ -66,7 +68,7 @@ export class AdminUserService {
   updateUserRole$ = (id: number, roleName: string): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/role/${roleName}`, {})
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Changes another user's account state — enabled and not-locked flags (FR-ADMIN-4).
@@ -81,7 +83,7 @@ export class AdminUserService {
   updateAccountSettings$ = (id: number, settings: { enabled: boolean; notLocked: boolean }): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/settings`, settings)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches one page of a managed user's audit event history
@@ -100,7 +102,7 @@ export class AdminUserService {
       .get<CustomHttpResponseInterface<AdminUserDetailInterface>>(
         `${this.server}/admin/user/${id}/events?page=${page}&size=${size}`,
       )
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Normalises HTTP errors into a single Observable<never> so all callers receive a

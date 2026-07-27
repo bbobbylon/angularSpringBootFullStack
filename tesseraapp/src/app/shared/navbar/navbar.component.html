@@ -128,9 +128,10 @@
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
              id="navbarDropdownProfile" role="button">
             @if (user; as u) {
-              @if (u.imageUrl) {
+              @if (u.imageUrl && !avatarFailed()) {
                 <div class="sc-nav-avatar">
-                  <img [alt]="u.firstName" [ngSrc]="u.imageUrl" class="user-avatar-md" fill style="object-fit: cover;">
+                  <img (error)="onAvatarError()" [alt]="u.firstName" [ngSrc]="u.imageUrl"
+                       class="user-avatar-md" fill style="object-fit: cover;">
                 </div>
               } @else {
                 <div class="sc-nav-avatar-fallback">

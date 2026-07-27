@@ -128,7 +128,12 @@ export class AnalyticsComponent implements OnInit {
       this.invoicesState().dataState === DataState.LOADING,
   );
 
-  readonly isAdmin = this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE', 'DELETE:USER');
+  // A getter, not a field: authority flags must follow the CURRENT token. Evaluated once at
+  // construction they latch whatever was true then — and on a page refresh that is usually an
+  // expired token, i.e. "no authorities at all". UserService memoises the decode.
+  get isAdmin(): boolean {
+    return this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE', 'DELETE:USER');
+  }
 
   // ── KPIs ────────────────────────────────────────────────────────────────
 

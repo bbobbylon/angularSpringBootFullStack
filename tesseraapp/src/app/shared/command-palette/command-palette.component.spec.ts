@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommandPaletteComponent } from './command-palette.component';
 import { UserService } from '../../service/user.service';
 import { ThemeService } from '../../service/theme.service';
+import { TranslocoService } from '@jsverse/transloco';
+import { translocoStub } from '../../testing/transloco-stub';
 
 /**
  * Smoke specs for {@link CommandPaletteComponent} — the ⌘/Ctrl+K palette mounted once
@@ -101,6 +103,9 @@ describe('CommandPaletteComponent', () => {
       providers: [
         { provide: UserService, useValue: userService },
         { provide: ThemeService, useValue: theme },
+        // The palette resolves every command label through Transloco now; the stub returns
+        // the shipped English copy so these specs keep asserting on real user-facing text.
+        { provide: TranslocoService, useValue: translocoStub() },
         { provide: Router, useValue: router },
       ],
     });

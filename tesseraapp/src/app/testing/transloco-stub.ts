@@ -32,6 +32,51 @@ export const EN_STRINGS: Record<string, string> = {
 };
 
 /**
+ * The command palette's labels and hints, mirrored from {@code public/assets/i18n/en.json}.
+ *
+ * <p>The palette resolves every command label through Transloco now, so a spec that asserts on
+ * rendered text needs these to come back in English. They are duplicated here deliberately: a spec
+ * that imported the live dictionary would keep passing if a translation were accidentally blanked,
+ * because the assertion and the value under test would move together.
+ */
+export const EN_PALETTE: Record<string, string> = {
+  'palette.analytics': "Analytics Hub",
+  'palette.analyticsHint': "Admin · trends & stats",
+  'palette.billing': "Billing Overview",
+  'palette.billingHint': "Admin · revenue analytics",
+  'palette.customers': "All Customers",
+  'palette.customersHint': "Browse customer directory",
+  'palette.home': "Home",
+  'palette.homeHint': "Dashboard overview",
+  'palette.invoices': "All Invoices",
+  'palette.invoicesHint': "Browse invoices",
+  'palette.logout': "Log Out",
+  'palette.logoutHint': "End your session",
+  'palette.manageServices': "Manage Services",
+  'palette.manageServicesHint': "Admin · catalog CRUD",
+  'palette.newCustomer': "New Customer",
+  'palette.newCustomerHint': "Create a customer",
+  'palette.newInvoice': "New Invoice",
+  'palette.newInvoiceHint': "Create an invoice",
+  'palette.profile': "Profile",
+  'palette.profileHint': "Your account",
+  'palette.roles': "Roles & Permissions",
+  'palette.rolesHint': "Admin · RBAC matrix",
+  'palette.sectionActions': "Actions",
+  'palette.sectionNavigate': "Navigate",
+  'palette.security': "Security Center",
+  'palette.securityHint': "MFA & active sessions",
+  'palette.securityOverview': "Security Overview",
+  'palette.securityOverviewHint': "Admin · anomalies & MFA coverage",
+  'palette.services': "Service Catalog",
+  'palette.servicesHint': "Browse services & apps",
+  'palette.toggleTheme': "Toggle Theme",
+  'palette.toggleThemeHint': "Switch dark / light",
+  'palette.users': "User Directory",
+  'palette.usersHint': "Admin · manage users",
+};
+
+/**
  * A {@code TranslocoService} double that reproduces the two behaviours the guards depend on.
  *
  * <p>It interpolates {@code {{param}}} placeholders, and — importantly — it returns the **key
@@ -44,7 +89,7 @@ export const EN_STRINGS: Record<string, string> = {
 export function translocoStub(): { translate: ReturnType<typeof vi.fn> } {
   return {
     translate: vi.fn((key: string, params?: Record<string, unknown>) => {
-      const template = EN_STRINGS[key];
+      const template = EN_STRINGS[key] ?? EN_PALETTE[key];
       if (template === undefined) return key;
       return template.replace(/\{\{(\w+)}}/g, (_, name: string) => String(params?.[name] ?? ''));
     }),
