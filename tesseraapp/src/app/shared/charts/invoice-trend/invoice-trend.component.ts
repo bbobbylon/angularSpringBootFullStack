@@ -18,6 +18,7 @@ import { GlobalStateInterface } from '../../../interface/global-state.interface'
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { InvoiceListDataInterface } from '../../../interface/appstates.interface';
 import { InvoiceInterface } from '../../../interface/invoice.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Self-contained invoice analytics panel embedded on the Invoices list page.
@@ -33,7 +34,7 @@ import { InvoiceInterface } from '../../../interface/invoice.interface';
 @Component({
   selector: 'app-invoice-trend',
   standalone: true,
-  imports: [DecimalPipe, RouterLink],
+  imports: [DecimalPipe, RouterLink, TranslocoDirective],
   templateUrl: './invoice-trend.component.html',
   styleUrl: './invoice-trend.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

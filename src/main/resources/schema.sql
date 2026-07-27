@@ -24,8 +24,13 @@
 -- all). Do NOT hand-edit those column names or types: a mismatch fails the prod boot.
 -- =====================================================================================
 
-CREATE SCHEMA IF NOT EXISTS db2;
-USE db2;
+-- PORTABLE BY DESIGN: no CREATE SCHEMA / USE here on purpose. Every statement below targets
+-- whichever database is ACTIVE on the connection that runs this script, so the SAME file
+-- initialises the local `db2` OR a cloud database such as Aiven `db3` — no hardcoded name to
+-- accidentally build tables in the wrong schema. Select the target before running:
+--   * CLI:  mysql -u <user> -p db2 < schema.sql      (the db-name argument = the active schema)
+--   * GUI:  make the database the active/default schema, then execute.
+-- A brand-new database must be created once, up front:  CREATE DATABASE db2;   (or db3, …).
 
 SET NAMES 'UTF8MB4';
 
@@ -60,15 +65,38 @@ CREATE TABLE IF NOT EXISTS roles
     CONSTRAINT UQ_Roles_Name UNIQUE (name)
 );
 
-INSERT INTO roles (name, permission)
-VALUES ('ROLE_GUEST', 'READ:USER'),
-       ('ROLE_USER', 'READ:USER, READ:CUSTOMER'),
-       ('ROLE_MODERATOR', 'READ:USER, READ:CUSTOMER, UPDATE:CUSTOMER'),
-       ('ROLE_HELP_DESK_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER'),
-       ('ROLE_ORGANIZATION_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE'),
-       ('ROLE_ADMIN',
+-- Role ids are PINNED, not auto-assigned.
+--
+-- Without explicit ids this seed drifts: `INSERT ... ON DUPLICATE KEY UPDATE` consumes an
+-- AUTO_INCREMENT value for every row it touches, including the rows it merely *updates*. Because
+-- this file is idempotent and meant to be re-run, each run burned another 7 ids — which is why a
+-- database seeded five times shows roles numbered in the 30s rather than 1–7.
+--
+-- That is not merely untidy. `userroles.role_id` is a real foreign key, so the numbers are load
+-- bearing *within* a database, and two databases seeded a different number of times disagree about
+-- which id means which role. Today nothing breaks, because every assignment path resolves the role
+-- by NAME first (`SELECT_ROLE_BY_NAME_QUERY`) and only then stores the id it found. But it means a
+-- dump restored from one environment into another, or a row compared across `db2` and `db3`, would
+-- silently attach people to the wrong role.
+--
+-- Pinning the ids makes the mapping identical in every environment and stops the drift, because an
+-- explicit id below the current counter allocates nothing.
+--
+-- NOTE for existing databases: this does NOT renumber roles that are already there. The unique key
+-- is `name`, so on a seeded database each row still matches on name and only its permission column
+-- is updated — the drifted id is left exactly as it is, and the foreign keys pointing at it stay
+-- valid. Fresh databases (and CI) get 1–7. Renumbering an existing database would mean updating
+-- `roles.id` and every `userroles.role_id` together, which is a deliberate migration and not
+-- something an idempotent seed should do behind your back.
+INSERT INTO roles (id, name, permission)
+VALUES (1, 'ROLE_GUEST', 'READ:USER'),
+       (2, 'ROLE_USER', 'READ:USER, READ:CUSTOMER'),
+       (3, 'ROLE_MODERATOR', 'READ:USER, READ:CUSTOMER, UPDATE:CUSTOMER'),
+       (4, 'ROLE_HELP_DESK_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER'),
+       (5, 'ROLE_ORGANIZATION_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE'),
+       (6, 'ROLE_ADMIN',
         'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, DELETE:USER'),
-       ('ROLE_APPLICATION_ADMIN',
+       (7, 'ROLE_APPLICATION_ADMIN',
         'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, DELETE:USER, DELETE:CUSTOMER') AS new
 ON DUPLICATE KEY UPDATE permission = new.permission;
 
@@ -88,15 +116,34 @@ CREATE TABLE IF NOT EXISTS events
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     type        VARCHAR(50)  NOT NULL,
     description VARCHAR(255) NOT NULL,
-    CONSTRAINT UQ_Events_Type UNIQUE (type),
-    CONSTRAINT CK_Events_Type CHECK (type IN
-        ('LOGIN_ATTEMPT', 'LOGIN_ATTEMPT_FAILURE', 'LOGIN_ATTEMPT_SUCCESS',
-         'PROFILE_UPDATE', 'PROFILE_PICTURE_UPDATE', 'ROLE_UPDATE',
-         'ACCOUNT_SETTINGS_UPDATE', 'PASSWORD_UPDATE', 'MFA_UPDATE',
-         'FEDERATED_LOGIN',
-         'TOTP_ENROLLED', 'TOTP_DISABLED', 'RECOVERY_CODE_USED',
-         'SESSION_REVOKED', 'TOKEN_REUSE_DETECTED'))
+    CONSTRAINT UQ_Events_Type UNIQUE (type)
 );
+
+-- events.type is guarded by a CHECK, but the valid-type set GROWS over time (TOTP, sessions,
+-- federation, token-reuse …). A CHECK baked into CREATE TABLE can't migrate: on a database
+-- created before a new type shipped, CREATE TABLE IF NOT EXISTS is a no-op, the OLD CHECK
+-- survives, and the new type is rejected on INSERT (MySQL error 3819 — the exact failure seen
+-- applying this against a pre-existing Aiven db3). So the CHECK is (re)applied idempotently here:
+-- drop whatever CHECK currently guards events.type — its name drifts across databases
+-- ('CK_Events_Type' on fresh installs, auto-named 'events_chk_1' on older ones) — then add the
+-- current definition. Existing rows are always a subset of the new set, so revalidation passes.
+SET @events_chk := (SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events'
+                      AND CONSTRAINT_TYPE = 'CHECK' LIMIT 1);
+SET @drop_events_chk := IF(@events_chk IS NULL, 'DO 0',
+                           CONCAT('ALTER TABLE events DROP CHECK `', @events_chk, '`'));
+PREPARE drop_events_chk_stmt FROM @drop_events_chk;
+EXECUTE drop_events_chk_stmt;
+DEALLOCATE PREPARE drop_events_chk_stmt;
+
+ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
+    ('LOGIN_ATTEMPT', 'LOGIN_ATTEMPT_FAILURE', 'LOGIN_ATTEMPT_SUCCESS',
+     'PROFILE_UPDATE', 'PROFILE_PICTURE_UPDATE', 'ROLE_UPDATE',
+     'ACCOUNT_SETTINGS_UPDATE', 'PASSWORD_UPDATE', 'MFA_UPDATE',
+     'FEDERATED_LOGIN',
+     'TOTP_ENROLLED', 'TOTP_DISABLED', 'RECOVERY_CODE_USED',
+     'SESSION_REVOKED', 'TOKEN_REUSE_DETECTED',
+     'SUSPICIOUS_LOGIN'));
 
 INSERT INTO events (type, description)
 VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
@@ -113,7 +160,8 @@ VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
        ('TOTP_DISABLED', 'You removed your authenticator app from multi-factor authentication :)'),
        ('RECOVERY_CODE_USED', 'You signed in using a single-use recovery code :)'),
        ('SESSION_REVOKED', 'You revoked an active session on your account :)'),
-       ('TOKEN_REUSE_DETECTED', 'A previously used refresh token was replayed; the affected session family was revoked for your security :|') AS new
+       ('TOKEN_REUSE_DETECTED', 'A previously used refresh token was replayed; the affected session family was revoked for your security :|'),
+       ('SUSPICIOUS_LOGIN', 'We noticed a sign-in that didn''t match your usual device or location, so we asked for extra verification :|') AS new
 ON DUPLICATE KEY UPDATE description = new.description;
 
 CREATE TABLE IF NOT EXISTS userevents
@@ -144,6 +192,26 @@ SET @add_userevents_detail := (
 PREPARE add_userevents_detail_stmt FROM @add_userevents_detail;
 EXECUTE add_userevents_detail_stmt;
 DEALLOCATE PREPARE add_userevents_detail_stmt;
+
+-- Widen users.image_url for federated avatar URLs.
+--
+-- The column was VARCHAR(255). Identity providers hand back longer URLs than that — a Google
+-- avatar (`https://lh3.googleusercontent.com/a/<long-opaque-token>=s96-c`) can exceed it — and
+-- MySQL outside strict mode SILENTLY TRUNCATES on insert rather than failing. The row is written,
+-- the login succeeds, and the only symptom is a broken image in the browser: the URL was chopped
+-- mid-token and resolves to nothing. Nothing server-side ever reports it.
+--
+-- Guarded on the current length so re-running is a no-op, and widening never rejects existing data.
+SET @widen_image_url := (
+    SELECT IF(COUNT(*) = 1,
+        'ALTER TABLE users MODIFY COLUMN image_url VARCHAR(512) DEFAULT ''https://cdn-icons-png.flaticon.com/512/149/149071.png''',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'
+      AND COLUMN_NAME = 'image_url' AND CHARACTER_MAXIMUM_LENGTH < 512);
+PREPARE widen_image_url_stmt FROM @widen_image_url;
+EXECUTE widen_image_url_stmt;
+DEALLOCATE PREPARE widen_image_url_stmt;
 
 -- ── Verification flows ─────────────────────────────────────────────────────────────────
 -- `url` stores a bare UUID verification key (NOT a full URL); the app builds the clickable
@@ -191,17 +259,38 @@ CREATE TABLE IF NOT EXISTS twofactorverifications
 -- which also fixes the create order: Customer → Invoice → invoiceserviceitems.
 CREATE TABLE IF NOT EXISTS `Customer`
 (
-    `createdAt`     datetime(6),
-    `id`            bigint       NOT NULL AUTO_INCREMENT,
-    `address`       varchar(255),
-    `customer_name` varchar(255) NOT NULL,
-    `email`         varchar(255) NOT NULL,
-    `imageUrl`      varchar(255),
-    `phoneNumber`   varchar(255),
-    `status`        varchar(255) NOT NULL,
-    `type`          varchar(255) NOT NULL,
+    `createdAt`       datetime(6),
+    `id`              bigint       NOT NULL AUTO_INCREMENT,
+    `address`         varchar(255),
+    `customer_name`   varchar(255) NOT NULL,
+    `email`           varchar(255) NOT NULL,
+    `imageUrl`        varchar(255),
+    `organization_id` bigint,
+    `phoneNumber`     varchar(255),
+    `status`          varchar(255) NOT NULL,
+    `type`            varchar(255) NOT NULL,
     PRIMARY KEY (`id`)
 ) engine = InnoDB;
+
+-- Idempotent add of Customer.organization_id for databases created before org-scoped reporting
+-- (FR-ORG-2) shipped. Same guard pattern as userevents.detail above: MySQL has no
+-- `ADD COLUMN IF NOT EXISTS`, so check information_schema and run the ALTER through a prepared
+-- statement only when the column is absent.
+--
+-- Deliberately NOT a foreign key. `organizations` is owned by the JDBC half of the schema while
+-- `Customer` is generated from the JPA entity and policed by Hibernate's ddl-auto: validate; a
+-- constraint spanning the two would be invisible to the entity mapping and would make the
+-- JpaSchemaSyncTest drift guard meaningless. The relationship is enforced in the service layer,
+-- which is also where the "which organization may this caller see?" decision already lives.
+SET @add_customer_org := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE `Customer` ADD COLUMN `organization_id` bigint DEFAULT NULL AFTER `imageUrl`',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Customer' AND COLUMN_NAME = 'organization_id');
+PREPARE add_customer_org_stmt FROM @add_customer_org;
+EXECUTE add_customer_org_stmt;
+DEALLOCATE PREPARE add_customer_org_stmt;
 
 CREATE TABLE IF NOT EXISTS `Invoice`
 (
@@ -217,14 +306,78 @@ CREATE TABLE IF NOT EXISTS `Invoice`
     CONSTRAINT `FK_Invoice_Customer` FOREIGN KEY (`customer`) REFERENCES `Customer` (`id`)
 ) engine = InnoDB;
 
+-- Idempotent relaxation of Invoice.customer for draft invoices. POST /invoice/create has always
+-- described itself as creating a standalone invoice to be linked to a customer later, but the
+-- column was NOT NULL, so that path could never actually be used. Guarded on information_schema
+-- because MySQL has no `MODIFY COLUMN IF`; re-running is a no-op and nothing is destroyed (going
+-- NOT NULL -> NULL never rejects existing rows).
+SET @relax_invoice_customer := (
+    SELECT IF(COUNT(*) = 1,
+        'ALTER TABLE `Invoice` MODIFY COLUMN `customer` bigint NULL',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Invoice'
+      AND COLUMN_NAME = 'customer' AND IS_NULLABLE = 'NO');
+PREPARE relax_invoice_customer_stmt FROM @relax_invoice_customer;
+EXECUTE relax_invoice_customer_stmt;
+DEALLOCATE PREPARE relax_invoice_customer_stmt;
+
 CREATE TABLE IF NOT EXISTS `Services`
 (
     `price`       float(53),
-    `id`          bigint NOT NULL AUTO_INCREMENT,
+    `id`          bigint  NOT NULL AUTO_INCREMENT,
     `description` varchar(255),
     `name`        varchar(255),
+    `active`      boolean NOT NULL DEFAULT TRUE,
     PRIMARY KEY (`id`)
 ) engine = InnoDB;
+
+-- Idempotent add of Services.active for catalogs created before service retirement shipped.
+-- DEFAULT TRUE means every pre-existing service reads back as offered, which is the only correct
+-- interpretation of a catalog that had no notion of being retired.
+SET @add_services_active := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE `Services` ADD COLUMN `active` boolean NOT NULL DEFAULT TRUE',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Services' AND COLUMN_NAME = 'active');
+PREPARE add_services_active_stmt FROM @add_services_active;
+EXECUTE add_services_active_stmt;
+DEALLOCATE PREPARE add_services_active_stmt;
+
+-- Seed the services catalog.
+--
+-- The table was created empty and nothing ever populated it, so `/services` and the service
+-- picker on a new invoice both rendered "no services" on any database built from this file. The
+-- catalog is reference data the application reads but never generates, so it belongs here beside
+-- the roles and event-type seeds rather than in DemoDataSeeder (which exists for sample
+-- customers/invoices, i.e. data a real deployment would delete).
+--
+-- Ids are pinned for the same reason the role ids are: `INSERT ... ON DUPLICATE KEY UPDATE` on an
+-- auto-increment column burns a value per row on every re-run, and `Services` has no unique key on
+-- `name` to dedupe against. Keying on the primary key makes re-running this file update the rows in
+-- place instead of appending a second copy of the catalogue each time.
+--
+-- Prices are the standard rate; an invoice copies name and price into its own line item when it is
+-- raised, so editing one of these later never restates an invoice already issued.
+INSERT INTO `Services` (`id`, `name`, `description`, `price`, `active`)
+VALUES (1, 'Identity & Access Review', 'Audit of roles, permissions, and account lifecycle against least-privilege policy.', 2400.00, TRUE),
+       (2, 'Single Sign-On Integration', 'Connect an existing identity provider (Google, Microsoft Entra, Okta) via OAuth2/OIDC.', 3600.00, TRUE),
+       (3, 'Multi-Factor Rollout', 'Enrolment campaign and support runbook for authenticator-app MFA across an organisation.', 1800.00, TRUE),
+       (4, 'Security Posture Assessment', 'Review of authentication, session handling, and audit coverage with a prioritised findings report.', 4200.00, TRUE),
+       (5, 'Cloud Migration', 'Containerise and migrate an existing deployment to managed cloud infrastructure.', 7500.00, TRUE),
+       (6, 'Database Administration', 'Schema review, index tuning, backup verification, and restore rehearsal.', 1500.00, TRUE),
+       (7, 'Web Application Development', 'Custom feature development against the existing Angular and Spring Boot stack.', 5200.00, TRUE),
+       (8, 'API Integration', 'Design and build an integration between this platform and a third-party system.', 2800.00, TRUE),
+       (9, 'Compliance Reporting', 'Evidence pack assembled from the audit log for an external assessor.', 1950.00, TRUE),
+       (10, 'Onboarding & Training', 'Administrator and end-user training, delivered remotely with recorded sessions.', 950.00, TRUE),
+       (11, 'Priority Support Retainer', 'Named contact with a four-hour response target during business hours.', 1200.00, TRUE),
+       (12, 'Data Import & Cleansing', 'Bulk import of customer records with de-duplication and validation reporting.', 1100.00, TRUE) AS new
+ON DUPLICATE KEY UPDATE `name`        = new.`name`,
+                        `description` = new.`description`,
+                        `price`       = new.`price`;
+-- `active` is deliberately NOT overwritten: a service an administrator has retired must stay
+-- retired across a re-run of this file, or the seed would silently put it back on sale.
 
 -- @ElementCollection table for Invoice.services (List<InvoiceLineItem>); composite PK
 -- (item_order, invoice_id), NO surrogate id — exactly as Hibernate maps an @OrderColumn collection.
@@ -259,9 +412,22 @@ CREATE TABLE IF NOT EXISTS organizations
     name       VARCHAR(100) NOT NULL,
     status     VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
     created_at DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT UQ_Organizations_Name UNIQUE (name),
-    CONSTRAINT CK_Organizations_Status CHECK (status IN ('ACTIVE', 'INACTIVE'))
+    CONSTRAINT UQ_Organizations_Name UNIQUE (name)
 );
+
+-- Same idempotent CHECK-rebuild pattern as events.type (see that block for the full rationale):
+-- re-apply the status CHECK so a pre-existing organizations table can't reject a newly added
+-- status value on INSERT. Cheap insurance — the status set is stable today ('ACTIVE','INACTIVE').
+SET @orgs_chk := (SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizations'
+                    AND CONSTRAINT_TYPE = 'CHECK' LIMIT 1);
+SET @drop_orgs_chk := IF(@orgs_chk IS NULL, 'DO 0',
+                         CONCAT('ALTER TABLE organizations DROP CHECK `', @orgs_chk, '`'));
+PREPARE drop_orgs_chk_stmt FROM @drop_orgs_chk;
+EXECUTE drop_orgs_chk_stmt;
+DEALLOCATE PREPARE drop_orgs_chk_stmt;
+
+ALTER TABLE organizations ADD CONSTRAINT CK_Organizations_Status CHECK (status IN ('ACTIVE', 'INACTIVE'));
 
 INSERT INTO organizations (name, status)
 VALUES ('Tessera', 'ACTIVE'),
@@ -279,6 +445,41 @@ CREATE TABLE IF NOT EXISTS userorganizations
     FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT UQ_UserOrganizations_User_Org UNIQUE (user_id, organization_id)
 );
+
+-- ── Backfill: customer ownership (must follow the organizations tables above) ───────────
+--
+-- Adopts every unowned customer into the lowest-numbered ACTIVE organization.
+--
+-- ORDERING MATTERS, which is why this sits here rather than beside the `Customer` ALTER that adds
+-- the column. It reads `organizations`, so it cannot run before that table exists. Placed up there
+-- it read naturally and was wrong on a FRESH database: `organizations` is created further down, so
+-- the backfill died with error 1146 (table doesn't exist) and — because both the mysql CLI and
+-- Workbench halt on error — every statement after it silently never ran. Existing databases hid the
+-- bug entirely, since they already had the table from an earlier run.
+--
+-- Existing rows predate the concept of customer ownership, so there is no recorded answer to
+-- "whose customer is this?" — the honest choices are to guess once, here, or to leave them NULL
+-- and invisible to every scoped administrator. Adopting them preserves the behaviour those rows
+-- were created under (visible to the operators who have been managing them) instead of silently
+-- emptying the dashboards of an established deployment.
+--
+-- Scoped to NULL rows only, so it is safe to re-run and never reassigns a customer that has since
+-- been given a real owner. If more than one organization is in play, review the result and
+-- reassign afterwards; this statement will not touch those rows again.
+--
+-- The `id` > 0 predicate is there for MySQL Workbench, not for correctness. Workbench connects
+-- with safe-update mode on by default, which rejects any UPDATE whose WHERE clause does not
+-- reference a KEY column (Error 1175) — and `organization_id` is not indexed. Since `id` is the
+-- PRIMARY KEY and auto-increment values start at 1, the condition matches every row and changes
+-- nothing about what this statement does; it just lets the file run as-is in Workbench instead of
+-- requiring each person to disable a safety setting before applying the schema. A migration script
+-- that only works after you have turned off a safety feature is a migration script that eventually
+-- gets run with that feature off against the wrong database.
+UPDATE `Customer`
+SET `organization_id` = (SELECT MIN(id) FROM organizations WHERE status = 'ACTIVE')
+WHERE `id` > 0
+  AND `organization_id` IS NULL
+  AND EXISTS (SELECT 1 FROM organizations WHERE status = 'ACTIVE');
 
 -- ── Authenticator-app (TOTP) multi-factor authentication ───────────────────────────────
 CREATE TABLE IF NOT EXISTS totpcredentials

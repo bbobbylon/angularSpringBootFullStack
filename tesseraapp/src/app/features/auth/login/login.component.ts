@@ -7,7 +7,9 @@ import { LoginStateInterface } from '../../../interface/appstates.interface';
 import { UserService } from '../../../service/user.service';
 import { Key } from '../../../enumeration/key.enumeration';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { retry } from 'rxjs';
 import { NotificationsService } from '../../../service/notifications-service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Handles login and MFA verification flows.
@@ -20,7 +22,7 @@ import { NotificationsService } from '../../../service/notifications-service';
   standalone: true,
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.css'],
-  imports: [RouterModule, CommonModule, FormsModule],
+  imports: [RouterModule, CommonModule, FormsModule, TranslocoDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LoginComponent implements OnInit {
@@ -71,10 +73,17 @@ export class LoginComponent implements OnInit {
     }
     this.userService
       .federatedProviders$()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        // The backend may still be booting when the login page first paints (or may restart while
+        // the page is open), which would leave the federated buttons missing until a manual refresh.
+        // Retry a few times so discovery self-heals once the backend is up. Complements the
+        // backend-ready gate in start.sh, and also covers IDE/separate launches and restarts.
+        retry({ count: 5, delay: 2000 }),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe({
         next: (response) => this.federatedProviders.set(response.data?.providers ?? []),
-        // Discovery failing must never block password login — just omit the buttons.
+        // Discovery ultimately failing must never block password login — just omit the buttons.
         error: () => this.federatedProviders.set([]),
       });
 
@@ -128,10 +137,13 @@ export class LoginComponent implements OnInit {
   /**
    * Submits the MFA verification code once the backend has requested 2FA.
    *
-   * Dispatches to the method-appropriate endpoint (FR-MFA-2/4): the SMS path verifies
-   * email + code, while the TOTP path submits the stored first-factor challenge plus
-   * the authenticator (or recovery) code. Both converge on identical token handling —
-   * past this point the session is method-agnostic.
+   * Dispatches to the method-appropriate endpoint (FR-MFA-2/4, FR-TPF-1): the SMS path
+   * verifies email + code, while the TOTP path submits the stored first-factor challenge
+   * plus the authenticator (or recovery) code. The risk step-up ('email') deliberately
+   * shares the SMS branch — the backend mints its code into the same verification store,
+   * so a separate endpoint would only duplicate the expiry and single-use rules. All
+   * three converge on identical token handling; past this point the session is
+   * method-agnostic.
    */
   verifyCode(verifyCodeForm: NgForm): void {
     const method = this.loginState().mfaMethod ?? 'sms';
@@ -212,6 +224,18 @@ export class LoginComponent implements OnInit {
               isUsingMfa: true,
               mfaMethod: 'sms',
               phone: response.data!.user!.phoneNumber!.substring(response.data!.user!.phoneNumber!.length - 4),
+            });
+          } else if (response.data!.stepUp) {
+            // Risk step-up (FR-TPF-1): this account has no second factor enrolled, so the
+            // two branches above did not fire — but the backend judged the sign-in unfamiliar
+            // and withheld tokens behind a one-time code emailed to the account holder.
+            // Verification reuses the SMS endpoint, so only the copy differs from 'sms'.
+            this.email.set(response.data!.user!.email ?? null);
+            this.loginState.set({
+              dataState: DataState.LOADED,
+              loginSuccess: false,
+              isUsingMfa: true,
+              mfaMethod: 'email',
             });
           } else {
             localStorage.setItem(Key.TOKEN, response.data!.access_token);

@@ -29,6 +29,55 @@ public class OAuthQuery {
             "INSERT INTO oauthproviderlinks (user_id, provider, provider_subject) VALUES (:userId, :provider, :subject)";
 
     /**
+     * Lists the providers currently linked to one account, for the Security Center's
+     * connected-accounts panel (ROADMAP §1.4).
+     *
+     * <p>Returns only the provider name and when it was linked — never the
+     * {@code provider_subject}. That subject is the provider's stable identifier for the person,
+     * and it is the one value in this table that would be useful to an attacker who had obtained
+     * a read of the response: it is exactly what the find-or-create lookup matches on. The UI has
+     * no use for it, so it does not leave the database.
+     *
+     * <p>Parameters: userId.
+     */
+    public static final String SELECT_PROVIDER_LINKS_BY_USER_ID_QUERY =
+            "SELECT provider, created_at FROM oauthproviderlinks WHERE user_id = :userId ORDER BY created_at";
+
+    /**
+     * Counts how many providers are linked to an account.
+     *
+     * <p>Used by the unlink guard: an account whose only way in is a federated provider must not
+     * be allowed to remove it, because doing so would lock the user out of their own account with
+     * no path back other than an administrator. Parameters: userId.
+     */
+    public static final String COUNT_PROVIDER_LINKS_BY_USER_ID_QUERY =
+            "SELECT COUNT(*) FROM oauthproviderlinks WHERE user_id = :userId";
+
+    /**
+     * Removes one provider link from an account.
+     *
+     * <p>Scoped by {@code user_id} as well as {@code provider} — never by link id alone. The id
+     * would be sufficient to identify the row, and that is precisely the problem: a request that
+     * names only a row id can be pointed at somebody else's row. Binding the caller's own id into
+     * the predicate makes cross-account unlinking unrepresentable rather than merely refused.
+     *
+     * <p>Parameters: userId, provider.
+     */
+    public static final String DELETE_PROVIDER_LINK_QUERY =
+            "DELETE FROM oauthproviderlinks WHERE user_id = :userId AND provider = :provider";
+
+    /**
+     * Whether the account has a usable password.
+     *
+     * <p>The other half of the unlink guard. A federated-only account created through
+     * {@link #INSERT_FEDERATED_USER_QUERY} has {@code password IS NULL}, so removing its last
+     * provider would leave it with no credential of any kind. An account that has since set a
+     * password may safely unlink everything. Parameters: userId.
+     */
+    public static final String COUNT_PASSWORD_BY_USER_ID_QUERY =
+            "SELECT COUNT(*) FROM users WHERE id = :userId AND password IS NOT NULL AND password <> ''";
+
+    /**
      * Creates the local account for a first-time federated user (FR-FED-3).
      * <p>
      * Differs deliberately from {@link UserQuery#INSERT_USER_QUERY}: there is no password

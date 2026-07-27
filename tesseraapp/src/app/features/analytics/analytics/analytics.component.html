@@ -1,13 +1,13 @@
 <app-navbar [user]="user()"></app-navbar>
 
-<main class="sc-analytics">
+<main *transloco="let t" class="sc-analytics">
   <div class="container">
 
     <!-- ── Header ──────────────────────────────────────────────────────── -->
     <header class="sc-analytics__head sc-reveal">
       <div>
-        <p class="eyebrow mb-1">Insights</p>
-        <h1 class="sc-analytics__title">Analytics Hub</h1>
+        <p class="eyebrow mb-1">{{ t('analytics.eyebrow') }}</p>
+        <h1 class="sc-analytics__title">{{ t('analytics.title') }}</h1>
         <p class="sc-analytics__sub">Trends, performance, and growth across your entire platform.</p>
       </div>
       <div class="sc-analytics__actions">
@@ -30,7 +30,7 @@
 
       <div class="sc-score-card" [class.sc-score-card--pos]="momCustomerGrowth() >= 0"
                                  [class.sc-score-card--neg]="momCustomerGrowth() < 0">
-        <span class="sc-score-card__label eyebrow">Customer Growth (MoM)</span>
+        <span class="sc-score-card__label eyebrow">{{ t('analytics.customerGrowth') }}</span>
         <span class="sc-score-card__value">
           {{ momCustomerGrowth() >= 0 ? '+' : '' }}{{ momCustomerGrowth() | number: '1.1-1' }}%
         </span>
@@ -41,7 +41,7 @@
 
       <div class="sc-score-card" [class.sc-score-card--pos]="momRevenueGrowth() >= 0"
                                  [class.sc-score-card--neg]="momRevenueGrowth() < 0">
-        <span class="sc-score-card__label eyebrow">Revenue Growth (MoM)</span>
+        <span class="sc-score-card__label eyebrow">{{ t('analytics.revenueGrowth') }}</span>
         <span class="sc-score-card__value">
           {{ momRevenueGrowth() >= 0 ? '+' : '' }}{{ momRevenueGrowth() | number: '1.1-1' }}%
         </span>
@@ -51,13 +51,13 @@
       </div>
 
       <div class="sc-score-card sc-score-card--neutral">
-        <span class="sc-score-card__label eyebrow">Collection Rate</span>
+        <span class="sc-score-card__label eyebrow">{{ t('analytics.collectionRate') }}</span>
         <span class="sc-score-card__value">{{ collectionRate() | number: '1.1-1' }}%</span>
         <i class="bi bi-check-circle sc-score-card__arrow"></i>
       </div>
 
       <div class="sc-score-card sc-score-card--pipeline">
-        <span class="sc-score-card__label eyebrow">Pending Pipeline</span>
+        <span class="sc-score-card__label eyebrow">{{ t('analytics.pendingPipeline') }}</span>
         <span class="sc-score-card__value">${{ pendingPipelineValue() | number: '1.0-0' }}</span>
         <i class="bi bi-hourglass-split sc-score-card__arrow"></i>
       </div>
@@ -68,8 +68,8 @@
     <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 80ms;">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">Growth Trends</h2>
-          <p class="sc-panel__meta">Customer acquisition vs. monthly revenue (last 10 months)</p>
+          <h2 class="sc-panel__title">{{ t('analytics.growthTrends') }}</h2>
+          <p class="sc-panel__meta">{{ t('analytics.growthSub') }}</p>
         </div>
         <div class="sc-trend-legend">
           <span class="sc-trend-legend__item sc-trend-legend__item--cust">
@@ -150,7 +150,7 @@
           </div>
         </div>
       } @else {
-        <p class="text-muted small px-4 py-3 mb-0">Not enough data yet — needs at least 2 months of activity.</p>
+        <p class="text-muted small px-4 py-3 mb-0">{{ t('analytics.notEnoughData') }}</p>
       }
     </section>
 
@@ -161,7 +161,7 @@
       <section class="sc-panel sc-panel--flush">
         <div class="sc-panel__head">
           <div>
-            <h2 class="sc-panel__title">Customer Status</h2>
+            <h2 class="sc-panel__title">{{ t('analytics.customerStatus') }}</h2>
             <p class="sc-panel__meta">{{ customerTotal() }} total</p>
           </div>
         </div>
@@ -194,7 +194,7 @@
             </ul>
           </div>
         } @else {
-          <p class="text-muted small px-4 py-3 mb-0">No customer data.</p>
+          <p class="text-muted small px-4 py-3 mb-0">{{ t('analytics.noCustomerData') }}</p>
         }
       </section>
 
@@ -202,8 +202,8 @@
       <section class="sc-panel sc-panel--flush">
         <div class="sc-panel__head">
           <div>
-            <h2 class="sc-panel__title">Customer Types</h2>
-            <p class="sc-panel__meta">By segment</p>
+            <h2 class="sc-panel__title">{{ t('analytics.customerTypes') }}</h2>
+            <p class="sc-panel__meta">{{ t('analytics.bySegment') }}</p>
           </div>
         </div>
         <div class="sc-type-list">
@@ -218,7 +218,7 @@
               </div>
             </div>
           } @empty {
-            <p class="text-muted small px-4 py-3 mb-0">No data.</p>
+            <p class="text-muted small px-4 py-3 mb-0">{{ t('analytics.noData') }}</p>
           }
         </div>
       </section>
@@ -229,8 +229,8 @@
     <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 160ms;">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">Customer Acquisition</h2>
-          <p class="sc-panel__meta">New customers per month (last 8 months)</p>
+          <h2 class="sc-panel__title">{{ t('analytics.acquisition') }}</h2>
+          <p class="sc-panel__meta">{{ t('analytics.acquisitionSub') }}</p>
         </div>
       </div>
       @if (acquisitionBars().length) {
@@ -247,7 +247,7 @@
           </div>
         </div>
       } @else {
-        <p class="text-muted small px-4 py-3 mb-0">No acquisition data yet.</p>
+        <p class="text-muted small px-4 py-3 mb-0">{{ t('analytics.noAcquisition') }}</p>
       }
     </section>
 
@@ -255,13 +255,13 @@
     <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 200ms;">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">Invoice Status Over Time</h2>
-          <p class="sc-panel__meta">Collection momentum — PAID / PENDING / OVERDUE per month</p>
+          <h2 class="sc-panel__title">{{ t('analytics.statusOverTime') }}</h2>
+          <p class="sc-panel__meta">{{ t('analytics.statusOverTimeSub') }}</p>
         </div>
         <div class="sc-stack-legend">
-          <span class="sc-stack-legend__item sc-stack-legend__item--paid">Paid</span>
-          <span class="sc-stack-legend__item sc-stack-legend__item--pending">Pending</span>
-          <span class="sc-stack-legend__item sc-stack-legend__item--overdue">Overdue</span>
+          <span class="sc-stack-legend__item sc-stack-legend__item--paid">{{ t('analytics.paid') }}</span>
+          <span class="sc-stack-legend__item sc-stack-legend__item--pending">{{ t('analytics.pending') }}</span>
+          <span class="sc-stack-legend__item sc-stack-legend__item--overdue">{{ t('analytics.overdue') }}</span>
         </div>
       </div>
       @if (stackedBars().length) {
@@ -287,7 +287,7 @@
           }
         </div>
       } @else {
-        <p class="text-muted small px-4 py-3 mb-0">No invoice data yet.</p>
+        <p class="text-muted small px-4 py-3 mb-0">{{ t('analytics.noInvoiceData') }}</p>
       }
     </section>
 
@@ -295,8 +295,8 @@
     <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 240ms;">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">Service Utilisation</h2>
-          <p class="sc-panel__meta">Top 10 services by invoice frequency</p>
+          <h2 class="sc-panel__title">{{ t('analytics.serviceUtilisation') }}</h2>
+          <p class="sc-panel__meta">{{ t('analytics.serviceSub') }}</p>
         </div>
         <a [routerLink]="['/services']" class="btn btn-outline-secondary btn-sm sc-panel__action">
           View catalog <i class="bi bi-arrow-right"></i>
@@ -317,7 +317,7 @@
           }
         </div>
       } @else {
-        <p class="text-muted small px-4 py-3 mb-0">No service data yet.</p>
+        <p class="text-muted small px-4 py-3 mb-0">{{ t('analytics.noServiceData') }}</p>
       }
     </section>
 

@@ -17,12 +17,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.sql.Timestamp;
 import java.util.Map;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.query.OAuthQuery.INSERT_FEDERATED_USER_QUERY;
+import static com.bob.angularspringbootfullstack.query.OAuthQuery.COUNT_PASSWORD_BY_USER_ID_QUERY;
+import static com.bob.angularspringbootfullstack.query.OAuthQuery.COUNT_PROVIDER_LINKS_BY_USER_ID_QUERY;
+import static com.bob.angularspringbootfullstack.query.OAuthQuery.DELETE_PROVIDER_LINK_QUERY;
 import static com.bob.angularspringbootfullstack.query.OAuthQuery.INSERT_PROVIDER_LINK_QUERY;
+import static com.bob.angularspringbootfullstack.query.OAuthQuery.SELECT_PROVIDER_LINKS_BY_USER_ID_QUERY;
 import static com.bob.angularspringbootfullstack.query.OAuthQuery.SELECT_USER_ID_BY_PROVIDER_SUBJECT_QUERY;
 import static com.bob.angularspringbootfullstack.query.UserQuery.COUNT_USER_EMAIL_QUERY;
 import static java.util.Objects.requireNonNull;
@@ -116,6 +121,68 @@ public class FederatedIdentityServiceImpl implements FederatedIdentityService {
     private void insertProviderLink(Long userId, String provider, String subject) {
         jdbcTemplate.update(INSERT_PROVIDER_LINK_QUERY,
                 Map.of("userId", userId, "provider", provider, "subject", subject));
+    }
+
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<ProviderLink> listLinks(Long userId) {
+        return jdbcTemplate.query(SELECT_PROVIDER_LINKS_BY_USER_ID_QUERY,
+                Map.of("userId", userId),
+                (resultSet, rowNum) -> {
+                    Timestamp linkedAt = resultSet.getTimestamp("created_at");
+                    return new ProviderLink(
+                            resultSet.getString("provider"),
+                            linkedAt == null ? null : linkedAt.toLocalDateTime());
+                });
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The order of the two counts is deliberate. The password check runs first and short-circuits:
+     * an account that can sign in with a password may unlink freely, and asking how many providers
+     * it has would be a question whose answer could not change the outcome.
+     */
+    @Override
+    @Transactional
+    public void unlinkProvider(Long userId, String provider) {
+        boolean hasPassword = count(COUNT_PASSWORD_BY_USER_ID_QUERY, Map.of("userId", userId)) > 0;
+        if (!hasPassword) {
+            long linkCount = count(COUNT_PROVIDER_LINKS_BY_USER_ID_QUERY, Map.of("userId", userId));
+            if (linkCount <= 1) {
+                // Refusing here is the whole feature. A federated-only account that removes its
+                // last provider has no credential left and no self-service way back in — the user
+                // would have to ask an administrator to repair an account they broke with a button
+                // the UI offered them.
+                throw new ApiException(
+                        "This is the only way you can sign in. Set a password first, or connect another provider.");
+            }
+        }
+
+        int removed = jdbcTemplate.update(DELETE_PROVIDER_LINK_QUERY,
+                Map.of("userId", userId, "provider", provider));
+        if (removed == 0) {
+            // Already not linked. Reported as success: the caller asked for a state that is
+            // already true, and there is nothing for them to do about it.
+            log.debug("[FEDERATION] No '{}' link to remove for userId={}", provider, userId);
+            return;
+        }
+        log.info("[FEDERATION] Disconnected provider '{}' from userId={}", provider, userId);
+    }
+
+    /**
+     * Runs a scalar COUNT, treating a null result as zero.
+     *
+     * @param query      the counting query
+     * @param parameters its named parameters
+     * @return the count, never null
+     */
+    private long count(String query, Map<String, ?> parameters) {
+        Long value = jdbcTemplate.queryForObject(query, parameters, Long.class);
+        return value == null ? 0 : value;
     }
 
     /**

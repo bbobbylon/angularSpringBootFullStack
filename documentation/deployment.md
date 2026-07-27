@@ -167,7 +167,16 @@ For all of them: set the env vars, point at a managed MySQL, and apply `schema.s
 - [ ] Health probe → `GET /actuator/health`
 - [ ] Confirm the frontend's API base URL matches the deployed backend (see [frontend notes](../tesseraapp/README.md))
 
-> Note: the Angular services currently target `http://localhost:8080`; deploying to a different backend origin requires updating the frontend's environment files and rebuilding. This is a known rough edge.
+> **Resolved (2026-07-25):** this note previously warned that the Angular services hardcoded
+> `http://localhost:8080` and that deploying elsewhere meant editing environment files and
+> rebuilding. That is no longer true. `environment.production.ts` uses `apiUrl: ''`, so production
+> calls are same-origin relative URLs (the SPA is served from inside the Spring Boot jar), and
+> `environment.ts` derives the dev API host from `window.location`, so the app also works when
+> opened from another device on the LAN. **No frontend rebuild is needed to change backend origin.**
+
+> **For the full per-cloud pipeline setup (AWS, Google Cloud, Azure), see
+> [cicd-setup.md](cicd-setup.md).** This guide covers the image and the principles; that one
+> covers wiring up each provider.
 
 ---
 

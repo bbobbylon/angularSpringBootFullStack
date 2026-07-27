@@ -93,6 +93,34 @@ public class Customer {
      */
     private String imageUrl;
     /**
+     * The organization that owns this customer record (FR-ORG-2).
+     * <p>
+     * This is what makes org-scoped reporting possible. Organizations previously scoped only
+     * <em>users</em> (via the {@code userorganizations} join table), so the analytics rollups had
+     * no tenant dimension to filter on and every organization administrator saw system-wide
+     * totals — including the revenue of organizations they have no relationship with.
+     * <p>
+     * Modelled as a plain {@code Long} rather than a {@code @ManyToOne} association because
+     * {@code organizations} is owned by the JDBC half of this codebase ({@code schema.sql} +
+     * {@code OrganizationQuery}), not by JPA. Mapping a relationship here would force
+     * {@code Organization} to become a second, JPA-managed view of the same table, and Hibernate's
+     * {@code ddl-auto: validate} would then police a table it does not otherwise manage. Holding
+     * the raw foreign key keeps the two persistence styles from colliding while still giving every
+     * query something to filter on.
+     * <p>
+     * Explicitly mapped to {@code organization_id} for the same reason as {@code customer_name}:
+     * {@code globally_quoted_identifiers: true} suppresses the camelCase → snake_case strategy,
+     * so without this Hibernate would look for a literal {@code "organizationId"} column.
+     * <p>
+     * Nullable by design. Rows created before this column existed are backfilled by
+     * {@code schema.sql}, but a null must remain <em>possible</em> rather than fatal — and the
+     * scoped queries treat it as "belongs to no organization", i.e. invisible to a scoped admin
+     * rather than visible to all of them. Unscoped tiers ({@code ROLE_ADMIN},
+     * {@code ROLE_APPLICATION_ADMIN}) still see every row.
+     */
+    @Column(name = "organization_id")
+    private Long organizationId;
+    /**
      * All invoices associated with this customer.
      * Loaded eagerly, so the full invoice history is always available with the customer.
      */

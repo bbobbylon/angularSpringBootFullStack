@@ -80,10 +80,13 @@
 }
 .sc-legend__item {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  /* dot | label | count | percent — the two numeric columns are fixed-width and separated by a
+     rule below, because with only a gap between them "Active 27 26%" reads as one run of digits
+     and the reader has to work out where the count ends and the share begins. */
+  grid-template-columns: auto 1fr 3.5rem 3.5rem;
   align-items: center;
   gap: var(--space-3);
-  padding: 0.35rem 0;
+  padding: 0.4rem 0;
   border-bottom: 1px solid var(--hairline);
 }
 .sc-legend__item:last-child {
@@ -102,12 +105,18 @@
   color: var(--text-strong);
   font-weight: 600;
   font-size: var(--fs-sm);
+  text-align: right;
+  /* Tabular figures so the counts form a straight column instead of jittering with digit width. */
+  font-variant-numeric: tabular-nums;
 }
 .sc-legend__pct {
-  color: var(--text-faint);
-  font-size: var(--fs-eyebrow);
-  min-width: 2.6em;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
   text-align: right;
+  font-variant-numeric: tabular-nums;
+  /* The divider that separates "how many" from "what share" at a glance. */
+  border-left: 1px solid var(--hairline-strong);
+  padding-left: var(--space-3);
 }
 
 /* ---- Billing ratios ---- */

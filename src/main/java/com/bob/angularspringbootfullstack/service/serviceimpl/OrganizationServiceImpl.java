@@ -18,6 +18,7 @@ import java.util.Map;
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_SHARED_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_USERS_SHARING_ORGANIZATIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATION_IDS_BY_USER_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 
@@ -92,6 +93,27 @@ public class OrganizationServiceImpl implements OrganizationService {
         } catch (Exception exception) {
             log.error("Error counting org-scoped users for admin {} (term '{}'): {}", adminId, searchTerm, exception.getMessage(), exception);
             throw new ApiException("An error occurred while retrieving the user directory. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Unlike the directory queries in this class, a failure here is <b>not</b> swallowed into an
+     * empty result. An empty set means "this administrator may see nothing", which is a legitimate
+     * verdict; returning it after a database error would make an infrastructure fault look like a
+     * deliberate authorization decision, and the caller would render an empty dashboard as though
+     * that were the truth. Failing loudly keeps "you have no access" distinguishable from
+     * "we could not determine your access".
+     */
+    @Override
+    public Collection<Long> findActiveOrganizationIds(Long userId) {
+        try {
+            return jdbcTemplate.queryForList(SELECT_ACTIVE_ORGANIZATION_IDS_BY_USER_QUERY,
+                    Map.of("userId", userId), Long.class);
+        } catch (Exception exception) {
+            log.error("Error resolving active organization ids for user {}: {}", userId, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while resolving your organization access. Please try again.");
         }
     }
 

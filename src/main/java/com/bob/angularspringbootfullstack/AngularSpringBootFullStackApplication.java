@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack;
 
 import org.springframework.boot.SpringApplication;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.web.config.EnableSpringDataWebSupport;
@@ -64,15 +65,38 @@ public class AngularSpringBootFullStackApplication {
     }
 
 
+    /**
+     * Origin patterns the browser is allowed to call this API from, comma-separated.
+     * <p>
+     * Sourced from configuration ({@code app.cors.allowed-origin-patterns}, env
+     * {@code CORS_ALLOWED_ORIGINS}) rather than hardcoded, because the correct answer is
+     * different in every environment and baking a list into the jar means a rebuild to
+     * change it — and, worse, it means the prod jar ships whatever placeholder domain was
+     * convenient at development time.
+     * <p>
+     * Per-profile values live in {@code application-*.yml}: dev allows the LAN so the app
+     * can be opened from a phone, prod names the real origin(s) and nothing else.
+     */
+    @Value("${app.cors.allowed-origin-patterns}")
+    private String allowedOriginPatterns;
+
     // CORS Filter configuration. Basic boilerplate that is used in almost all Spring Boot applications. It does the same thing as the @CrossOrigin annotation but applies globally to all endpoints. It allows the frontend (running on a different port) to make requests to the backend without being blocked by the browser's same-origin policy. The allowed origins are specified in the configuration, and you can adjust them as needed for your development and production environments.
     @Bean
     public CorsFilter corsFilter() {
         UrlBasedCorsConfigurationSource urlBasedCorsConfigurationSource = new UrlBasedCorsConfigurationSource();
         CorsConfiguration corsConfiguration = new CorsConfiguration();
         corsConfiguration.setAllowCredentials(true);
-        // TODO: replace the placeholder with your real production domain once DNS is configured
-        corsConfiguration.setAllowedOrigins(List.of("http://localhost:4200", "http://localhost:3000", "https://app.tesseraapp.example.com"));
-        //corsConfiguration.setAllowedOrigins(Arrays.asList("*"));
+        // setAllowedOriginPATTERNS, not setAllowedOrigins: with allowCredentials(true) the
+        // CORS spec forbids the "*" wildcard, and Spring enforces that by REFUSING to start
+        // if setAllowedOrigins contains one. Patterns are the supported way to express
+        // "any host on my LAN" — Spring matches the request's Origin against them and
+        // echoes back that exact origin, which is spec-compliant. Exact origins (the prod
+        // case) are still written literally and still match exactly.
+        corsConfiguration.setAllowedOriginPatterns(
+                Arrays.stream(allowedOriginPatterns.split(","))
+                        .map(String::trim)
+                        .filter(pattern -> !pattern.isEmpty())
+                        .toList());
         corsConfiguration.setAllowedHeaders(Arrays.asList("Origin", "Access-Control-Allow-Origin", "Content-Type",
                 "Accept", "Jwt-Token", "Authorization", "Origin", "Accept", "X-Requested-With",
                 "Access-Control-Request-Method", "Access-Control-Request-Headers"));

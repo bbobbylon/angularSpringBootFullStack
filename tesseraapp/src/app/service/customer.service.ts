@@ -1,7 +1,9 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpEvent } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
+// To re-enable the commented `tap(console.log)` calls below, add `tap` back here:
+// import { catchError, tap } from 'rxjs/operators';
+import { catchError } from 'rxjs/operators';
 import {
   CustomerInvoiceUserInterface,
   CustomerListDataInterface,
@@ -44,7 +46,7 @@ export class CustomerService {
   stats$ = (): Observable<CustomHttpResponseInterface<StatsDataInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<StatsDataInterface>>(`${this.server}/customer/stats`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches a paginated page of customers.
@@ -57,7 +59,7 @@ export class CustomerService {
     //TODO allow sorting, filtering, and infinite scrolling later
     this.http
       .get<CustomHttpResponseInterface<CustomerListDataInterface>>(`${this.server}/customer/list?page=${page}&size=${size}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
   /**
    * Fetches a single customer's complete record by numeric ID.
    *
@@ -73,7 +75,7 @@ export class CustomerService {
   customerId$ = (customerId: number): Observable<CustomHttpResponseInterface<CustomerStateInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<CustomerStateInterface>>(`${this.server}/customer/get/${customerId}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Sends updated customer fields to the backend via PUT /customer/update/:id.
@@ -89,7 +91,7 @@ export class CustomerService {
   updateCustomer$ = (customer: CustomerInterface): Observable<CustomHttpResponseInterface<CustomerStateInterface>> =>
     this.http
       .put<CustomHttpResponseInterface<CustomerStateInterface>>(`${this.server}/customer/update/${customer.id}`, customer)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * POSTs a new customer record to the backend.
@@ -101,7 +103,7 @@ export class CustomerService {
   newCustomer$ = (customer: CustomerInterface): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<CustomerListDataInterface>>(`${this.server}/customer/create`, customer)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
   /**
    * Fetches a paginated page of all invoices.
    *
@@ -112,7 +114,7 @@ export class CustomerService {
   invoices$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<InvoiceListDataInterface>>(`${this.server}/customer/invoice/list?page=${page}&size=${size}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches a single invoice and its associated customer by invoice ID.
@@ -128,7 +130,7 @@ export class CustomerService {
   invoice$ = (invoiceId: number): Observable<CustomHttpResponseInterface<CustomerInvoiceUserInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(`${this.server}/customer/invoice/get/${invoiceId}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches the customer list needed to populate the new-invoice form dropdown.
@@ -139,7 +141,7 @@ export class CustomerService {
   newInvoice$ = (): Observable<CustomHttpResponseInterface<NewInvoiceDataInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<NewInvoiceDataInterface>>(`${this.server}/customer/invoice/new`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Creates a new invoice and links it to the specified customer.
@@ -151,17 +153,37 @@ export class CustomerService {
   addInvoiceToCustomer$ = (customerId: number, invoice: InvoiceInterface): Observable<CustomHttpResponseInterface<NewInvoiceDataInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<NewInvoiceDataInterface>>(`${this.server}/customer/invoice/addtocustomer/${customerId}`, invoice)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Applies edits to an existing invoice (ROADMAP §2 — "Edit invoices").
+   *
+   * Calls {@code PATCH /customer/invoice/update/:id}. Only the editable fields are read
+   * server-side: the invoice number is an external reference already printed on documents the
+   * customer holds, and reassigning ownership is a separate operation, so neither can be changed
+   * through this call regardless of what the body contains.
+   *
+   * Until this existed, a wrong amount could only be addressed by raising a second invoice —
+   * leaving the incorrect one in the customer's history and in every revenue total derived from it.
+   *
+   * @param invoiceId - the numeric ID of the invoice to edit
+   * @param invoice - the edited fields (status, amount, totalAmount, invoiceDate, services)
+   * @returns Observable emitting the envelope carrying the updated invoice
+   */
+  updateInvoice$ = (invoiceId: number, invoice: Partial<InvoiceInterface>): Observable<CustomHttpResponseInterface<CustomerInvoiceUserInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(`${this.server}/customer/invoice/update/${invoiceId}`, invoice)
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   downloadCustomerReport$ = (): Observable<HttpEvent<Blob>> =>
     this.http
-      .get<HttpEvent<Blob>>(`${this.server}/customer/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })
-      .pipe(tap(console.log), catchError(this.handleError));
+      .get<Blob>(`${this.server}/customer/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   downloadInvoiceReport$ = (): Observable<HttpEvent<Blob>> =>
     this.http
-      .get<HttpEvent<Blob>>(`${this.server}/customer/invoice/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })
-      .pipe(tap(console.log), catchError(this.handleError));
+      .get<Blob>(`${this.server}/customer/invoice/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Searches for customers whose name contains the given term via GET /customer/search.
@@ -179,7 +201,7 @@ export class CustomerService {
       .get<
         CustomHttpResponseInterface<CustomerListDataInterface>
       >(`${this.server}/customer/search?name=${encodeURIComponent(customerName)}&page=${page}&size=${size}`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Normalises HTTP errors into a single Observable<never> so all callers
@@ -197,9 +219,9 @@ export class CustomerService {
     } else {
       if (error.error?.reason) {
         errorMessage = error.error.reason as string;
-        console.log(error.error);
-        console.log(errorMessage);
-        console.log(error);
+        // console.log(error.error);
+        // console.log(errorMessage);
+        // console.log(error);
       } else {
         errorMessage = `Server returned code: ${error.status}, error message is: ${error.message}`;
       }

@@ -44,6 +44,20 @@ public interface UserService {
     void sendVerificationCode(UserDTO userDTO);
 
     /**
+     * Issues and emails a one-time step-up code for a sign-in flagged as anomalous (SRS FR-TPF-1).
+     *
+     * <p>Called only for accounts with no enrolled second factor — an account with TOTP or SMS 2FA
+     * is already being challenged. The code is stored in the same {@code twofactorverifications}
+     * table as the SMS flow and is redeemed at the same
+     * {@code GET /user/verify/code/{email}/{code}} endpoint, so the step-up reuses a proven,
+     * already-public redemption path instead of introducing a second one to secure.
+     *
+     * @param userDTO       the user awaiting step-up verification
+     * @param reasonSummary human-readable description of what looked unusual, for the email body
+     */
+    void sendStepUpCode(UserDTO userDTO, String reasonSummary);
+
+    /**
      * Verifies a 2FA code for a user.
      *
      * @param email user's email

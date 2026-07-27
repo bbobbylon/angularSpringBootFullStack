@@ -82,12 +82,23 @@ public class Invoice {
     /**
      * JPA relationship to the owning Customer. Excluded from JSON output to prevent
      * circular serialization between Customer and Invoice.
-     * <p>
-     * TODO: Change nullable = false to nullable = true to support draft invoices
-     *  (created standalone via POST /invoice/create, linked to a customer later).
+     *
+     * <p><b>Nullable, to support draft invoices.</b> {@code POST /invoice/create} has always
+     * advertised itself as creating a <em>standalone</em> invoice to be attached to a customer
+     * later, but the column was {@code NOT NULL} — so that endpoint could only ever succeed if the
+     * caller supplied a customer, which is precisely the case it was not for. The entity and the
+     * schema now agree that a draft has no customer yet, and
+     * {@code PUT /invoice/{invoiceId}/addtocustomer/{customerId}} is what gives it one.
+     *
+     * <p><b>Deployment note:</b> databases created before this change still carry
+     * {@code customer bigint NOT NULL}. {@code schema.sql} contains a guarded, idempotent
+     * {@code MODIFY COLUMN} that relaxes it; until that runs against an existing database, draft
+     * creation will still be refused by the database itself. Hibernate's {@code ddl-auto: validate}
+     * does not check nullability, so a stale database fails at insert time rather than at startup —
+     * which is why the ALTER is called out here rather than left for someone to discover.
      */
     @ManyToOne
-    @JoinColumn(name = "customer", nullable = false)
+    @JoinColumn(name = "customer", nullable = true)
     @JsonIgnore
     private Customer customer;
 }

@@ -101,6 +101,23 @@ public interface UserRepo<T extends User> {
     void sendVerificationCode(UserDTO userDTO);
 
     /**
+     * Mints and persists a single-use verification code for the given user, replacing any code
+     * already outstanding, and returns it <em>without</em> dispatching it anywhere.
+     *
+     * <p>Separating minting from delivery is what lets two different flows share one code store
+     * (the {@code twofactorverifications} table) and one redemption endpoint
+     * ({@code GET /user/verify/code/{email}/{code}}) while delivering over different channels:
+     * {@link #sendVerificationCode} sends over SMS for enrolled 2FA users, and the FR-TPF-1
+     * step-up path emails it to accounts with no second factor. Returning the code rather than
+     * sending it also keeps the choice of channel — a business decision — in the service layer
+     * where it belongs.
+     *
+     * @param userDTO the user the code is issued to
+     * @return the freshly generated code, already persisted with its expiration
+     */
+    String issueVerificationCode(UserDTO userDTO);
+
+    /**
      * Verifies a user's 2FA code.
      *
      * @param email user's email

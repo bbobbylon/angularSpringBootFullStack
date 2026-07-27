@@ -34,8 +34,8 @@ public class UserQuery {
      * verification lookups host-independent.
      * <p>
      * TODO: rename the {@code url} column to {@code verification_key} to match its contents. That
-     *  requires a DB migration applied to the live local + Aiven databases plus schema.sql,
-     *  psqlschema.sql and aivendatabase.sql — intentionally deferred as a follow-up.
+     *  requires a guarded, idempotent rename in {@code schema.sql} (the single schema source),
+     *  applied to the live local and Aiven databases — intentionally deferred as a follow-up.
      * <p>
      * Parameters: userId, url (the bare key)
      */

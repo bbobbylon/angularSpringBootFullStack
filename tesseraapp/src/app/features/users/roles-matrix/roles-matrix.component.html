@@ -8,20 +8,20 @@
   Read-only. Role and permission assignment lives in the admin user-detail view.
 -->
 <app-navbar [user]="user()"></app-navbar>
-<main class="sc-page">
+<main class="sc-page" *transloco="let t">
   <div class="container">
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb sc-breadcrumb">
-        <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
-        <li class="breadcrumb-item"><a [routerLink]="['/users']">Admin</a></li>
-        <li aria-current="page" class="breadcrumb-item active">Roles Matrix</li>
+        <li class="breadcrumb-item"><a [routerLink]="['/']">{{ t('securityCenter.home') }}</a></li>
+        <li class="breadcrumb-item"><a [routerLink]="['/users']">{{ t('nav.admin') }}</a></li>
+        <li aria-current="page" class="breadcrumb-item active">{{ t('rolesMatrix.breadcrumb') }}</li>
       </ol>
     </nav>
 
     <header class="sc-head sc-reveal">
       <div>
-        <p class="eyebrow mb-1">Access control</p>
-        <h1 class="sc-head__title">Roles &times; Permissions</h1>
+        <p class="eyebrow mb-1">{{ t('rolesMatrix.eyebrow') }}</p>
+        <h1 class="sc-head__title">{{ t('rolesMatrix.title') }}</h1>
         <p class="sc-head__sub">
           Each column is a permission string enforced by Spring Security at the URL and method level (SRS FR-RBAC-2).
           A checkmark means the role grants it; a dash means it does not.
@@ -34,12 +34,12 @@
       @case (DataState.LOADING) {
         <div class="d-flex align-items-center gap-2 text-muted py-4">
           <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-          <span>Loading roles catalogue…</span>
+          <span>{{ t('rolesMatrix.loading') }}</span>
         </div>
       }
 
       @case (DataState.ERROR) {
-        <div class="alert alert-danger">Could not load the roles catalogue. Please refresh.</div>
+        <div class="alert alert-danger">{{ t('rolesMatrix.error') }}</div>
       }
 
       @case (DataState.LOADED) {
@@ -94,7 +94,7 @@
         <p class="text-muted" style="font-size: 0.82rem;">
           <i class="bi bi-info-circle me-1"></i>
           Role assignments are managed from the
-          <a [routerLink]="['/users']">User Directory</a>.
+          <a [routerLink]="['/users']">{{ t('nav.userDirectory') }}</a>.
           Permission strings are defined in the backend role catalogue and enforced server-side on every request.
         </p>
       }

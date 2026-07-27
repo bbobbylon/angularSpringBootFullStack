@@ -2,20 +2,20 @@
   @switch (state.dataState) {
     @case (DataState.LOADED) {
       <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-      <main class="sc-page">
+      <main *transloco="let t" class="sc-page">
         <div class="container">
 
           <nav aria-label="breadcrumb">
             <ol class="breadcrumb sc-breadcrumb">
               <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
-              <li class="breadcrumb-item active" aria-current="page">Invoices</li>
+              <li class="breadcrumb-item active" aria-current="page">{{ t('invoices.title') }}</li>
             </ol>
           </nav>
 
           <header class="sc-head sc-reveal">
             <div>
-              <p class="eyebrow mb-1">Billing</p>
-              <h1 class="sc-head__title">Invoices</h1>
+              <p class="eyebrow mb-1">{{ t('invoices.eyebrow') }}</p>
+              <h1 class="sc-head__title">{{ t('invoices.title') }}</h1>
             </div>
             <div class="sc-head__actions">
               <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm sc-panel__action">
@@ -44,12 +44,12 @@
                 <table class="table table-hover align-middle">
                   <thead>
                   <tr>
-                    <th scope="col">Invoice #</th>
-                    <th scope="col">Service</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Date</th>
-                    <th scope="col">Total</th>
-                    <th class="text-end" scope="col">Action</th>
+                    <th scope="col">{{ t('invoices.invoiceNumber') }}</th>
+                    <th scope="col">{{ t('invoices.service') }}</th>
+                    <th scope="col">{{ t('common.status') }}</th>
+                    <th scope="col">{{ t('common.date') }}</th>
+                    <th scope="col">{{ t('common.total') }}</th>
+                    <th class="text-end" scope="col">{{ t('common.action') }}</th>
                   </tr>
                   </thead>
                   <tbody class="table-body">
@@ -105,7 +105,7 @@
                     <li
                       [ngClass]="(state?.appData?.data?.invoices?.page?.totalPages ?? 0) - 1 === (currentPage()) ? ' disabled' : ''"
                       class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">Next &raquo;</button>
+                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">{{ t('common.next') }} &raquo;</button>
                     </li>
                   </ul>
                 </nav>
@@ -113,8 +113,8 @@
             } @else {
               <div class="sc-empty">
                 <span class="sc-empty__icon"><i class="bi bi-receipt"></i></span>
-                <p class="sc-empty__title">No invoices yet</p>
-                <p class="sc-empty__hint">Invoices you create will appear here with their status and totals.</p>
+                <p class="sc-empty__title">{{ t('invoices.emptyTitle') }}</p>
+                <p class="sc-empty__hint">{{ t('invoices.emptyHint') }}</p>
                 <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm">
                   <i class="bi bi-receipt"></i> Create an invoice
                 </a>
@@ -126,9 +126,11 @@
       </main>
     }
     @case (DataState.LOADING) {
-      <div class="sc-state">
-        <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
-        <p class="mb-0">Loading invoices…</p>
+      <!-- Its own Transloco scope: this branch renders outside the <main> that carries the
+           page-level scope, so it cannot see that block's `t`. -->
+      <div *transloco="let t" class="sc-state">
+        <div class="spinner-border" role="status"><span class="visually-hidden">{{ t('common.loading') }}</span></div>
+        <p class="mb-0">{{ t('invoices.loading') }}</p>
       </div>
     }
     @case (DataState.ERROR) {

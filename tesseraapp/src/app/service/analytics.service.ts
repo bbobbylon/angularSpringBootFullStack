@@ -1,7 +1,9 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
+// To re-enable the commented `tap(console.log)` calls below, add `tap` back here:
+// import { catchError, tap } from 'rxjs/operators';
+import { catchError } from 'rxjs/operators';
 import {
   CustomerListDataInterface,
   InvoiceListDataInterface,
@@ -45,7 +47,7 @@ export class AnalyticsService {
   summary$ = (): Observable<CustomHttpResponseInterface<StatsDataInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<StatsDataInterface>>(`${this.server}/admin/analytics/summary`)
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches a paginated page of customers for the Analytics hub's growth/acquisition
@@ -60,7 +62,7 @@ export class AnalyticsService {
       .get<CustomHttpResponseInterface<CustomerListDataInterface>>(
         `${this.server}/admin/analytics/customers?page=${page}&size=${size}`,
       )
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches a paginated page of invoices for the revenue/status charts on both
@@ -76,7 +78,7 @@ export class AnalyticsService {
       .get<CustomHttpResponseInterface<InvoiceListDataInterface>>(
         `${this.server}/admin/analytics/invoices?page=${page}&size=${size}`,
       )
-      .pipe(tap(console.log), catchError(this.handleError));
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Normalises HTTP errors into a single Observable<never> so all callers receive a

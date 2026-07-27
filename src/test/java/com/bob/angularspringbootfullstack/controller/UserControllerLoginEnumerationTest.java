@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.controller;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.GlobalExceptionHandler;
 import com.bob.angularspringbootfullstack.service.EventService;
+import com.bob.angularspringbootfullstack.service.LoginRiskService;
 import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.TotpService;
@@ -79,9 +80,14 @@ class UserControllerLoginEnumerationTest {
         EventService eventService = mock(EventService.class);
         TotpService totpService = mock(TotpService.class);
         SessionService sessionService = mock(SessionService.class);
+        // FR-TPF-1: never reached in this test — both cases fail the FIRST factor, and the risk
+        // check only runs after authentication succeeds. Mocked purely to satisfy the constructor,
+        // which is itself the point: anomaly detection must not sit on the failure path, or its
+        // extra query would introduce a timing difference between known and unknown emails.
+        LoginRiskService loginRiskService = mock(LoginRiskService.class);
 
         UserController controller = new UserController(userService, roleService, authenticationManager,
-                request, eventPublisher, eventService, totpService, sessionService);
+                request, eventPublisher, eventService, totpService, sessionService, loginRiskService);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())

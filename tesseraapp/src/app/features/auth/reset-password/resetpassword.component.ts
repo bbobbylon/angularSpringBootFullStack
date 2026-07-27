@@ -6,6 +6,7 @@ import { DataState } from '../../../enumeration/datastate.enum';
 import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Password reset view used after a reset link is verified.
@@ -16,7 +17,7 @@ import { NotificationsService } from '../../../service/notifications-service';
  */
 @Component({
   selector: 'app-resetpassword',
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, TranslocoDirective],
   templateUrl: './resetpassword.component.html',
   styleUrl: './resetpassword.component.css',
   standalone: true,
@@ -46,7 +47,7 @@ export class ResetPasswordComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log(response);
+          // console.log(response);
           resetPasswordForm.reset();
           this.notification.onSuccess(response.message);
           this.resetPasswordState.set({ dataState: DataState.LOADED, resetPasswordSuccess: true, message: response.message });

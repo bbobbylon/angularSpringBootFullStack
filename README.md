@@ -1,6 +1,10 @@
 # Angular Spring Boot Full Stack Application
 
-A full-stack application combining **Angular 21** (frontend) and **Spring Boot 4** (backend) with JWT authentication, refresh tokens, two-factor authentication, role-based access control, customer management, and invoicing.
+A full-stack **zero-trust CIAM platform** combining **Angular 21** (frontend) and **Spring Boot 4**
+(backend): JWT authentication with rotating refresh sessions and replay detection, authenticator-app
+MFA, federated sign-in, login-anomaly detection with step-up verification, permission-based RBAC with
+organization scoping, an administrative security dashboard, and a customer / invoicing / services
+domain on top — in six languages.
 
 ---
 
@@ -8,14 +12,38 @@ A full-stack application combining **Angular 21** (frontend) and **Spring Boot 4
 
 *High-level architecture: Angular client · Spring Boot server · MySQL, containerized with Docker. Full breakdown in [documentation/architecture.md](documentation/architecture.md).*
 
+## What it does
+
+**Identity & access**
+- Registration with email verification, password reset, and per-account brute-force lockout
+- **Rotating refresh sessions** — every refresh mints a new token and retires the old one; replaying a retired token revokes the whole session family (theft detection)
+- **Authenticator-app MFA (TOTP)** with single-use recovery codes, bound to a server-side challenge so a code alone can never skip the password step
+- **Federated sign-in** via Google / GitHub / Microsoft, converging on one local identity; connected accounts are manageable from the Security Center
+- **Login-anomaly detection** — an unrecognised device or network escalates to step-up verification instead of being waved through
+- **Permission-based RBAC** (`READ:USER`, `UPDATE:CUSTOMER`, …) enforced at both the URL and method level, with **organization scoping** so an org admin sees only their own tenants
+
+**Administration**
+- User directory with role reassignment and account-state control
+- **Security dashboard** — anomalous sign-ins, authentication trends, restricted accounts, MFA adoption, live sessions
+- **Roles × permissions matrix**, services-catalog CRUD, billing and analytics hubs
+
+**Business domain**
+- Customers and invoices (create, edit, export to XLSX), a services catalog, and dashboard analytics
+
+**Experience**
+- Six languages with instant switching, dark/light theming, a ⌘/Ctrl+K command palette, and capability-level UI gating so controls you cannot use are disabled with an explanation rather than failing on submit
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | Angular 21, Bootstrap 5, ngx-toastr |
+| Frontend | Angular 21 (standalone, zoneless, signals), Bootstrap 5, ngx-toastr, Transloco |
 | Backend | Spring Boot 4, Spring Security 7, Hibernate 7 |
 | Database | MySQL 8.4 |
-| Auth | JWT (access + refresh tokens), 2FA via SMS (Twilio — stubbed in dev, code logged) |
+| Auth | JWT access + rotating refresh sessions (replay detection), authenticator-app TOTP, OAuth2/OIDC federation, SMS 2FA (Twilio — stubbed in dev, code logged) |
+| i18n | Transloco — runtime language switching, 6 locales (en · es · fr · de · pt · zh) |
 | Runtime | Java 21, Node 22 |
 | Container | Docker (multi-stage build) |
 
@@ -35,6 +63,10 @@ In-depth guides live in [`documentation/`](documentation/):
 | [Configuration](documentation/configuration.md) | Env vars, profiles, `application.yml` |
 | [Deployment](documentation/deployment.md) | Docker, Compose, Azure CI/CD, cloud |
 | [Developer Guide](documentation/developer-guide.md) | End-to-end deep dive + how to extend |
+| [Testing](documentation/testing.md) | Test layout, what is covered, how to run it |
+| [CI/CD Setup](documentation/cicd-setup.md) | GitHub Actions pipeline, secrets, environments |
+| [Frontend Guide](documentation/frontend-guide.md) | Angular structure, state, styling, i18n |
+| [Request Flows](documentation/flows/README.md) | Click-to-database walkthroughs of every major flow |
 
 ## Prerequisites
 
@@ -314,7 +346,35 @@ The app is structured for cloud deployment:
 | GET | `/customer/invoice/get/{id}` | Single invoice |
 | POST | `/customer/invoice/create` | Create standalone invoice |
 | POST | `/customer/invoice/addtocustomer/{customerId}` | Create and link to customer |
+| PUT | `/customer/invoice/{invoiceId}/addtocustomer/{customerId}` | Attach an existing draft invoice to a customer |
+| PATCH | `/customer/invoice/update/{invoiceId}` | Edit an invoice (status, dates, amounts) |
 | GET | `/customer/invoice/download/report` | Export invoices as XLSX |
+
+### Sessions & connected accounts
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/user/sessions` | Live refresh sessions, with the current device badged |
+| DELETE | `/user/sessions/{family}` | Revoke one session |
+| DELETE | `/user/sessions` | Log out everywhere else |
+| POST | `/user/sessions/logout` | End *this* session server-side |
+| GET | `/user/sessions/providers` | Identity providers linked to your account |
+| DELETE | `/user/sessions/providers/{provider}` | Disconnect a provider (refused if it is your last sign-in method) |
+
+### Administration
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/admin/user/list` | User directory (org-scoped for organization admins) |
+| PATCH | `/admin/user/{id}/role/{roleName}` | Reassign a role (`UPDATE:ROLE`) |
+| PATCH | `/admin/user/{id}/settings` | Enable / unlock an account (`UPDATE:USER`) |
+| PATCH | `/admin/user/{id}/update` | Edit another user's profile (`UPDATE:USER`) |
+| GET | `/admin/security/overview?days` | Security dashboard (window clamped to 1–90 days) |
+| GET | `/admin/analytics/summary` \| `/customers` \| `/invoices` | Admin-gated reporting data |
+| GET | `/admin/services/list` | Services catalog, including retired entries |
+| POST | `/admin/services/create` | Add a service |
+| PUT | `/admin/services/update/{serviceId}` | Edit a service |
+| PATCH | `/admin/services/{serviceId}/active/{active}` | Retire / reinstate a service |
 
 ---
 

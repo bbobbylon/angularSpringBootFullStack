@@ -9,6 +9,7 @@ import { ActivatedRoute, ParamMap, RouterLink } from '@angular/router';
 import { CustomerService } from '../../../service/customer.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Verification landing view for account and password reset links.
@@ -20,7 +21,7 @@ import { NotificationsService } from '../../../service/notifications-service';
  */
 @Component({
   selector: 'app-verify',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, TranslocoDirective],
   templateUrl: './verify.component.html',
   styleUrl: './verify.component.css',
   standalone: true,
@@ -63,12 +64,12 @@ export class VerifyComponent implements OnInit {
     this.activatedRoute.paramMap
       .pipe(
         switchMap((params: ParamMap) => {
-          console.log(this.activatedRoute);
+          // console.log(this.activatedRoute);
           //TODO implement a better way to determine which URL we are on, instead of using window.location.href
           const type: AccountType = this.getAccountType(window.location.href);
           return this.userService.verifyAccount$(params.get(this.ACCOUNT_KEY)!, type).pipe(
             map((response) => {
-              console.log(response);
+              // console.log(response);
               if (type === 'password') {
                 this.userSubject.set(response.data?.user ?? null);
               }

@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { StatsInterface } from '../../interface/stats.interface';
 import { UserService } from '../../service/user.service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Renders the summary stats panel on the home dashboard.
@@ -19,7 +20,7 @@ import { UserService } from '../../service/user.service';
  */
 @Component({
   selector: 'app-stats',
-  imports: [DecimalPipe, RouterLink],
+  imports: [DecimalPipe, RouterLink, TranslocoDirective],
   templateUrl: './stats.component.html',
   styleUrl: './stats.component.css',
   standalone: true,

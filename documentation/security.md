@@ -337,17 +337,21 @@ In the interest of honesty (and as a to-do list). Status legend: ⚠️ = built-
 **Third-party gaps (see §1 for the full utilization table):**
 - ⚠️ **SMS 2FA is stubbed** — the Twilio send is commented out in `NotificationServiceImpl`; codes are logged, not delivered. Restoring it = set the three `TWILIO_*` vars + uncomment one call. TOTP is the real, complete second factor. **Decision still open:** wire it live or formally descope.
 - ⚠️ **Federated login is inactive without credentials** — no provider buttons appear until `*_CLIENT_ID`/`*_CLIENT_SECRET` values are set (by design; env-gated).
-- ❌ **Redundant JWT library** — `io.jsonwebtoken:jjwt` (api/impl/jackson) is on the classpath but unused; the code uses `com.auth0:java-jwt` exclusively. Remove `jjwt` to consolidate.
 
-**Requirement gaps:**
-- ❌ **Federated provider name not on the audit row (FR-FED-5, partial)** — `FEDERATED_LOGIN` is recorded, but *which* provider (Google/GitHub/Microsoft) lives in server logs only; `userevents` has no detail column. One column would close it.
-- ❌ **Risk-based / step-up auth (FR-EXT-2) — PLANNED** — new-device re-verification and the login-analytics dashboard are not built. AI-based anomaly detection is planned, time-permitting (out of scope this revision).
+**Closed since this section was written:**
+- ✅ **Redundant JWT library removed** — `jjwt` is gone; the code uses `com.auth0:java-jwt` exclusively.
+- ✅ **Federated provider name on the audit row (FR-FED-5)** — `userevents.detail` carries the provider on `FEDERATED_LOGIN`.
+- ✅ **Risk-based / step-up auth (FR-TPF-1)** — an unrecognised device or network escalates to step-up verification rather than being waved through; single-factor accounts get an emailed code and no tokens until it is entered.
+- ✅ **Login-analytics dashboard (FR-TPF-2)** — `/admin/security/overview`, org-scoped, is the review surface for the above.
+- ✅ **Profile image storage** — `ImageStorageService` abstraction with local and S3 implementations; no hardcoded developer path.
+- ✅ **General request rate limiting** — `RateLimitFilter` (Bucket4j) returns 429 with `Retry-After`; per-account brute-force lockout is now persistent with administrative unlock.
+- ✅ **Security-critical-path tests** — refresh rotation *and* replay detection, TOTP challenge binding, and organization scope (reads as well as writes) are covered. The frontend has specs too (see [testing.md](testing.md)).
 
 **Operational / hardening gaps:**
-- ❌ **Profile image storage is local + hardcoded** to the developer's home directory — not container/cloud-ready (see the `TODO(dev-only)` in `UserController`).
-- ❌ **Brute-force counting is audit-event based** (per-email sliding window), not a distributed rate limiter — adequate for a single instance, not for horizontal scale. No general request rate limit.
 - ❌ **Prod secrets** (JWT secret, OAuth client secrets, mail creds) must be supplied by the platform, not `.env`.
-- ❌ **Tests** have grown (security regression + schema-drift guards) but security-critical paths — refresh rotation/reuse detection, TOTP challenge binding, org scope — remain thinly covered; the frontend has no specs.
+- ❌ **Brute-force counting is audit-event based** (per-email sliding window) rather than a distributed counter — correct for a single instance, but two instances count separately.
+- ❌ **Federated *linking* is not a distinct flow.** "Connect a provider" in the Security Center runs an ordinary federated login, so the OAuth callback resolves an account from the provider identity rather than attaching it to the already-signed-in user. Connecting an identity whose email differs from the current account therefore switches the session to that account instead of linking. Unlinking is safe and correctly guarded; linking needs a dedicated flow that carries the authenticated user through the OAuth round trip.
+- ❌ **A real production boot with `ddl-auto: validate`** against a `schema.sql`-only database has never been exercised — only the offline `JpaSchemaSyncTest`.
 
 **Explicitly out of scope this revision:** machine-to-machine (client-credentials) authorization, SCIM provisioning, and SAML federation.
 

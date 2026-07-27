@@ -6,6 +6,7 @@ import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Registration view for creating new user accounts.
@@ -17,7 +18,7 @@ import { NotificationsService } from '../../../service/notifications-service';
  */
 @Component({
   selector: 'app-register',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, TranslocoDirective],
   templateUrl: './register.component.html',
   styleUrl: './register.component.css',
   standalone: true,
@@ -52,7 +53,7 @@ export class RegisterComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
-          console.log(response);
+          // console.log(response);
           registerForm.reset();
           this.notification.onSuccess(response.message);
           this.registerState.set({ dataState: DataState.LOADED, registerSuccess: true, message: response.message });

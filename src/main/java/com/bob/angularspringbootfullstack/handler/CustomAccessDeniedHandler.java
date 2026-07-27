@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.handler;
 
+import com.bob.angularspringbootfullstack.constants.CapabilityCatalog;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.utils.AuthDiagnosticsLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,9 +59,26 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
         // the chain); the client-visible 403 body below is unchanged.
         AuthDiagnosticsLogger.logForbidden(SecurityContextHolder.getContext().getAuthentication(), request);
 
+        // Name the capability the caller was missing (ROADMAP §2 — permission-denied UX at the API
+        // level). The previous message — "You don't have enough permission to access this
+        // resource!" — was identical for every endpoint, so a user who could not save a customer
+        // and a user who could not reassign a role were told the same thing and neither learned
+        // what to ask for. CapabilityCatalog derives the phrase from the request's method and
+        // path, because this handler runs inside the filter chain, before any controller method
+        // has been selected, and so has nothing else to go on.
+        //
+        // Still non-enumerating: the phrase names a capability only, never whether a particular
+        // record or account exists — which matters because a 403 also covers out-of-scope
+        // resources, and "this exists but is not yours" must stay indistinguishable from "you may
+        // not do this".
+        //
+        // Note this body is written straight to the output stream rather than returned from a
+        // controller, so ErrorDetailScrubber's ResponseBodyAdvice does not see it. The message
+        // therefore survives in production — correctly, since it is deliberate user-facing text
+        // rather than the incidental exception detail that advice exists to strip.
         HttpResponse httpResponse = HttpResponse.builder()
                 .timeStamp(now().toString())
-                .reason("You don't have enough permission to access this resource!")
+                .reason(CapabilityCatalog.messageFor(request))
                 .status(FORBIDDEN)
                 .statusCode(FORBIDDEN.value())
                 .build();

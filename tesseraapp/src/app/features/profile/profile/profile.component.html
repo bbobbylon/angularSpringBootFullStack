@@ -1,11 +1,11 @@
 @if (profileState(); as state) {
   <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-  <main class="sc-page">
+  <main class="sc-page" *transloco="let t">
     <div class="container">
       <nav aria-label="breadcrumb">
         <ol class="breadcrumb sc-breadcrumb">
           <li class="breadcrumb-item">
-            <a [routerLink]="['/']">Home</a>
+            <a [routerLink]="['/']">{{ t('securityCenter.home') }}</a>
           </li>
           <li aria-current="page" class="breadcrumb-item active">
             {{ state?.appData?.data?.user?.firstName }} {{ state?.appData?.data?.user?.lastName }}
@@ -54,7 +54,7 @@
                 </div>
                 <button (click)="fileInput.click()" aria-label="Change profile picture" class="bi bi-camera-fill right-position"
                         type="button">
-                  <span class="visually-hidden">Change profile picture</span>
+                  <span class="visually-hidden">{{ t('profile.changePicture') }}</span>
                 </button>
               </span>
             </div>
@@ -86,8 +86,8 @@
             <div class="list-group-item p-3">
               <div class="row align-items-center">
                 <div class="col">
-                  <strong class="mb-2">Activity Logs</strong>
-                  <p class="text-muted mb-0">Show the latest activities on your account.</p>
+                  <strong class="mb-2">{{ t('profile.activityLogs') }}</strong>
+                  <p class="text-muted mb-0">{{ t('profile.activityHint') }}</p>
                 </div>
                 <div class="col-auto">
                   <div class="form-check form-switch">
@@ -105,14 +105,33 @@
           <!-- Profile tab -->
           <div aria-labelledby="profile" class="tab-pane fade show active" id="profile-tab" role="tabpanel"
                style="min-height: 510px;">
-            <h3 class="mb-4">Profile Settings</h3>
+            <h3 class="mb-4">{{ t('profile.profileSettings') }}</h3>
+            <!--
+              These fields are gated on nothing but the in-flight state: editing YOUR OWN
+              name, email, phone, address, title and bio is a self-service action, not an
+              administrative one.
+
+              They previously required the UPDATE:USER authority, which conflated two
+              different questions — "may I administer other people's accounts?" (what
+              UPDATE:USER actually means; it gates /admin/user/*/update and
+              /admin/user/*/settings) and "may I edit myself?". ROLE_USER holds only
+              READ:USER + READ:CUSTOMER, so every ordinary user saw a permanently
+              read-only profile page.
+
+              The backend was never the constraint: PATCH /user/update matches no
+              authority rule and falls through to .anyRequest().authenticated(), and the
+              handler sources the target id from the JWT principal — so a user can only
+              ever update themselves, whatever they submit. The account-settings form
+              further down keeps its authority gate, because toggling enabled/notLocked
+              IS an administrative capability.
+            -->
             <form #profileForm="ngForm" (ngSubmit)="updateProfile(profileForm)">
               <input [ngModel]="state?.appData?.data?.user?.id" name="id" type="hidden">
               <div class="row">
                 <div class="col-md-6">
                   <div class="form-group">
-                    <label for="firstName">First Name</label>
-                    <input [disabled]="!hasPermission('UPDATE:USER') || isLoading()"
+                    <label for="firstName">{{ t('profile.firstName') }}</label>
+                    <input [disabled]="isLoading()"
                            [ngModel]="state?.appData?.data?.user?.firstName" class="form-control" id="firstName"
                            name="firstName"
                            type="text">
@@ -120,8 +139,8 @@
                 </div>
                 <div class="col-md-6">
                   <div class="form-group">
-                    <label for="lastName">Last Name</label>
-                    <input [disabled]="!hasPermission('UPDATE:USER') || isLoading()"
+                    <label for="lastName">{{ t('profile.lastName') }}</label>
+                    <input [disabled]="isLoading()"
                            [ngModel]="state?.appData?.data?.user?.lastName" class="form-control" id="lastName"
                            name="lastName"
                            type="text">
@@ -129,16 +148,16 @@
                 </div>
                 <div class="col-md-6">
                   <div class="form-group">
-                    <label for="email">Email</label>
-                    <input [disabled]="!hasPermission('UPDATE:USER') || isLoading()"
+                    <label for="email">{{ t('common.email') }}</label>
+                    <input [disabled]="isLoading()"
                            [ngModel]="state?.appData?.data?.user?.email" class="form-control" id="email" name="email"
                            type="text">
                   </div>
                 </div>
                 <div class="col-md-6">
                   <div class="form-group">
-                    <label for="phoneNumber">Phone</label>
-                    <input [disabled]="!hasPermission('UPDATE:USER') || isLoading()"
+                    <label for="phoneNumber">{{ t('profile.phone') }}</label>
+                    <input [disabled]="isLoading()"
                            [ngModel]="state?.appData?.data?.user?.phoneNumber" class="form-control" id="phoneNumber"
                            name="phoneNumber"
                            type="text">
@@ -146,8 +165,8 @@
                 </div>
                 <div class="col-md-6">
                   <div class="form-group">
-                    <label for="address">Address</label>
-                    <input [disabled]="!hasPermission('UPDATE:USER') || isLoading()"
+                    <label for="address">{{ t('profile.address') }}</label>
+                    <input [disabled]="isLoading()"
                            [ngModel]="state?.appData?.data?.user?.address" class="form-control" id="address"
                            name="address"
                            type="text">
@@ -155,8 +174,8 @@
                 </div>
                 <div class="col-md-6">
                   <div class="form-group">
-                    <label for="title">Job Title</label>
-                    <input [disabled]="!hasPermission('UPDATE:USER') || isLoading()"
+                    <label for="title">{{ t('profile.jobTitle') }}</label>
+                    <input [disabled]="isLoading()"
                            [ngModel]="state?.appData?.data?.user?.title" class="form-control" id="title" name="title"
                            type="text">
                   </div>
@@ -164,21 +183,21 @@
                 <div class="col-md-12">
                   <div class="form-group">
                     <label for="bio">Bio</label>
-                    <textarea [disabled]="!hasPermission('UPDATE:USER') || isLoading()"
+                    <textarea [disabled]="isLoading()"
                               [ngModel]="state?.appData?.data?.user?.bio" class="form-control" id="bio" name="bio"
                               rows="4"></textarea>
                   </div>
                 </div>
               </div>
               <div>
-                <button [disabled]="!hasPermission('UPDATE:USER') || isLoading()"
+                <button [disabled]="isLoading()"
                         class="btn btn-primary" type="submit">
                   @if (isLoading()) {
                     <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                           style="margin-right: 5px;"></span>
-                    <span>Loading...</span>
+                    <span>{{ t('common.loading') }}</span>
                   } @else {
-                    <span>Update</span>
+                    <span>{{ t('profile.update') }}</span>
                   }
                 </button>
               </div>
@@ -188,12 +207,12 @@
           <!-- Password tab -->
           <div aria-labelledby="password" class="tab-pane fade" id="password-tab" role="tabpanel"
                style="min-height: 510px;">
-            <h3 class="mb-4">Password Settings</h3>
+            <h3 class="mb-4">{{ t('profile.passwordSettings') }}</h3>
             <form #passwordForm="ngForm" (ngSubmit)="updatePassword(passwordForm)">
               <div class="row">
                 <div class="col-md-6">
                   <div class="form-group">
-                    <label for="currentPassword">Current password</label>
+                    <label for="currentPassword">{{ t('profile.currentPassword') }}</label>
                     <input [disabled]="isLoading()" class="form-control" id="currentPassword"
                            name="currentPassword" ngModel
                            required type="password">
@@ -203,7 +222,7 @@
               <div class="row">
                 <div class="col-md-6">
                   <div class="form-group">
-                    <label for="newPassword">New password</label>
+                    <label for="newPassword">{{ t('profile.newPassword') }}</label>
                     <input [disabled]="isLoading()" class="form-control" id="newPassword" minlength="5"
                            name="newPassword"
                            ngModel required type="password">
@@ -211,7 +230,7 @@
                 </div>
                 <div class="col-md-6">
                   <div class="form-group">
-                    <label for="confirmPassword">Confirm new password</label>
+                    <label for="confirmPassword">{{ t('profile.confirmPassword') }}</label>
                     <input [disabled]="isLoading()" class="form-control" id="confirmPassword" minlength="5"
                            name="confirmPassword"
                            ngModel required type="password">
@@ -223,9 +242,9 @@
                   @if (isLoading()) {
                     <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                           style="margin-right: 5px;"></span>
-                    <span>Loading...</span>
+                    <span>{{ t('common.loading') }}</span>
                   } @else {
-                    <span>Update</span>
+                    <span>{{ t('profile.update') }}</span>
                   }
                 </button>
               </div>
@@ -235,14 +254,14 @@
           <!-- Authorization tab -->
           <div aria-labelledby="security" class="tab-pane fade" id="security-tab" role="tabpanel"
                style="min-height: 510px;">
-            <h3 class="mb-4">Authorization Settings</h3>
+            <h3 class="mb-4">{{ t('profile.authorizationSettings') }}</h3>
             <!-- Read-only by design (SRS FR-RBAC-4 / NFR-SEC-8): users cannot change their
                  own role. Role reassignment is performed by an administrator from the
                  Users dashboard, which calls the authority-gated /admin endpoints. -->
             <div class="row">
               <div class="col-md-6">
                 <div class="form-group">
-                  <label for="roleName" style="margin-bottom: 5px;">Role Name</label>
+                  <label for="roleName" style="margin-bottom: 5px;">{{ t('profile.roleName') }}</label>
                   <input [disabled]="true"
                          [value]="state?.appData?.data?.user?.roleName"
                          class="form-control" id="roleName" name="roleName" type="text">
@@ -254,7 +273,7 @@
               </div>
               <div class="col-md-6">
                 <div class="form-group">
-                  <p style="margin-bottom: 5px;">Role Permissions</p>
+                  <p style="margin-bottom: 5px;">{{ t('profile.rolePermissions') }}</p>
                   @for (permission of permissions(); track permission) {
                     <input [disabled]="true" [value]="permission" class="form-control"
                            style="margin-bottom: 5px;" type="text">
@@ -267,7 +286,7 @@
           <!-- Account tab -->
           <div aria-labelledby="application" class="tab-pane fade" id="application-tab" role="tabpanel"
                style="min-height: 510px;">
-            <h3 class="mb-4">Account Settings</h3>
+            <h3 class="mb-4">{{ t('profile.accountSettings') }}</h3>
             <form #settingsForm="ngForm" (ngSubmit)="updateAccountSettings(settingsForm)">
               <input name="userId" type="hidden">
               <div class="row">
@@ -278,14 +297,14 @@
                              [disabled]="!hasPermission('CREATE:USER') || isLoading()"
                              [ngModel]="state?.appData?.data?.user?.enabled"
                              class="form-check-input" id="enabled" name="enabled" type="checkbox">
-                      <label class="form-check-label" for="enabled">Account Active</label>
+                      <label class="form-check-label" for="enabled">{{ t('profile.accountActive') }}</label>
                     </div>
                     <div class="form-check">
                       <input [checked]="state?.appData?.data?.user?.notLocked"
                              [disabled]="!hasPermission('CREATE:USER') || isLoading()"
                              [ngModel]="state?.appData?.data?.user?.notLocked"
                              class="form-check-input" id="isNotLocked" name="notLocked" type="checkbox">
-                      <label class="form-check-label" for="isNotLocked">Account Unlocked</label>
+                      <label class="form-check-label" for="isNotLocked">{{ t('profile.accountUnlocked') }}</label>
                     </div>
                   </div>
                 </div>
@@ -297,9 +316,9 @@
                   @if (isLoading()) {
                     <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                           style="margin-right: 5px;"></span>
-                    <span>Loading...</span>
+                    <span>{{ t('common.loading') }}</span>
                   } @else {
-                    <span>Update</span>
+                    <span>{{ t('profile.update') }}</span>
                   }
                 </button>
               </div>
@@ -311,17 +330,17 @@
                sessions & devices panel. -->
           <div aria-labelledby="notification" class="tab-pane fade" id="notification-tab" role="tabpanel"
                style="min-height: 510px;">
-            <h3 class="mb-4">Authentication Settings</h3>
-            <p>These settings help keep your account more secure.</p>
+            <h3 class="mb-4">{{ t('profile.authSettings') }}</h3>
+            <p>{{ t('profile.authHint') }}</p>
             <div class="list-group mb-5 shadow">
               <div class="list-group-item">
                 <div class="row align-items-center">
                   <div class="col">
-                    <strong class="mb-2">Authenticator App (TOTP)</strong>
+                    <strong class="mb-2">{{ t('profile.totp') }}</strong>
                     @if (state?.appData?.data?.user?.usingTotp) {
-                      <span class="badge bg-success mx-3">Enabled</span>
+                      <span class="badge bg-success mx-3">{{ t('securityCenter.enabled') }}</span>
                     } @else {
-                      <span class="badge bg-warning mx-3">Not set up</span>
+                      <span class="badge bg-warning mx-3">{{ t('securityCenter.notSetUp') }}</span>
                     }
                     <p class="text-muted mb-0">
                       Time-based one-time codes from an authenticator app — the strongest second factor available here.
@@ -332,11 +351,11 @@
               <div class="list-group-item">
                 <div class="row align-items-center">
                   <div class="col">
-                    <strong class="mb-2">SMS Verification</strong>
+                    <strong class="mb-2">{{ t('profile.sms') }}</strong>
                     @if (state?.appData?.data?.user?.using2FA) {
-                      <span class="badge bg-success mx-3">Enabled</span>
+                      <span class="badge bg-success mx-3">{{ t('securityCenter.enabled') }}</span>
                     } @else {
-                      <span class="badge bg-warning mx-3">Disabled</span>
+                      <span class="badge bg-warning mx-3">{{ t('securityCenter.disabled') }}</span>
                     }
                     <p class="text-muted mb-0">
                       One-time codes sent to your phone number.
@@ -347,7 +366,7 @@
               <div class="list-group-item">
                 <div class="row align-items-center">
                   <div class="col">
-                    <strong class="mb-2">Security Center</strong>
+                    <strong class="mb-2">{{ t('nav.securityCenter') }}</strong>
                     <p class="text-muted mb-0">
                       Enroll or disable second factors and manage every device signed in to your account.
                     </p>
@@ -370,13 +389,13 @@
           <div class="col-xl-12 mt-4">
             <div class="card" style="border-radius: 8px;">
               <div class="card-body">
-                <h5 class="card-title">Account Activities</h5>
-                <h6 class="card-subtitle mb-2 text-muted">Latest activities on your account.</h6>
+                <h5 class="card-title">{{ t('profile.accountActivities') }}</h5>
+                <h6 class="card-subtitle mb-2 text-muted">{{ t('profile.activitiesHint') }}</h6>
                 <table class="table table-hover">
                   <thead>
                   <tr>
-                    <th scope="col">Event</th>
-                    <th scope="col">Device</th>
+                    <th scope="col">{{ t('securityCenter.event') }}</th>
+                    <th scope="col">{{ t('security.log.device') }}</th>
                     <th scope="col">IP Address</th>
                     <th scope="col">Date</th>
                   </tr>

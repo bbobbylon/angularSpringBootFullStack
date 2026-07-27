@@ -1,3 +1,6 @@
+<!-- One Transloco scope for the whole template. An ng-container is used because the
+     top level is @if/@switch control flow, not an element, and every branch needs `t`. -->
+<ng-container *transloco="let t">
 @if (userState(); as state) {
   @switch (state.dataState) {
     @case (DataState.LOADED) {
@@ -6,8 +9,8 @@
         <div class="container">
           <nav aria-label="breadcrumb">
             <ol class="breadcrumb sc-breadcrumb">
-              <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
-              <li class="breadcrumb-item"><a [routerLink]="['/users']">Users</a></li>
+              <li class="breadcrumb-item"><a [routerLink]="['/']">{{ t('securityCenter.home') }}</a></li>
+              <li class="breadcrumb-item"><a [routerLink]="['/users']">{{ t('users.breadcrumb') }}</a></li>
               <li class="breadcrumb-item active">
                 {{ state?.appData?.data?.selectedUser?.firstName }} {{ state?.appData?.data?.selectedUser?.lastName }}
               </li>
@@ -59,11 +62,11 @@
               <!-- Role reassignment (FR-ADMIN-3, requires UPDATE:ROLE) -->
               <div class="card mb-3">
                 <div class="card-body">
-                  <h5 class="mb-3"><i class="bi bi-shield-shaded" style="margin-right: 8px;"></i>Role</h5>
+                  <h5 class="mb-3"><i class="bi bi-shield-shaded" style="margin-right: 8px;"></i>{{ t('users.role') }}</h5>
                   <form #roleForm="ngForm" (ngSubmit)="updateRole(roleForm)">
                     <div class="row align-items-end">
                       <div class="col-md-8">
-                        <label class="form-label" for="roleName">Assigned role</label>
+                        <label class="form-label" for="roleName">{{ t('userDetails.assignedRole') }}</label>
                         <select [disabled]="!canEditRole || isSelf() || isLoading()"
                                 [ngModel]="state?.appData?.data?.selectedUser?.roleName"
                                 class="form-control select-cl" id="roleName" name="roleName" required>
@@ -78,16 +81,17 @@
                           @if (isLoading()) {
                             <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                                   style="margin-right: 5px;"></span>
-                            <span>Saving...</span>
+                            <span>{{ t('common.saving') }}</span>
                           } @else {
-                            <span>Update Role</span>
+                            <span>{{ t('userDetails.updateRole') }}</span>
                           }
                         </button>
                       </div>
                     </div>
                     @if (!canEditRole) {
                       <small class="text-secondary d-block mt-2">
-                        Your role does not include the UPDATE:ROLE authority.
+                        <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                        You don't have permission to assign roles — contact your administrator.
                       </small>
                     }
                   </form>
@@ -97,7 +101,7 @@
               <!-- Account state (FR-ADMIN-4, requires UPDATE:USER) -->
               <div class="card mb-3">
                 <div class="card-body">
-                  <h5 class="mb-3"><i class="bi bi-person-lock" style="margin-right: 8px;"></i>Account State</h5>
+                  <h5 class="mb-3"><i class="bi bi-person-lock" style="margin-right: 8px;"></i>{{ t('userDetails.accountState') }}</h5>
                   <form #settingsForm="ngForm" (ngSubmit)="updateAccountSettings(settingsForm)">
                     <div class="row align-items-end">
                       <div class="col-md-8">
@@ -105,13 +109,13 @@
                           <input [disabled]="!canEditSettings || isSelf() || isLoading()"
                                  [ngModel]="state?.appData?.data?.selectedUser?.enabled"
                                  class="form-check-input" id="enabled" name="enabled" type="checkbox">
-                          <label class="form-check-label" for="enabled">Account enabled (may log in)</label>
+                          <label class="form-check-label" for="enabled">{{ t('userDetails.accountEnabled') }}</label>
                         </div>
                         <div class="form-check">
                           <input [disabled]="!canEditSettings || isSelf() || isLoading()"
                                  [ngModel]="state?.appData?.data?.selectedUser?.notLocked"
                                  class="form-check-input" id="notLocked" name="notLocked" type="checkbox">
-                          <label class="form-check-label" for="notLocked">Account unlocked</label>
+                          <label class="form-check-label" for="notLocked">{{ t('userDetails.accountUnlocked') }}</label>
                         </div>
                       </div>
                       <div class="col-md-4">
@@ -120,16 +124,17 @@
                           @if (isLoading()) {
                             <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                                   style="margin-right: 5px;"></span>
-                            <span>Saving...</span>
+                            <span>{{ t('common.saving') }}</span>
                           } @else {
-                            <span>Update State</span>
+                            <span>{{ t('userDetails.updateState') }}</span>
                           }
                         </button>
                       </div>
                     </div>
                     @if (!canEditSettings) {
                       <small class="text-secondary d-block mt-2">
-                        Your role does not include the UPDATE:USER authority.
+                        <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                        You don't have permission to change account state — contact your administrator.
                       </small>
                     }
                   </form>
@@ -152,10 +157,10 @@
                   <table class="table table-hover">
                     <thead>
                     <tr>
-                      <th scope="col">Event</th>
-                      <th scope="col">Device</th>
-                      <th scope="col">IP Address</th>
-                      <th scope="col">Date</th>
+                      <th scope="col">{{ t('securityCenter.event') }}</th>
+                      <th scope="col">{{ t('security.log.device') }}</th>
+                      <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
+                      <th scope="col">{{ t('common.date') }}</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -174,7 +179,7 @@
                         </tr>
                       } @empty {
                         <tr>
-                          <td class="text-center text-muted" colspan="4">No recorded activity.</td>
+                          <td class="text-center text-muted" colspan="4">{{ t('userDetails.noActivity') }}</td>
                         </tr>
                       }
                     </tbody>
@@ -208,8 +213,8 @@
     }
     @case (DataState.LOADING) {
       <div class="sc-state">
-        <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
-        <p class="mb-0">Loading account…</p>
+        <div class="spinner-border" role="status"><span class="visually-hidden">{{ t('common.loading') }}</span></div>
+        <p class="mb-0">{{ t('userDetails.loading') }}</p>
       </div>
     }
     @case (DataState.ERROR) {
@@ -220,3 +225,4 @@
     }
   }
 }
+</ng-container>

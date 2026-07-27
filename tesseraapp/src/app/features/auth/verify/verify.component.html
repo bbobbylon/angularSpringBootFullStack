@@ -13,19 +13,19 @@
   routerLinks) is preserved from the original — only markup/styling changed.
   Shared styling lives in the AUTH SCREENS section of src/styles.css.
 -->
-<div class="sc-auth">
+<div *transloco="let t" class="sc-auth">
 
   <!-- ── Left: branded security console ────────────────────────────────────── -->
   <aside class="sc-auth__aside">
     <div class="sc-auth__aside-inner">
       <a class="sc-auth__brand" routerLink="/login">
         <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
-        <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+        <span class="sc-auth__brand-text">Tessera<span class="text-accent">App</span></span>
       </a>
 
       <div class="sc-auth__lede">
-        <p class="eyebrow sc-reveal" style="--d: 0ms">Zero-trust identity platform</p>
-        <h1 class="sc-auth__headline sc-reveal" style="--d: 60ms">Confirming<br />your identity.</h1>
+        <p class="eyebrow sc-reveal" style="--d: 0ms">{{ t('authPanel.platform') }}</p>
+        <h1 class="sc-auth__headline sc-reveal" style="--d: 60ms" [innerHTML]="t('authPanel.headlineVerify')"></h1>
         <p class="sc-auth__sub sc-reveal" style="--d: 120ms">
           Every verification link is single-use and time-boxed. Once confirmed, your
           session is signed, device-aware, and written to an immutable audit trail.
@@ -36,36 +36,36 @@
         <li class="sc-trust__item sc-reveal" style="--d: 220ms">
           <i class="bi bi-fingerprint"></i>
           <div>
-            <span class="sc-trust__title">HMAC-SHA512 signed tokens</span>
-            <span class="sc-trust__meta">Stateless JWT · 30-min access</span>
+            <span class="sc-trust__title">{{ t('authPanel.tokens') }}</span>
+            <span class="sc-trust__meta">{{ t('authPanel.tokensMeta') }}</span>
           </div>
         </li>
         <li class="sc-trust__item sc-reveal" style="--d: 280ms">
           <i class="bi bi-lock-fill"></i>
           <div>
-            <span class="sc-trust__title">BCrypt-hashed credentials</span>
-            <span class="sc-trust__meta">Never stored in plaintext</span>
+            <span class="sc-trust__title">{{ t('authPanel.bcrypt') }}</span>
+            <span class="sc-trust__meta">{{ t('authPanel.bcryptMeta') }}</span>
           </div>
         </li>
         <li class="sc-trust__item sc-reveal" style="--d: 340ms">
           <i class="bi bi-broadcast-pin"></i>
           <div>
-            <span class="sc-trust__title">Device &amp; IP audit</span>
-            <span class="sc-trust__meta">Logged on every security event</span>
+            <span class="sc-trust__title">{{ t('authPanel.audit') }}</span>
+            <span class="sc-trust__meta">{{ t('authPanel.auditMeta') }}</span>
           </div>
         </li>
         <li class="sc-trust__item sc-reveal" style="--d: 400ms">
           <i class="bi bi-hourglass-split"></i>
           <div>
-            <span class="sc-trust__title">Single-use secure links</span>
-            <span class="sc-trust__meta">Time-boxed · expire fast</span>
+            <span class="sc-trust__title">{{ t('authPanel.singleUse') }}</span>
+            <span class="sc-trust__meta">{{ t('authPanel.singleUseMeta') }}</span>
           </div>
         </li>
       </ul>
 
       <div class="sc-auth__status sc-reveal" style="--d: 480ms">
         <span class="sc-pulse"></span>
-        <span class="mono">Zero-trust gateway · operational</span>
+        <span class="mono">{{ t('authPanel.gateway') }}</span>
       </div>
     </div>
   </aside>
@@ -85,7 +85,7 @@
 
             <div class="sc-auth__success">
               <span class="spinner-border sc-spinner" role="status">
-                <span class="visually-hidden">Verifying…</span>
+                <span class="visually-hidden">{{ t('login.verifying') }}</span>
               </span>
               <h2 class="sc-auth__title">{{ state.title }}</h2>
               <p class="sc-auth__hint">{{ state.message }}</p>
@@ -125,32 +125,32 @@
                 <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
               </a>
 
-              <p class="eyebrow">Set new password</p>
-              <h2 class="sc-auth__title">Choose a new password</h2>
-              <p class="sc-auth__hint">Pick a strong password you haven't used before — it secures every future sign-in.</p>
+              <p class="eyebrow">{{ t('verify.eyebrow') }}</p>
+              <h2 class="sc-auth__title">{{ t('verify.title') }}</h2>
+              <p class="sc-auth__hint">{{ t('verify.hint') }}</p>
 
               @if (state.error) {
                 <div class="alert sc-alert alert-dismissible fade show" role="alert">
                   <i class="bi bi-exclamation-octagon-fill"></i>
                   <span>{{ state.error }}</span>
-                  <button aria-label="Close" class="btn-close" data-bs-dismiss="alert" type="button"></button>
+                  <button [attr.aria-label]="t('login.close')" class="btn-close" data-bs-dismiss="alert" type="button"></button>
                 </div>
               }
 
               <form #resetPasswordForm="ngForm" (ngSubmit)="setNewPassword(resetPasswordForm)" class="sc-form" novalidate>
                 <div class="sc-field">
-                  <label class="form-label" for="newPassword">New password</label>
+                  <label class="form-label" for="newPassword">{{ t('verify.newPassword') }}</label>
                   <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
                   <input id="newPassword" name="newPassword" ngModel required minlength="2" type="password"
-                         autocomplete="new-password" placeholder="At least 2 characters"
+                         autocomplete="new-password" [placeholder]="t('verify.newPasswordPlaceholder')"
                          [disabled]="isLoading()" class="form-control sc-input" />
                 </div>
 
                 <div class="sc-field">
-                  <label class="form-label" for="confirmPassword">Confirm new password</label>
+                  <label class="form-label" for="confirmPassword">{{ t('verify.confirmPassword') }}</label>
                   <span class="sc-field__icon"><i class="bi bi-lock-fill"></i></span>
                   <input id="confirmPassword" name="confirmPassword" ngModel required minlength="2" type="password"
-                         autocomplete="new-password" placeholder="Re-enter your password"
+                         autocomplete="new-password" [placeholder]="t('verify.confirmPlaceholder')"
                          [disabled]="isLoading()" class="form-control sc-input" />
                 </div>
 
@@ -159,9 +159,9 @@
                   class="btn btn-primary sc-submit" type="submit">
                   @if (isLoading()) {
                     <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"></span>
-                    <span>Updating…</span>
+                    <span>{{ t('verify.updating') }}</span>
                   } @else {
-                    <span>Update password</span>
+                    <span>{{ t('verify.updatePassword') }}</span>
                     <i class="bi bi-arrow-right"></i>
                   }
                 </button>
@@ -169,7 +169,7 @@
 
               <div class="sc-auth__links">
                 <a [routerLink]="['/login']"
-                   [style.pointer-events]="isLoading() ? 'none' : 'auto'">Back to sign in</a>
+                   [style.pointer-events]="isLoading() ? 'none' : 'auto'">{{ t('verify.backToSignIn') }}</a>
                 <a [routerLink]="['/resetpassword']"
                    [style.pointer-events]="isLoading() ? 'none' : 'auto'">Request a new link</a>
               </div>

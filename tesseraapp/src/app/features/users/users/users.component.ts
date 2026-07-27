@@ -12,6 +12,7 @@ import { AdminUserListInterface } from '../../../interface/admin.interface';
 import { AdminUserService } from '../../../service/admin-user.service';
 import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { NotificationsService } from '../../../service/notifications-service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Administrative user directory — the list half of the Users dashboard
@@ -29,7 +30,7 @@ import { NotificationsService } from '../../../service/notifications-service';
  */
 @Component({
   selector: 'app-users',
-  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage],
+  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, TranslocoDirective],
   templateUrl: './users.component.html',
   styleUrl: './users.component.css',
   standalone: true,

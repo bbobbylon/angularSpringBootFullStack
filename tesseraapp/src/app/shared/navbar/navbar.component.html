@@ -9,20 +9,28 @@
             class="navbar-toggler" data-bs-target="#navbarSupportedContent" data-bs-toggle="collapse"
             type="button"><span class="navbar-toggler-icon"></span></button>
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
-      <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+      <!--
+        One Transloco scope for the whole nav. `*transloco="let t"` binds a translate function for
+        this subtree and re-renders it when the language changes — which is what makes the switcher
+        instantaneous rather than requiring a reload. A single scope at the top costs one directive
+        instance instead of one per string.
+      -->
+      <ul *transloco="let t" class="navbar-nav ms-auto mb-2 mb-lg-0">
 
         <!-- Customers -->
         <li class="nav-item dropdown">
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
              id="navbarDropdownCustomers" role="button">
-            Customers
+            {{ t('nav.customers') }}
           </a>
           <ul aria-labelledby="navbarDropdownCustomers" class="dropdown-menu dropdown-menu-end">
-            <li><a [routerLink]="['/customer/new']" class="dropdown-item">
-              <i class="bi bi-person-plus-fill"></i>New Customer</a>
-            </li>
+            @if (canCreateRecords) {
+              <li><a [routerLink]="['/customer/new']" class="dropdown-item">
+                <i class="bi bi-person-plus-fill"></i>{{ t('nav.newCustomer') }}</a>
+              </li>
+            }
             <li><a [routerLink]="['/customers']" class="dropdown-item">
-              <i class="bi bi-people-fill"></i>All Customers</a>
+              <i class="bi bi-people-fill"></i>{{ t('nav.allCustomers') }}</a>
             </li>
           </ul>
         </li>
@@ -31,14 +39,16 @@
         <li class="nav-item dropdown">
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
              id="navbarDropdownInvoices" role="button">
-            Invoices
+            {{ t('nav.invoices') }}
           </a>
           <ul aria-labelledby="navbarDropdownInvoices" class="dropdown-menu dropdown-menu-end">
-            <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
-              <i class="bi bi-receipt"></i>New Invoice</a>
-            </li>
+            @if (canCreateRecords) {
+              <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
+                <i class="bi bi-receipt"></i>{{ t('nav.newInvoice') }}</a>
+              </li>
+            }
             <li><a [routerLink]="['/invoices']" class="dropdown-item">
-              <i class="bi bi-receipt-cutoff"></i>All Invoices</a>
+              <i class="bi bi-receipt-cutoff"></i>{{ t('nav.allInvoices') }}</a>
             </li>
           </ul>
         </li>
@@ -47,15 +57,24 @@
         <li class="nav-item dropdown">
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
              id="navbarDropdownServices" role="button">
-            Services
+            {{ t('nav.services') }}
           </a>
           <ul aria-labelledby="navbarDropdownServices" class="dropdown-menu dropdown-menu-end">
             <li><a [routerLink]="['/services']" class="dropdown-item">
-              <i class="bi bi-grid-1x2-fill"></i>Service Catalog</a>
+              <i class="bi bi-grid-1x2-fill"></i>{{ t('nav.serviceCatalog') }}</a>
             </li>
-            <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
-              <i class="bi bi-plus-circle"></i>New Service Invoice</a>
-            </li>
+            @if (canManageUsers) {
+              <!-- Catalog administration — staff-only, and gated on the same authorities the
+                   backend enforces on /admin/services/**. -->
+              <li><a [routerLink]="['/services', 'manage']" class="dropdown-item">
+                <i class="bi bi-sliders"></i>{{ t('nav.manageServices') }}</a>
+              </li>
+            }
+            @if (canCreateRecords) {
+              <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
+                <i class="bi bi-plus-circle"></i>{{ t('nav.newServiceInvoice') }}</a>
+              </li>
+            }
           </ul>
         </li>
 
@@ -65,32 +84,40 @@
           <li class="nav-item dropdown">
             <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
                id="navbarDropdownAdmin" role="button">
-              <i class="bi bi-shield-shaded"></i>Admin
+              <i class="bi bi-shield-shaded"></i>{{ t('nav.admin') }}
             </a>
             <ul aria-labelledby="navbarDropdownAdmin" class="dropdown-menu dropdown-menu-end">
               <!-- User management (list + per-user role assignment) -->
               <li><a [routerLink]="['/users']" class="dropdown-item">
-                <i class="bi bi-people-fill"></i>User Directory</a>
+                <i class="bi bi-people-fill"></i>{{ t('nav.userDirectory') }}</a>
               </li>
               @if (isSuperAdmin) {
                 <!-- Role assignment shortcut — super-admin only.
                      Org admins can view users but cannot reassign roles across orgs. -->
                 <li><a [routerLink]="['/users']" class="dropdown-item">
-                  <i class="bi bi-person-badge-fill"></i>Assign Roles</a>
+                  <i class="bi bi-person-badge-fill"></i>{{ t('nav.assignRoles') }}</a>
                 </li>
               }
               <!-- Permissions matrix — which authorities belong to which role -->
               <li><a [routerLink]="['/roles']" class="dropdown-item">
-                <i class="bi bi-grid-3x3-gap-fill"></i>Roles &amp; Permissions</a>
+                <i class="bi bi-grid-3x3-gap-fill"></i>{{ t('nav.rolesPermissions') }}</a>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <!-- Security overview (FR-TPF-2) — the review surface for anomaly detection.
+                   Note this is NOT the /security Account Security Center in the profile menu:
+                   that one is self-service and every user has it, this one reports on the whole
+                   in-scope population and is staff-only. -->
+              <li><a [routerLink]="['/security-overview']" class="dropdown-item">
+                <i class="bi bi-shield-exclamation"></i>{{ t('nav.securityOverview') }}</a>
               </li>
               <li><hr class="dropdown-divider"></li>
               <!-- Billing overview — revenue analytics for the current scope -->
               <li><a [routerLink]="['/billing']" class="dropdown-item">
-                <i class="bi bi-graph-up-arrow"></i>Billing Overview</a>
+                <i class="bi bi-graph-up-arrow"></i>{{ t('nav.billingOverview') }}</a>
               </li>
               <!-- Analytics hub — full trend charts and cross-cutting stats -->
               <li><a [routerLink]="['/analytics']" class="dropdown-item">
-                <i class="bi bi-bar-chart-line-fill"></i>Analytics Hub</a>
+                <i class="bi bi-bar-chart-line-fill"></i>{{ t('nav.analyticsHub') }}</a>
               </li>
             </ul>
           </li>
@@ -101,9 +128,10 @@
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
              id="navbarDropdownProfile" role="button">
             @if (user; as u) {
-              @if (u.imageUrl) {
+              @if (u.imageUrl && !avatarFailed()) {
                 <div class="sc-nav-avatar">
-                  <img [alt]="u.firstName" [ngSrc]="u.imageUrl" class="user-avatar-md" fill style="object-fit: cover;">
+                  <img (error)="onAvatarError()" [alt]="u.firstName" [ngSrc]="u.imageUrl"
+                       class="user-avatar-md" fill style="object-fit: cover;">
                 </div>
               } @else {
                 <div class="sc-nav-avatar-fallback">
@@ -120,13 +148,62 @@
                 <i class="bi bi-person-circle"></i>{{ u.firstName }} {{ u.lastName }}</a>
               </li>
               <li><a [routerLink]="['/security']" class="dropdown-item">
-                <i class="bi bi-shield-lock"></i>Security Center</a>
+                <i class="bi bi-shield-lock"></i>{{ t('nav.securityCenter') }}</a>
               </li>
             }
             <li style="cursor: pointer;"><a (click)="logOut()" (keydown.enter)="logOut()" class="dropdown-item"
                                             role="button" tabindex="0">
-              <i class="bi bi-box-arrow-in-right"></i>Logout</a>
+              <i class="bi bi-box-arrow-in-right"></i>{{ t('nav.logOut') }}</a>
             </li>
+          </ul>
+        </li>
+
+        <!--
+          Command palette trigger. The ⌘/Ctrl+K hotkey has been there since M7, but a shortcut with
+          no visible affordance is one only its author knows about — this is what teaches it. Styled
+          as a search field rather than a button because that is what it behaves like, and the key
+          hint sits inside so the shortcut is learned in passing.
+        -->
+        <li class="nav-item d-flex align-items-center ms-lg-2">
+          <button (click)="openCommandPalette()" class="sc-cmdk-trigger" type="button"
+                  [attr.aria-label]="t('nav.commandPalette')" [title]="t('nav.commandPalette')">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <span class="sc-cmdk-trigger__text">{{ t('nav.search') }}</span>
+            <kbd class="sc-cmdk-trigger__kbd">{{ isMac ? '⌘' : 'Ctrl' }} K</kbd>
+          </button>
+        </li>
+
+        <!--
+          Language selector (ROADMAP §2 — i18n). Sits beside the theme toggle because the two are
+          the same kind of control: a personal display preference that takes effect immediately and
+          is remembered across sessions.
+
+          Each option is labelled in its OWN language ("Español", never "Spanish"). A user stranded
+          in a language they cannot read needs an exit they can recognise, and labelling the list in
+          the current interface language would hide that exit behind the very problem it solves.
+        -->
+        <li class="nav-item dropdown d-flex align-items-center ms-lg-2">
+          <a aria-expanded="false" class="nav-link dropdown-toggle sc-lang-toggle" data-bs-toggle="dropdown"
+             href="#" id="navbarDropdownLanguage" role="button"
+             [attr.aria-label]="t('nav.language')" [title]="t('nav.language')">
+            <i class="bi bi-translate"></i>
+            <span class="sc-lang-toggle__code">{{ currentLangShort() }}</span>
+          </a>
+          <ul aria-labelledby="navbarDropdownLanguage" class="dropdown-menu dropdown-menu-end">
+            @for (language of languages; track language.code) {
+              <li>
+                <a (click)="setLanguage(language.code)" (keydown.enter)="setLanguage(language.code)"
+                   [class.active]="currentLang() === language.code"
+                   class="dropdown-item" role="button" style="cursor: pointer;" tabindex="0">
+                  @if (currentLang() === language.code) {
+                    <i class="bi bi-check2"></i>
+                  } @else {
+                    <i class="bi" style="display:inline-block;width:1em;"></i>
+                  }
+                  {{ language.label }}
+                </a>
+              </li>
+            }
           </ul>
         </li>
 

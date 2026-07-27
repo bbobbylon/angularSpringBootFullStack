@@ -22,12 +22,15 @@ export interface LoginStateInterface {
   isUsingMfa?: boolean;
   phone?: string;
   /**
-   * Which second factor the MFA panel is collecting (SRS FR-MFA-2/4):
+   * Which second factor the MFA panel is collecting (SRS FR-MFA-2/4, FR-TPF-1):
    * 'sms' renders the "code sent to your phone" copy and submits to the SMS verify
    * endpoint; 'totp' renders authenticator copy and submits the challenge + code to
-   * {@code POST /user/verify/totp}. Absent when MFA is not in play.
+   * {@code POST /user/verify/totp}; 'email' renders the risk step-up copy for an account
+   * with no enrolled second factor whose sign-in looked unfamiliar, and submits to the
+   * same endpoint as 'sms' (the backend reuses one verification store for both).
+   * Absent when MFA is not in play.
    */
-  mfaMethod?: 'sms' | 'totp';
+  mfaMethod?: 'sms' | 'totp' | 'email';
 }
 /**
  * Holds the authenticated user's full profile payload returned after a successful login.
@@ -52,6 +55,17 @@ export interface ProfileInterface {
    * {@code POST /user/verify/totp}. Absent on every other response.
    */
   challenge?: string;
+  /**
+   * Set by {@code POST /user/login} when a sign-in was flagged as anomalous on an account
+   * with no enrolled second factor (SRS FR-TPF-1): the password step succeeded, but tokens
+   * are withheld until the one-time code emailed to the account holder is presented to
+   * {@code GET /user/verify/code/{email}/{code}} — the same endpoint the SMS flow uses.
+   *
+   * It is a rendering hint only, never a risk disclosure: the flag says "a code is
+   * required", not why. The reason reaches the account owner by email and the audit log,
+   * so an attacker holding only a stolen password learns nothing from this response.
+   */
+  stepUp?: boolean;
 }
 
 /**

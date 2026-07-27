@@ -15,6 +15,7 @@ import { AdminUserService } from '../../../service/admin-user.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { getEventDisplay } from '../../../utils/event-display.utils';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Single-user management view — the detail half of the Users dashboard
@@ -34,7 +35,7 @@ import { getEventDisplay } from '../../../utils/event-display.utils';
 @Component({
   selector: 'app-user-details',
   standalone: true,
-  imports: [FormsModule, RouterLink, DatePipe, NgClass, NavbarComponent],
+  imports: [FormsModule, RouterLink, DatePipe, NgClass, NavbarComponent, TranslocoDirective],
   templateUrl: './user-details.component.html',
   styleUrl: './user-details.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -65,8 +66,17 @@ export class UserDetailsComponent implements OnInit {
    * Evaluated once from the access token's authorities claim; the backend
    * re-validates on every request, so these only shape the UI.
    */
-  protected readonly canEditRole: boolean;
-  protected readonly canEditSettings: boolean;
+  // Getters, not constructor-assigned fields: authority flags must follow the CURRENT token.
+  // Captured once at construction they latch whatever was true then — and on a page refresh that
+  // is usually an expired token, i.e. "no authorities at all", which silently disabled both admin
+  // forms for a legitimate administrator. UserService memoises the decode.
+  protected get canEditRole(): boolean {
+    return this.userService.hasAnyAuthority('UPDATE:ROLE');
+  }
+
+  protected get canEditSettings(): boolean {
+    return this.userService.hasAnyAuthority('UPDATE:USER');
+  }
 
   private readonly adminUserService = inject(AdminUserService);
   private readonly userService = inject(UserService);
@@ -76,11 +86,6 @@ export class UserDetailsComponent implements OnInit {
 
   /** Caches the latest successful response so mutations can patch slices of it. */
   private data = signal<CustomHttpResponseInterface<AdminUserDetailInterface> | undefined>(undefined);
-
-  constructor() {
-    this.canEditRole = this.userService.hasAnyAuthority('UPDATE:ROLE');
-    this.canEditSettings = this.userService.hasAnyAuthority('UPDATE:USER');
-  }
 
   /**
    * Loads the selected user whenever the {@code :id} route parameter changes.

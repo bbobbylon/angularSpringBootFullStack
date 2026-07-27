@@ -268,8 +268,8 @@ public class AdminUserController {
     }
 
     /**
-     * Updates another user's profile fields on an administrator's behalf (FR-ADMIN, closes the
-     * {@code TODO(admin-update)} left in {@link UserController}).
+     * Updates another user's profile fields on an administrator's behalf (FR-ADMIN, the admin-update capability
+     * {@link UserController} deliberately does not provide).
      *
      * <p><b>Why the id is trusted here, unlike {@code PATCH /user/update}.</b> The self-service
      * endpoint deliberately <em>ignores</em> the body id and binds to the JWT principal, because

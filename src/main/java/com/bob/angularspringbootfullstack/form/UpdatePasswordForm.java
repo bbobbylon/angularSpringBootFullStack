@@ -1,6 +1,8 @@
 package com.bob.angularspringbootfullstack.form;
 
+import com.bob.angularspringbootfullstack.constants.PasswordPolicy;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 /**
@@ -15,7 +17,11 @@ import lombok.Data;
 public class UpdatePasswordForm {
     @NotEmpty(message = "The current password is required")
     private String currentPassword;
+    // Strength is enforced on the CHANGE path too, not just at registration: without it an
+    // account created under the policy could be downgraded to a one-character password the
+    // moment it was changed, which makes the registration check decorative.
     @NotEmpty(message = "The new password is required")
+    @Pattern(regexp = PasswordPolicy.PATTERN, message = PasswordPolicy.MESSAGE)
     private String newPassword;
     @NotEmpty(message = "Confirmation password cannot be empty")
     private String confirmPassword;

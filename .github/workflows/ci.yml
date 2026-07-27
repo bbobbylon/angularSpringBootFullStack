@@ -76,7 +76,7 @@ jobs:
         run: mvn --no-transfer-progress verify
 
   frontend:
-    name: Frontend — Angular lint + build
+    name: Frontend — Angular test + build
     runs-on: ubuntu-latest
 
     defaults:
@@ -96,6 +96,42 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Dependency CVE scan for the frontend. The backend half of this pipeline has been
+      # covered all along (`mvn verify` runs OWASP dependency-check and fails on CVSS >= 7),
+      # but the Angular tree — by far the larger dependency graph — was never scanned.
+      #
+      # --audit-level=high fails the job only on high/critical advisories. Moderate findings
+      # are reported without breaking the build: the transitive dev-dependency churn in an
+      # Angular workspace produces a steady trickle of them, and a gate that is red for
+      # reasons nobody can act on gets ignored, which costs more than it catches.
+      #
+      # NOTE: this step could not be verified on the author's Windows machine — `npm audit`
+      # there fails with "invalid json response body ... audit endpoint returned an error",
+      # because npm receives a gzipped advisory response it does not decode. That is a local
+      # npm/network condition (the payload starts with the gzip magic bytes), not a problem
+      # with this configuration, and it does not reproduce on a clean Ubuntu runner. If it
+      # ever does flake here, prefer `continue-on-error: true` over deleting the step, so
+      # advisories stay visible even when the endpoint misbehaves.
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      # Lint now GATES. It could not before: the workspace carried 12 standing errors (10 of them
+      # real accessibility defects — labels with no control association, click handlers with no
+      # keyboard equivalent), so a gate here would have been red from day one and promptly
+      # ignored. Those are fixed, so the rule can finally be enforced rather than aspirational.
+      #
+      # Deliberately placed BEFORE the tests: lint failures are cheap to produce and cheap to
+      # read, and there is no value in spending a test run to tell someone about a missing
+      # `for` attribute.
+      - name: Lint
+        run: npm run lint
+
+      # The Vitest specs existed but were never run here, so a broken spec could merge
+      # while CI stayed green — the harness was proving nothing. --no-watch is required:
+      # the default watch mode never exits and would hang the runner until timeout.
+      - name: Test (Vitest, headless)
+        run: npm test -- --no-watch
 
       - name: Build (production)
         run: npm run build -- --configuration production

@@ -33,6 +33,20 @@
 ENV=local
 DB=aiven   # native | local | aiven
 
+# Serve the Angular dev server on ALL network interfaces instead of localhost only
+# (true | false), so you can open the app from a phone or tablet on the same wifi.
+#
+# Off by default: binding to 0.0.0.0 exposes an unauthenticated dev server (and its
+# source maps) to everyone on the network, which is not something to leave on by accident.
+#
+# With LAN=true the script prints the URL to use. Two things must also be true:
+#   1. Windows Firewall must allow inbound TCP 4200 and 8080 (see documentation/getting-started.md).
+#   2. Your phone must be on the SAME network — a "guest" wifi SSID, or a router with
+#      AP/client isolation enabled, will block it no matter what this script does.
+# The frontend derives the API URL from the browser's own hostname (see
+# environment.ts), so no rebuild or extra config is needed for the API half.
+LAN=true
+
 # Auto-open the app in your default browser once it's responding (true | false).
 # OPEN_BROWSER_TIMEOUT caps how long to wait for the server before giving up —
 # raise it for first-time `docker` builds (they compile the Angular app + JAR).
@@ -171,9 +185,15 @@ start_local() {
     cd "$ANGULAR_DIR" && npm install && cd "$SCRIPT_DIR"
   fi
 
-  log "Starting Angular dev server on port 4200..."
   cd "$ANGULAR_DIR"
-  npm run start &
+  if [[ "$LAN" == "true" ]]; then
+    # Bind 0.0.0.0 so devices on the same wifi can reach the dev server (see LAN= above).
+    log "Starting Angular dev server on port 4200 (LAN mode — all interfaces)..."
+    npm run start:lan &
+  else
+    log "Starting Angular dev server on port 4200..."
+    npm run start &
+  fi
   ANGULAR_PID=$!
   cd "$SCRIPT_DIR"
 
@@ -187,6 +207,33 @@ start_local() {
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   log "  Frontend : ${BLUE}http://localhost:4200${NC}"
   log "  Backend  : ${BLUE}http://localhost:$LOCAL_BACKEND_PORT${NC}"
+  if [[ "$LAN" == "true" ]]; then
+    # Best-effort LAN IPv4 lookup so the phone URL can be printed rather than hunted for.
+    #
+    # VIRTUAL ADAPTERS MUST BE SKIPPED. A dev box typically has several, and on Windows the
+    # Hyper-V "vEthernet (Default Switch)" adapter (172.x) sorts BEFORE the real NIC in
+    # ipconfig output — so naively taking the first IPv4 prints an address reachable only by
+    # this machine and its VMs. A phone that tries it just times out, with nothing to
+    # indicate the address itself was the problem. Docker, VMware, VirtualBox and Bluetooth
+    # PAN adapters all create the same trap.
+    #
+    # So: walk the adapter blocks, mark the virtual ones, and take the first IPv4 belonging
+    # to a real one. Falls back to hostname -I (Linux/WSL), then to a hint if neither exists.
+    lan_ip="$(ipconfig 2>/dev/null | tr -d '\r' | awk '
+      /adapter/ {
+        skip = 0
+        if ($0 ~ /vEthernet|Loopback|VirtualBox|VMware|Bluetooth|Docker|Hyper-V/) skip = 1
+        next
+      }
+      !skip && /IPv4 Address/ { sub(/.*: */, ""); print; exit }
+    ')"
+    [[ -z "$lan_ip" ]] && lan_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    if [[ -n "$lan_ip" ]]; then
+      log "  On phone : ${BLUE}http://${lan_ip}:4200${NC}  (same wifi; allow TCP 4200+$LOCAL_BACKEND_PORT in Windows Firewall)"
+    else
+      log "  On phone : same wifi → http://<your-PC-IPv4>:4200  (find it with: ipconfig)"
+    fi
+  fi
   if [[ "$DB" == "aiven" ]]; then
     log "  Database : ${BLUE}Aiven cloud MySQL${NC}"
   else

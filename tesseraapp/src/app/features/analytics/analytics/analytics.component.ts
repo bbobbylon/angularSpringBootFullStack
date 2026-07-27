@@ -25,6 +25,7 @@ import {
 import { CustomerInterface } from '../../../interface/customer.interface';
 import { InvoiceInterface } from '../../../interface/invoice.interface';
 import { UserInterface } from '../../../interface/user.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /** One point on the dual-trend SVG line/area chart. */
 interface TrendPoint {
@@ -90,7 +91,7 @@ interface ServiceUtil {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [NavbarComponent, RouterLink, DecimalPipe],
+  imports: [NavbarComponent, RouterLink, DecimalPipe, TranslocoDirective],
   templateUrl: './analytics.component.html',
   styleUrl: './analytics.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -127,7 +128,12 @@ export class AnalyticsComponent implements OnInit {
       this.invoicesState().dataState === DataState.LOADING,
   );
 
-  readonly isAdmin = this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE', 'DELETE:USER');
+  // A getter, not a field: authority flags must follow the CURRENT token. Evaluated once at
+  // construction they latch whatever was true then — and on a page refresh that is usually an
+  // expired token, i.e. "no authorities at all". UserService memoises the decode.
+  get isAdmin(): boolean {
+    return this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE', 'DELETE:USER');
+  }
 
   // ── KPIs ────────────────────────────────────────────────────────────────
 

@@ -6,6 +6,7 @@ import com.bob.angularspringbootfullstack.model.Services;
 import com.bob.angularspringbootfullstack.model.Stats;
 import org.springframework.data.domain.Page;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -99,6 +100,43 @@ public interface CustomerService {
     void addInvoiceToCustomer(Long customerId, Invoice invoice);
 
     /**
+     * Applies edits to an existing invoice.
+     *
+     * <p>Invoices were create-only until now, which meant a typo in an amount or a status that
+     * needed correcting could only be fixed by raising a second invoice — leaving the wrong one
+     * permanently in the customer's history and in every revenue total derived from it.
+     *
+     * <p>Three fields are deliberately <b>not</b> taken from the caller, whatever the request body
+     * contains: the invoice number (a stable external reference — changing it would break every
+     * document already sent to the customer), the creation identity of the row, and the owning
+     * customer. Reassigning an invoice to a different customer is a different operation with
+     * different consequences for both parties' billing histories, and it has its own endpoint
+     * ({@link #linkInvoiceToCustomer}) rather than hiding inside a general edit.
+     *
+     * @param invoiceId the id of the invoice to edit
+     * @param edits     the submitted values; only the editable fields are read
+     * @return the updated invoice
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no invoice with the given ID exists
+     */
+    Invoice updateInvoice(Long invoiceId, Invoice edits);
+
+    /**
+     * Attaches an existing standalone (draft) invoice to a customer.
+     *
+     * <p>The other half of {@code POST /invoice/create}: that endpoint raises an invoice with no
+     * customer, and this one gives it an owner once it is known. Distinct from
+     * {@link #addInvoiceToCustomer}, which creates a brand-new invoice already attached — the two
+     * differ in whether the invoice exists yet, which is why they are separate rather than one
+     * method with a nullable id.
+     *
+     * @param invoiceId  the id of the existing invoice
+     * @param customerId the id of the customer to attach it to
+     * @return the invoice, now owned by the customer
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if either id does not exist
+     */
+    Invoice linkInvoiceToCustomer(Long invoiceId, Long customerId);
+
+    /**
      * Returns a paginated page of customers whose name contains the given search term.
      *
      * @param name the substring to search for within customer names
@@ -118,12 +156,17 @@ public interface CustomerService {
     Invoice getInvoice(Long invoiceId);
 
     /**
-     * Returns all entries from the {@link Services} catalog.
+     * Returns the entries from the {@link Services} catalog that are still on offer.
      * <p>
      * Used to populate the service dropdown on the new-invoice form so users
      * can select from predefined offerings rather than entering free text.
      *
-     * @return all service catalog entries, unpaginated
+     * <p>Retired services are excluded. Offering a discontinued service on a new invoice is worse
+     * than merely untidy — it is how a business accidentally sells something it no longer
+     * provides. Administrators see the full catalog, retired entries included, through
+     * {@code ServicesCatalogService}.
+     *
+     * @return the active service catalog entries, unpaginated
      */
     Iterable<Services> getServices();
 
@@ -145,4 +188,53 @@ public interface CustomerService {
      * @return an ordered map of status → customer count across the whole table
      */
     Map<String, Integer> getCustomerStatusBreakdown();
+
+    // ── Organization-scoped reporting (FR-ORG-2) ────────────────────────────────────────────
+    // These mirror the four methods above but restrict every row to customers owned by the
+    // caller's organizations. They are deliberately SEPARATE methods rather than an extra
+    // nullable parameter on the existing ones: a null "no scope" argument would make the
+    // unrestricted case the default that any caller gets by forgetting to pass anything, and a
+    // security boundary should not be something you opt into. Call sites now state which view
+    // they want, and AnalyticsController is the one place that decides which applies.
+    //
+    // Every method requires a NON-EMPTY collection. An empty organization set means the caller
+    // belongs to no active organization and must see nothing, which is the caller's decision to
+    // enforce — quietly returning system-wide data on empty is precisely the failure this
+    // feature exists to prevent, and an empty SQL `IN ()` list is invalid anyway.
+
+    /**
+     * Paginated customers owned by the given organizations.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @param page            zero-based page index
+     * @param size            records per page
+     * @return a page of customers restricted to those organizations
+     */
+    Page<Customer> getCustomersForOrganizations(Collection<Long> organizationIds, int page, int size);
+
+    /**
+     * Paginated invoices billed to customers owned by the given organizations.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @param page            zero-based page index
+     * @param size            records per page
+     * @return a page of invoices restricted to those organizations
+     */
+    Page<Invoice> getInvoicesForOrganizations(Collection<Long> organizationIds, int page, int size);
+
+    /**
+     * Aggregated dashboard statistics restricted to the given organizations.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @return counts and billed total covering only those organizations
+     */
+    Stats getStatsForOrganizations(Collection<Long> organizationIds);
+
+    /**
+     * Customer status breakdown restricted to the given organizations.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @return an ordered map of status → customer count within those organizations
+     */
+    Map<String, Integer> getCustomerStatusBreakdownForOrganizations(Collection<Long> organizationIds);
 }

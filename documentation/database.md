@@ -107,7 +107,7 @@ The account record. Mapped by `UserRowMapper` to the `User` POJO.
 | `using_totp` | BOOLEAN | authenticator-app MFA enrolled (denormalized from `totpcredentials`) |
 | `created_at` | DATETIME | defaults to `CURRENT_TIMESTAMP` |
 | `password_changed_at` | DATETIME | tokens issued before this are rejected (see [security.md](security.md)) |
-| `image_url` | VARCHAR(255) | avatar; defaults to a placeholder icon |
+| `image_url` | VARCHAR(512) | avatar; defaults to a placeholder icon. **Widened from 255**: identity providers return longer URLs than that, and MySQL outside strict mode silently truncates on insert — the row is written, the login succeeds, and the only symptom is a broken image in the browser |
 
 ### `roles`
 The seven-role catalog. One row per role; `permission` is a comma-separated list of `RESOURCE:ACTION` grants.
@@ -248,7 +248,11 @@ One customer has many invoices (`@OneToMany`, eager).
 > Legacy columns `service` and `services` (VARCHAR) also exist on this table from earlier mappings; line items now live in `invoiceserviceitems`. They're harmless leftovers (Hibernate `update` never drops columns).
 
 ### `services`
-Reference table of service offerings: `id`, `name`, `description`, `price` (DOUBLE). Named `Services` because `Service` collides with a Spring stereotype.
+Reference table of service offerings: `id`, `name`, `description`, `price` (DOUBLE), `active` (BOOLEAN NOT NULL DEFAULT TRUE). Named `Services` because `Service` collides with a Spring stereotype.
+
+`active` is how a service is **retired, never deleted**. Invoices copy a service's name and price into their own line items when raised, so deleting the row would not corrupt historical invoices — but it would erase the catalog's own history and turn "bring that offering back" into a retyping exercise. The public catalog (`GET /customer/invoice/new`) returns active entries only; the admin catalog returns everything.
+
+Seeded with 12 entries by `schema.sql`. The seed **does not overwrite `active`**, so a service an administrator has retired stays retired across a re-run.
 
 ### `invoiceserviceitems`
 The `@ElementCollection` table for an invoice's line items — **no surrogate `id`** (Hibernate-managed):
@@ -266,23 +270,42 @@ The `@ElementCollection` table for an invoice's line items — **no surrogate `i
 
 ### Role catalog (seeded by `schema.sql`)
 
-| Role | Permissions |
-|------|-------------|
-| `ROLE_GUEST` | `READ:USER` |
-| `ROLE_USER` | `READ:USER, READ:CUSTOMER` |
-| `ROLE_MODERATOR` | `READ:USER, READ:CUSTOMER, UPDATE:CUSTOMER` |
-| `ROLE_HELP_DESK_ADMIN` | `READ:USER, READ:CUSTOMER, UPDATE:USER` |
-| `ROLE_ORGANIZATION_ADMIN` | `READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE` |
-| `ROLE_ADMIN` | `READ/CREATE/UPDATE:USER+CUSTOMER, UPDATE:ROLE, DELETE:USER` |
-| `ROLE_APPLICATION_ADMIN` | all of the above **+ `DELETE:CUSTOMER`** (full access) |
+> **Role ids are pinned 1–7.** Without explicit ids the seed drifts: `INSERT … ON DUPLICATE KEY UPDATE`
+> consumes an AUTO_INCREMENT value for every row it touches, *including rows it merely updates*, so
+> each re-run of this idempotent file burned another 7 ids — which is why a database seeded five
+> times shows roles numbered in the 30s. That matters because `userroles.role_id` is a real foreign
+> key, so two databases seeded a different number of times disagree about which id means which role.
+> Nothing breaks today (every assignment path resolves the role by **name** first), but a dump moved
+> between environments would attach people to the wrong role. Pinning fixes the mapping everywhere
+> and stops the drift. **Existing databases are not renumbered** — the unique key is `name`, so a
+> seeded row keeps its drifted id and its foreign keys stay valid.
+
+| Role | id | Permissions |
+|------|---:|-------------|
+| `ROLE_GUEST` | 1 | `READ:USER` |
+| `ROLE_USER` | 2 | `READ:USER, READ:CUSTOMER` |
+| `ROLE_MODERATOR` | 3 | `READ:USER, READ:CUSTOMER, UPDATE:CUSTOMER` |
+| `ROLE_HELP_DESK_ADMIN` | 4 | `READ:USER, READ:CUSTOMER, UPDATE:USER` |
+| `ROLE_ORGANIZATION_ADMIN` | 5 | `READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE` |
+| `ROLE_ADMIN` | 6 | `READ/CREATE/UPDATE:USER+CUSTOMER, UPDATE:ROLE, DELETE:USER` |
+| `ROLE_APPLICATION_ADMIN` | 7 | all of the above **+ `DELETE:CUSTOMER`** (full access) |
 
 How permissions map to endpoints is in [security.md](security.md#rbac) and [api-reference.md](api-reference.md).
 
-### Event catalog (the 15 `CK_Events_Type` values)
+### Event catalog (the 16 `CK_Events_Type` values)
 
-`LOGIN_ATTEMPT`, `LOGIN_ATTEMPT_SUCCESS`, `LOGIN_ATTEMPT_FAILURE`, `PROFILE_UPDATE`, `PROFILE_PICTURE_UPDATE`, `ROLE_UPDATE`, `ACCOUNT_SETTINGS_UPDATE`, `PASSWORD_UPDATE`, `MFA_UPDATE`, `FEDERATED_LOGIN`, `TOTP_ENROLLED`, `TOTP_DISABLED`, `RECOVERY_CODE_USED`, `SESSION_REVOKED`, `TOKEN_REUSE_DETECTED`.
+`LOGIN_ATTEMPT`, `LOGIN_ATTEMPT_SUCCESS`, `LOGIN_ATTEMPT_FAILURE`, `PROFILE_UPDATE`, `PROFILE_PICTURE_UPDATE`, `ROLE_UPDATE`, `ACCOUNT_SETTINGS_UPDATE`, `PASSWORD_UPDATE`, `MFA_UPDATE`, `FEDERATED_LOGIN`, `TOTP_ENROLLED`, `TOTP_DISABLED`, `RECOVERY_CODE_USED`, `SESSION_REVOKED`, `TOKEN_REUSE_DETECTED`, `SUSPICIOUS_LOGIN`.
 
 > Adding a new event type means updating **both** the `CHECK` constraint and the seed `INSERT` in `schema.sql`.
+> The `CHECK` is **rebuilt idempotently** on every run precisely because the valid set grows: a
+> database created before a new type shipped keeps the old constraint (`CREATE TABLE IF NOT EXISTS`
+> is a no-op) and rejects the new type on insert with MySQL error 3819.
+
+### Services catalog (seeded by `schema.sql`)
+
+12 offerings with **pinned ids**, for the same reason the roles are pinned — `Services` has no unique
+key on `name`, so without them a re-run would append a second copy of the catalog rather than update
+it in place. The seed deliberately leaves `active` alone so a retired service stays retired.
 
 ---
 

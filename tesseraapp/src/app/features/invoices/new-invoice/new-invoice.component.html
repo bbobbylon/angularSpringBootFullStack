@@ -1,3 +1,6 @@
+<!-- One Transloco scope for the whole template. An ng-container is used because the
+     top level is @if/@switch control flow, not an element, and every branch needs `t`. -->
+<ng-container *transloco="let t">
 @if (newInvoiceState(); as state) {
   @switch (state.dataState) {
     @case (DataState.LOADED) {
@@ -7,9 +10,9 @@
           <nav aria-label="breadcrumb">
             <ol class="breadcrumb sc-breadcrumb">
               <li class="breadcrumb-item">
-                <a [routerLink]="['/']">Home</a>
+                <a [routerLink]="['/']">{{ t('securityCenter.home') }}</a>
               </li>
-              <li class="breadcrumb-item"><a [routerLink]="['/invoices']">Invoices</a></li>
+              <li class="breadcrumb-item"><a [routerLink]="['/invoices']">{{ t('nav.invoices') }}</a></li>
               <li aria-current="page" class="breadcrumb-item active">New</li>
             </ol>
           </nav>
@@ -31,18 +34,14 @@
                               type="button"></button>
                     </div>
                   }
-                  @if (state.appData?.message) {
-                    <div class="alert alert-success bg-success text-light border-0 alert-dismissible fade show"
-                         role="alert">
-                      {{ state.appData?.message }}
-                      <button aria-label="Close" class="btn-close btn-close-white" data-bs-dismiss="alert"
-                              type="button"></button>
-                    </div>
-                  }
+                  <!-- The backend's cosmetic GET /customer/invoice/new message
+                       ("New invoice page reached and Customers have been retrieved!") is intentionally
+                       not surfaced here — it was a load-time diagnostic and is still available via the
+                       newInvoice$ console log. Real creation feedback is the toast in createNewInvoice(). -->
                   <form #invoiceForm="ngForm" (ngSubmit)="createNewInvoice(invoiceForm)">
                     <div class="row">
                       <div class="col-md-12" style="margin-bottom: 15px">
-                        <label>Services</label>
+                        <span class="form-label d-block" id="ni-services-label">{{ t('billing.services') }}</span>
                         @for (line of serviceLines; track $index; let i = $index) {
                           <div class="d-flex gap-2 mb-2">
                             <select
@@ -51,7 +50,7 @@
                               [ngModel]="null"
                               class="form-control"
                               required>
-                              <option [ngValue]="null" disabled>Select a service...</option>
+                              <option [ngValue]="null" disabled>{{ t('newInvoice.selectService') }}</option>
                               @for (svc of state?.appData?.data?.availableServices; track svc.id) {
                                 <option [value]="svc.id">{{ svc.name }}</option>
                               }
@@ -75,7 +74,7 @@
                         </button>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
-                        <label for="customerId">Customer</label>
+                        <label for="customerId">{{ t('newInvoice.customer') }}</label>
                         <select [ngModel]="null" class="form-control select-cl" id="customerId" name="customerId"
                                 required>
                           @for (customer of state?.appData?.data?.customers; track customer.id) {
@@ -87,20 +86,20 @@
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
-                          <label for="totalAmount">Total</label>
+                          <label for="totalAmount">{{ t('common.total') }}</label>
                           <input class="form-control" id="totalAmount" name="totalAmount" ngModel required
                                  type="number" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
-                          <label for="invoiceDate">Date</label>
+                          <label for="invoiceDate">{{ t('common.date') }}</label>
                           <input class="form-control" id="invoiceDate" name="invoiceDate" ngModel required
                                  type="date" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
-                        <label for="status">Status</label>
+                        <label for="status">{{ t('common.status') }}</label>
                         <select class="form-control" id="status" name="status" ngModel="PENDING" required>
                           <option value="PENDING">PENDING</option>
                           <option value="PAID">PAID</option>
@@ -118,7 +117,7 @@
                         @if (isLoading()) {
                           <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                                 style="margin-right: 5px"></span>
-                          <span>Saving...</span>
+                          <span>{{ t('common.saving') }}</span>
                         } @else {
                           Save
                         }
@@ -134,8 +133,8 @@
     }
     @case (DataState.LOADING) {
       <div class="sc-state">
-        <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
-        <p class="mb-0">Loading…</p>
+        <div class="spinner-border" role="status"><span class="visually-hidden">{{ t('common.loading') }}</span></div>
+        <p class="mb-0">{{ t('common.loading') }}</p>
       </div>
     }
     @case (DataState.ERROR) {
@@ -146,3 +145,4 @@
     }
   }
 }
+</ng-container>

@@ -6,20 +6,20 @@
   Sessions & devices (the stateful half of the hybrid token model made visible).
 -->
 <app-navbar [user]="user()"></app-navbar>
-<main class="sc-page">
+<main *transloco="let t" class="sc-page">
   <div class="container">
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb sc-breadcrumb">
-        <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
-        <li aria-current="page" class="breadcrumb-item active">Security Center</li>
+        <li class="breadcrumb-item"><a [routerLink]="['/']">{{ t('securityCenter.home') }}</a></li>
+        <li aria-current="page" class="breadcrumb-item active">{{ t('securityCenter.title') }}</li>
       </ol>
     </nav>
 
     <header class="sc-head sc-reveal">
       <div>
-        <p class="eyebrow mb-1">Account</p>
-        <h1 class="sc-head__title">Security Center</h1>
-        <p class="sc-head__sub">Manage your second factor and see every device signed in to your account.</p>
+        <p class="eyebrow mb-1">{{ t('securityCenter.eyebrow') }}</p>
+        <h1 class="sc-head__title">{{ t('securityCenter.title') }}</h1>
+        <p class="sc-head__sub">{{ t('securityCenter.subtitle') }}</p>
       </div>
     </header>
 
@@ -81,7 +81,7 @@
     <!-- ── Multi-factor authentication ─────────────────────────────────────── -->
     <div class="card mb-4" style="border-radius: 8px;">
       <div class="card-body">
-        <h5 class="card-title"><i class="bi bi-shield-lock-fill" style="margin-right: 8px;"></i>Multi-factor authentication</h5>
+        <h5 class="card-title"><i class="bi bi-shield-lock-fill" style="margin-right: 8px;"></i>{{ t('securityCenter.mfaTitle') }}</h5>
         <h6 class="card-subtitle mb-3 text-muted">A second factor keeps your account safe even if your password leaks.</h6>
 
         <div class="list-group shadow-sm">
@@ -94,7 +94,7 @@
               @case ('idle') {
                 <div class="row align-items-center">
                   <div class="col">
-                    <strong>Authenticator app</strong>
+                    <strong>{{ t('securityCenter.authenticator') }}</strong>
                     @if (user()?.usingTotp) {
                       <span class="badge bg-success mx-2">Enabled</span>
                     } @else {
@@ -107,7 +107,7 @@
                           Recovery codes remaining:
                           <span class="mono">{{ recoveryCodesRemaining() }}</span>
                           @if (recoveryCodesRemaining() <= 2) {
-                            <span class="badge bg-danger ms-2">Running low — re-enroll to get a fresh set</span>
+                            <span class="badge bg-danger ms-2">{{ t('securityCenter.codesLow') }}</span>
                           }
                         </span>
                       }
@@ -119,7 +119,7 @@
                         @if (isLoading()) {
                           <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
                         }
-                        Set up
+                        {{ t('securityCenter.setUp') }}
                       </button>
                     }
                   </div>
@@ -130,13 +130,13 @@
                 @if (user()?.usingTotp) {
                   <form #disableForm="ngForm" (ngSubmit)="disableTotp(disableForm)" class="row g-2 align-items-end mt-2">
                     <div class="col-auto">
-                      <label class="form-label mb-1" for="disableCode">Authenticator or recovery code</label>
+                      <label class="form-label mb-1" for="disableCode">{{ t('securityCenter.disableCodeLabel') }}</label>
                       <input [disabled]="isLoading()" autocomplete="one-time-code" class="form-control form-control-sm"
                              id="disableCode" name="code" ngModel placeholder="123456" required type="text">
                     </div>
                     <div class="col-auto">
                       <button [disabled]="disableForm.invalid || isLoading()" class="btn btn-outline-danger btn-sm" type="submit">
-                        Disable authenticator
+                        {{ t('securityCenter.disableAuthenticator') }}
                       </button>
                     </div>
                   </form>
@@ -145,8 +145,8 @@
 
               <!-- Step 1: scan + confirm -->
               @case ('scan') {
-                <strong>Set up your authenticator</strong>
-                <p class="text-muted mb-3">Scan the QR code, then enter the 6-digit code your app shows to confirm.</p>
+                <strong>{{ t('securityCenter.enrollTitle') }}</strong>
+                <p class="text-muted mb-3">{{ t('securityCenter.enrollHint') }}</p>
                 <div class="row">
                   <div class="col-md-auto text-center mb-3">
                     @if (setup(); as s) {
@@ -161,20 +161,20 @@
                   <div class="col-md">
                     <form #confirmForm="ngForm" (ngSubmit)="confirmEnrollment(confirmForm)">
                       <div class="mb-3" style="max-width: 260px;">
-                        <label class="form-label" for="confirmCode">Code from your app</label>
+                        <label class="form-label" for="confirmCode">{{ t('securityCenter.codeFromApp') }}</label>
                         <input [disabled]="isLoading()" autocomplete="one-time-code" class="form-control"
                                id="confirmCode" inputmode="numeric" name="code" ngModel placeholder="••••••" required type="text">
                       </div>
                       <button [disabled]="confirmForm.invalid || isLoading()" class="btn btn-primary btn-sm" type="submit">
                         @if (isLoading()) {
                           <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
-                          <span>Verifying…</span>
+                          <span>{{ t('securityCenter.verifying') }}</span>
                         } @else {
-                          <span>Confirm &amp; enable</span>
+                          <span>{{ t('securityCenter.confirmEnable') }}</span>
                         }
                       </button>
                       <button (click)="cancelEnrollment()" [disabled]="isLoading()" class="btn btn-outline-secondary btn-sm ms-2" type="button">
-                        Cancel
+                        {{ t('common.cancel') }}
                       </button>
                     </form>
                   </div>
@@ -183,10 +183,10 @@
 
               <!-- Step 2: one-time recovery code reveal -->
               @case ('codes') {
-                <strong>Save your recovery codes</strong>
+                <strong>{{ t('securityCenter.saveCodesTitle') }}</strong>
                 <p class="text-muted mb-2">
                   Each code signs you in once if you lose your authenticator.
-                  <strong>They will never be shown again</strong> — store them somewhere safe now.
+                  <strong>{{ t('securityCenter.codesNeverShown') }}</strong> — store them somewhere safe now.
                 </p>
                 <div class="row row-cols-2 row-cols-md-5 g-2 mb-3" style="max-width: 720px;">
                   @for (code of recoveryCodes(); track code) {
@@ -194,7 +194,7 @@
                   }
                 </div>
                 <button (click)="finishEnrollment()" class="btn btn-primary btn-sm" type="button">
-                  I've saved my codes
+                  {{ t('securityCenter.codesSaved') }}
                 </button>
               }
             }
@@ -204,36 +204,117 @@
           <div class="list-group-item p-3">
             <div class="row align-items-center">
               <div class="col">
-                <strong>SMS verification</strong>
+                <strong>{{ t('securityCenter.smsTitle') }}</strong>
                 @if (user()?.using2FA) {
                   <span class="badge bg-success mx-2">Enabled</span>
                 } @else {
                   <span class="badge bg-warning mx-2">Disabled</span>
                 }
                 <p class="text-muted mb-0">
-                  One-time codes sent to your phone. Requires a phone number on your profile.
+                  One-time codes sent to your phone.
+                  @if (!user()?.phoneNumber) {
+                    <span>{{ t('securityCenter.addPhonePrompt') }}</span>
+                  }
                   @if (user()?.usingTotp) {
-                    <span class="d-block mt-1">Your authenticator app takes precedence while it is enabled.</span>
+                    <span class="d-block mt-1">{{ t('securityCenter.totpPrecedence') }}</span>
                   }
                 </p>
               </div>
               <div class="col-auto">
-                <button (click)="toggleSmsMfa()" [disabled]="isLoading()" class="btn btn-outline-primary btn-sm" type="button">
-                  {{ user()?.using2FA ? 'Disable' : 'Enable' }}
+                <button (click)="toggleSmsMfa()" [disabled]="isLoading() || phonePromptOpen()" class="btn btn-outline-primary btn-sm" type="button">
+                  {{ user()?.using2FA ? t('securityCenter.disable') : t('securityCenter.enable') }}
                 </button>
               </div>
             </div>
+
+            <!--
+              Inline phone capture. Shown instead of the backend's "a phone number is
+              required" error when the user tries to enable SMS without one on file:
+              the missing prerequisite is offered as the next step rather than reported
+              as a failure. Saving it enables SMS in the same action.
+            -->
+            @if (phonePromptOpen()) {
+              <form #phoneForm="ngForm" (ngSubmit)="savePhoneAndEnableSms(phoneForm)" class="mt-3" novalidate>
+                <label class="form-label" for="smsPhoneNumber">{{ t('securityCenter.phoneNumber') }}</label>
+                <div class="row g-2 align-items-start">
+                  <div class="col-12 col-sm-auto flex-grow-1" style="max-width: 320px;">
+                    <input id="smsPhoneNumber" name="phoneNumber" ngModel required
+                           type="tel" inputmode="tel" autocomplete="tel"
+                           pattern="^\+?[0-9. ()-]{7,25}$"
+                           placeholder="+1 555 010 1234"
+                           [disabled]="isLoading()"
+                           class="form-control form-control-sm" />
+                    <small class="text-muted">{{ t('securityCenter.phoneHint') }}</small>
+                  </div>
+                  <div class="col-auto">
+                    <button [disabled]="isLoading() || phoneForm.invalid" class="btn btn-primary btn-sm" type="submit">
+                      {{ isLoading() ? t('common.saving') : t('securityCenter.saveEnable') }}
+                    </button>
+                  </div>
+                  <div class="col-auto">
+                    <button (click)="cancelPhonePrompt(phoneForm)" [disabled]="isLoading()"
+                            class="btn btn-outline-secondary btn-sm" type="button">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </form>
+            }
           </div>
         </div>
       </div>
     </div>
+
+    <!-- ── Connected accounts (ROADMAP §1.4) ───────────────────────────────── -->
+    @if (connectedProviders().length > 0 || connectableProviders().length > 0) {
+      <div class="card mb-4" style="border-radius: 8px;">
+        <div class="card-body">
+          <h5 class="card-title mb-1">
+            <i class="bi bi-link-45deg" style="margin-right: 8px;"></i>{{ t('securityCenter.connectedTitle') }}
+          </h5>
+          <h6 class="card-subtitle text-muted mb-3">{{ t('securityCenter.connectedHint') }}</h6>
+
+          @for (link of connectedProviders(); track link.provider) {
+            <div class="row align-items-center py-2 border-bottom">
+              <div class="col">
+                <strong class="text-capitalize">{{ link.provider }}</strong>
+                <span class="d-block small text-muted">
+                  {{ t('securityCenter.connectedSince', { when: (link.linkedAt | date: 'mediumDate') }) }}
+                </span>
+              </div>
+              <div class="col-auto">
+                <button (click)="disconnectProvider(link.provider)" [disabled]="isLoading()"
+                        class="btn btn-outline-danger btn-sm" type="button">
+                  {{ t('securityCenter.disconnect') }}
+                </button>
+              </div>
+            </div>
+          } @empty {
+            <p class="text-muted small mb-3">{{ t('securityCenter.noneConnected') }}</p>
+          }
+
+          @if (connectableProviders().length > 0) {
+            <div class="pt-3">
+              <span class="small text-muted d-block mb-2">{{ t('securityCenter.connectMore') }}</span>
+              @for (provider of connectableProviders(); track provider) {
+                <button (click)="connectProvider(provider)" [disabled]="isLoading()"
+                        class="btn btn-outline-primary btn-sm text-capitalize" style="margin-right: 6px;"
+                        type="button">
+                  <i class="bi bi-plus-lg"></i> {{ provider }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
 
     <!-- ── Sessions & devices ──────────────────────────────────────────────── -->
     <div class="card mb-4" style="border-radius: 8px;">
       <div class="card-body">
         <div class="row align-items-center mb-2">
           <div class="col">
-            <h5 class="card-title mb-1"><i class="bi bi-laptop" style="margin-right: 8px;"></i>Sessions &amp; devices</h5>
+            <h5 class="card-title mb-1"><i class="bi bi-laptop" style="margin-right: 8px;"></i>{{ t('securityCenter.sessionsTitle') }}</h5>
             <h6 class="card-subtitle text-muted">
               Every device holding a live refresh token. Revoking a session stops it from refreshing;
               its current access token expires within 30 minutes.
@@ -242,7 +323,7 @@
           <div class="col-auto">
             <button (click)="revokeOtherSessions()" [disabled]="isLoading() || sessions().length <= 1"
                     class="btn btn-outline-danger btn-sm" type="button">
-              <i class="bi bi-box-arrow-right" style="margin-right: 4px;"></i>Log out everywhere else
+              <i class="bi bi-box-arrow-right" style="margin-right: 4px;"></i>{{ t('securityCenter.logOutEverywhere') }}
             </button>
           </div>
         </div>
@@ -250,12 +331,12 @@
         <table class="table table-hover mb-0">
           <thead>
           <tr>
-            <th scope="col">Device</th>
-            <th scope="col">IP Address</th>
-            <th scope="col">Signed in</th>
-            <th scope="col">Last active</th>
-            <th scope="col">Expires</th>
-            <th scope="col">Action</th>
+            <th scope="col">{{ t('security.log.device') }}</th>
+            <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
+            <th scope="col">{{ t('securityCenter.signedIn') }}</th>
+            <th scope="col">{{ t('securityCenter.lastActive') }}</th>
+            <th scope="col">{{ t('securityCenter.expires') }}</th>
+            <th scope="col">{{ t('common.action') }}</th>
           </tr>
           </thead>
           <tbody>
@@ -264,7 +345,7 @@
                 <td>
                   {{ session.device }}
                   @if (session.family === currentFamily()) {
-                    <span class="badge bg-info ms-2">This device</span>
+                    <span class="badge bg-info ms-2">{{ t('securityCenter.thisDevice') }}</span>
                   }
                 </td>
                 <td class="mono">{{ session.ipAddress }}</td>
@@ -274,9 +355,9 @@
                 <td>
                   <button (click)="revokeSession(session.family)"
                           [disabled]="isLoading() || session.family === currentFamily()"
-                          [title]="session.family === currentFamily() ? 'Use Logout to end this session' : 'Revoke this session'"
+                          [title]="session.family === currentFamily() ? t('securityCenter.useLogoutTitle') : t('securityCenter.revokeTitle')"
                           class="btn btn-outline-danger btn-sm" type="button">
-                    Revoke
+                    {{ t('securityCenter.revoke') }}
                   </button>
                 </td>
               </tr>
@@ -296,7 +377,7 @@
     <div class="card mb-4" style="border-radius: 8px;">
       <div class="card-body">
         <h5 class="card-title mb-1">
-          <i class="bi bi-clock-history" style="margin-right: 8px;"></i>Activity History
+          <i class="bi bi-clock-history" style="margin-right: 8px;"></i>{{ t('securityCenter.activityTitle') }}
         </h5>
         <h6 class="card-subtitle text-muted mb-3">
           Every security event on your account — newest first.
@@ -305,10 +386,10 @@
         <table class="table table-hover mb-2">
           <thead>
           <tr>
-            <th scope="col">Event</th>
+            <th scope="col">{{ t('securityCenter.event') }}</th>
             <th scope="col">Device</th>
             <th scope="col">IP Address</th>
-            <th scope="col">Date</th>
+            <th scope="col">{{ t('common.date') }}</th>
           </tr>
           </thead>
           <tbody>
@@ -327,14 +408,14 @@
               </tr>
             } @empty {
               <tr>
-                <td class="text-muted text-center" colspan="4">No security events recorded yet.</td>
+                <td class="text-muted text-center" colspan="4">{{ t('securityCenter.noEvents') }}</td>
               </tr>
             }
           </tbody>
         </table>
 
         @if (eventsTotalPages() > 1) {
-          <nav aria-label="Activity history pagination">
+          <nav [attr.aria-label]="t('securityCenter.activityPagination')">
             <ul class="pagination pagination-sm justify-content-end mb-0">
               <li [class.disabled]="currentEventPage() === 0" class="page-item">
                 <button (click)="goToEventsPage(currentEventPage() - 1)" class="page-link">&laquo;</button>

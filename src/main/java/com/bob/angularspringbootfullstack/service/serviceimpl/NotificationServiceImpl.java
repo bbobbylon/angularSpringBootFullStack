@@ -64,6 +64,48 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p><b>Delivery-failure fallback.</b> If the send fails — most commonly because no SMTP
+     * credentials are configured on a developer machine — the code is written to the server log at
+     * WARN so the challenge can still be completed locally. That is a deliberate dev affordance
+     * mirroring the existing SMS path (which logs its code unconditionally), and it is why the log
+     * line spells out the exposure: anyone who can read the application log can complete this one
+     * challenge. In any deployed environment SMTP is configured, the send succeeds, and the code
+     * never reaches the log. The alternative — failing closed — would lock a legitimate user out of
+     * their own account because of an infrastructure fault, on a path they cannot retry past.
+     */
+    @Override
+    public void sendStepUpCode(String firstName, String email, String code, String reasonSummary) {
+        CompletableFuture
+                .runAsync(() -> emailService.sendStepUpCodeEmail(firstName, email, code, reasonSummary))
+                .exceptionally(throwable -> {
+                    log.warn("Failed to email the step-up code to {} ({}). Falling back to the server log so the " +
+                                    "challenge remains completable — NOTE: this exposes the code to anyone who can " +
+                                    "read these logs, and only happens when mail delivery is unavailable. Code: {}",
+                            email, throwable.getMessage(), code);
+                    return null;
+                });
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Purely informational, so a delivery failure is logged and dropped — there is no fallback
+     * channel and nothing the user must act on to complete their sign-in.
+     */
+    @Override
+    public void sendSecurityAlert(String firstName, String email, String reasonSummary) {
+        CompletableFuture
+                .runAsync(() -> emailService.sendSecurityAlertEmail(firstName, email, reasonSummary))
+                .exceptionally(throwable -> {
+                    log.error("Failed to send the security alert email to {}: {}",
+                            email, throwable.getMessage(), throwable);
+                    return null;
+                });
+    }
+
+    /**
      * Shared async wrapper for both email-based verification flows. Hands the
      * composition off to {@link EmailService#sendVerificationEmail} on a
      * worker thread and routes any failure into a single SLF4J error log

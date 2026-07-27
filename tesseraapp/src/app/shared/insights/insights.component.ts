@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { UserService } from '../../service/user.service';
 import { StatsInterface } from '../../interface/stats.interface';
 import { CustomerInterface } from '../../interface/customer.interface';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * One slice of the customer-status donut.
@@ -39,7 +40,7 @@ interface DonutSegment {
 @Component({
   selector: 'app-insights',
   standalone: true,
-  imports: [DecimalPipe, RouterLink],
+  imports: [DecimalPipe, RouterLink, TranslocoDirective],
   templateUrl: './insights.component.html',
   styleUrl: './insights.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -62,7 +63,12 @@ export class InsightsComponent {
    * Whether to show the analytics view instead of the quick-actions view. Uses the
    * same staff authorities the navbar and adminGuard check, so the three stay in sync.
    */
-  readonly isAdmin = this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE');
+  // A getter, not a field: authority flags must follow the CURRENT token. Evaluated once at
+  // construction they latch whatever was true then — and on a page refresh that is usually an
+  // expired token, i.e. "no authorities at all". UserService memoises the decode.
+  get isAdmin(): boolean {
+    return this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE');
+  }
 
   /** Status → display label + theme-token color. Drives both donut and legend. */
   private readonly statusMeta: Record<string, { label: string; color: string }> = {

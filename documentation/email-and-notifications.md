@@ -81,7 +81,7 @@ Both email flows persist a **bare UUID key**, not a URL, and attach the host onl
 
 **The two verify routes are public — and must stay so in lockstep.** Both `/user/verify/account/**` and `/user/verify/password/**` appear in `Constants.PUBLIC_URLS` (the filter-chain `permitAll` set, `constants/Constants.java:18-26`) **and** in `Constants.PUBLIC_ROUTES` (the `CustomAuthFilter` skip list, `:60-65`). A route public in one list but not the other breaks on a stale `Authorization` header — see [security.md](security.md).
 
-> **There is a known data-model wart.** The column is named `url` but stores a bare key. A `TODO` in `UserRepoImpl.java:195-196` proposes renaming it to `verification_key` (would need a migration across `schema.sql` / `aivendatabase.sql`). Documented here so the name does not mislead.
+> **There is a known data-model wart.** The column is named `url` but stores a bare key. A `TODO` in `UserRepoImpl.java:195-196` proposes renaming it to `verification_key` (would need a guarded rename in `schema.sql`, applied to the local and Aiven databases). Documented here so the name does not mislead.
 
 ---
 

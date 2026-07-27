@@ -100,16 +100,18 @@ function addAuthorizationTokenHeader(request: HttpRequest<unknown>, token: strin
  */
 function handleRefreshToken(req: HttpRequest<unknown>, next: HttpHandlerFn, userService: UserService): Observable<HttpEvent<unknown>> {
   if (!isTokenRefreshing) {
-    console.log('Refreshing Token...');
+    // console.log('Refreshing Token...');
     isTokenRefreshing = true;
     refreshTokenSubject.next(null);
     return userService.refreshToken$().pipe(
       switchMap((response) => {
-        console.log('Token Refresh Response:', response);
+        // DEBUG ONLY — DO NOT SHIP ENABLED: prints credentials/PII to the console.
+        // console.log('Token Refresh Response:', response);
         isTokenRefreshing = false;
         refreshTokenSubject.next(response);
-        console.log('New Token:', response.data!.access_token);
-        console.log('Sending original request:', req);
+        // DEBUG ONLY — DO NOT SHIP ENABLED: prints credentials/PII to the console.
+        // console.log('New Token:', response.data!.access_token);
+        // console.log('Sending original request:', req);
         return next(addAuthorizationTokenHeader(req, response.data!.access_token));
       }),
       catchError((error) => {

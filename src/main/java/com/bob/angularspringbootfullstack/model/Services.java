@@ -54,4 +54,24 @@ public class Services {
      * Standard base price for the service, in the application's default currency.
      */
     private Double price;
+
+    /**
+     * Whether this service is still offered.
+     *
+     * <p>Retiring a service is a <em>deactivation</em>, never a delete. Invoices copy a service's
+     * name and price into their own line items at the moment they are raised, so deleting the
+     * catalog row would not corrupt historical invoices — but it would destroy the catalog's own
+     * history, making it impossible to answer "what did we used to sell?" or to bring an offering
+     * back without retyping it. A boolean costs nothing and keeps that answerable.
+     *
+     * <p>Modelled as a {@code Boolean} rather than a primitive on purpose: the entity is annotated
+     * {@code @JsonInclude(NON_DEFAULT)}, under which a primitive {@code false} equals the default
+     * and would be silently dropped from the JSON — so a deactivated service would serialize
+     * looking exactly like an active one. With the wrapper, the field defaults to {@code null} in a
+     * no-args instance, so both {@code true} and {@code false} are non-default and both survive.
+     *
+     * <p>The column is {@code NOT NULL DEFAULT TRUE}, so rows that predate this field read back as
+     * active — the correct interpretation of a catalog that had no concept of retirement.
+     */
+    private Boolean active;
 }

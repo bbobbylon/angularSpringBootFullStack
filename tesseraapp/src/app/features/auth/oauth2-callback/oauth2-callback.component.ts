@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/cor
 import { ActivatedRoute, Router } from '@angular/router';
 import { Key } from '../../../enumeration/key.enumeration';
 import { NotificationsService } from '../../../service/notifications-service';
+import { TranslocoService } from '@jsverse/transloco';
 
 /**
  * SPA landing route for the federated login redirect (SRS FR-FED-4, route
@@ -45,6 +46,8 @@ export class Oauth2CallbackComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly notification = inject(NotificationsService);
+  /** Translates toast copy at call time, so a language switch applies to the next toast. */
+  private readonly transloco = inject(TranslocoService);
 
   /**
    * Parses the redirect fragment and dispatches to the matching flow — tokens,
@@ -78,7 +81,7 @@ export class Oauth2CallbackComponent implements OnInit {
       return;
     }
 
-    this.notification.onError('Federated sign-in failed. Please try again.');
+    this.notification.onError(this.transloco.translate('toasts.federatedFailed'));
     this.router.navigate(['/login'], { replaceUrl: true });
   }
 }

@@ -157,3 +157,53 @@
 .table-invoice > tbody td {
   border-color: #eef1f3;
 }
+
+/* ---------------------------------------------------------------------------
+   Edit panel (ROADMAP §2 — "Edit invoices")
+
+   Sits between the action bar and the printable #invoice element, and is styled
+   as app chrome rather than document ink: the surrounding invoice is
+   deliberately white paper (see the .table-invoice rules above, which hard-code
+   document colours so the PDF is legible regardless of the app theme), whereas
+   this panel is part of the application and follows the theme like every other
+   form. Making it look like the document would suggest it is part of what gets
+   printed — which is exactly what it is not.
+   --------------------------------------------------------------------------- */
+.sc-invoice-edit {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+.sc-invoice-edit .form-label {
+  color: var(--text-muted);
+  font-size: var(--fs-eyebrow);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.sc-invoice-edit__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+}
+.sc-invoice-edit__note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+  max-width: 52ch;
+}
+
+/* The panel is application chrome, so it must never reach the printed page. */
+@media print {
+  .sc-invoice-edit,
+  .invoice-company .btn {
+    display: none !important;
+  }
+}

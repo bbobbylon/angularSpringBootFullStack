@@ -30,3 +30,41 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+
+# ── Production CORS ─────────────────────────────────────────────────────────────────────
+# Overrides the base profile's dev default, which allows any RFC-1918 private-range origin
+# so the app can be opened from a phone on the developer's own wifi. That default is safe
+# only because reaching it requires already being on the LAN — an assumption that does not
+# hold for a deployed API, whose clients arrive from the public internet.
+#
+# It falls back to UI_APP_URL — the SPA origin, which every deployment path already sets
+# (aws/task-definition.json, .github/workflows/deploy.yml, deploy-gcp.yml) and which is
+# already the right answer for a single-SPA deployment. That keeps the default CORRECT and
+# narrow rather than absent: no pipeline has to learn a new variable, and no environment
+# can silently inherit the dev profile's private-range patterns.
+#
+# Set CORS_ALLOWED_ORIGINS explicitly only when more than one origin must be allowed
+# (e.g. an apex domain plus www), comma-separated:
+#   CORS_ALLOWED_ORIGINS=https://app.example.com,https://www.example.com
+#
+# If UI_APP_URL is also unset the placeholder cannot resolve and startup fails — deliberate,
+# and consistent with this profile's "no silent fallbacks" rule.
+#
+# Note this matters far less when the SPA and API are served from ONE origin behind a
+# reverse proxy (the shape environment.production.ts assumes, with apiUrl: ''): those calls
+# are same-origin and never trigger a CORS check at all. Keep it correct regardless — it is
+# the boundary that catches a misconfigured split-origin deploy.
+app:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:${UI_APP_URL}}
+
+  # ── Production error hygiene ──────────────────────────────────────────────────────────
+  # Suppresses `devMessage` and the raw `reason` on error responses. Raw exception text names
+  # tables, columns, class names and (on the auth paths) the identifier that was looked up —
+  # collectively a map of the system, and on login specifically it would undercut the
+  # anti-enumeration guarantee. Nothing is lost: every handler already logs the full exception
+  # server-side, so operators read the detail in the application log instead of the client
+  # reading it in the response. Hardcoded rather than env-driven — there is no legitimate reason
+  # to turn this back on in production.
+  error:
+    expose-details: false

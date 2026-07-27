@@ -1,12 +1,12 @@
-<section class="sc-trend-panel">
+<section *transloco="let t" class="sc-trend-panel">
   <!-- Toggle header -->
   <button class="sc-trend-panel__toggle" (click)="toggleExpanded()" type="button"
           [attr.aria-expanded]="expanded()">
     <div class="sc-trend-panel__toggle-left">
       <i class="bi bi-bar-chart-fill sc-trend-panel__toggle-icon"></i>
-      <span class="sc-trend-panel__toggle-label">Customer Analytics</span>
+      <span class="sc-trend-panel__toggle-label">{{ t('charts.customerAnalytics') }}</span>
       @if (state().dataState === DataState.LOADING) {
-        <span class="sc-trend-panel__loading">Loading…</span>
+        <span class="sc-trend-panel__loading">{{ t('common.loading') }}</span>
       } @else if (customerTotal() > 0) {
         <span class="sc-trend-panel__count">{{ customerTotal() }} records analysed</span>
       }
@@ -25,7 +25,7 @@
 
           <!-- Acquisition bar chart -->
           <div class="sc-trend-cell sc-trend-cell--bars">
-            <p class="sc-trend-cell__title eyebrow">New Customers / Month</p>
+            <p class="sc-trend-cell__title eyebrow">{{ t('charts.newPerMonth') }}</p>
             <div class="sc-mini-bars">
               @for (bar of acquisitionBars(); track bar.label) {
                 <div class="sc-mini-bar-col">
@@ -42,7 +42,7 @@
 
           <!-- Status donut -->
           <div class="sc-trend-cell">
-            <p class="sc-trend-cell__title eyebrow">Status Breakdown</p>
+            <p class="sc-trend-cell__title eyebrow">{{ t('charts.statusBreakdown') }}</p>
             @if (statusSegments().length) {
               <div class="sc-mini-donut-wrap">
                 <div class="sc-mini-donut-fig">
@@ -74,7 +74,7 @@
 
           <!-- Type split -->
           <div class="sc-trend-cell">
-            <p class="sc-trend-cell__title eyebrow">By Type</p>
+            <p class="sc-trend-cell__title eyebrow">{{ t('charts.byType') }}</p>
             <div class="sc-mini-type-list">
               @for (t of typeSplit(); track t.label) {
                 <div class="sc-mini-type-row">
@@ -103,7 +103,7 @@
           <div class="sc-skeleton-bar sc-skeleton-bar--short"></div>
         </div>
       } @else {
-        <p class="text-muted small mb-0 p-3">No analytics data available.</p>
+        <p class="text-muted small mb-0 p-3">{{ t('charts.noData') }}</p>
       }
     </div>
   }

@@ -2,7 +2,7 @@
   @switch (state.dataState) {
     @case (DataState.LOADED) {
       <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
-      <main class="sc-page">
+      <main *transloco="let t" class="sc-page">
         <div class="container">
           <nav aria-label="breadcrumb">
             <ol class="breadcrumb sc-breadcrumb">
@@ -15,14 +15,67 @@
           <div class="row justify-content-center">
             <div class="col-xl-9 col-lg-11">
               <div class="invoice">
-                <div class="invoice-company">
-                  <span>
-                    <a (click)="exportAsPDF()" class="btn btn-sm btn-primary sc-panel__action">
-                      <i class="bi bi-file-earmark-pdf-fill"></i>
-                      Export as PDF
-                    </a>
-                  </span>
+                <!--
+                  Action bar and edit panel live OUTSIDE #invoice on purpose: that element is what
+                  exportAsPDF() hands to jsPDF, so anything placed inside it ends up printed on the
+                  customer's copy of the invoice.
+                -->
+                <div class="invoice-company d-flex justify-content-end gap-2">
+                  <button (click)="exportAsPDF()" class="btn btn-sm btn-primary sc-panel__action" type="button">
+                    <i class="bi bi-file-earmark-pdf-fill"></i>
+                    {{ t('invoice.exportPdf') }}
+                  </button>
+                  <button (click)="toggleEdit()"
+                          [disabled]="!canEditInvoice"
+                          [appRequiresAuthority]="['UPDATE:CUSTOMER', 'UPDATE:USER']"
+                          class="btn btn-sm btn-outline-secondary"
+                          deniedAction="edit invoices"
+                          type="button">
+                    <i class="bi bi-pencil"></i>
+                    {{ isEditing() ? t('invoice.cancelEdit') : t('invoice.edit') }}
+                  </button>
                 </div>
+
+                @if (isEditing() && canEditInvoice) {
+                  <form #invoiceForm="ngForm" (ngSubmit)="saveInvoice(invoiceForm)" class="sc-invoice-edit">
+                    <div class="row g-3">
+                      <div class="col-md-3">
+                        <label class="form-label" for="edit-status">{{ t('common.status') }}</label>
+                        <select [ngModel]="state?.appData?.data?.invoice?.status"
+                                class="form-select" id="edit-status" name="status" required>
+                          <option value="PENDING">PENDING</option>
+                          <option value="PAID">PAID</option>
+                          <option value="OVERDUE">OVERDUE</option>
+                          <option value="CANCELED">CANCELED</option>
+                        </select>
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="edit-date">{{ t('invoice.invoiceDate') }}</label>
+                        <input [ngModel]="state?.appData?.data?.invoice?.invoiceDate"
+                               class="form-control" id="edit-date" name="invoiceDate" type="date" />
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="edit-amount">{{ t('invoice.amount') }}</label>
+                        <input [ngModel]="state?.appData?.data?.invoice?.amount"
+                               class="form-control" id="edit-amount" min="0" name="amount" step="0.01" type="number" />
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="edit-total">{{ t('invoice.totalAmount') }}</label>
+                        <input [ngModel]="state?.appData?.data?.invoice?.totalAmount"
+                               class="form-control" id="edit-total" min="0" name="totalAmount" required step="0.01"
+                               type="number" />
+                      </div>
+                    </div>
+                    <div class="sc-invoice-edit__actions">
+                      <p class="sc-invoice-edit__note">
+                        {{ t('invoice.numberLocked') }}
+                      </p>
+                      <button [disabled]="invoiceForm.invalid || isSaving()" class="btn btn-primary btn-sm" type="submit">
+                        @if (isSaving()) { <span>{{ t('common.saving') }}</span> } @else { <span>{{ t('invoice.saveChanges') }}</span> }
+                      </button>
+                    </div>
+                  </form>
+                }
                 <hr />
                 <div id="invoice">
                   <div class="invoice-header">

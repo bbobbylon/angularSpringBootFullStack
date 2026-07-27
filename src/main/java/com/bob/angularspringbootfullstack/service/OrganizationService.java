@@ -29,6 +29,25 @@ public interface OrganizationService {
     boolean isWithinOrganizationScope(Long adminId, Long targetId);
 
     /**
+     * Returns the ids of every organization the given user actively belongs to.
+     *
+     * <p>This is the tenant filter for org-scoped <em>aggregates</em> (FR-ORG-2), the complement to
+     * {@link #isWithinOrganizationScope}: that method answers a yes/no question about one target,
+     * which fits per-user administrative actions, while reporting needs the set of organizations up
+     * front so the restriction can be pushed into the aggregating SQL. A total cannot be filtered
+     * after it has been summed — the attribution is gone by then — so the scope has to be known
+     * before the query runs.
+     *
+     * <p>An empty result means the caller belongs to no active organization and must therefore see
+     * <em>nothing</em>. Callers must not fall back to unscoped data on empty; that would invert the
+     * control and hand a membership-less admin the system-wide view.
+     *
+     * @param userId the administrator whose memberships bound the query
+     * @return the active organization ids, possibly empty, never {@code null}
+     */
+    Collection<Long> findActiveOrganizationIds(Long userId);
+
+    /**
      * The organization-scoped user directory: pages through only the users sharing an
      * active organization with the administrator, with the same free-text filter and
      * DTO enrichment as the unscoped {@link UserService#searchUsers} so the admin

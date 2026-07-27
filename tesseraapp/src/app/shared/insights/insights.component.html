@@ -1,12 +1,12 @@
 @if (isAdmin) {
   <!-- ===== Admin / staff view: operational analytics ===== -->
-  <div class="sc-insights">
+  <div *transloco="let t" class="sc-insights">
 
     <!-- Customer status distribution (donut) -->
     <section class="sc-panel sc-panel--flush">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">Customer status</h2>
+          <h2 class="sc-panel__title">{{ t('insights.customerStatus') }}</h2>
           <p class="sc-panel__meta">{{ donutScope() }}</p>
         </div>
       </div>
@@ -25,7 +25,7 @@
             </svg>
             <div class="sc-donut__center">
               <span class="sc-donut__total">{{ donutTotal() }}</span>
-              <span class="eyebrow">customers</span>
+              <span class="eyebrow">{{ t('insights.customersLabel') }}</span>
             </div>
           </div>
 
@@ -41,7 +41,7 @@
           </ul>
         </div>
       } @else {
-        <p class="text-muted mb-0">No customer records to chart yet.</p>
+        <p class="text-muted mb-0">{{ t('insights.noChart') }}</p>
       }
     </section>
 
@@ -49,8 +49,8 @@
     <section class="sc-panel sc-panel--flush">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">Billing snapshot</h2>
-          <p class="sc-panel__meta">Portfolio averages</p>
+          <h2 class="sc-panel__title">{{ t('insights.billingSnapshot') }}</h2>
+          <p class="sc-panel__meta">{{ t('insights.portfolioAverages') }}</p>
         </div>
       </div>
 
@@ -58,21 +58,21 @@
         <div class="sc-ratio__row">
           <span class="sc-ratio__icon"><i class="bi bi-receipt"></i></span>
           <div class="sc-ratio__body">
-            <span class="eyebrow">Avg. invoice value</span>
+            <span class="eyebrow">{{ t('insights.avgInvoiceValue') }}</span>
             <span class="sc-ratio__value">${{ avgInvoiceValue() | number: '1.2-2' }}</span>
           </div>
         </div>
         <div class="sc-ratio__row">
           <span class="sc-ratio__icon sc-ratio__icon--info"><i class="bi bi-diagram-3"></i></span>
           <div class="sc-ratio__body">
-            <span class="eyebrow">Invoices per customer</span>
+            <span class="eyebrow">{{ t('insights.invoicesPerCustomer') }}</span>
             <span class="sc-ratio__value">{{ invoicesPerCustomer() | number: '1.1-1' }}</span>
           </div>
         </div>
         <div class="sc-ratio__row">
           <span class="sc-ratio__icon sc-ratio__icon--ok"><i class="bi bi-cash-stack"></i></span>
           <div class="sc-ratio__body">
-            <span class="eyebrow">Total billed</span>
+            <span class="eyebrow">{{ t('insights.totalBilled') }}</span>
             <span class="sc-ratio__value">${{ (stats()?.totalBilled ?? 0) | number: '1.2-2' }}</span>
           </div>
         </div>
@@ -81,25 +81,27 @@
 
   </div>
 } @else {
-  <!-- ===== Standard account view: quick actions ===== -->
-  <section class="sc-panel sc-panel--flush">
+  <!-- ===== Standard account view: quick actions =====
+       Its own Transloco scope: @if / @else are control-flow blocks, not elements, so a
+       directive on the admin branch cannot cover this one. -->
+  <section *transloco="let t" class="sc-panel sc-panel--flush">
     <div class="sc-panel__head">
       <div>
-        <h2 class="sc-panel__title">Quick actions</h2>
-        <p class="sc-panel__meta">Jump back in</p>
+        <h2 class="sc-panel__title">{{ t('insights.quickActions') }}</h2>
+        <p class="sc-panel__meta">{{ t('insights.jumpBackIn') }}</p>
       </div>
     </div>
 
     <div class="sc-quick">
       <a class="sc-quick__card" [routerLink]="['/customers']">
         <span class="sc-quick__icon"><i class="bi bi-people-fill"></i></span>
-        <span class="sc-quick__label">Browse customers</span>
-        <span class="sc-quick__hint">View the full directory</span>
+        <span class="sc-quick__label">{{ t('insights.browseCustomers') }}</span>
+        <span class="sc-quick__hint">{{ t('insights.fullDirectory') }}</span>
       </a>
       <a class="sc-quick__card" [routerLink]="['/invoices']">
         <span class="sc-quick__icon sc-quick__icon--info"><i class="bi bi-receipt-cutoff"></i></span>
-        <span class="sc-quick__label">View invoices</span>
-        <span class="sc-quick__hint">Billing history &amp; status</span>
+        <span class="sc-quick__label">{{ t('insights.viewInvoices') }}</span>
+        <span class="sc-quick__hint">{{ t('insights.billingHistory') }}</span>
       </a>
       <a class="sc-quick__card" [routerLink]="['/security']">
         <span class="sc-quick__icon sc-quick__icon--ok"><i class="bi bi-shield-lock-fill"></i></span>

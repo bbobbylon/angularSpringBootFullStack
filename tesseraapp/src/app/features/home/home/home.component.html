@@ -1,14 +1,9 @@
-<!-- TODO: Add a loading spinner for DataState.LOADING state. Currently the template renders nothing
-     while the observable is loading (the outer @if is false until the first emission). The fix is to
-     restructure each page template to have three branches:
-       @if (state.dataState === DataState.LOADING) { <spinner> }
-       @if (state.dataState === DataState.LOADED)  { <content> }
-       @if (state.dataState === DataState.ERROR)   { <error message> }
-     Apply this same pattern to all routed page components (customers, invoices, customer-details, etc.). -->
+<!-- Three-branch state rendering (LOADING skeletons / ERROR / LOADED), the pattern the
+     other routed pages follow. -->
 @if (homeState(); as state) {
   <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
 
-  <main class="sc-dash">
+  <main *transloco="let t" class="sc-dash">
     <div class="container">
 
       @if (state.dataState === DataState.LOADING) {
@@ -61,15 +56,22 @@
       <!-- Page header: greets the authenticated user and hosts the report export. -->
       <header class="sc-dash__head sc-reveal">
         <div class="sc-dash__heading">
-          <p class="eyebrow mb-1">Dashboard</p>
+          <p class="eyebrow mb-1">{{ t('home.eyebrow') }}</p>
           <h1 class="sc-dash__title">
-            Welcome back@if (state?.appData?.data?.user?.firstName; as name) {,
-              <span class="text-accent">{{ name }}</span>}
+            @if (state?.appData?.data?.user?.firstName; as name) {
+              <!-- Interpolated as one string rather than "Welcome back" + a name fragment: word
+                   order around a name is not universal, and splitting the sentence would force
+                   every translation into English's arrangement. -->
+              {{ t('home.welcome') }},
+              <span class="text-accent">{{ name }}</span>
+            } @else {
+              {{ t('home.welcome') }}
+            }
           </h1>
-          <p class="sc-dash__sub">An overview of your customers and billing activity.</p>
+          <p class="sc-dash__sub">{{ t('home.subtitle') }}</p>
         </div>
         <button (click)="report()" class="btn btn-info sc-dash__export" type="button">
-          <i class="bi bi-file-earmark-excel"></i> Export report
+          <i class="bi bi-file-earmark-excel"></i> {{ t('common.exportReport') }}
         </button>
       </header>
 
@@ -96,13 +98,13 @@
       <section class="sc-panel sc-reveal" style="--d: 120ms;">
         <div class="sc-panel__head">
           <div>
-            <h2 class="sc-panel__title">Customers</h2>
+            <h2 class="sc-panel__title">{{ t('home.customers') }}</h2>
             <p class="sc-panel__meta">
-              {{ state?.appData?.data?.page?.page?.totalElements ?? 0 }} total records
+              {{ t('home.totalRecords', { count: state?.appData?.data?.page?.page?.totalElements ?? 0 }) }}
             </p>
           </div>
           <a [routerLink]="['/customer/new']" class="btn btn-primary btn-sm sc-panel__action">
-            <i class="bi bi-person-plus"></i> New customer
+            <i class="bi bi-person-plus"></i> {{ t('home.newCustomer') }}
           </a>
         </div>
 
@@ -111,14 +113,14 @@
             <table class="table table-hover align-middle mb-0">
               <thead>
               <tr>
-                <th class="text-center" scope="col">ID</th>
-                <th scope="col">Photo</th>
-                <th scope="col">Name</th>
-                <th scope="col">Email</th>
-                <th scope="col">Phone</th>
-                <th scope="col">Status</th>
-                <th scope="col">Type</th>
-                <th class="text-end" scope="col">Action</th>
+                <th class="text-center" scope="col">{{ t('common.id') }}</th>
+                <th scope="col">{{ t('common.photo') }}</th>
+                <th scope="col">{{ t('common.name') }}</th>
+                <th scope="col">{{ t('common.email') }}</th>
+                <th scope="col">{{ t('common.phone') }}</th>
+                <th scope="col">{{ t('common.status') }}</th>
+                <th scope="col">{{ t('common.type') }}</th>
+                <th class="text-end" scope="col">{{ t('common.action') }}</th>
               </tr>
               </thead>
               <tbody class="table-body">
@@ -152,7 +154,7 @@
                     <td class="text-muted">{{ customer.type }}</td>
                     <td class="text-end">
                       <button [routerLink]="['/customers/', customer.id]" class="btn btn-info btn-sm" type="button">
-                        View
+                        {{ t('common.view') }}
                       </button>
                     </td>
                   </tr>
@@ -163,7 +165,7 @@
 
           <div class="d-flex align-items-center justify-content-between sc-panel__foot">
             <div class="d-flex align-items-center gap-2">
-              <label class="form-label mb-0 small text-muted" for="pageSize">Rows per page:</label>
+              <label class="form-label mb-0 small text-muted" for="pageSize">{{ t('common.rowsPerPage') }}</label>
               <select (change)="changePageSize(+$any($event.target).value)" id="pageSize"
                       class="form-select form-select-sm w-auto">
                 @for (option of pageSizeOptions; track option) {
@@ -171,13 +173,13 @@
                 }
               </select>
             </div>
-            <nav aria-label="Page navigation">
+            <nav [attr.aria-label]="t('common.pageNavigation')">
               <ul class="pagination justify-content-end mb-0">
                 <li [ngClass]="0 === currentPage() ? 'disabled' : ''"
                     class="page-item pointer">
                   <button (click)="changePage('backward')"
                           [disabled]="0 === currentPage()"
-                          class="page-link">&laquo; Prev
+                          class="page-link">&laquo; {{ t('common.prev') }}
                   </button>
                 </li>
                 @for (_page of (state?.appData?.data?.page?.page?.totalPages ?? 0) | ExtractArrayValue: 'number'; track $index; let i = $index) {
@@ -194,7 +196,7 @@
                   class="page-item pointer">
                   <button (click)="changePage('forward')"
                           [disabled]="((state?.appData?.data?.page?.page?.totalPages ?? 0) - 1) === currentPage()"
-                          class="page-link">Next &raquo;
+                          class="page-link">{{ t('common.next') }} &raquo;
                   </button>
                 </li>
               </ul>
@@ -204,10 +206,10 @@
           <!-- Empty state: shown when the page has loaded but holds no customers. -->
           <div class="sc-empty">
             <span class="sc-empty__icon"><i class="bi bi-people"></i></span>
-            <p class="sc-empty__title">No customers yet</p>
-            <p class="sc-empty__hint">Add your first customer to start tracking billing activity.</p>
+            <p class="sc-empty__title">{{ t('home.emptyTitle') }}</p>
+            <p class="sc-empty__hint">{{ t('home.emptyHint') }}</p>
             <a [routerLink]="['/customer/new']" class="btn btn-primary btn-sm">
-              <i class="bi bi-person-plus"></i> Add a customer
+              <i class="bi bi-person-plus"></i> {{ t('home.addCustomer') }}
             </a>
           </div>
         }

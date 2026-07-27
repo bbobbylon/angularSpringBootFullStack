@@ -8,6 +8,9 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { tokenInterceptor } from './interceptor/token.interceptor';
 import { cacheInterceptor } from './interceptor/cache.interceptor';
 import { provideToastr } from 'ngx-toastr';
+import { provideTransloco } from '@jsverse/transloco';
+import { TranslocoHttpLoader } from './service/transloco-loader';
+import { isDevMode } from '@angular/core';
 
 /**
  * Root application configuration for the Angular standalone app.
@@ -51,5 +54,45 @@ export const appConfig: ApplicationConfig = {
     { provide: IMAGE_CONFIG, useValue: { disableImageSizeWarning: true } },
     provideAnimationsAsync(),
     provideToastr({ timeOut: 4000, positionClass: 'toast-bottom-right', preventDuplicates: true }),
+
+    /**
+     * Runtime internationalisation (ROADMAP §2).
+     *
+     * Transloco resolves translations at runtime from JSON dictionaries under
+     * public/assets/i18n, rather than compiling one bundle per language the way
+     * @angular/localize does. That choice is what makes the navbar's language switcher
+     * possible: changing language swaps a dictionary in place instead of loading a
+     * different build, so the user stays exactly where they were in the app. See
+     * TranslocoHttpLoader for the full trade-off.
+     *
+     * fallbackLang + missingHandler: a key with no translation in the active language
+     * falls back to English rather than rendering as its raw key. That matters most
+     * during incremental translation — a half-translated Spanish UI should read as
+     * mostly-Spanish-with-some-English, which is usable, not as a page full of
+     * "nav.customers", which is not.
+     *
+     * reRenderOnLangChange is required for a live switcher; without it the pipes
+     * resolve once and the page keeps its original language until a full reload.
+     */
+    provideTransloco({
+      config: {
+        // Kept in step with LanguageService.available — that service owns the user-facing list
+        // (labels, ordering, the short navbar code); this array is what Transloco will accept as
+        // an active language. A code in one and not the other is the failure mode: present here
+        // but not there is unreachable, present there but not here is silently refused.
+        //
+        // RTL locales (ar, he) are deliberately absent. They need dir="rtl" on the document plus
+        // a pass converting the stylesheet's physical properties (margin-left, float, text-align:
+        // left) to logical ones — shipping one before that work renders a visibly broken page,
+        // which serves an Arabic speaker worse than not offering Arabic at all.
+        availableLangs: ['en', 'es', 'fr', 'de', 'pt', 'zh'],
+        defaultLang: 'en',
+        fallbackLang: 'en',
+        missingHandler: { useFallbackTranslation: true },
+        reRenderOnLangChange: true,
+        prodMode: !isDevMode(),
+      },
+      loader: TranslocoHttpLoader,
+    }),
   ],
 };

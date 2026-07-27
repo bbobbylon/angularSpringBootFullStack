@@ -1,16 +1,20 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { switchMap } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { UserService } from '../../../service/user.service';
+import { ProviderLinkInterface } from '../../../interface/security.interface';
 import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { UserInterface } from '../../../interface/user.interface';
 import { SessionInterface, TotpSetupInterface } from '../../../interface/security.interface';
 import { UserEventsInterface } from '../../../interface/user-events.interface';
 import { getEventDisplay } from '../../../utils/event-display.utils';
+import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 
 /**
  * Account Security Center (plan.md M4 creates this surface; M5 populates it).
@@ -30,7 +34,7 @@ import { getEventDisplay } from '../../../utils/event-display.utils';
 @Component({
   selector: 'app-security-center',
   standalone: true,
-  imports: [FormsModule, RouterLink, DatePipe, NavbarComponent],
+  imports: [FormsModule, RouterLink, DatePipe, NavbarComponent, TranslocoDirective],
   templateUrl: './security-center.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -54,10 +58,37 @@ export class SecurityCenterComponent implements OnInit {
   protected readonly recoveryCodes = signal<string[]>([]);
   /** Live sessions for the devices panel. */
   protected readonly sessions = signal<SessionInterface[]>([]);
+
+  /** Identity providers currently connected to this account (ROADMAP §1.4). */
+  protected readonly connectedProviders = signal<ProviderLinkInterface[]>([]);
+
+  /** Providers this deployment supports, so the panel can offer the ones not yet connected. */
+  protected readonly availableProviders = signal<string[]>([]);
+
+  /**
+   * Providers on offer that are not already connected.
+   *
+   * <p>Computed rather than stored so the "Connect" list shrinks the moment a link is made,
+   * without a second round trip to recompute what is left.
+   */
+  protected readonly connectableProviders = computed(() => {
+    const linked = new Set(this.connectedProviders().map((link) => link.provider));
+    return this.availableProviders().filter((provider) => !linked.has(provider));
+  });
   /** Family of the session this browser is on — badges the current row. */
   protected readonly currentFamily = signal('');
   /** Disables buttons while any mutation is in flight. */
   protected readonly isLoading = signal(false);
+  /**
+   * Whether the inline "add a phone number" form is showing under the SMS row.
+   *
+   * SMS 2FA cannot be enabled without a phone number, and the backend enforces that
+   * (see {@code UserRepoImpl#toggleMFA}). Surfacing that as a raw error toast made the
+   * user's next step their problem to figure out; opening the field that unblocks them
+   * turns a dead end into the first step of the flow. The server-side guard is
+   * deliberately left in place — this is a usability layer over it, not a replacement.
+   */
+  protected readonly phonePromptOpen = signal(false);
   /** Audit events for the Activity History panel (M2). */
   protected readonly events = signal<UserEventsInterface[]>([]);
   /** Total event pages returned by the backend — drives the pagination controls. */
@@ -69,6 +100,8 @@ export class SecurityCenterComponent implements OnInit {
 
   private readonly userService = inject(UserService);
   private readonly notification = inject(NotificationsService);
+  /** Translates toast copy at call time, so a language switch applies to the next toast. */
+  private readonly transloco = inject(TranslocoService);
   private readonly destroyRef = inject(DestroyRef);
 
   /**
@@ -77,6 +110,7 @@ export class SecurityCenterComponent implements OnInit {
    * never blanks the others.
    */
   ngOnInit(): void {
+    this.loadConnectedProviders();
     this.userService
       .profile$()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -135,7 +169,7 @@ export class SecurityCenterComponent implements OnInit {
           this.enrollStep.set('codes');
           this.setup.set(undefined);
           this.isLoading.set(false);
-          this.notification.onSuccess('Authenticator app enabled');
+          this.notification.onSuccess(this.transloco.translate('toasts.totpEnabled'));
           this.refreshTotpStatus();
           confirmForm.reset();
         },
@@ -171,7 +205,7 @@ export class SecurityCenterComponent implements OnInit {
         next: (response) => {
           this.user.set(response.data?.user);
           this.isLoading.set(false);
-          this.notification.onSuccess('Authenticator app disabled');
+          this.notification.onSuccess(this.transloco.translate('toasts.totpDisabled'));
           this.refreshTotpStatus();
           disableForm.reset();
         },
@@ -185,10 +219,20 @@ export class SecurityCenterComponent implements OnInit {
 
   /**
    * Flips the SMS second factor (the pre-M4 MFA), relocated here from the Profile
-   * page so all second-factor management lives on one surface. The backend still
-   * requires a phone number on the account.
+   * page so all second-factor management lives on one surface.
+   *
+   * <p>When the user is <em>enabling</em> SMS and has no phone number on file, this opens
+   * the inline capture form instead of calling the API. Letting the request go through
+   * would return the backend's "a phone number is required" error — accurate, but it ends
+   * the interaction and leaves the user to find the Profile page themselves. Disabling is
+   * never intercepted: an account can hold a stale flag with no number, and blocking the
+   * path back to "off" would be the worst possible time to ask for a phone number.
    */
   protected toggleSmsMfa(): void {
+    if (!this.user()?.using2FA && !this.user()?.phoneNumber) {
+      this.phonePromptOpen.set(true);
+      return;
+    }
     this.isLoading.set(true);
     this.userService
       .toggleMFA$()
@@ -197,9 +241,62 @@ export class SecurityCenterComponent implements OnInit {
         next: (response) => {
           this.user.set(response.data?.user);
           this.isLoading.set(false);
-          this.notification.onSuccess('SMS verification setting updated');
+          this.notification.onSuccess(this.transloco.translate('toasts.smsUpdated'));
         },
         error: (error: string) => {
+          this.notification.onError(error);
+          this.isLoading.set(false);
+        },
+      });
+  }
+
+  /** Abandons the inline phone capture, leaving SMS 2FA off and the profile untouched. */
+  protected cancelPhonePrompt(phoneForm: NgForm): void {
+    this.phonePromptOpen.set(false);
+    phoneForm.resetForm();
+  }
+
+  /**
+   * Saves the supplied phone number to the profile and then turns SMS 2FA on, as one
+   * user-visible action.
+   *
+   * <p>Two requests, chained with {@code switchMap} rather than fired together: the
+   * toggle is only legal <em>after</em> the number is persisted, since the backend reads
+   * it back from the user row to decide whether to allow the flip. Chaining also gives an
+   * honest partial-failure story — if the profile write fails, the toggle never runs and
+   * the account is not left claiming an SMS factor it cannot deliver to.
+   *
+   * <p>The existing user object is spread into the payload because
+   * {@code PATCH /user/update} binds a whole {@code UpdateForm} whose first name, last
+   * name, and email are {@code @NotEmpty}; sending the phone number alone would fail
+   * validation. The user's own id is ignored server-side — that endpoint sources it from
+   * the JWT principal — so this cannot be aimed at another account.
+   *
+   * @param phoneForm the inline form supplying {@code phoneNumber}
+   */
+  protected savePhoneAndEnableSms(phoneForm: NgForm): void {
+    const current = this.user();
+    if (!current) {
+      return;
+    }
+    this.isLoading.set(true);
+    this.userService
+      .update$({ ...current, phoneNumber: phoneForm.value.phoneNumber })
+      .pipe(
+        switchMap(() => this.userService.toggleMFA$()),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (response) => {
+          this.user.set(response.data?.user);
+          this.isLoading.set(false);
+          this.phonePromptOpen.set(false);
+          phoneForm.resetForm();
+          this.notification.onSuccess(this.transloco.translate('toasts.phoneSaved'));
+        },
+        error: (error: string) => {
+          // The form stays open and populated so the user can correct a rejected number
+          // (the backend validates the shape) without retyping it.
           this.notification.onError(error);
           this.isLoading.set(false);
         },
@@ -217,7 +314,7 @@ export class SecurityCenterComponent implements OnInit {
           this.sessions.set(response.data?.sessions ?? []);
           this.currentFamily.set(response.data?.currentFamily ?? '');
           this.isLoading.set(false);
-          this.notification.onSuccess('Session revoked');
+          this.notification.onSuccess(this.transloco.translate('toasts.sessionRevoked'));
         },
         error: (error: string) => {
           this.notification.onError(error);
@@ -237,7 +334,7 @@ export class SecurityCenterComponent implements OnInit {
           this.sessions.set(response.data?.sessions ?? []);
           this.currentFamily.set(response.data?.currentFamily ?? '');
           this.isLoading.set(false);
-          this.notification.onSuccess('Logged out of other sessions');
+          this.notification.onSuccess(this.transloco.translate('toasts.otherSessionsRevoked'));
         },
         error: (error: string) => {
           this.notification.onError(error);
@@ -299,6 +396,73 @@ export class SecurityCenterComponent implements OnInit {
           this.currentFamily.set(response.data?.currentFamily ?? '');
         },
         error: (error: string) => this.notification.onError(error),
+      });
+  }
+
+  /**
+   * Loads the account's connected providers alongside the deployment's available ones.
+   *
+   * <p>Both fail soft: a deployment with no OAuth2 credentials configured returns an empty
+   * provider list, and this panel should then simply show nothing rather than an error — federated
+   * login being unconfigured is a normal state, not a fault.
+   */
+  private loadConnectedProviders(): void {
+    this.userService
+      .connectedProviders$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.connectedProviders.set(response.data?.providers ?? []),
+        error: () => this.connectedProviders.set([]),
+      });
+
+    this.userService
+      .federatedProviders$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.availableProviders.set(response.data?.providers ?? []),
+        error: () => this.availableProviders.set([]),
+      });
+  }
+
+  /**
+   * Starts the OAuth2 flow to connect an additional provider.
+   *
+   * <p>Reuses the ordinary login initiation: signing in with a provider whose subject is unknown
+   * but whose email matches this account is exactly what links it (the find-or-create convergence
+   * step). There is no separate "link" endpoint to maintain, and no second code path that could
+   * diverge from the one login already exercises.
+   *
+   * @param provider - the registration id to connect
+   */
+  protected connectProvider(provider: string): void {
+    this.userService.initiateFederatedLogin(provider);
+  }
+
+  /**
+   * Disconnects a provider, refreshing the panel from the server's response.
+   *
+   * <p>The backend refuses when this is the account's last sign-in method; that arrives as an
+   * ordinary error whose message already names the remedy, so it is surfaced verbatim.
+   *
+   * @param provider - the registration id to disconnect
+   */
+  protected disconnectProvider(provider: string): void {
+    if (this.isLoading()) return;
+    this.isLoading.set(true);
+
+    this.userService
+      .unlinkProvider$(provider)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isLoading.set(false);
+          this.connectedProviders.set(response.data?.providers ?? []);
+          this.notification.onSuccess(this.transloco.translate('toasts.providerDisconnected'));
+        },
+        error: (error: Error) => {
+          this.isLoading.set(false);
+          this.notification.onError(error.message);
+        },
       });
   }
 }

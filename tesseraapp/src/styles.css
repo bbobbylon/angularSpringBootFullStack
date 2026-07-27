@@ -197,19 +197,6 @@ body {
     color var(--dur-slow) var(--ease-in-out);
 }
 
-/* Faint technical grid for depth — sits behind all content */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 44px 44px;
-}
-
 h1, h2, h3, h4, h5, h6 {
   color: var(--text-strong);
   font-weight: 600;
@@ -971,4 +958,32 @@ select,
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-skeleton { animation: none; opacity: 0.4; }
+}
+
+/* ===========================================================================
+   12. RESTRICTED CONTROLS — capability-level RBAC gating (ROADMAP §2)
+
+   Applied by RequiresAuthorityDirective to a control the signed-in account lacks
+   the authority to use. Styled distinctly from Bootstrap's plain :disabled — a
+   control disabled *because of who you are* is a different message from one
+   disabled because a request is in flight, and the cursor is what tells the two
+   apart before the tooltip has time to appear.
+
+   The directive always pairs this class with a title attribute naming the missing
+   capability, so the state is never mysterious. Purely cosmetic: the backend
+   re-checks every authority on every request (NFR-SEC-4).
+   =========================================================================== */
+.is-restricted {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+/* Only elements with no `disabled` property need clicks suppressed in CSS — an anchor or a
+   div-as-button. Deliberately NOT applied to buttons and inputs: `disabled` already blocks
+   their activation, and pointer-events:none would additionally suppress the hover that shows
+   the directive's explanatory title, removing the one affordance that tells the user why the
+   control is dead. */
+a.is-restricted,
+[role='button'].is-restricted {
+  pointer-events: none;
 }

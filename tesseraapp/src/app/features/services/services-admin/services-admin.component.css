@@ -1,0 +1,122 @@
+/* ===========================================================================
+   Manage Services (ROADMAP §2 — services catalog administration)
+
+   Built on the global tokens so the screen follows the theme switch. The only
+   colour decisions made here are semantic ones: "offered" borrows --ok and
+   "retired" borrows --text-faint, because a retired service is not an error
+   state — it is simply not in play, and colouring it red would suggest
+   something had gone wrong.
+   =========================================================================== */
+
+.sc-svcadmin {
+  padding: var(--space-6) 0 var(--space-8);
+}
+
+.sc-svcadmin__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+.sc-svcadmin__title {
+  margin: 0;
+  font-size: var(--fs-h1);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.sc-svcadmin__sub {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  max-width: 64ch;
+}
+.sc-svcadmin__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+
+.sc-svcadmin__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+.sc-svcadmin__summary strong { color: var(--text-strong); }
+.sc-svcadmin__sep { color: var(--text-faint); }
+
+.sc-svcadmin__form { margin-top: var(--space-4); }
+.sc-svcadmin__form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.sc-svcadmin__table { margin-bottom: 0; }
+.sc-svcadmin__table > :not(caption) > * > * {
+  background: transparent;
+  border-bottom-color: var(--hairline);
+  color: var(--text);
+  padding: 0.75rem 0.6rem;
+}
+.sc-svcadmin__table thead th {
+  color: var(--text-faint);
+  font-size: var(--fs-eyebrow);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.sc-svcadmin__name { color: var(--text-strong); font-weight: 600; }
+
+/* A retired row is dimmed rather than hidden or struck through: it must still be
+   readable (an administrator is often here specifically to find one), just clearly
+   out of play. */
+.sc-svcadmin__table tr.is-retired .sc-svcadmin__name { color: var(--text-muted); }
+.sc-svcadmin__table tr.is-retired { opacity: 0.72; }
+
+.sc-svcadmin__editing > td {
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+}
+
+.sc-svcadmin__chip {
+  display: inline-block;
+  padding: 0.12rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.sc-svcadmin__chip--live {
+  background: rgba(52, 211, 153, 0.14);
+  border-color: rgba(52, 211, 153, 0.32);
+  color: var(--ok);
+}
+.sc-svcadmin__chip--retired {
+  background: var(--surface-3);
+  border-color: var(--hairline-strong);
+  color: var(--text-faint);
+}
+
+.sc-svcadmin__empty {
+  text-align: center;
+  padding: var(--space-7) var(--space-4);
+  color: var(--text-muted);
+}
+.sc-svcadmin__empty i {
+  font-size: 2.2rem;
+  display: block;
+  margin-bottom: var(--space-3);
+  color: var(--text-faint);
+}
+
+@media (max-width: 640px) {
+  .sc-svcadmin__head { align-items: flex-start; }
+  .sc-svcadmin__actions { width: 100%; }
+}

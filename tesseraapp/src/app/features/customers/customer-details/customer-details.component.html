@@ -1,3 +1,6 @@
+<!-- One Transloco scope for the whole template. An ng-container is used because the
+     top level is @if/@switch control flow, not an element, and every branch needs `t`. -->
+<ng-container *transloco="let t">
 @if (customerState(); as state) {
   @switch (state.dataState) {
     @case (DataState.LOADED) {
@@ -6,8 +9,8 @@
         <div class="container">
           <nav aria-label="breadcrumb">
             <ol class="breadcrumb sc-breadcrumb">
-              <li class="breadcrumb-item"><a [routerLink]="['/']">Home</a></li>
-              <li class="breadcrumb-item"><a [routerLink]="['/customers']">Customers</a></li>
+              <li class="breadcrumb-item"><a [routerLink]="['/']">{{ t('securityCenter.home') }}</a></li>
+              <li class="breadcrumb-item"><a [routerLink]="['/customers']">{{ t('customerDetails.breadcrumbCustomers') }}</a></li>
               <li aria-current="page"
                   class="breadcrumb-item active">{{ state?.appData?.data?.customers?.customerName }}
               </li>
@@ -50,8 +53,8 @@
               </div>
               <div class="card">
                 <div class="card-body">
-                  <h5 class="card-title">Total Invoices</h5>
-                  <h6 class="card-subtitle mb-2 text-muted">Customer Total Invoices</h6>
+                  <h5 class="card-title">{{ t('customerDetails.totalInvoices') }}</h5>
+                  <h6 class="card-subtitle mb-2 text-muted">{{ t('customerDetails.customerTotalInvoices') }}</h6>
                   <ul class="list-group">
                     <li class="list-group-item d-flex justify-content-between align-items-center"
                         style="font-size: 20px">
@@ -65,7 +68,7 @@
               </div>
               <div class="card">
                 <div class="card-body">
-                  <h5 class="card-title">Total Billed:</h5>
+                  <h5 class="card-title">{{ t('customerDetails.totalBilled') }}</h5>
                   <ul class="list-group">
                     <li class="list-group-item d-flex justify-content-between align-items-center"
                         style="font-size: 20px">
@@ -111,23 +114,23 @@
             <div class="col-xl-8">
               <div class="card">
                 <div class="card-body">
-                  <h5 class="card-title">Profile Details</h5>
+                  <h5 class="card-title">{{ t('customerDetails.profileDetails') }}</h5>
                   <form #customerForm="ngForm" (ngSubmit)="update(customerForm)">
                     <input
-                      [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                      [disabled]="!canUpdateCustomer || isLoading()"
                       [ngModel]="state?.appData?.data?.customers?.id"
                       name="id"
                       type="hidden" />
                     <input
-                      [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                      [disabled]="!canUpdateCustomer || isLoading()"
                       [ngModel]="state?.appData?.data?.customers?.createdAt"
                       name="createdAt"
                       type="hidden" />
                     <div class="row mb-3">
-                      <label class="col-sm-3 col-form-label" for="name">First Name</label>
+                      <label class="col-sm-3 col-form-label" for="name">{{ t('profile.firstName') }}</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [disabled]="!canUpdateCustomer || isLoading()"
                           [ngModel]="state?.appData?.data?.customers?.customerName"
                           class="form-control"
                           name="customerName"
@@ -135,10 +138,10 @@
                       </div>
                     </div>
                     <div class="row mb-3">
-                      <label class="col-sm-3 col-form-label" for="email">Email</label>
+                      <label class="col-sm-3 col-form-label" for="email">{{ t('common.email') }}</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [disabled]="!canUpdateCustomer || isLoading()"
                           [ngModel]="state?.appData?.data?.customers?.email"
                           class="form-control"
                           name="email"
@@ -146,10 +149,10 @@
                       </div>
                     </div>
                     <div class="row mb-3">
-                      <label class="col-sm-3 col-form-label" for="type">Type</label>
+                      <label class="col-sm-3 col-form-label" for="type">{{ t('common.type') }}</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [disabled]="!canUpdateCustomer || isLoading()"
                           [ngModel]="state?.appData?.data?.customers?.type"
                           class="form-control"
                           name="type"
@@ -157,10 +160,10 @@
                       </div>
                     </div>
                     <div class="row mb-3">
-                      <label class="col-sm-3 col-form-label" for="status">Status</label>
+                      <label class="col-sm-3 col-form-label" for="status">{{ t('common.status') }}</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [disabled]="!canUpdateCustomer || isLoading()"
                           [ngModel]="state?.appData?.data?.customers?.status"
                           class="form-control"
                           name="status"
@@ -168,10 +171,10 @@
                       </div>
                     </div>
                     <div class="row mb-3">
-                      <label class="col-sm-3 col-form-label" for="address">Address</label>
+                      <label class="col-sm-3 col-form-label" for="address">{{ t('profile.address') }}</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [disabled]="!canUpdateCustomer || isLoading()"
                           [ngModel]="state?.appData?.data?.customers?.address"
                           class="form-control"
                           name="address"
@@ -182,7 +185,7 @@
                       <label class="col-sm-3 col-form-label" for="phoneNumber">phoneNumber</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [disabled]="!canUpdateCustomer || isLoading()"
                           [ngModel]="state?.appData?.data?.customers?.phoneNumber"
                           class="form-control"
                           name="phoneNumber"
@@ -190,29 +193,45 @@
                       </div>
                     </div>
                     <div class="row mb-3">
-                      <label class="col-sm-3 col-form-label" for="imageUrl">Image URL</label>
+                      <label class="col-sm-3 col-form-label" for="imageUrl">{{ t('customerDetails.imageUrl') }}</label>
                       <div class="col-sm-9">
                         <input
-                          [disabled]="state?.appData?.data?.user?.roleName === 'ROLE_USER' || isLoading()"
+                          [disabled]="!canUpdateCustomer || isLoading()"
                           [ngModel]="state?.appData?.data?.customers?.imageUrl"
                           class="form-control"
                           name="imageUrl"
                           type="text" />
                       </div>
                     </div>
+                    <!--
+                      Capability gating (ROADMAP §2). The control stays on screen but goes inert
+                      for an account without UPDATE:CUSTOMER, and the directive attaches the
+                      tooltip explaining why. Hiding it — what this template did before — left a
+                      read-only user staring at a form with no way to tell whether saving was
+                      forbidden or simply broken. The [disabled] binding repeats the capability
+                      test on purpose: it is re-evaluated on every change detection, so without it
+                      the next isLoading() flip would hand the button back.
+                    -->
                     <button
-                      [disabled]="isLoading()"
-                      [hidden]="state?.appData?.data?.user?.roleName === 'ROLE_USER'"
+                      [disabled]="!canUpdateCustomer || isLoading()"
+                      [appRequiresAuthority]="['UPDATE:CUSTOMER', 'UPDATE:USER']"
                       class="btn btn-primary float-end"
+                      deniedAction="update customers"
                       type="submit">
                       @if (isLoading()) {
                         <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
                               style="margin-right: 5px"></span>
-                        <span>Loading...</span>
+                        <span>{{ t('common.loading') }}</span>
                       } @else {
-                        <span>Update</span>
+                        <span>{{ t('profile.update') }}</span>
                       }
                     </button>
+                    @if (!canUpdateCustomer) {
+                      <p class="text-muted small mb-0 pt-2">
+                        <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                        Read-only — contact your administrator to request permission to update customers.
+                      </p>
+                    }
                   </form>
                 </div>
               </div>
@@ -222,17 +241,17 @@
             <div class="col-xl-12">
               <div class="card">
                 <div class="card-body">
-                  <h5 class="card-title">Invoices</h5>
-                  <h6 class="card-subtitle mb-2 text-muted">Customer Invoices</h6>
+                  <h5 class="card-title">{{ t('nav.invoices') }}</h5>
+                  <h6 class="card-subtitle mb-2 text-muted">{{ t('customerDetails.customerInvoices') }}</h6>
                   <table class="table table-hover align-middle">
                     <thead>
                     <tr>
-                      <th scope="col">Invoice Number</th>
-                      <th scope="col">Service</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Date</th>
-                      <th scope="col">Total</th>
-                      <th scope="col">Action</th>
+                      <th scope="col">{{ t('customerDetails.invoiceNumber') }}</th>
+                      <th scope="col">{{ t('invoices.service') }}</th>
+                      <th scope="col">{{ t('common.status') }}</th>
+                      <th scope="col">{{ t('common.date') }}</th>
+                      <th scope="col">{{ t('common.total') }}</th>
+                      <th scope="col">{{ t('common.action') }}</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -280,8 +299,8 @@
     }
     @case (DataState.LOADING) {
       <div class="sc-state">
-        <div class="spinner-border" role="status"><span class="visually-hidden">Loading…</span></div>
-        <p class="mb-0">Loading customer…</p>
+        <div class="spinner-border" role="status"><span class="visually-hidden">{{ t('common.loading') }}</span></div>
+        <p class="mb-0">{{ t('customerDetails.loading') }}</p>
       </div>
     }
     @case (DataState.ERROR) {
@@ -292,3 +311,4 @@
     }
   }
 }
+</ng-container>

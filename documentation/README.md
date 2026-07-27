@@ -13,6 +13,7 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | **Trace one feature end-to-end** | [flows/](flows/README.md) — every use case from button click → JWT/headers → controller → DB → UI change |
 | **Work in the codebase day-to-day** | [development-workflow.md](development-workflow.md) — IDE setup, the `start.sh` loop, debugging, branch workflow |
 | **See project status & what's planned** | [project-status-and-roadmap.md](project-status-and-roadmap.md) — proposed-vs-actual, known gaps, prioritized backlog |
+| **Look back at how it was built** | [history/PROJECT-HISTORY.md](history/PROJECT-HISTORY.md) — evolution narrative, M0–M7 milestones, retired-doc registry, branch snapshot |
 
 ## Reference guides
 
@@ -25,7 +26,8 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | [database.md](database.md) | Persistence model, every table, relationships, role + event reference data |
 | [configuration.md](configuration.md) | Environment variables, Spring profiles, annotated `application.yml`, gotchas |
 | [deployment.md](deployment.md) | Docker image, Compose, Azure CI/CD, cloud platforms |
-| [frontend-guide.md](frontend-guide.md) | Angular internals — routes→components, the six services, guards, interceptors, `DataState`/signals state pattern |
+| [cicd-setup.md](cicd-setup.md) | **CI/CD hub** — pipeline setup for **AWS, Google Cloud, and Azure** side by side, the shared build→registry→runtime shape, required secrets, and which security controls only become effective once deployed |
+| [frontend-guide.md](frontend-guide.md) | Angular internals — routes→components, services, guards, interceptors, `DataState`/signals, **Transloco i18n**, **capability-level UI gating**, the command palette |
 | [email-and-notifications.md](email-and-notifications.md) | Email (verification/reset) + SMS-stub + Angular toast notifications; the verification-link model |
 | [testing.md](testing.md) | Test inventory, how to run, how to write backend/frontend tests, the coverage roadmap |
 | [../tesseraapp/README.md](../tesseraapp/README.md) | Frontend (Angular) specifics |
@@ -36,7 +38,7 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 - **Tracing a feature or bug:** [flows/](flows/README.md) → `00-anatomy-of-a-request.md` (the shared spine) → the specific flow doc for your screen
 - **Reviewing security:** security.md → `SecurityConfig.java` / `TokenProvider.java` / `SessionServiceImpl.java`
 - **Integrating a client:** api-reference.md → security.md (§3 tokens)
-- **Deploying:** configuration.md → deployment.md → database.md (apply `schema.sql`)
+- **Deploying:** configuration.md → deployment.md → **cicd-setup.md** (pick a cloud) → database.md (apply `schema.sql`)
 
 ---
 

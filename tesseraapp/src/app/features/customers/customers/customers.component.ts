@@ -13,6 +13,7 @@ import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { CustomerTrendComponent } from '../../../shared/charts/customer-trend/customer-trend.component';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * All-customers list view with search and pagination.
@@ -24,7 +25,7 @@ import { CustomerTrendComponent } from '../../../shared/charts/customer-trend/cu
  */
 @Component({
   selector: 'app-customers',
-  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, CustomerTrendComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, CustomerTrendComponent, TranslocoDirective],
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.css',
   standalone: true,
