@@ -12,6 +12,8 @@ import {
 import { Router } from '@angular/router';
 import { UserService } from '../../service/user.service';
 import { ThemeService } from '../../service/theme.service';
+import { CommandPaletteService } from '../../service/command-palette.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoService } from '@jsverse/transloco';
 
 /**
@@ -68,6 +70,7 @@ export class CommandPaletteComponent {
   private readonly userService = inject(UserService);
   private readonly themeService = inject(ThemeService);
   private readonly transloco = inject(TranslocoService);
+  private readonly paletteService = inject(CommandPaletteService);
 
   /** Whether the overlay is currently visible. */
   protected readonly open = signal(false);
@@ -113,6 +116,16 @@ export class CommandPaletteComponent {
   });
 
   constructor() {
+    // Anything outside this component's subtree (the navbar button) opens the palette through
+    // CommandPaletteService rather than by reaching in — see that service for why.
+    this.paletteService.openRequested$
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => {
+        if (this.userService.isAuthenticated() && !this.open()) {
+          this.openPalette();
+        }
+      });
+
     // Move focus into the search field once the overlay has rendered. The viewChild
     // query resolves during change detection; the macrotask defers the focus() call
     // until after the input element actually exists in the DOM.

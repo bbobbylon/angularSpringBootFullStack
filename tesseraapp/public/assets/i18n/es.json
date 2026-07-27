@@ -56,7 +56,9 @@
     "securityCenter": "Centro de seguridad",
     "logOut": "Cerrar sesión",
     "toggleTheme": "Cambiar tema",
-    "language": "Idioma"
+    "language": "Idioma",
+    "commandPalette": "Abrir la paleta de comandos",
+    "search": "Buscar"
   },
   "auth": {
     "signIn": "Iniciar sesión",

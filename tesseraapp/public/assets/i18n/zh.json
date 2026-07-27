@@ -56,7 +56,9 @@
     "securityCenter": "安全中心",
     "logOut": "退出登录",
     "toggleTheme": "切换主题",
-    "language": "语言"
+    "language": "语言",
+    "commandPalette": "打开命令面板",
+    "search": "搜索"
   },
   "auth": {
     "signIn": "登录",

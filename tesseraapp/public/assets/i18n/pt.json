@@ -56,7 +56,9 @@
     "securityCenter": "Central de segurança",
     "logOut": "Sair",
     "toggleTheme": "Alternar tema",
-    "language": "Idioma"
+    "language": "Idioma",
+    "commandPalette": "Abrir a paleta de comandos",
+    "search": "Pesquisar"
   },
   "auth": {
     "signIn": "Entrar",

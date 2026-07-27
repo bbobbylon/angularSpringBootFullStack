@@ -5,6 +5,7 @@ import { UserInterface } from '../../interface/user.interface';
 import { NgOptimizedImage } from '@angular/common';
 import { ThemeService } from '../../service/theme.service';
 import { LanguageService } from '../../service/language.service';
+import { CommandPaletteService } from '../../service/command-palette.service';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
@@ -38,6 +39,7 @@ export class NavbarComponent {
   private readonly router = inject(Router);
   private readonly themeService = inject(ThemeService);
   private readonly languageService = inject(LanguageService);
+  private readonly paletteService = inject(CommandPaletteService);
 
   /** The languages on offer, for the navbar selector (ROADMAP §2 — i18n). */
   protected readonly languages = this.languageService.available;
@@ -81,6 +83,19 @@ export class NavbarComponent {
    * default an account with no picture already gets.
    */
   protected readonly avatarFailed = signal(false);
+
+  /**
+   * Whether this looks like a Mac, so the hint reads ⌘K rather than Ctrl K.
+   *
+   * <p>Shown next to the search trigger. A discoverable button is what teaches the shortcut: a
+   * hotkey nobody is told about is a feature only its author uses.
+   */
+  protected readonly isMac = /mac/i.test(navigator.platform || navigator.userAgent);
+
+  /** Opens the command palette from the navbar button. */
+  protected openCommandPalette(): void {
+    this.paletteService.open();
+  }
 
   /** Switches the navbar to the initials avatar after an image load failure. */
   protected onAvatarError(): void {

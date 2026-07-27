@@ -20,7 +20,10 @@ The Angular client from the inside: how the standalone app boots and wires its p
 5. [Services API reference](#5-services-api-reference)
 6. [State management: DataState, signals & the RxJS trio](#6-state-management-datastate-signals--the-rxjs-trio)
 7. [Enumerations & envelope interfaces](#7-enumerations--envelope-interfaces)
-8. [Known limitations, gotchas & gap register](#8-known-limitations-gotchas--gap-register)
+8. [Internationalization (Transloco)](#8-internationalization-transloco)
+9. [Capability-level UI gating](#9-capability-level-ui-gating)
+10. [Command palette](#10-command-palette)
+11. [Known limitations, gotchas & gap register](#11-known-limitations-gotchas--gap-register)
 
 ---
 
@@ -330,7 +333,91 @@ Templates branch on the state with `@switch`/`@if` against `DataState.LOADING/LO
 
 ---
 
-## 8. Known limitations, gotchas & gap register
+## 8. Internationalization (Transloco)
+
+Six locales — English, Spanish, French, German, Portuguese, Simplified Chinese — switchable at
+runtime from the navbar, with the choice persisted like the theme.
+
+**Why runtime, not `@angular/localize`.** The built-in tooling resolves translations at *compile*
+time and emits one bundle per language. That is the right choice for a public marketing site, and
+the wrong one here: switching language would mean loading a different build, so the user loses their
+place. Transloco swaps a JSON dictionary in place, so the switch is instant and the current view
+survives it. The cost — dictionaries are not tree-shaken — is a few kilobytes, fetched lazily and
+cached per language.
+
+| Piece | Location |
+|---|---|
+| Provider config | `app.config.ts` (`provideTransloco`) |
+| Dictionary loader | `service/transloco-loader.ts` |
+| Active-language state | `service/language.service.ts` (mirrors `ThemeService`) |
+| Dictionaries | `public/assets/i18n/{en,es,fr,de,pt,zh}.json` |
+
+**Conventions that matter:**
+
+- **`fallbackLang: 'en'` + `useFallbackTranslation`.** A key missing from a translation renders the
+  English text, not the raw key. This is what makes an incremental translation pass safe.
+- **One `*transloco="let t"` scope per template**, usually on the outermost element. Where the
+  template's top level is `@if`/`@switch` control flow rather than an element, wrap the whole file
+  in `<ng-container *transloco="let t">` — a scope on one branch is invisible to the others, and
+  the symptom is a compile error reading *"Property 't' does not exist"*.
+- **Translate whole sentences, never fragments.** The home greeting emits a complete phrase per
+  branch rather than `"Welcome back"` + a name fragment, because word order and punctuation around
+  a name are not universal; splitting a sentence silently forces every language into English's
+  arrangement.
+- **Languages are labelled in their own language** ("Español", never "Spanish"). A user stranded in
+  a language they cannot read needs an exit they can recognise.
+- **RTL locales are deliberately absent.** Arabic and Hebrew need `dir="rtl"` plus a pass converting
+  the stylesheet's physical properties (`margin-left`, `float`, `text-align: left`) to logical ones.
+  Shipping one before that work renders a visibly broken page, which serves those readers worse than
+  not offering the language.
+- Component-level strings (toasts, command-palette labels) resolve through `TranslocoService`
+  injected into the component, not the template pipe.
+
+---
+
+## 9. Capability-level UI gating
+
+Route guards answer "may you open this page?". These answer "may you use this control?" — so a
+refusal is felt *before* the click rather than as a 403 on submit.
+
+| Piece | Purpose |
+|---|---|
+| `*appHasAuthority` | Structural directive — renders content only for a held authority; supports `; else` for a read-only substitute |
+| `[appRequiresAuthority]` | Attribute directive — leaves the control visible but inert, with `aria-disabled`, a `.is-restricted` class, and a `title` naming the missing capability |
+| `capabilityGuard` | Route-data-driven gate (`requiredAuthorities` + `deniedActionKey`); **fails closed** when a route declares nothing |
+
+**Hide or disable?** Remove a control when its presence is pure noise (a Delete button a viewer can
+never use). Disable it when absence would read as a rendering bug — a form whose submit button
+simply is not there. Both directives ship because the choice is per-control.
+
+> **Authority flags must be getters, not fields.** `hasAnyAuthority` returns `false` for an
+> **expired** token, not only a missing authority. A flag captured once at construction latches
+> whatever was true then — and on a page refresh that is usually an expired token, so an admin sees
+> the non-admin view until something reconstructs the component. Write
+> `get isAdmin() { return this.userService.hasAnyAuthority(...); }`. `UserService` memoises the
+> decode on the token string, so per-change-detection evaluation is a string compare.
+
+**None of this is a security boundary (NFR-SEC-4).** The authorities come from a token the user
+controls; the backend re-derives them from the database on every request and enforces them at both
+the URL and method level. These directives change what renders, never what the API permits.
+
+---
+
+## 10. Command palette
+
+⌘/Ctrl+K opens a type-to-filter launcher, mounted once in `AppComponent` beside the router outlet so
+it is reachable from every route. It self-gates on authentication and **rebuilds its command list
+from the live token on every open**, so admin destinations and creation commands appear only for
+tokens that carry the matching authorities.
+
+Anything outside its subtree opens it through `CommandPaletteService` (the navbar's search-styled
+trigger does). That indirection exists because the palette and the navbar sit in different branches
+of the component tree — and because dispatching a synthetic `Ctrl+K` at `document` would couple the
+button to a keybinding rather than to an intent.
+
+---
+
+## 11. Known limitations, gotchas & gap register
 
 Status legend: ✅ done/wired · ⚠️ built-but-not-production-ideal · ❌ open/planned.
 

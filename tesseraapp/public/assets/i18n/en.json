@@ -56,7 +56,9 @@
     "securityCenter": "Security Center",
     "logOut": "Log Out",
     "toggleTheme": "Toggle theme",
-    "language": "Language"
+    "language": "Language",
+    "commandPalette": "Open the command palette",
+    "search": "Search"
   },
   "auth": {
     "signIn": "Sign in",

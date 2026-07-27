@@ -56,7 +56,9 @@
     "securityCenter": "Sicherheitscenter",
     "logOut": "Abmelden",
     "toggleTheme": "Design wechseln",
-    "language": "Sprache"
+    "language": "Sprache",
+    "commandPalette": "Befehlspalette öffnen",
+    "search": "Suchen"
   },
   "auth": {
     "signIn": "Anmelden",

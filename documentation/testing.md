@@ -2,8 +2,8 @@
 
 The honest state of automated testing in TesseraApp: the current test inventory, how to run the backend and frontend suites, how to write a backend unit/slice test against this codebase's mocking seams, the Angular 21 Vitest setup, the integration approach (a full-context boot against local MySQL), the offline JPA schema-drift guard, and a frank gap register with a roadmap to broaden coverage.
 
-> **Audience:** contributors adding or maintaining tests. This guide does **not** overstate coverage — it is deliberately modest, because the suite is modest.
-> **Code wins over docs:** the counts below were read off `src/test/**` directly. Other artifacts (`week-5-plan.md`, `branch-changelog.md`) cite "6 suites / 14 tests"; the working tree actually has **5 test classes / 13 `@Test` methods**. If a doc and the code disagree, the code wins and the doc should be fixed.
+> **Audience:** contributors adding or maintaining tests. This guide does **not** overstate coverage — where something is untested it says so.
+> **Code wins over docs:** the counts below were read off `src/test/**` and `tesseraapp/src/**` directly. If a doc and the code disagree, the code wins and the doc should be fixed.
 > **See also:** [developer-guide.md §8](developer-guide.md#8-testing--quality) (one-line summary this guide expands) · [configuration.md](configuration.md) (profiles/env the context-load test needs) · [security.md](security.md) (the anti-enumeration contract one test guards) · [database.md](database.md) (the schema the drift guard validates).
 
 ---
@@ -24,18 +24,53 @@ The honest state of automated testing in TesseraApp: the current test inventory,
 
 ## 1. Current test inventory
 
-Five backend test classes live under `src/test/java/com/bob/angularspringbootfullstack/`. There are **zero** frontend specs (see [§7](#7-frontend-testing-angular-21-vitest)). The suite is small but real; four of the five classes are pure/standalone and run in milliseconds with **no database**, which is the whole point of how they are written.
+**21 backend test classes / 116 `@Test` methods**, plus **4 frontend spec files / 35 specs**. Only one
+backend class needs a database; everything else runs in milliseconds against mocks, standalone
+MockMvc, or Hibernate's offline schema export — which is the whole point of how they are written.
 
-| Suite | `@Test`s | Type | What it locks in | Needs MySQL? |
-|-------|---------:|------|------------------|:------------:|
-| `AngularSpringBootFullStackApplicationTests` | 1 | `@SpringBootTest` integration | `contextLoads` — the full Spring context wires up end-to-end (all beans, security, both data paths) | ✅ yes |
-| `service/serviceimpl/CustomerServiceImplTest` | 5 | Mockito unit | Service business rules: `createdAt` stamping, 10-char uppercase invoice numbers, not-found → `ApiException`, editable-field merge | ❌ no |
-| `exception/GlobalExceptionHandlerTest` | 4 | Standalone MockMvc | `@RestControllerAdvice` → `HttpResponse` envelope: 400 on `@Valid`/malformed JSON, `ApiException` message pass-through, 500 that never leaks the cause | ❌ no |
-| `controller/UserControllerLoginEnumerationTest` | 2 | Standalone MockMvc | Anti-enumeration (FR-AUTH-4 / NFR-SEC-7): unknown-email and wrong-password login failures are byte-identical bar the timestamp | ❌ no |
-| `tooling/JpaSchemaSyncTest` | 1 | Offline Hibernate | `schema.sql` contains every table/column Hibernate maps (drift guard for `ddl-auto: validate` in prod) | ❌ no (no DB, offline DDL export) |
-| **Total** | **13** | | | |
+### Backend — security & access control
 
-> **Why so few need MySQL.** Only `contextLoads` boots the real application context (and therefore the real datasource). Every other class was written specifically to exercise its target without a context or a connection — they use Mockito mocks, `MockMvcBuilders.standaloneSetup`, or Hibernate's offline schema export. So the meaningful unit/slice tests stay green in CI even with no database (`CustomerServiceImplTest:30`, `GlobalExceptionHandlerTest:33-35`, `UserControllerLoginEnumerationTest:52-55`).
+| Suite | Tests | What it locks in |
+|-------|------:|------------------|
+| `service/serviceimpl/SessionServiceImplTest` | 4 | **Refresh rotation & replay detection** — the happy path (old row superseded, a *different* jti issued, family preserved), plus superseded/revoked replays revoking the whole family without rotating |
+| `service/serviceimpl/TotpServiceImplTest` | 5 | **TOTP challenge binding** — identity comes from the challenge, never the request; a wrong code refuses *without* burning the challenge; recovery codes validate-and-consume atomically |
+| `service/serviceimpl/LoginRiskServiceImplTest` | 12 | Anomaly detection (FR-TPF-1), both failure directions — false positives matter as much as true ones |
+| `controller/AdminUserControllerOrgScopeTest` | 5 | **Org scoping on reads as well as writes**, platform admins never scope-checked, and a non-enumerating 403 |
+| `controller/AnalyticsControllerOrgScopeTest` | 8 | Scoped analytics: assertions in pairs, because calling the *unscoped* variant is the bug |
+| `controller/AnalyticsControllerSecurityTest` | 3 | The `/admin/analytics/**` authority gate |
+| `service/serviceimpl/FederatedIdentityUnlinkTest` | 5 | The unlink guard — both halves of "no password *and* no second provider" |
+| `constants/CapabilityCatalogTest` | 6 | 403s name the blocked capability without leaking record existence |
+| `controller/UserControllerLoginEnumerationTest` | 2 | Anti-enumeration: unknown-email and wrong-password failures are byte-identical bar the timestamp |
+| `controller/UserControllerBruteForceLockTest` | 2 | Per-account lockout |
+| `controller/AdminUserControllerTest` | 3 | Path id is authoritative; self-targeting refused |
+| `utils/RequestUtilsIpAddressTest` | 10 | `X-Forwarded-For` trust, forgery cases included |
+| `utils/AuthDiagnosticsLoggerTest` | 9 | Console-only RBAC diagnostics stay off the client response |
+| `exception/ErrorDetailScrubberTest` | 6 | Prod error bodies carry no internal detail |
+
+### Backend — application & infrastructure
+
+| Suite | Tests | What it locks in | Needs MySQL? |
+|-------|------:|------------------|:------------:|
+| `service/SecurityDashboardServiceImplTest` | 11 | Window clamping, zero-filled counters, gap-filled trend, empty scope failing closed *before* any query | ❌ |
+| `service/serviceimpl/CustomerServiceImplTest` | 5 | Service business rules: `createdAt` stamping, invoice numbering, not-found → `ApiException` | ❌ |
+| `service/serviceimpl/EventServiceImplTest` | 2 | Audit event recording | ❌ |
+| `listener/NewUserEventListenerTest` | 2 | A failing audit write must not break login | ❌ |
+| `exception/GlobalExceptionHandlerTest` | 4 | The `HttpResponse` envelope; a 500 never leaks its cause | ❌ |
+| `tooling/JpaSchemaSyncTest` | 1 | `schema.sql` contains every table/column Hibernate maps (drift guard for `ddl-auto: validate`) | ❌ (offline DDL export) |
+| `AngularSpringBootFullStackApplicationTests` | 1 | `contextLoads` — the full context wires up end-to-end | ✅ |
+| **Total** | **116** | | |
+
+### Frontend (Vitest + jsdom)
+
+| Spec | Tests | What it locks in |
+|------|------:|------------------|
+| `shared/command-palette/command-palette.component.spec.ts` | 12 | Hotkey gating, authority-filtered command sets, filtering, keyboard model |
+| `directive/has-authority.directive.spec.ts` | 9 | Capability gating: hide vs disable, `else` templates, accessibility of the disabled state |
+| `guard/admin.guard.spec.ts` | 7 | Route gating + the localized, non-enumerating denial message |
+| `guard/capability.guard.spec.ts` | 7 | Route-data-driven gating, fail-closed on a missing declaration |
+| **Total** | **35** | |
+
+> **Why so little needs MySQL.** Only `contextLoads` boots the real application context. Everything else was written to exercise its target without a context or a connection, so the meaningful unit/slice tests stay green in CI with no database.
 
 Test-scope dependencies (both in `pom.xml`): `spring-boot-starter-test` (JUnit 5 / Jupiter, Mockito, AssertJ, Hamcrest, Spring `MockMvc`) at `pom.xml:130-133`, and `spring-security-test` at `pom.xml:135-138`.
 
@@ -68,7 +103,7 @@ From `tesseraapp/`:
 | Lint | `npm run lint` |
 | Format check / write | `npm run format:check` / `npm run format` |
 
-`npm test` currently passes by finding **no spec files** — see [§7](#7-frontend-testing-angular-21-vitest).
+`npm test` runs 4 spec files / 35 specs through Vitest + jsdom — see [§7](#7-frontend-testing-angular-21-vitest).
 
 ---
 
@@ -248,7 +283,7 @@ Stated plainly: coverage is **modest** — 5 backend classes / 13 tests and 0 fr
 | **Organization-scoped** admin authorization | ❌ | `AdminUserController`, `OrganizationServiceImpl` | No test that out-of-scope access returns 403 / `APPLICATION_ADMIN` bypasses |
 | Real `SecurityConfig` matchers / `CustomAuthFilter` | ❌ | `configuration/`, `filter/` | Slice tests bypass the filter chain by design |
 | Brute-force per-account lockout | ❌ | `UserController.authenticate` + `EventService` | 5-failures/15-min window untested |
-| Frontend (interceptors, guards, services, components) | ❌ | `tesseraapp/src/` | Zero specs despite a configured Vitest harness ([§7](#7-frontend-testing-angular-21-vitest)) |
+| Frontend interceptors (`tokenInterceptor`, `cacheInterceptor`) | ❌ | `tesseraapp/src/app/interceptor/` | Guards, the capability directives and the command palette have specs; the interceptors — the most logic-dense pieces — do not |
 | HTTP-level integration (real requests, fixtures) | ❌ | — | No `TestRestTemplate`/Testcontainers layer |
 
 ### Roadmap to broaden (prioritized)
@@ -256,7 +291,7 @@ Stated plainly: coverage is **modest** — 5 backend classes / 13 tests and 0 fr
 | Priority | Step | Why first |
 |:--------:|------|-----------|
 | **P1** | Unit-test the security-critical seams with Mockito (same pattern as [§3](#3-writing-a-backend-unit-test-mock-the-reposservices)): `SessionServiceImpl` rotation + family-wide reuse revocation; `TotpServiceImpl`/`TotpUtils` verify + recovery-code single-use; `AdminUserController` org-scope 403/bypass | These are the headline claims and carry the most risk if they regress; they need no DB |
-| **P1** | Add the first frontend specs for `tokenInterceptor`, `cacheInterceptor`, and `adminGuard` ([§7](#7-frontend-testing-angular-21-vitest)) | Most logic-dense, highest-leverage; harness already configured |
+| **P1** | Specs for `tokenInterceptor` and `cacheInterceptor` ([§7](#7-frontend-testing-angular-21-vitest)) | The silent-refresh path is the highest-leverage untested logic left; `adminGuard` is now covered |
 | **P2** | Replace/supplement `contextLoads` with a **Testcontainers MySQL** `@SpringBootTest` so integration is hermetic and CI-friendly (removes the "needs local MySQL" footgun in [§5](#5-integration-approach-contextloads-against-local-mysql)) | Unblocks DB-backed tests in CI without a manual MySQL |
 | **P2** | Add a `@SpringBootTest(webEnvironment=RANDOM_PORT)` + `TestRestTemplate` happy-path per controller, asserting the `HttpResponse` envelope and real `SecurityConfig` authority rules | Covers the filter chain the standalone slices skip |
 | **P3** | A real prod-profile boot with `ddl-auto=validate` against a `schema.sql`-only database, to retire `JpaSchemaSyncTest`'s "offline stand-in" caveat | Confirms the drift guard's premise end-to-end |
