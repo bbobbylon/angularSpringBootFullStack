@@ -65,15 +65,38 @@ CREATE TABLE IF NOT EXISTS roles
     CONSTRAINT UQ_Roles_Name UNIQUE (name)
 );
 
-INSERT INTO roles (name, permission)
-VALUES ('ROLE_GUEST', 'READ:USER'),
-       ('ROLE_USER', 'READ:USER, READ:CUSTOMER'),
-       ('ROLE_MODERATOR', 'READ:USER, READ:CUSTOMER, UPDATE:CUSTOMER'),
-       ('ROLE_HELP_DESK_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER'),
-       ('ROLE_ORGANIZATION_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE'),
-       ('ROLE_ADMIN',
+-- Role ids are PINNED, not auto-assigned.
+--
+-- Without explicit ids this seed drifts: `INSERT ... ON DUPLICATE KEY UPDATE` consumes an
+-- AUTO_INCREMENT value for every row it touches, including the rows it merely *updates*. Because
+-- this file is idempotent and meant to be re-run, each run burned another 7 ids — which is why a
+-- database seeded five times shows roles numbered in the 30s rather than 1–7.
+--
+-- That is not merely untidy. `userroles.role_id` is a real foreign key, so the numbers are load
+-- bearing *within* a database, and two databases seeded a different number of times disagree about
+-- which id means which role. Today nothing breaks, because every assignment path resolves the role
+-- by NAME first (`SELECT_ROLE_BY_NAME_QUERY`) and only then stores the id it found. But it means a
+-- dump restored from one environment into another, or a row compared across `db2` and `db3`, would
+-- silently attach people to the wrong role.
+--
+-- Pinning the ids makes the mapping identical in every environment and stops the drift, because an
+-- explicit id below the current counter allocates nothing.
+--
+-- NOTE for existing databases: this does NOT renumber roles that are already there. The unique key
+-- is `name`, so on a seeded database each row still matches on name and only its permission column
+-- is updated — the drifted id is left exactly as it is, and the foreign keys pointing at it stay
+-- valid. Fresh databases (and CI) get 1–7. Renumbering an existing database would mean updating
+-- `roles.id` and every `userroles.role_id` together, which is a deliberate migration and not
+-- something an idempotent seed should do behind your back.
+INSERT INTO roles (id, name, permission)
+VALUES (1, 'ROLE_GUEST', 'READ:USER'),
+       (2, 'ROLE_USER', 'READ:USER, READ:CUSTOMER'),
+       (3, 'ROLE_MODERATOR', 'READ:USER, READ:CUSTOMER, UPDATE:CUSTOMER'),
+       (4, 'ROLE_HELP_DESK_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER'),
+       (5, 'ROLE_ORGANIZATION_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE'),
+       (6, 'ROLE_ADMIN',
         'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, DELETE:USER'),
-       ('ROLE_APPLICATION_ADMIN',
+       (7, 'ROLE_APPLICATION_ADMIN',
         'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, DELETE:USER, DELETE:CUSTOMER') AS new
 ON DUPLICATE KEY UPDATE permission = new.permission;
 
@@ -169,6 +192,26 @@ SET @add_userevents_detail := (
 PREPARE add_userevents_detail_stmt FROM @add_userevents_detail;
 EXECUTE add_userevents_detail_stmt;
 DEALLOCATE PREPARE add_userevents_detail_stmt;
+
+-- Widen users.image_url for federated avatar URLs.
+--
+-- The column was VARCHAR(255). Identity providers hand back longer URLs than that — a Google
+-- avatar (`https://lh3.googleusercontent.com/a/<long-opaque-token>=s96-c`) can exceed it — and
+-- MySQL outside strict mode SILENTLY TRUNCATES on insert rather than failing. The row is written,
+-- the login succeeds, and the only symptom is a broken image in the browser: the URL was chopped
+-- mid-token and resolves to nothing. Nothing server-side ever reports it.
+--
+-- Guarded on the current length so re-running is a no-op, and widening never rejects existing data.
+SET @widen_image_url := (
+    SELECT IF(COUNT(*) = 1,
+        'ALTER TABLE users MODIFY COLUMN image_url VARCHAR(512) DEFAULT ''https://cdn-icons-png.flaticon.com/512/149/149071.png''',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'
+      AND COLUMN_NAME = 'image_url' AND CHARACTER_MAXIMUM_LENGTH < 512);
+PREPARE widen_image_url_stmt FROM @widen_image_url;
+EXECUTE widen_image_url_stmt;
+DEALLOCATE PREPARE widen_image_url_stmt;
 
 -- ── Verification flows ─────────────────────────────────────────────────────────────────
 -- `url` stores a bare UUID verification key (NOT a full URL); the app builds the clickable
@@ -301,6 +344,40 @@ SET @add_services_active := (
 PREPARE add_services_active_stmt FROM @add_services_active;
 EXECUTE add_services_active_stmt;
 DEALLOCATE PREPARE add_services_active_stmt;
+
+-- Seed the services catalog.
+--
+-- The table was created empty and nothing ever populated it, so `/services` and the service
+-- picker on a new invoice both rendered "no services" on any database built from this file. The
+-- catalog is reference data the application reads but never generates, so it belongs here beside
+-- the roles and event-type seeds rather than in DemoDataSeeder (which exists for sample
+-- customers/invoices, i.e. data a real deployment would delete).
+--
+-- Ids are pinned for the same reason the role ids are: `INSERT ... ON DUPLICATE KEY UPDATE` on an
+-- auto-increment column burns a value per row on every re-run, and `Services` has no unique key on
+-- `name` to dedupe against. Keying on the primary key makes re-running this file update the rows in
+-- place instead of appending a second copy of the catalogue each time.
+--
+-- Prices are the standard rate; an invoice copies name and price into its own line item when it is
+-- raised, so editing one of these later never restates an invoice already issued.
+INSERT INTO `Services` (`id`, `name`, `description`, `price`, `active`)
+VALUES (1, 'Identity & Access Review', 'Audit of roles, permissions, and account lifecycle against least-privilege policy.', 2400.00, TRUE),
+       (2, 'Single Sign-On Integration', 'Connect an existing identity provider (Google, Microsoft Entra, Okta) via OAuth2/OIDC.', 3600.00, TRUE),
+       (3, 'Multi-Factor Rollout', 'Enrolment campaign and support runbook for authenticator-app MFA across an organisation.', 1800.00, TRUE),
+       (4, 'Security Posture Assessment', 'Review of authentication, session handling, and audit coverage with a prioritised findings report.', 4200.00, TRUE),
+       (5, 'Cloud Migration', 'Containerise and migrate an existing deployment to managed cloud infrastructure.', 7500.00, TRUE),
+       (6, 'Database Administration', 'Schema review, index tuning, backup verification, and restore rehearsal.', 1500.00, TRUE),
+       (7, 'Web Application Development', 'Custom feature development against the existing Angular and Spring Boot stack.', 5200.00, TRUE),
+       (8, 'API Integration', 'Design and build an integration between this platform and a third-party system.', 2800.00, TRUE),
+       (9, 'Compliance Reporting', 'Evidence pack assembled from the audit log for an external assessor.', 1950.00, TRUE),
+       (10, 'Onboarding & Training', 'Administrator and end-user training, delivered remotely with recorded sessions.', 950.00, TRUE),
+       (11, 'Priority Support Retainer', 'Named contact with a four-hour response target during business hours.', 1200.00, TRUE),
+       (12, 'Data Import & Cleansing', 'Bulk import of customer records with de-duplication and validation reporting.', 1100.00, TRUE) AS new
+ON DUPLICATE KEY UPDATE `name`        = new.`name`,
+                        `description` = new.`description`,
+                        `price`       = new.`price`;
+-- `active` is deliberately NOT overwritten: a service an administrator has retired must stay
+-- retired across a re-run of this file, or the seed would silently put it back on sale.
 
 -- @ElementCollection table for Invoice.services (List<InvoiceLineItem>); composite PK
 -- (item_order, invoice_id), NO surrogate id — exactly as Hibernate maps an @OrderColumn collection.

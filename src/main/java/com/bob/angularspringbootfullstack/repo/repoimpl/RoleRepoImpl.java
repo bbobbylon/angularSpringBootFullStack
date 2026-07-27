@@ -88,15 +88,19 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
-     * Not yet implemented; returns null. Roles are seeded directly in the
-     * database for now.
+     * Creating roles is not supported.
+     *
+     * <p>Unimplemented on purpose: roles are seeded by {@code schema.sql} and this application
+     * never edits the role catalogue at runtime. It throws rather than returning {@code null} so
+     * that a future caller fails at the call site with a message naming the real path, instead of
+     * receiving a null that surfaces as an NPE somewhere unrelated.
      *
      * @param data the role to create
-     * @return null
+     * @throws UnsupportedOperationException always
      */
     @Override
     public Role create(Role data) {
-        return null;
+        throw new UnsupportedOperationException("Roles are seeded via schema.sql; role CRUD is not implemented.");
     }
 
     /**
@@ -120,27 +124,36 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Not yet implemented; returns null. Use {@link #getRoleByUserId(Long)}
-     * for the only role lookup the application currently performs.
+     * Fetching a role by id is not supported.
+     *
+     * <p>Unimplemented on purpose: roles are seeded by {@code schema.sql} and this application
+     * never edits the role catalogue at runtime. It throws rather than returning {@code null} so
+     * that a future caller fails at the call site with a message naming the real path, instead of
+     * receiving a null that surfaces as an NPE somewhere unrelated.
      *
      * @param id the role id
-     * @return null
+     * @throws UnsupportedOperationException always
      */
     @Override
     public Role get(Long id) {
-        return null;
+        throw new UnsupportedOperationException("Use getRoleByUserId(Long) — the only role lookup this application performs.");
     }
 
     /**
-     * Not yet implemented; returns null.
+     * Updating a role is not supported.
+     *
+     * <p>Unimplemented on purpose: roles are seeded by {@code schema.sql} and this application
+     * never edits the role catalogue at runtime. It throws rather than returning {@code null} so
+     * that a future caller fails at the call site with a message naming the real path, instead of
+     * receiving a null that surfaces as an NPE somewhere unrelated.
      *
      * @param id   the id of the role to update
      * @param data the new role data
-     * @return null
+     * @throws UnsupportedOperationException always
      */
     @Override
     public Role update(Long id, Role data) {
-        return null;
+        throw new UnsupportedOperationException("Roles are seeded via schema.sql; role CRUD is not implemented.");
     }
 
     /**

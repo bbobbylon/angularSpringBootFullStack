@@ -28,7 +28,11 @@ import java.util.stream.Collectors;
 
 import static java.time.LocalTime.now;
 import static org.springframework.http.HttpStatus.*;
-//TODO remove the bad practices for prod, specifically .reason, .message, etc so that PPI information is not exposed. 
+// NOTE: this class still populates .devMessage/.reason with raw exception text, and that is
+// intentional — ErrorDetailScrubber (a ResponseBodyAdvice) strips both from 4xx/5xx bodies
+// whenever app.error.expose-details is false, which application-prod.yml pins. Scrubbing at
+// the serialization boundary rather than at each of the ~10 builders here is what makes the
+// guarantee structural: a new handler added later cannot forget to apply it.
 
 /**
  * Central {@code @RestControllerAdvice} for translating framework and application exceptions into a
