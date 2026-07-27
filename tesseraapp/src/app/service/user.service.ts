@@ -403,6 +403,19 @@ export class UserService {
    * a cross-session data leak that directly violates the app's zero-trust posture.
    */
   logOut() {
+    // Tell the server FIRST, while the access token still exists to authenticate the call —
+    // clearing localStorage beforehand would leave nothing to prove who is signing out, and the
+    // request would come back 401 with the session still live.
+    //
+    // Fire-and-forget on purpose. The local half of signing out must happen whether or not the
+    // network call succeeds: a user who clicks "log out" on a shared machine and hits a dead
+    // backend must still end up signed out locally, not stranded holding valid tokens because a
+    // request failed. The error branch is deliberately silent — there is no action the user could
+    // take, and a toast reading "logout failed" on a screen that has just logged them out is
+    // alarming and untrue.
+    this.http
+      .post<CustomHttpResponseInterface<void>>(`${this.server}/user/sessions/logout`, {})
+      .subscribe({ error: () => {} });
     localStorage.removeItem(Key.TOKEN);
     localStorage.removeItem(Key.REFRESH_TOKEN);
     this.httpCache.evictAll();

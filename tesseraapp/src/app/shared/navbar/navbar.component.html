@@ -18,9 +18,11 @@
             Customers
           </a>
           <ul aria-labelledby="navbarDropdownCustomers" class="dropdown-menu dropdown-menu-end">
-            <li><a [routerLink]="['/customer/new']" class="dropdown-item">
-              <i class="bi bi-person-plus-fill"></i>New Customer</a>
-            </li>
+            @if (canCreateRecords) {
+              <li><a [routerLink]="['/customer/new']" class="dropdown-item">
+                <i class="bi bi-person-plus-fill"></i>New Customer</a>
+              </li>
+            }
             <li><a [routerLink]="['/customers']" class="dropdown-item">
               <i class="bi bi-people-fill"></i>All Customers</a>
             </li>
@@ -34,9 +36,11 @@
             Invoices
           </a>
           <ul aria-labelledby="navbarDropdownInvoices" class="dropdown-menu dropdown-menu-end">
-            <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
-              <i class="bi bi-receipt"></i>New Invoice</a>
-            </li>
+            @if (canCreateRecords) {
+              <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
+                <i class="bi bi-receipt"></i>New Invoice</a>
+              </li>
+            }
             <li><a [routerLink]="['/invoices']" class="dropdown-item">
               <i class="bi bi-receipt-cutoff"></i>All Invoices</a>
             </li>
@@ -53,9 +57,11 @@
             <li><a [routerLink]="['/services']" class="dropdown-item">
               <i class="bi bi-grid-1x2-fill"></i>Service Catalog</a>
             </li>
-            <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
-              <i class="bi bi-plus-circle"></i>New Service Invoice</a>
-            </li>
+            @if (canCreateRecords) {
+              <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
+                <i class="bi bi-plus-circle"></i>New Service Invoice</a>
+              </li>
+            }
           </ul>
         </li>
 

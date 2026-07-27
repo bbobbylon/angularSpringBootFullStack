@@ -68,13 +68,29 @@ describe('CommandPaletteComponent', () => {
   /**
    * Configures the TestBed for a given session shape.
    *
+   * <p>{@code hasAnyAuthority} is modelled as a real authority set rather than a single boolean.
+   * A flat {@code mockReturnValue} would answer "yes" (or "no") to *every* question the palette
+   * asks, which stopped being adequate once the palette gated two different capabilities: it
+   * could no longer represent the account that genuinely exists in this system — a
+   * {@code ROLE_MODERATOR} that may edit customers but may not administer users. Mirroring the
+   * seeded roles from {@code schema.sql} keeps the spec honest about which combinations are real.
+   *
    * @param opts.authenticated whether a valid token is present
-   * @param opts.admin whether that token carries UPDATE:USER / UPDATE:ROLE
+   * @param opts.admin whether that token carries staff authorities (UPDATE:USER / UPDATE:ROLE)
+   * @param opts.write whether it carries write authority (UPDATE:CUSTOMER); defaults to
+   *                   {@code opts.admin}, since every staff role holds UPDATE:USER and so can write
    */
-  const setup = (opts: { authenticated: boolean; admin: boolean }): void => {
+  const setup = (opts: { authenticated: boolean; admin: boolean; write?: boolean }): void => {
+    const granted = new Set<string>(['READ:USER', 'READ:CUSTOMER']);
+    if (opts.write ?? opts.admin) granted.add('UPDATE:CUSTOMER');
+    if (opts.admin) {
+      granted.add('UPDATE:USER');
+      granted.add('UPDATE:ROLE');
+    }
+
     userService = {
       isAuthenticated: vi.fn().mockReturnValue(opts.authenticated),
-      hasAnyAuthority: vi.fn().mockReturnValue(opts.admin),
+      hasAnyAuthority: vi.fn((...authorities: string[]) => authorities.some((authority) => granted.has(authority))),
       logOut: vi.fn(),
     };
     theme = { toggle: vi.fn() };
@@ -144,8 +160,33 @@ describe('CommandPaletteComponent', () => {
     expect(userService.hasAnyAuthority).toHaveBeenCalledWith('UPDATE:USER', 'UPDATE:ROLE');
   });
 
+  it('withholds creation commands from a read-only session', () => {
+    setup({ authenticated: true, admin: false, write: false });
+
+    pressHotkey();
+
+    // A read-only account may browse both directories but must not be offered the forms it
+    // could never submit — the same gate the navbar applies (ROADMAP §2).
+    expect(labels()).toContain('All Customers');
+    expect(labels()).toContain('All Invoices');
+    expect(labels()).not.toContain('New Customer');
+    expect(labels()).not.toContain('New Invoice');
+    expect(userService.hasAnyAuthority).toHaveBeenCalledWith('UPDATE:CUSTOMER', 'UPDATE:USER');
+  });
+
+  it('offers creation commands to a writer without staff authority', () => {
+    // ROLE_MODERATOR: UPDATE:CUSTOMER but no UPDATE:USER/UPDATE:ROLE. Proves the two gates are
+    // independent — write access must not be smuggled in on the back of the admin check.
+    setup({ authenticated: true, admin: false, write: true });
+
+    pressHotkey();
+
+    expect(labels()).toEqual(expect.arrayContaining(['New Customer', 'New Invoice']));
+    expect(labels()).not.toContain('User Directory');
+  });
+
   it('filters entries by label or hint as the user types', () => {
-    setup({ authenticated: true, admin: false });
+    setup({ authenticated: true, admin: false, write: true });
     pressHotkey();
 
     type('invoice');

@@ -109,6 +109,13 @@ app:
     # Activates S3ImageStorageService + AwsS3Config; requires aws.s3.bucket and aws.region.
     storage-type: ${IMAGE_STORAGE_TYPE:local}
 
+  error:
+    # Whether error responses may carry internal diagnostic detail (the `devMessage` and raw
+    # `reason` fields) to the client. TRUE here so local debugging keeps the verbose bodies;
+    # application-prod.yml pins it FALSE. Enforced by ErrorDetailScrubber at the serialization
+    # boundary rather than per-handler, so it holds for every error path including future ones.
+    expose-details: ${EXPOSE_ERROR_DETAILS:true}
+
   cors:
     # Browser origins allowed to call this API, comma-separated. Consumed by
     # AngularSpringBootFullStackApplication#corsFilter via setAllowedOriginPatterns, so

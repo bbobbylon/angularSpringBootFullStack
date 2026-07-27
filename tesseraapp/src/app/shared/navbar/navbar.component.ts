@@ -61,6 +61,23 @@ export class NavbarComponent {
   protected readonly isSuperAdmin = this.userService.hasAnyAuthority('DELETE:USER');
 
   /**
+   * Whether the user may create business records — gates the "New Customer" / "New Invoice"
+   * entries (ROADMAP §2, capability-level RBAC gating).
+   *
+   * Both creation endpoints fall through to SecurityConfig's
+   * {@code .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")}, so
+   * an account holding only {@code READ:*} — {@code ROLE_USER} and {@code ROLE_GUEST} — can reach
+   * both forms, fill them in, and receive a 403 on submit. Menu entries are *hidden* rather than
+   * disabled here (unlike the Save button on customer-details): a navigation list is a menu of
+   * available destinations, and a permanently dead entry in it is noise, whereas a missing submit
+   * button inside a form the user is already looking at reads as a bug.
+   *
+   * Browsing remains ungated — "All Customers" and "All Invoices" only need {@code READ:CUSTOMER},
+   * which every role has.
+   */
+  protected readonly canCreateRecords = this.userService.hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER');
+
+  /**
    * Flips the application between dark and light mode via {@link ThemeService},
    * which updates the {@code data-bs-theme} attribute and persists the choice.
    */

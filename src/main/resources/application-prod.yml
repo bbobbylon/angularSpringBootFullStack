@@ -57,3 +57,14 @@ spring:
 app:
   cors:
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:${UI_APP_URL}}
+
+  # ── Production error hygiene ──────────────────────────────────────────────────────────
+  # Suppresses `devMessage` and the raw `reason` on error responses. Raw exception text names
+  # tables, columns, class names and (on the auth paths) the identifier that was looked up —
+  # collectively a map of the system, and on login specifically it would undercut the
+  # anti-enumeration guarantee. Nothing is lost: every handler already logs the full exception
+  # server-side, so operators read the detail in the application log instead of the client
+  # reading it in the response. Hardcoded rather than env-driven — there is no legitimate reason
+  # to turn this back on in production.
+  error:
+    expose-details: false

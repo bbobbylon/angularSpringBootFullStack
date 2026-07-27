@@ -87,7 +87,8 @@
                     </div>
                     @if (!canEditRole) {
                       <small class="text-secondary d-block mt-2">
-                        Your role does not include the UPDATE:ROLE authority.
+                        <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                        You don't have permission to assign roles — contact your administrator.
                       </small>
                     }
                   </form>
@@ -129,7 +130,8 @@
                     </div>
                     @if (!canEditSettings) {
                       <small class="text-secondary d-block mt-2">
-                        Your role does not include the UPDATE:USER authority.
+                        <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                        You don't have permission to change account state — contact your administrator.
                       </small>
                     }
                   </form>

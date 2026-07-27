@@ -221,13 +221,24 @@ export class CommandPaletteComponent {
     const commands: Command[] = [
       { id: 'home', label: 'Home', hint: 'Dashboard overview', icon: 'bi-grid-1x2-fill', section: 'Navigate', run: go('/') },
       { id: 'customers', label: 'All Customers', hint: 'Browse customer directory', icon: 'bi-people-fill', section: 'Navigate', run: go('/customers') },
-      { id: 'new-customer', label: 'New Customer', hint: 'Create a customer', icon: 'bi-person-plus-fill', section: 'Navigate', run: go('/customer/new') },
       { id: 'invoices', label: 'All Invoices', hint: 'Browse invoices', icon: 'bi-receipt-cutoff', section: 'Navigate', run: go('/invoices') },
-      { id: 'new-invoice', label: 'New Invoice', hint: 'Create an invoice', icon: 'bi-receipt', section: 'Navigate', run: go('/invoice/new') },
       { id: 'services', label: 'Service Catalog', hint: 'Browse services & apps', icon: 'bi-grid-1x2', section: 'Navigate', run: go('/services') },
       { id: 'profile', label: 'Profile', hint: 'Your account', icon: 'bi-person-circle', section: 'Navigate', run: go('/profile') },
       { id: 'security', label: 'Security Center', hint: 'MFA & active sessions', icon: 'bi-shield-lock', section: 'Navigate', run: go('/security') },
     ];
+
+    // Creation commands require write authority (ROADMAP §2 — capability-level RBAC gating).
+    // Both destinations POST, so they fall under SecurityConfig's
+    // .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER"); a
+    // read-only account offered "New Invoice" here would be led to a form that can only 403 on
+    // submit. Gated at the same authorities the navbar uses, because a command palette that
+    // offers a destination the menu hides is the same bug told twice.
+    if (this.userService.hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER')) {
+      commands.push(
+        { id: 'new-customer', label: 'New Customer', hint: 'Create a customer', icon: 'bi-person-plus-fill', section: 'Navigate', run: go('/customer/new') },
+        { id: 'new-invoice', label: 'New Invoice', hint: 'Create an invoice', icon: 'bi-receipt', section: 'Navigate', run: go('/invoice/new') },
+      );
+    }
 
     if (this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')) {
       commands.push(

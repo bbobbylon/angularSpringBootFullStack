@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authenticationGuard } from './guard/authentication.guard';
 import { adminGuard } from './guard/admin.guard';
+import { capabilityGuard } from './guard/capability.guard';
 
 /**
  * Application route table for the standalone router.
@@ -54,14 +55,24 @@ export const routes: Routes = [
     canActivate: [authenticationGuard],
     loadComponent: () => import('./features/customers/customers/customers.component').then((m) => m.CustomersComponent),
   },
+  // Creation routes require write authority, not staff status (ROADMAP §2). Both forms POST,
+  // so they land on SecurityConfig's
+  // .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER") — the guard
+  // asks for exactly that pair. Note this is deliberately NOT adminGuard: ROLE_MODERATOR holds
+  // UPDATE:CUSTOMER without any staff authority, and must keep reaching these pages. The navbar
+  // and command palette hide the links for accounts that fail this check; the guard is what
+  // closes the URL-typing path, so a read-only user gets an explanation instead of a form that
+  // 403s on submit.
   {
     path: 'customer/new',
-    canActivate: [authenticationGuard],
+    canActivate: [authenticationGuard, capabilityGuard],
+    data: { requiredAuthorities: ['UPDATE:CUSTOMER', 'UPDATE:USER'], deniedAction: 'create customers' },
     loadComponent: () => import('./features/customers/new-customer/new-customer.component').then((m) => m.NewCustomerComponent),
   },
   {
     path: 'invoice/new',
-    canActivate: [authenticationGuard],
+    canActivate: [authenticationGuard, capabilityGuard],
+    data: { requiredAuthorities: ['UPDATE:CUSTOMER', 'UPDATE:USER'], deniedAction: 'create invoices' },
     loadComponent: () => import('./features/invoices/new-invoice/new-invoice.component').then((m) => m.NewInvoiceComponent),
   },
   {
