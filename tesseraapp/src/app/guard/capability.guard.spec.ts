@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { capabilityGuard } from './capability.guard';
 import { UserService } from '../service/user.service';
 import { NotificationsService } from '../service/notifications-service';
+import { TranslocoService } from '@jsverse/transloco';
+import { translocoStub } from '../testing/transloco-stub';
 
 /**
  * Specs for {@link capabilityGuard} — the route-data-driven gate on {@code /customer/new} and
@@ -23,6 +25,8 @@ import { NotificationsService } from '../service/notifications-service';
 describe('capabilityGuard', () => {
   let userService: { isAuthenticated: ReturnType<typeof vi.fn>; hasAnyAuthority: ReturnType<typeof vi.fn> };
   let notifications: { onWarning: ReturnType<typeof vi.fn> };
+  /** Translation double, shared with admin.guard.spec so both guards are held to one behaviour. */
+  let transloco: { translate: ReturnType<typeof vi.fn> };
   let router: Router;
 
   /**
@@ -42,17 +46,20 @@ describe('capabilityGuard', () => {
   const CUSTOMER_CREATE = {
     requiredAuthorities: ['UPDATE:CUSTOMER', 'UPDATE:USER'],
     deniedAction: 'create customers',
+    deniedActionKey: 'permissions.actions.createCustomers',
   };
 
   beforeEach(() => {
     userService = { isAuthenticated: vi.fn(), hasAnyAuthority: vi.fn() };
     notifications = { onWarning: vi.fn() };
+    transloco = translocoStub();
 
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: UserService, useValue: userService },
         { provide: NotificationsService, useValue: notifications },
+        { provide: TranslocoService, useValue: transloco },
       ],
     });
 

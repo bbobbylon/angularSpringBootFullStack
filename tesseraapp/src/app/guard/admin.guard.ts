@@ -1,7 +1,45 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router } from '@angular/router';
+import { ActivatedRouteSnapshot, CanActivateFn, Router } from '@angular/router';
 import { UserService } from '../service/user.service';
 import { NotificationsService } from '../service/notifications-service';
+import { TranslocoService } from '@jsverse/transloco';
+
+/**
+ * Builds the localized "you don't have permission to X" sentence for a blocked route.
+ *
+ * <p>Shared by {@link adminGuard} and {@code capabilityGuard} so the two guards cannot drift into
+ * saying the same thing two different ways — a user who is stopped at one and then the other must
+ * read one consistent message.
+ *
+ * <h3>Two ways a route can name its capability</h3>
+ * {@code data.deniedActionKey} is a translation key ({@code 'permissions.actions.manageUsers'}) and
+ * is preferred. {@code data.deniedAction} is a plain English phrase and remains supported as a
+ * fallback, so a route that has not been migrated still produces a correct English message rather
+ * than rendering a raw key at the user. That fallback is deliberate: a half-migrated route table is
+ * the normal state during an incremental translation, and the failure mode has to be "this one
+ * sentence is still English", not "this sentence is now `permissions.actions.undefined`".
+ *
+ * <p>Transloco returns the key itself when a translation is missing, so the result is compared
+ * against the key to detect that case.
+ *
+ * @param route - the activated route snapshot carrying the capability declaration
+ * @param transloco - the translation service
+ * @returns the complete, localized message
+ */
+export function deniedMessageFor(route: ActivatedRouteSnapshot, transloco: TranslocoService): string {
+  const key = route.data?.['deniedActionKey'] as string | undefined;
+  const literal = route.data?.['deniedAction'] as string | undefined;
+
+  let action: string;
+  if (key) {
+    const translated = transloco.translate(key);
+    action = translated === key ? (literal ?? transloco.translate('permissions.actions.generic')) : translated;
+  } else {
+    action = literal ?? transloco.translate('permissions.actions.generic');
+  }
+
+  return transloco.translate('permissions.denied', { action });
+}
 
 /**
  * Route guard for the administrative Users dashboard (SRS FR-ADMIN-5).
@@ -34,6 +72,7 @@ export const adminGuard: CanActivateFn = (route) => {
   const userService = inject(UserService);
   const router = inject(Router);
   const notifications = inject(NotificationsService);
+  const transloco = inject(TranslocoService);
 
   if (!userService.isAuthenticated()) {
     return router.createUrlTree(['/login']);
@@ -43,9 +82,8 @@ export const adminGuard: CanActivateFn = (route) => {
   }
 
   // Authenticated but under-privileged: name the blocked capability so the user knows
-  // what to ask their administrator for, then bounce home. Falls back to a generic
-  // phrase if a route forgot to declare its deniedAction.
-  const action = (route.data?.['deniedAction'] as string | undefined) ?? 'access this area';
-  notifications.onWarning(`You don't have permission to ${action} — contact your administrator.`);
+  // what to ask their administrator for, then bounce home. The message is localized
+  // (ROADMAP §2 — i18n) and falls back to a generic phrase if a route declares nothing.
+  notifications.onWarning(deniedMessageFor(route, transloco));
   return router.createUrlTree(['/']);
 };

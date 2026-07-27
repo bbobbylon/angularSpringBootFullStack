@@ -112,3 +112,30 @@
 /* Icon gap inside dropdown items — replaces scattered inline style="padding-right:X" */
 .sc-navbar .dropdown-item i { margin-right: 0.5rem; }
 .sc-navbar .nav-link > i:first-child { margin-right: 0.25rem; }
+
+/* ---------------------------------------------------------------------------
+   Language selector (ROADMAP §2 — i18n)
+
+   Deliberately quieter than the nav links and visually paired with the theme
+   toggle beside it: both are display preferences rather than destinations, and
+   giving them the same weight as "Customers" would misrepresent what they do.
+   The short code (EN / ES) is shown alongside the globe so the current language
+   is readable without opening the menu.
+   --------------------------------------------------------------------------- */
+.sc-lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.sc-lang-toggle__code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+/* Bootstrap's dropdown-toggle caret sits awkwardly next to the icon pair. */
+.sc-lang-toggle::after { margin-left: 0.15rem; }
+
+.dropdown-item.active {
+  font-weight: 600;
+}

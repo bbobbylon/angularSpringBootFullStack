@@ -15,14 +15,68 @@
           <div class="row justify-content-center">
             <div class="col-xl-9 col-lg-11">
               <div class="invoice">
-                <div class="invoice-company">
-                  <span>
-                    <a (click)="exportAsPDF()" class="btn btn-sm btn-primary sc-panel__action">
-                      <i class="bi bi-file-earmark-pdf-fill"></i>
-                      Export as PDF
-                    </a>
-                  </span>
+                <!--
+                  Action bar and edit panel live OUTSIDE #invoice on purpose: that element is what
+                  exportAsPDF() hands to jsPDF, so anything placed inside it ends up printed on the
+                  customer's copy of the invoice.
+                -->
+                <div class="invoice-company d-flex justify-content-end gap-2">
+                  <button (click)="exportAsPDF()" class="btn btn-sm btn-primary sc-panel__action" type="button">
+                    <i class="bi bi-file-earmark-pdf-fill"></i>
+                    Export as PDF
+                  </button>
+                  <button (click)="toggleEdit()"
+                          [disabled]="!canEditInvoice"
+                          [requiresAuthority]="['UPDATE:CUSTOMER', 'UPDATE:USER']"
+                          class="btn btn-sm btn-outline-secondary"
+                          deniedAction="edit invoices"
+                          type="button">
+                    <i class="bi bi-pencil"></i>
+                    {{ isEditing() ? 'Cancel edit' : 'Edit invoice' }}
+                  </button>
                 </div>
+
+                @if (isEditing() && canEditInvoice) {
+                  <form #invoiceForm="ngForm" (ngSubmit)="saveInvoice(invoiceForm)" class="sc-invoice-edit">
+                    <div class="row g-3">
+                      <div class="col-md-3">
+                        <label class="form-label" for="edit-status">Status</label>
+                        <select [ngModel]="state?.appData?.data?.invoice?.status"
+                                class="form-select" id="edit-status" name="status" required>
+                          <option value="PENDING">PENDING</option>
+                          <option value="PAID">PAID</option>
+                          <option value="OVERDUE">OVERDUE</option>
+                          <option value="CANCELED">CANCELED</option>
+                        </select>
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="edit-date">Invoice date</label>
+                        <input [ngModel]="state?.appData?.data?.invoice?.invoiceDate"
+                               class="form-control" id="edit-date" name="invoiceDate" type="date" />
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="edit-amount">Amount</label>
+                        <input [ngModel]="state?.appData?.data?.invoice?.amount"
+                               class="form-control" id="edit-amount" min="0" name="amount" step="0.01" type="number" />
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="edit-total">Total amount</label>
+                        <input [ngModel]="state?.appData?.data?.invoice?.totalAmount"
+                               class="form-control" id="edit-total" min="0" name="totalAmount" required step="0.01"
+                               type="number" />
+                      </div>
+                    </div>
+                    <div class="sc-invoice-edit__actions">
+                      <p class="sc-invoice-edit__note">
+                        The invoice number cannot be changed — it is the reference already printed on
+                        the customer's copy.
+                      </p>
+                      <button [disabled]="invoiceForm.invalid || isSaving()" class="btn btn-primary btn-sm" type="submit">
+                        @if (isSaving()) { <span>Saving…</span> } @else { <span>Save changes</span> }
+                      </button>
+                    </div>
+                  </form>
+                }
                 <hr />
                 <div id="invoice">
                   <div class="invoice-header">

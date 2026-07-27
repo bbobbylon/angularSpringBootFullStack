@@ -2,6 +2,8 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { UserService } from '../service/user.service';
 import { NotificationsService } from '../service/notifications-service';
+import { TranslocoService } from '@jsverse/transloco';
+import { deniedMessageFor } from './admin.guard';
 
 /**
  * Route guard for pages that require a specific capability rather than staff status
@@ -50,6 +52,7 @@ export const capabilityGuard: CanActivateFn = (route) => {
   const userService = inject(UserService);
   const router = inject(Router);
   const notifications = inject(NotificationsService);
+  const transloco = inject(TranslocoService);
 
   if (!userService.isAuthenticated()) {
     return router.createUrlTree(['/login']);
@@ -60,7 +63,7 @@ export const capabilityGuard: CanActivateFn = (route) => {
     return true;
   }
 
-  const action = (route.data?.['deniedAction'] as string | undefined) ?? 'access this area';
-  notifications.onWarning(`You don't have permission to ${action} — contact your administrator.`);
+  // Shared with adminGuard so the two guards cannot phrase the same refusal differently.
+  notifications.onWarning(deniedMessageFor(route, transloco));
   return router.createUrlTree(['/']);
 };

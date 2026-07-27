@@ -66,13 +66,13 @@ export const routes: Routes = [
   {
     path: 'customer/new',
     canActivate: [authenticationGuard, capabilityGuard],
-    data: { requiredAuthorities: ['UPDATE:CUSTOMER', 'UPDATE:USER'], deniedAction: 'create customers' },
+    data: { requiredAuthorities: ['UPDATE:CUSTOMER', 'UPDATE:USER'], deniedAction: 'create customers', deniedActionKey: 'permissions.actions.createCustomers' },
     loadComponent: () => import('./features/customers/new-customer/new-customer.component').then((m) => m.NewCustomerComponent),
   },
   {
     path: 'invoice/new',
     canActivate: [authenticationGuard, capabilityGuard],
-    data: { requiredAuthorities: ['UPDATE:CUSTOMER', 'UPDATE:USER'], deniedAction: 'create invoices' },
+    data: { requiredAuthorities: ['UPDATE:CUSTOMER', 'UPDATE:USER'], deniedAction: 'create invoices', deniedActionKey: 'permissions.actions.createInvoices' },
     loadComponent: () => import('./features/invoices/new-invoice/new-invoice.component').then((m) => m.NewInvoiceComponent),
   },
   {
@@ -104,13 +104,13 @@ export const routes: Routes = [
   {
     path: 'users',
     canActivate: [authenticationGuard, adminGuard],
-    data: { deniedAction: 'manage users' },
+    data: { deniedAction: 'manage users', deniedActionKey: 'permissions.actions.manageUsers' },
     loadComponent: () => import('./features/users/users/users.component').then((m) => m.UsersComponent),
   },
   {
     path: 'users/:id',
     canActivate: [authenticationGuard, adminGuard],
-    data: { deniedAction: 'manage users' },
+    data: { deniedAction: 'manage users', deniedActionKey: 'permissions.actions.manageUsers' },
     loadComponent: () => import('./features/users/user-details/user-details.component').then((m) => m.UserDetailsComponent),
   },
   // Roles × Permissions Matrix (SRS M3, FR-RBAC-1/2). adminGuard mirrors the
@@ -118,7 +118,7 @@ export const routes: Routes = [
   {
     path: 'roles',
     canActivate: [authenticationGuard, adminGuard],
-    data: { deniedAction: 'manage roles and permissions' },
+    data: { deniedAction: 'manage roles and permissions', deniedActionKey: 'permissions.actions.manageRoles' },
     loadComponent: () => import('./features/users/roles-matrix/roles-matrix.component').then((m) => m.RolesMatrixComponent),
   },
   {
@@ -133,7 +133,7 @@ export const routes: Routes = [
   {
     path: 'billing',
     canActivate: [authenticationGuard, adminGuard],
-    data: { deniedAction: 'view billing' },
+    data: { deniedAction: 'view billing', deniedActionKey: 'permissions.actions.viewBilling' },
     loadComponent: () => import('./features/billing/billing/billing.component').then((m) => m.BillingComponent),
   },
   // Service / app catalog — all authenticated users can browse available services and
@@ -146,6 +146,19 @@ export const routes: Routes = [
         (m) => m.ServicesCatalogComponent,
       ),
   },
+  // Services catalog administration (ROADMAP §2). Staff-only, and separate from /services
+  // deliberately: the browse page shows only what can be put on an invoice, while this one shows
+  // retired entries too so they can be reinstated. The write endpoints live under
+  // /admin/services/**, so the authority is enforced server-side regardless of this guard.
+  {
+    path: 'services/manage',
+    canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'manage the services catalog', deniedActionKey: 'permissions.actions.manageServices' },
+    loadComponent: () =>
+      import('./features/services/services-admin/services-admin.component').then(
+        (m) => m.ServicesAdminComponent,
+      ),
+  },
   // Analytics hub (admin-only) — dual-area trend chart, acquisition bars, stacked status
   // breakdown, service utilisation. adminGuard mirrors billing, and like billing the data
   // is fetched from the admin-gated /admin/analytics/** API (UPDATE:USER / UPDATE:ROLE
@@ -153,10 +166,24 @@ export const routes: Routes = [
   {
     path: 'analytics',
     canActivate: [authenticationGuard, adminGuard],
-    data: { deniedAction: 'view analytics' },
+    data: { deniedAction: 'view analytics', deniedActionKey: 'permissions.actions.viewAnalytics' },
     loadComponent: () =>
       import('./features/analytics/analytics/analytics.component').then(
         (m) => m.AnalyticsComponent,
+      ),
+  },
+  // Administrative security dashboard (SRS FR-TPF-2) — the review surface for the anomaly
+  // detection FR-TPF-1 added. Distinct from /security, which is the *self-service* Account
+  // Security Center every authenticated user gets: this one reports on the whole (in-scope)
+  // population and is therefore staff-only. Like billing and analytics, the guard is the
+  // usability half and /admin/security/** is where the authority is actually enforced.
+  {
+    path: 'security-overview',
+    canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'view security monitoring', deniedActionKey: 'permissions.actions.viewSecurity' },
+    loadComponent: () =>
+      import('./features/security/security-overview/security-overview.component').then(
+        (m) => m.SecurityOverviewComponent,
       ),
   },
   { path: '**', redirectTo: '/', pathMatch: 'full' },

@@ -5,17 +5,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminGuard } from './admin.guard';
 import { UserService } from '../service/user.service';
 import { NotificationsService } from '../service/notifications-service';
+import { TranslocoService } from '@jsverse/transloco';
+import { translocoStub } from '../testing/transloco-stub';
 
 /**
  * Specs for {@link adminGuard} — the route guard behind /users, /roles, /billing and
  * /analytics (SRS FR-ADMIN-5).
  *
- * <p>These are the first frontend specs in the project, so they double as proof that the
- * Vitest + jsdom harness wired into {@code angular.json}'s {@code @angular/build:unit-test}
- * target actually runs. They deliberately cover a *security-adjacent* surface first: the
- * guard is a usability aid rather than a boundary (NFR-SEC-4 — the backend re-checks every
- * authority on {@code /admin/**}), but a regression here would either strand a legitimate
+ * <p>The guard is a usability aid rather than a boundary (NFR-SEC-4 — the backend re-checks
+ * every authority on {@code /admin/**}), but a regression here would either strand a legitimate
  * admin or silently swallow the "contact your administrator" feedback added in ROADMAP §2.
+ *
+ * <p>The denial message is localized (ROADMAP §2 — i18n): the guard resolves the capability
+ * phrase through Transloco, preferring a route's {@code deniedActionKey} and falling back to its
+ * plain-English {@code deniedAction}. Both paths are covered below, because the fallback is what
+ * keeps a half-migrated route table from showing users raw translation keys.
  *
  * <p>The guard is a functional {@code CanActivateFn}, so it is invoked through
  * {@link TestBed#runInInjectionContext} — that is what makes its {@code inject()} calls
@@ -28,6 +32,8 @@ describe('adminGuard', () => {
   let userService: { isAuthenticated: ReturnType<typeof vi.fn>; hasAnyAuthority: ReturnType<typeof vi.fn> };
   /** Test double capturing the toast the guard raises on denial. */
   let notifications: { onWarning: ReturnType<typeof vi.fn> };
+  /** Translation double — see {@link translocoStub}. */
+  let transloco: { translate: ReturnType<typeof vi.fn> };
   let router: Router;
 
   /**
@@ -38,25 +44,32 @@ describe('adminGuard', () => {
    *
    * @param deniedAction the per-route capability phrase, or undefined to omit it entirely
    */
-  const routeWith = (deniedAction?: string): ActivatedRouteSnapshot =>
-    ({ data: deniedAction ? { deniedAction } : {} }) as unknown as ActivatedRouteSnapshot;
+  const routeWith = (deniedAction?: string, deniedActionKey?: string): ActivatedRouteSnapshot =>
+    ({
+      data: {
+        ...(deniedAction ? { deniedAction } : {}),
+        ...(deniedActionKey ? { deniedActionKey } : {}),
+      },
+    }) as unknown as ActivatedRouteSnapshot;
 
   /** The guard ignores router state; a bare stub keeps the call sites readable. */
   const state = {} as RouterStateSnapshot;
 
   /** Invokes the guard inside an injection context and normalises the (never-async) result. */
-  const runGuard = (deniedAction?: string): boolean | UrlTree =>
-    TestBed.runInInjectionContext(() => adminGuard(routeWith(deniedAction), state)) as boolean | UrlTree;
+  const runGuard = (deniedAction?: string, deniedActionKey?: string): boolean | UrlTree =>
+    TestBed.runInInjectionContext(() => adminGuard(routeWith(deniedAction, deniedActionKey), state)) as boolean | UrlTree;
 
   beforeEach(() => {
     userService = { isAuthenticated: vi.fn(), hasAnyAuthority: vi.fn() };
     notifications = { onWarning: vi.fn() };
+    transloco = translocoStub();
 
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: UserService, useValue: userService },
         { provide: NotificationsService, useValue: notifications },
+        { provide: TranslocoService, useValue: transloco },
       ],
     });
 
@@ -109,6 +122,32 @@ describe('adminGuard', () => {
     expect(router.serializeUrl(result as UrlTree)).toBe('/');
     expect(notifications.onWarning).toHaveBeenCalledWith(
       "You don't have permission to access this area — contact your administrator.",
+    );
+  });
+
+  it('prefers a route translation key over the English literal', () => {
+    userService.isAuthenticated.mockReturnValue(true);
+    userService.hasAnyAuthority.mockReturnValue(false);
+
+    runGuard('manage users', 'permissions.actions.manageUsers');
+
+    expect(transloco.translate).toHaveBeenCalledWith('permissions.actions.manageUsers');
+    expect(notifications.onWarning).toHaveBeenCalledWith(
+      "You don't have permission to manage users — contact your administrator.",
+    );
+  });
+
+  it('falls back to the English literal when the key has no translation', () => {
+    userService.isAuthenticated.mockReturnValue(true);
+    userService.hasAnyAuthority.mockReturnValue(false);
+
+    // Transloco returns the key itself for a missing translation. Rendering that at the user —
+    // "You don't have permission to permissions.actions.notYetTranslated" — is the failure this
+    // guards against, and it is the normal state of a half-migrated route table.
+    runGuard('view billing', 'permissions.actions.notYetTranslated');
+
+    expect(notifications.onWarning).toHaveBeenCalledWith(
+      "You don't have permission to view billing — contact your administrator.",
     );
   });
 

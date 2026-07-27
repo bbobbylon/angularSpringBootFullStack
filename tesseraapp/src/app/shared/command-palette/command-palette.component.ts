@@ -246,6 +246,8 @@ export class CommandPaletteComponent {
         { id: 'roles', label: 'Roles & Permissions', hint: 'Admin · RBAC matrix', icon: 'bi-grid-3x3-gap-fill', section: 'Navigate', run: go('/roles') },
         { id: 'billing', label: 'Billing Overview', hint: 'Admin · revenue analytics', icon: 'bi-graph-up-arrow', section: 'Navigate', run: go('/billing') },
         { id: 'analytics', label: 'Analytics Hub', hint: 'Admin · trends & stats', icon: 'bi-bar-chart-line-fill', section: 'Navigate', run: go('/analytics') },
+        { id: 'security-overview', label: 'Security Overview', hint: 'Admin · anomalies & MFA coverage', icon: 'bi-shield-exclamation', section: 'Navigate', run: go('/security-overview') },
+        { id: 'manage-services', label: 'Manage Services', hint: 'Admin · catalog CRUD', icon: 'bi-sliders', section: 'Navigate', run: go('/services/manage') },
       );
     }
 

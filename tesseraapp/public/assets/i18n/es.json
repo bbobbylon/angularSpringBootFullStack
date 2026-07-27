@@ -1,0 +1,164 @@
+{
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "close": "Cerrar",
+    "loading": "Cargando…",
+    "saving": "Guardando…",
+    "search": "Buscar",
+    "actions": "Acciones",
+    "status": "Estado",
+    "none": "Ninguno",
+    "unknown": "Desconocido",
+    "readOnly": "Solo lectura"
+  },
+  "nav": {
+    "customers": "Clientes",
+    "newCustomer": "Nuevo cliente",
+    "allCustomers": "Todos los clientes",
+    "invoices": "Facturas",
+    "newInvoice": "Nueva factura",
+    "allInvoices": "Todas las facturas",
+    "services": "Servicios",
+    "serviceCatalog": "Catálogo de servicios",
+    "newServiceInvoice": "Nueva factura de servicio",
+    "manageServices": "Gestionar servicios",
+    "admin": "Administración",
+    "userDirectory": "Directorio de usuarios",
+    "assignRoles": "Asignar roles",
+    "rolesPermissions": "Roles y permisos",
+    "securityOverview": "Panel de seguridad",
+    "billingOverview": "Resumen de facturación",
+    "analyticsHub": "Centro de análisis",
+    "profile": "Perfil",
+    "securityCenter": "Centro de seguridad",
+    "logOut": "Cerrar sesión",
+    "toggleTheme": "Cambiar tema",
+    "language": "Idioma"
+  },
+  "auth": {
+    "signIn": "Iniciar sesión",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "createAccount": "Crear una cuenta",
+    "continueWith": "Continuar con {{provider}}",
+    "orContinueWith": "o continuar con"
+  },
+  "permissions": {
+    "denied": "No tienes permiso para {{action}}. Ponte en contacto con tu administrador.",
+    "readOnlyCustomers": "Solo lectura: ponte en contacto con tu administrador para solicitar permiso para actualizar clientes.",
+    "cannotAssignRoles": "No tienes permiso para asignar roles. Ponte en contacto con tu administrador.",
+    "cannotChangeAccountState": "No tienes permiso para cambiar el estado de la cuenta. Ponte en contacto con tu administrador.",
+    "actions": {
+      "manageUsers": "gestionar usuarios",
+      "manageRoles": "gestionar roles y permisos",
+      "viewBilling": "ver la facturación",
+      "viewAnalytics": "ver los análisis",
+      "viewSecurity": "ver la supervisión de seguridad",
+      "manageServices": "gestionar el catálogo de servicios",
+      "createCustomers": "crear clientes",
+      "createInvoices": "crear facturas",
+      "updateCustomers": "actualizar clientes",
+      "editInvoices": "editar facturas",
+      "generic": "acceder a esta sección"
+    }
+  },
+  "security": {
+    "eyebrow": "Protección frente a amenazas",
+    "title": "Panel de seguridad",
+    "subtitle": "Inicios de sesión anómalos, tendencias de autenticación, cuentas restringidas y cobertura de doble factor durante los últimos {{days}} días.",
+    "scopeNote": "Estas cifras abarcan únicamente las organizaciones que administras; no son totales de toda la plataforma.",
+    "tiles": {
+      "anomalous": "Inicios de sesión anómalos",
+      "anomalousNone": "No se ha detectado nada en este periodo",
+      "anomalousSome": "Detectados y derivados a verificación adicional",
+      "failureRate": "Tasa de inicios fallidos",
+      "restricted": "Cuentas restringidas",
+      "mfaCoverage": "Cobertura de doble factor",
+      "tokenReplay": "Reutilización de token detectada",
+      "tokenReplayNone": "Ningún token de actualización ha sido reutilizado",
+      "tokenReplaySome": "Familias de sesión revocadas automáticamente",
+      "liveSessions": "Sesiones activas"
+    },
+    "trend": {
+      "title": "Resultados de autenticación",
+      "subtitle": "Las tres series comparten una misma escala, por lo que su tamaño relativo es significativo.",
+      "successful": "Correctos",
+      "failed": "Fallidos",
+      "flagged": "Detectados",
+      "empty": "No se ha registrado actividad de autenticación en este periodo."
+    },
+    "repeat": {
+      "title": "Cuentas detectadas más de una vez",
+      "subtitle": "Un único aviso suele ser un dispositivo nuevo. Las repeticiones son un patrón que conviene revisar.",
+      "flags": "{{count}} avisos"
+    },
+    "log": {
+      "title": "Registro de inicios de sesión anómalos",
+      "subtitle": "Inicios de sesión que superaron la contraseña pero no coincidían con el dispositivo ni la red habituales de la cuenta, del más reciente al más antiguo.",
+      "empty": "No hay inicios de sesión anómalos en los últimos {{days}} días. La detección está activa: es un periodo limpio, no una comprobación desactivada.",
+      "account": "Cuenta",
+      "noticed": "Qué se detectó",
+      "stepUp": "Verificación aplicada",
+      "device": "Dispositivo",
+      "address": "Dirección",
+      "when": "Cuándo"
+    },
+    "restricted": {
+      "title": "Cuentas que no pueden iniciar sesión",
+      "subtitle": "Bloqueadas por la protección contra fuerza bruta o nunca verificadas. Ambas se presentan como «no puedo entrar».",
+      "empty": "Todas las cuentas están en regla.",
+      "locked": "Bloqueada",
+      "notEnabled": "Sin activar",
+      "lastFailure": "Último fallo: {{when}}",
+      "noFailures": "Sin intentos fallidos registrados"
+    },
+    "mfa": {
+      "title": "Cobertura de doble factor",
+      "subtitle": "El grupo de un solo factor es exactamente la población que recibe un código por correo cuando se detecta un inicio de sesión sospechoso.",
+      "empty": "No hay cuentas en el ámbito.",
+      "authenticator": "Aplicación de autenticación",
+      "sms": "SMS",
+      "passwordOnly": "Solo contraseña",
+      "federatedSignIns": "Inicios de sesión federados",
+      "recoveryCodesUsed": "Códigos de recuperación usados"
+    }
+  },
+  "servicesAdmin": {
+    "eyebrow": "Administración",
+    "title": "Gestionar servicios",
+    "subtitle": "Añade, edita y retira las ofertas disponibles en las nuevas facturas. Los servicios retirados permanecen aquí para poder recuperarlos: nunca se elimina nada.",
+    "publicCatalog": "Catálogo público",
+    "addService": "Añadir servicio",
+    "addTitle": "Añadir un servicio",
+    "offered": "En oferta",
+    "retired": "Retirado",
+    "retire": "Retirar",
+    "reinstate": "Reactivar",
+    "name": "Nombre",
+    "description": "Descripción",
+    "basePrice": "Precio base",
+    "noDescription": "Sin descripción.",
+    "emptyTitle": "El catálogo está vacío.",
+    "emptyHint": "Añade tu primer servicio para que pueda seleccionarse en las nuevas facturas.",
+    "editNote": "Editar un servicio no modifica las facturas ya emitidas: conservan el nombre y el precio registrados en su momento.",
+    "summary": {
+      "offered": "en oferta",
+      "retired": "retirados",
+      "catalogValue": "Valor del catálogo"
+    }
+  },
+  "invoice": {
+    "exportPdf": "Exportar como PDF",
+    "edit": "Editar factura",
+    "cancelEdit": "Cancelar edición",
+    "invoiceDate": "Fecha de factura",
+    "amount": "Importe",
+    "totalAmount": "Importe total",
+    "saveChanges": "Guardar cambios",
+    "numberLocked": "El número de factura no se puede cambiar: es la referencia ya impresa en la copia del cliente."
+  }
+}

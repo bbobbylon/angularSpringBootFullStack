@@ -4,6 +4,8 @@ import { UserService } from '../../service/user.service';
 import { UserInterface } from '../../interface/user.interface';
 import { NgOptimizedImage } from '@angular/common';
 import { ThemeService } from '../../service/theme.service';
+import { LanguageService } from '../../service/language.service';
+import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
  * Top navigation bar component.
@@ -23,7 +25,7 @@ import { ThemeService } from '../../service/theme.service';
  */
 @Component({
   selector: 'app-navbar',
-  imports: [RouterLink, NgOptimizedImage],
+  imports: [RouterLink, NgOptimizedImage, TranslocoDirective],
   templateUrl: './navbar.component.html',
   styleUrl: './navbar.component.css',
   standalone: true,
@@ -35,6 +37,31 @@ export class NavbarComponent {
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private readonly themeService = inject(ThemeService);
+  private readonly languageService = inject(LanguageService);
+
+  /** The languages on offer, for the navbar selector (ROADMAP §2 — i18n). */
+  protected readonly languages = this.languageService.available;
+
+  /** The active language code, so the selector can mark the current choice. */
+  protected readonly currentLang = this.languageService.current;
+
+  /**
+   * Switches the interface language.
+   *
+   * <p>Takes effect immediately and without a reload — the whole reason the project chose a
+   * runtime library (Transloco) over compile-time {@code @angular/localize}, which would have
+   * required loading a different build and losing the user's place.
+   *
+   * @param code the language code to activate
+   */
+  protected setLanguage(code: string): void {
+    this.languageService.set(code);
+  }
+
+  /** The active language's short code ({@code EN} / {@code ES}) for the compact trigger. */
+  protected currentLangShort(): string {
+    return this.languageService.currentOption().short;
+  }
 
   /**
    * The active color mode, exposed for the toggle button's icon and labels.

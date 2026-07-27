@@ -1,0 +1,358 @@
+<app-navbar [user]="user()"></app-navbar>
+
+<main class="sc-secops">
+  <div class="container">
+
+    <!-- ── Header + window selector ─────────────────────────────────────── -->
+    <header class="sc-secops__head sc-reveal">
+      <div>
+        <p class="eyebrow mb-1">Threat protection</p>
+        <h1 class="sc-secops__title">Security Overview</h1>
+        <p class="sc-secops__sub">
+          Anomalous sign-ins, authentication trends, restricted accounts, and multi-factor coverage
+          across the last {{ windowDays() }} days.
+        </p>
+      </div>
+      <div class="sc-secops__actions">
+        <div aria-label="Reporting window" class="sc-window" role="group">
+          @for (option of windowOptions; track option) {
+            <button
+              (click)="selectWindow(option)"
+              [attr.aria-pressed]="selectedWindow() === option"
+              [class.is-active]="selectedWindow() === option"
+              class="sc-window__btn"
+              type="button">
+              {{ option }}d
+            </button>
+          }
+        </div>
+        <a [routerLink]="['/users']" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-people-fill"></i> Users
+        </a>
+      </div>
+    </header>
+
+    <!--
+      Scope disclosure (FR-ORG-2). Rendered whenever the server reports a scoped response so an
+      organization admin is never left to assume a quiet slice means a quiet platform. Deliberately
+      states only that the view is limited — naming the organizations, or how many exist, would
+      leak the shape of other tenants to someone who cannot see them.
+    -->
+    @if (isScoped()) {
+      <div class="sc-scope-note sc-reveal" style="--d: 20ms;">
+        <i class="bi bi-diagram-3-fill" aria-hidden="true"></i>
+        <span>
+          These figures cover only the organizations you administer — they are not platform-wide totals.
+        </span>
+      </div>
+    }
+
+    @switch (pageState().dataState) {
+
+      @case (DataState.LOADING) {
+        <div class="sc-secops__grid">
+          @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+            <div class="sc-panel sc-panel--flush sc-secops__tile">
+              <span class="sc-skeleton sc-skeleton-line sc-skeleton-line--sm" style="width: 45%"></span>
+              <span class="sc-skeleton sc-skeleton-line" style="width: 70%; margin-top: 0.9rem"></span>
+            </div>
+          }
+        </div>
+        <div class="sc-panel">
+          @for (placeholder of [1, 2, 3, 4, 5]; track placeholder) {
+            <div class="sc-skeleton-row">
+              <span class="sc-skeleton sc-skeleton-avatar"></span>
+              <span class="sc-skeleton sc-skeleton-line" style="flex: 1"></span>
+            </div>
+          }
+        </div>
+      }
+
+      @case (DataState.ERROR) {
+        <div class="sc-panel sc-secops__empty">
+          <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
+          <h2 class="h5 mb-1">The security overview could not be loaded</h2>
+          <p class="text-muted mb-0">{{ pageState().error }}</p>
+        </div>
+      }
+
+      @case (DataState.LOADED) {
+
+        <!-- ── Headline counters ──────────────────────────────────────────── -->
+        <section class="sc-secops__grid sc-reveal" style="--d: 40ms;">
+
+          <!-- The anomaly tile leads, and turns amber only when there is something to look at:
+               a permanently-coloured alert tile stops being read within a week. -->
+          <div class="sc-panel sc-panel--flush sc-secops__tile" [class.is-alert]="suspiciousCount() > 0">
+            <span class="sc-secops__tile-label eyebrow">Anomalous sign-ins</span>
+            <span class="sc-secops__tile-value">{{ suspiciousCount() | number }}</span>
+            <span class="sc-secops__tile-note">
+              @if (suspiciousCount() === 0) {
+                Nothing flagged in this window
+              } @else {
+                Flagged and escalated to step-up verification
+              }
+            </span>
+          </div>
+
+          <div class="sc-panel sc-panel--flush sc-secops__tile">
+            <span class="sc-secops__tile-label eyebrow">Failed sign-in rate</span>
+            <span class="sc-secops__tile-value">{{ failureRate() | number: '1.1-1' }}%</span>
+            <span class="sc-secops__tile-note">
+              {{ failedCount() | number }} failed of {{ (failedCount() + successCount()) | number }} attempts
+            </span>
+          </div>
+
+          <div class="sc-panel sc-panel--flush sc-secops__tile" [class.is-alert]="lockedCount() > 0">
+            <span class="sc-secops__tile-label eyebrow">Restricted accounts</span>
+            <span class="sc-secops__tile-value">{{ restrictedAccounts().length | number }}</span>
+            <span class="sc-secops__tile-note">
+              {{ lockedCount() }} locked · {{ disabledCount() }} not enabled
+            </span>
+          </div>
+
+          <div class="sc-panel sc-panel--flush sc-secops__tile">
+            <span class="sc-secops__tile-label eyebrow">MFA coverage</span>
+            <span class="sc-secops__tile-value">{{ mfa().mfaCoveragePercent | number: '1.1-1' }}%</span>
+            <span class="sc-secops__tile-note">
+              {{ mfa().singleFactorUsers | number }} of {{ mfa().totalUsers | number }} accounts on a password alone
+            </span>
+          </div>
+
+          <div class="sc-panel sc-panel--flush sc-secops__tile" [class.is-critical]="tokenReuseCount() > 0">
+            <span class="sc-secops__tile-label eyebrow">Token replay detected</span>
+            <span class="sc-secops__tile-value">{{ tokenReuseCount() | number }}</span>
+            <span class="sc-secops__tile-note">
+              @if (tokenReuseCount() === 0) {
+                No refresh token has been replayed
+              } @else {
+                Session families revoked automatically
+              }
+            </span>
+          </div>
+
+          <div class="sc-panel sc-panel--flush sc-secops__tile">
+            <span class="sc-secops__tile-label eyebrow">Live sessions</span>
+            <span class="sc-secops__tile-value">{{ activeSessions() | number }}</span>
+            <span class="sc-secops__tile-note">
+              across {{ accountsWithSessions() | number }} accounts
+              ({{ sessionsPerAccount() | number: '1.1-1' }} each)
+            </span>
+          </div>
+        </section>
+
+        <!-- ── Login-outcome trend ────────────────────────────────────────── -->
+        <section class="sc-panel sc-secops__panel sc-reveal" style="--d: 80ms;">
+          <div class="sc-secops__panel-head">
+            <div>
+              <h2 class="sc-secops__panel-title">Authentication outcomes</h2>
+              <p class="sc-secops__panel-sub">
+                All three series share one scale, so their relative size is meaningful.
+              </p>
+            </div>
+            <ul class="sc-legend">
+              <li><span class="sc-legend__swatch sc-legend__swatch--ok"></span>Successful</li>
+              <li><span class="sc-legend__swatch sc-legend__swatch--danger"></span>Failed</li>
+              <li><span class="sc-legend__swatch sc-legend__swatch--warn"></span>Flagged</li>
+            </ul>
+          </div>
+
+          @if (trend().length === 0) {
+            <p class="text-muted mb-0">No authentication activity recorded in this window.</p>
+          } @else {
+            <div class="sc-trend">
+              @for (column of trend(); track column.fullLabel) {
+                <div class="sc-trend__col"
+                     [attr.title]="column.fullLabel + ' — ' + column.successful + ' successful, ' + column.failed + ' failed, ' + column.suspicious + ' flagged'">
+                  <div class="sc-trend__bars">
+                    <span class="sc-trend__bar sc-trend__bar--ok" [style.height.%]="column.successHeight"></span>
+                    <span class="sc-trend__bar sc-trend__bar--danger" [style.height.%]="column.failedHeight"></span>
+                    <span class="sc-trend__bar sc-trend__bar--warn" [style.height.%]="column.suspiciousHeight"></span>
+                  </div>
+                  <span class="sc-trend__label">{{ column.label }}</span>
+                </div>
+              }
+            </div>
+          }
+        </section>
+
+        <!-- ── Repeat offenders ───────────────────────────────────────────── -->
+        @if (repeatOffenders().length > 0) {
+          <section class="sc-panel sc-secops__panel sc-secops__panel--flag sc-reveal" style="--d: 100ms;">
+            <h2 class="sc-secops__panel-title">
+              <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+              Accounts flagged more than once
+            </h2>
+            <p class="sc-secops__panel-sub">
+              One flagged sign-in is usually a new device. Repeats are a pattern worth reviewing.
+            </p>
+            <ul class="sc-repeat">
+              @for (account of repeatOffenders(); track account.email) {
+                <li class="sc-repeat__row">
+                  <a [routerLink]="['/users', account.userId]" class="sc-repeat__name">
+                    {{ account.name || account.email }}
+                  </a>
+                  <span class="sc-repeat__email">{{ account.email }}</span>
+                  <span class="sc-repeat__count">{{ account.count }} flags</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        <!-- ── Flagged sign-in log ────────────────────────────────────────── -->
+        <section class="sc-panel sc-secops__panel sc-reveal" style="--d: 120ms;">
+          <div class="sc-secops__panel-head">
+            <div>
+              <h2 class="sc-secops__panel-title">Anomalous sign-in log</h2>
+              <p class="sc-secops__panel-sub">
+                Sign-ins that passed the password check but did not match the account's own device
+                or network history, newest first.
+              </p>
+            </div>
+          </div>
+
+          @if (suspiciousLogins().length === 0) {
+            <div class="sc-secops__quiet">
+              <i class="bi bi-shield-check" aria-hidden="true"></i>
+              <p class="mb-0">
+                No anomalous sign-ins in the last {{ windowDays() }} days. Detection is active —
+                this is a clean window, not a disabled check.
+              </p>
+            </div>
+          } @else {
+            <div class="table-responsive">
+              <table class="table sc-table align-middle">
+                <thead>
+                <tr>
+                  <th scope="col">Account</th>
+                  <th scope="col">What was noticed</th>
+                  <th scope="col">Step-up applied</th>
+                  <th scope="col">Device</th>
+                  <th scope="col">Address</th>
+                  <th scope="col">When</th>
+                </tr>
+                </thead>
+                <tbody>
+                  @for (entry of suspiciousLogins(); track entry.createdAt + entry.email) {
+                    <tr>
+                      <td>
+                        <a [routerLink]="['/users', entry.userId]" class="sc-table__link">
+                          {{ entry.firstName }} {{ entry.lastName }}
+                        </a>
+                        <span class="d-block small text-muted">{{ entry.email }}</span>
+                      </td>
+                      <td>{{ signalOf(entry.detail) }}</td>
+                      <td><span class="sc-chip">{{ stepUpOf(entry.detail) }}</span></td>
+                      <td class="small">{{ entry.device ?? 'Unknown device' }}</td>
+                      <td class="small font-monospace">{{ entry.ipAddress ?? 'Unknown' }}</td>
+                      <td class="small text-muted">{{ entry.createdAt | date: 'MMM d, HH:mm' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+
+        <!-- ── Restricted accounts + MFA adoption ─────────────────────────── -->
+        <div class="sc-secops__split">
+
+          <section class="sc-panel sc-secops__panel sc-reveal" style="--d: 140ms;">
+            <h2 class="sc-secops__panel-title">Accounts that cannot sign in</h2>
+            <p class="sc-secops__panel-sub">
+              Locked by brute-force protection, or never verified. Both present as "I can't get in".
+            </p>
+
+            @if (restrictedAccounts().length === 0) {
+              <div class="sc-secops__quiet">
+                <i class="bi bi-unlock" aria-hidden="true"></i>
+                <p class="mb-0">Every account is in good standing.</p>
+              </div>
+            } @else {
+              <ul class="sc-restricted">
+                @for (account of restrictedAccounts(); track account.userId) {
+                  <li class="sc-restricted__row">
+                    <div class="sc-restricted__who">
+                      <a [routerLink]="['/users', account.userId]" class="sc-table__link">
+                        {{ account.firstName }} {{ account.lastName }}
+                      </a>
+                      <span class="d-block small text-muted">{{ account.email }}</span>
+                    </div>
+                    <div class="sc-restricted__state">
+                      @if (!account.nonLocked) {
+                        <span class="sc-chip sc-chip--danger">Locked</span>
+                      }
+                      @if (!account.enabled) {
+                        <span class="sc-chip sc-chip--warn">Not enabled</span>
+                      }
+                    </div>
+                    <span class="sc-restricted__when small text-muted">
+                      @if (account.lastFailureAt) {
+                        Last failure {{ account.lastFailureAt | date: 'MMM d, HH:mm' }}
+                      } @else {
+                        No failed attempts on record
+                      }
+                    </span>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+
+          <section class="sc-panel sc-secops__panel sc-reveal" style="--d: 160ms;">
+            <h2 class="sc-secops__panel-title">Multi-factor coverage</h2>
+            <p class="sc-secops__panel-sub">
+              The single-factor group is exactly the population that falls back to an emailed code
+              when a sign-in is flagged.
+            </p>
+
+            @if (mfa().totalUsers === 0) {
+              <div class="sc-secops__quiet">
+                <i class="bi bi-people" aria-hidden="true"></i>
+                <p class="mb-0">No accounts in scope.</p>
+              </div>
+            } @else {
+              <div class="sc-mfa">
+                <div class="sc-mfa__bar" role="img"
+                     [attr.aria-label]="mfa().mfaCoveragePercent + '% of accounts have a second factor'">
+                  <span class="sc-mfa__seg sc-mfa__seg--totp"
+                        [style.width.%]="(mfa().totpUsers / mfa().totalUsers) * 100"></span>
+                  <span class="sc-mfa__seg sc-mfa__seg--sms"
+                        [style.width.%]="(mfa().smsUsers / mfa().totalUsers) * 100"></span>
+                  <span class="sc-mfa__seg sc-mfa__seg--none"
+                        [style.width.%]="(mfa().singleFactorUsers / mfa().totalUsers) * 100"></span>
+                </div>
+                <ul class="sc-mfa__key">
+                  <li>
+                    <span class="sc-legend__swatch sc-legend__swatch--totp"></span>
+                    Authenticator app <strong>{{ mfa().totpUsers | number }}</strong>
+                  </li>
+                  <li>
+                    <span class="sc-legend__swatch sc-legend__swatch--sms"></span>
+                    SMS <strong>{{ mfa().smsUsers | number }}</strong>
+                  </li>
+                  <li>
+                    <span class="sc-legend__swatch sc-legend__swatch--none"></span>
+                    Password only <strong>{{ mfa().singleFactorUsers | number }}</strong>
+                  </li>
+                </ul>
+              </div>
+
+              <dl class="sc-secops__stats">
+                <div>
+                  <dt>Federated sign-ins</dt>
+                  <dd>{{ federatedCount() | number }}</dd>
+                </div>
+                <div>
+                  <dt>Recovery codes used</dt>
+                  <dd>{{ recoveryCodeCount() | number }}</dd>
+                </div>
+              </dl>
+            }
+          </section>
+        </div>
+      }
+    }
+  </div>
+</main>

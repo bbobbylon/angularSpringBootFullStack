@@ -27,8 +27,6 @@ interface TrendColumn {
   successful: number;
   failed: number;
   suspicious: number;
-  /** X position in the 0–100 viewBox. */
-  x: number;
   /** Bar heights as a share of the tallest day, 0–100. */
   successHeight: number;
   failedHeight: number;
@@ -165,15 +163,13 @@ export class SecurityOverviewComponent implements OnInit {
     if (points.length === 0) return [];
 
     const peak = Math.max(1, ...points.map((point) => Math.max(point.successful, point.failed, point.suspicious)));
-    const step = points.length === 1 ? 0 : 100 / (points.length - 1);
 
-    return points.map((point, index) => ({
+    return points.map((point) => ({
       label: point.day.slice(5),
       fullLabel: point.day,
       successful: point.successful,
       failed: point.failed,
       suspicious: point.suspicious,
-      x: points.length === 1 ? 50 : index * step,
       successHeight: (point.successful / peak) * 100,
       failedHeight: (point.failed / peak) * 100,
       suspiciousHeight: (point.suspicious / peak) * 100,

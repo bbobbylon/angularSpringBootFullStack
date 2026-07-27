@@ -1,0 +1,164 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "close": "Close",
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "search": "Search",
+    "actions": "Actions",
+    "status": "Status",
+    "none": "None",
+    "unknown": "Unknown",
+    "readOnly": "Read-only"
+  },
+  "nav": {
+    "customers": "Customers",
+    "newCustomer": "New Customer",
+    "allCustomers": "All Customers",
+    "invoices": "Invoices",
+    "newInvoice": "New Invoice",
+    "allInvoices": "All Invoices",
+    "services": "Services",
+    "serviceCatalog": "Service Catalog",
+    "newServiceInvoice": "New Service Invoice",
+    "manageServices": "Manage Services",
+    "admin": "Admin",
+    "userDirectory": "User Directory",
+    "assignRoles": "Assign Roles",
+    "rolesPermissions": "Roles & Permissions",
+    "securityOverview": "Security Overview",
+    "billingOverview": "Billing Overview",
+    "analyticsHub": "Analytics Hub",
+    "profile": "Profile",
+    "securityCenter": "Security Center",
+    "logOut": "Log Out",
+    "toggleTheme": "Toggle theme",
+    "language": "Language"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "email": "Email address",
+    "password": "Password",
+    "forgotPassword": "Forgot your password?",
+    "createAccount": "Create an account",
+    "continueWith": "Continue with {{provider}}",
+    "orContinueWith": "or continue with"
+  },
+  "permissions": {
+    "denied": "You don't have permission to {{action}} — contact your administrator.",
+    "readOnlyCustomers": "Read-only — contact your administrator to request permission to update customers.",
+    "cannotAssignRoles": "You don't have permission to assign roles — contact your administrator.",
+    "cannotChangeAccountState": "You don't have permission to change account state — contact your administrator.",
+    "actions": {
+      "manageUsers": "manage users",
+      "manageRoles": "manage roles and permissions",
+      "viewBilling": "view billing",
+      "viewAnalytics": "view analytics",
+      "viewSecurity": "view security monitoring",
+      "manageServices": "manage the services catalog",
+      "createCustomers": "create customers",
+      "createInvoices": "create invoices",
+      "updateCustomers": "update customers",
+      "editInvoices": "edit invoices",
+      "generic": "access this area"
+    }
+  },
+  "security": {
+    "eyebrow": "Threat protection",
+    "title": "Security Overview",
+    "subtitle": "Anomalous sign-ins, authentication trends, restricted accounts, and multi-factor coverage across the last {{days}} days.",
+    "scopeNote": "These figures cover only the organizations you administer — they are not platform-wide totals.",
+    "tiles": {
+      "anomalous": "Anomalous sign-ins",
+      "anomalousNone": "Nothing flagged in this window",
+      "anomalousSome": "Flagged and escalated to step-up verification",
+      "failureRate": "Failed sign-in rate",
+      "restricted": "Restricted accounts",
+      "mfaCoverage": "MFA coverage",
+      "tokenReplay": "Token replay detected",
+      "tokenReplayNone": "No refresh token has been replayed",
+      "tokenReplaySome": "Session families revoked automatically",
+      "liveSessions": "Live sessions"
+    },
+    "trend": {
+      "title": "Authentication outcomes",
+      "subtitle": "All three series share one scale, so their relative size is meaningful.",
+      "successful": "Successful",
+      "failed": "Failed",
+      "flagged": "Flagged",
+      "empty": "No authentication activity recorded in this window."
+    },
+    "repeat": {
+      "title": "Accounts flagged more than once",
+      "subtitle": "One flagged sign-in is usually a new device. Repeats are a pattern worth reviewing.",
+      "flags": "{{count}} flags"
+    },
+    "log": {
+      "title": "Anomalous sign-in log",
+      "subtitle": "Sign-ins that passed the password check but did not match the account's own device or network history, newest first.",
+      "empty": "No anomalous sign-ins in the last {{days}} days. Detection is active — this is a clean window, not a disabled check.",
+      "account": "Account",
+      "noticed": "What was noticed",
+      "stepUp": "Step-up applied",
+      "device": "Device",
+      "address": "Address",
+      "when": "When"
+    },
+    "restricted": {
+      "title": "Accounts that cannot sign in",
+      "subtitle": "Locked by brute-force protection, or never verified. Both present as \"I can't get in\".",
+      "empty": "Every account is in good standing.",
+      "locked": "Locked",
+      "notEnabled": "Not enabled",
+      "lastFailure": "Last failure {{when}}",
+      "noFailures": "No failed attempts on record"
+    },
+    "mfa": {
+      "title": "Multi-factor coverage",
+      "subtitle": "The single-factor group is exactly the population that falls back to an emailed code when a sign-in is flagged.",
+      "empty": "No accounts in scope.",
+      "authenticator": "Authenticator app",
+      "sms": "SMS",
+      "passwordOnly": "Password only",
+      "federatedSignIns": "Federated sign-ins",
+      "recoveryCodesUsed": "Recovery codes used"
+    }
+  },
+  "servicesAdmin": {
+    "eyebrow": "Administration",
+    "title": "Manage Services",
+    "subtitle": "Add, edit, and retire the offerings available on new invoices. Retired services stay here so they can be brought back — nothing is ever deleted.",
+    "publicCatalog": "Public Catalog",
+    "addService": "Add Service",
+    "addTitle": "Add a service",
+    "offered": "Offered",
+    "retired": "Retired",
+    "retire": "Retire",
+    "reinstate": "Reinstate",
+    "name": "Name",
+    "description": "Description",
+    "basePrice": "Base price",
+    "noDescription": "No description provided.",
+    "emptyTitle": "The catalog is empty.",
+    "emptyHint": "Add your first service to make it selectable on new invoices.",
+    "editNote": "Editing a service does not change invoices already raised — they keep the name and price captured at the time.",
+    "summary": {
+      "offered": "offered",
+      "retired": "retired",
+      "catalogValue": "Catalog value"
+    }
+  },
+  "invoice": {
+    "exportPdf": "Export as PDF",
+    "edit": "Edit invoice",
+    "cancelEdit": "Cancel edit",
+    "invoiceDate": "Invoice date",
+    "amount": "Amount",
+    "totalAmount": "Total amount",
+    "saveChanges": "Save changes",
+    "numberLocked": "The invoice number cannot be changed — it is the reference already printed on the customer's copy."
+  }
+}

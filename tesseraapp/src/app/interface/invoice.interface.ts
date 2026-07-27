@@ -33,6 +33,16 @@ export interface InvoiceInterface {
   /** Payment state (e.g., 'PENDING', 'PAID', 'OVERDUE'). */
   status: string;
   /**
+   * The billed amount before any adjustments — the backend's {@code amount}, distinct from
+   * {@link totalAmount}, which is the figure after discounts or tax.
+   *
+   * Optional because the entity is annotated {@code @JsonInclude(NON_DEFAULT)} on the server, so
+   * the key is omitted entirely from the JSON when the value is null. It was missing from this
+   * interface altogether until the invoice edit form needed it — the read-only views only ever
+   * displayed {@code totalAmount}, so nothing had forced the omission to surface.
+   */
+  amount?: number;
+  /**
    * Final total amount after any adjustments, discounts, or taxes.
    *
    * Maps to {@code totalAmount} on the Java {@code Invoice} entity.

@@ -153,6 +153,26 @@ export class CustomerService {
       .post<CustomHttpResponseInterface<NewInvoiceDataInterface>>(`${this.server}/customer/invoice/addtocustomer/${customerId}`, invoice)
       .pipe(tap(console.log), catchError(this.handleError));
 
+  /**
+   * Applies edits to an existing invoice (ROADMAP §2 — "Edit invoices").
+   *
+   * Calls {@code PATCH /customer/invoice/update/:id}. Only the editable fields are read
+   * server-side: the invoice number is an external reference already printed on documents the
+   * customer holds, and reassigning ownership is a separate operation, so neither can be changed
+   * through this call regardless of what the body contains.
+   *
+   * Until this existed, a wrong amount could only be addressed by raising a second invoice —
+   * leaving the incorrect one in the customer's history and in every revenue total derived from it.
+   *
+   * @param invoiceId - the numeric ID of the invoice to edit
+   * @param invoice - the edited fields (status, amount, totalAmount, invoiceDate, services)
+   * @returns Observable emitting the envelope carrying the updated invoice
+   */
+  updateInvoice$ = (invoiceId: number, invoice: Partial<InvoiceInterface>): Observable<CustomHttpResponseInterface<CustomerInvoiceUserInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(`${this.server}/customer/invoice/update/${invoiceId}`, invoice)
+      .pipe(catchError(this.handleError));
+
   downloadCustomerReport$ = (): Observable<HttpEvent<Blob>> =>
     this.http
       .get<HttpEvent<Blob>>(`${this.server}/customer/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })

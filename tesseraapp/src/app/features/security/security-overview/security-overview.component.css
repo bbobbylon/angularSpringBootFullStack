@@ -1,0 +1,364 @@
+/* ===========================================================================
+   Security Overview (SRS FR-TPF-2)
+
+   Built entirely on the global design tokens from styles.css, so this screen
+   follows the dark/light theme switch without a single hard-coded colour. The
+   semantic tokens do real work here: --danger, --warn and --ok already carry
+   the app's meaning of "bad / watch / fine", so the dashboard inherits a
+   consistent vocabulary instead of inventing a second one for security.
+   =========================================================================== */
+
+.sc-secops {
+  padding: var(--space-6) 0 var(--space-8);
+}
+
+/* ---- Header + window selector ---- */
+.sc-secops__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+.sc-secops__title {
+  margin: 0;
+  font-size: var(--fs-h1);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.sc-secops__sub {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+.sc-secops__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+
+/* Segmented control. Kept as real <button>s rather than styled labels so the
+   arrow keys, Enter and focus ring all behave without re-implementing them. */
+.sc-window {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+}
+.sc-window__btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 0.32rem 0.8rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
+}
+.sc-window__btn:hover { color: var(--text-strong); }
+.sc-window__btn.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* ---- Scope disclosure banner (FR-ORG-2) ---- */
+.sc-scope-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+.sc-scope-note i { color: var(--accent-strong); font-size: 1.05rem; }
+
+/* ---- Counter tiles ---- */
+.sc-secops__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+.sc-secops__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: var(--space-4) var(--space-5);
+  /* The left rule is the tile's severity channel — colour alone would be the
+     only cue, which fails for a colour-blind reader; the border also changes
+     width, so the state is legible without hue. */
+  border-left: 3px solid var(--hairline);
+}
+.sc-secops__tile.is-alert { border-left-color: var(--warn); }
+.sc-secops__tile.is-critical { border-left-color: var(--danger); }
+.sc-secops__tile-label { color: var(--text-muted); }
+.sc-secops__tile-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+.sc-secops__tile-note {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+}
+
+/* ---- Panels ---- */
+.sc-secops__panel { margin-top: var(--space-5); }
+.sc-secops__panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+.sc-secops__panel-title {
+  margin: 0;
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.sc-secops__panel-sub {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  max-width: 70ch;
+}
+.sc-secops__panel--flag { border-color: var(--warn); }
+.sc-secops__panel--flag .sc-secops__panel-title i { color: var(--warn); }
+
+.sc-secops__split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.sc-secops__empty {
+  margin-top: var(--space-6);
+  text-align: center;
+  padding: var(--space-7) var(--space-5);
+}
+.sc-secops__empty i { font-size: 2.2rem; color: var(--danger); display: block; margin-bottom: var(--space-3); }
+
+/* A quiet window is good news and should read as such, rather than as an
+   error state or an empty table that looks like a loading failure. */
+.sc-secops__quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-2);
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+.sc-secops__quiet i { font-size: 1.4rem; color: var(--ok); flex: none; }
+
+/* ---- Trend chart ---- */
+.sc-legend {
+  display: flex;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.sc-legend li { display: inline-flex; align-items: center; gap: 0.4rem; }
+.sc-legend__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.sc-legend__swatch--ok { background: var(--ok); }
+.sc-legend__swatch--danger { background: var(--danger); }
+.sc-legend__swatch--warn { background: var(--warn); }
+.sc-legend__swatch--totp { background: var(--ok); }
+.sc-legend__swatch--sms { background: var(--info); }
+.sc-legend__swatch--none { background: var(--text-faint); }
+
+.sc-trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 190px;
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+}
+.sc-trend__col {
+  flex: 1 1 0;
+  min-width: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+.sc-trend__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+  width: 100%;
+  justify-content: center;
+}
+.sc-trend__bar {
+  width: 6px;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  transition: height var(--dur-slow) var(--ease-out);
+}
+.sc-trend__bar--ok { background: var(--ok); }
+.sc-trend__bar--danger { background: var(--danger); }
+.sc-trend__bar--warn { background: var(--warn); }
+.sc-trend__label {
+  margin-top: var(--space-2);
+  font-size: 0.65rem;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* ---- Repeat offenders ---- */
+.sc-repeat { list-style: none; margin: 0; padding: 0; }
+.sc-repeat__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--hairline);
+  flex-wrap: wrap;
+}
+.sc-repeat__row:last-child { border-bottom: 0; }
+.sc-repeat__name { color: var(--text-strong); font-weight: 600; text-decoration: none; }
+.sc-repeat__name:hover { color: var(--accent); }
+.sc-repeat__email { color: var(--text-faint); font-size: var(--fs-sm); }
+.sc-repeat__count {
+  margin-left: auto;
+  background: rgba(251, 191, 36, 0.16);
+  color: var(--warn);
+  border-radius: var(--radius-pill);
+  padding: 0.15rem 0.7rem;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* ---- Tables ---- */
+.sc-table { margin-bottom: 0; }
+.sc-table > :not(caption) > * > * {
+  background: transparent;
+  border-bottom-color: var(--hairline);
+  color: var(--text);
+  padding: 0.7rem 0.6rem;
+}
+.sc-table thead th {
+  color: var(--text-faint);
+  font-size: var(--fs-eyebrow);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.sc-table__link { color: var(--text-strong); font-weight: 600; text-decoration: none; }
+.sc-table__link:hover { color: var(--accent); }
+
+.sc-chip {
+  display: inline-block;
+  padding: 0.12rem 0.6rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--hairline);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.sc-chip--danger {
+  background: rgba(251, 113, 133, 0.14);
+  border-color: rgba(251, 113, 133, 0.32);
+  color: var(--danger);
+}
+.sc-chip--warn {
+  background: rgba(251, 191, 36, 0.14);
+  border-color: rgba(251, 191, 36, 0.32);
+  color: var(--warn);
+}
+
+/* ---- Restricted accounts ---- */
+.sc-restricted { list-style: none; margin: 0; padding: 0; }
+.sc-restricted__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2) var(--space-3);
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.sc-restricted__row:last-child { border-bottom: 0; }
+.sc-restricted__state { display: inline-flex; gap: 0.35rem; align-items: flex-start; }
+.sc-restricted__when { grid-column: 1 / -1; }
+
+/* ---- MFA adoption ---- */
+.sc-mfa { margin-bottom: var(--space-4); }
+.sc-mfa__bar {
+  display: flex;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.sc-mfa__seg { display: block; height: 100%; transition: width var(--dur-slow) var(--ease-out); }
+.sc-mfa__seg--totp { background: var(--ok); }
+.sc-mfa__seg--sms { background: var(--info); }
+.sc-mfa__seg--none { background: var(--text-faint); }
+.sc-mfa__key {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.sc-mfa__key li { display: inline-flex; align-items: center; gap: 0.4rem; }
+.sc-mfa__key strong { color: var(--text-strong); }
+
+.sc-secops__stats {
+  display: flex;
+  gap: var(--space-5);
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--hairline);
+}
+.sc-secops__stats dt {
+  font-size: var(--fs-eyebrow);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.sc-secops__stats dd {
+  margin: 0.2rem 0 0;
+  font-size: var(--fs-h3);
+  font-weight: 700;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .sc-secops__head { align-items: flex-start; }
+  .sc-secops__actions { width: 100%; justify-content: space-between; }
+}
