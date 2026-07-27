@@ -249,22 +249,6 @@ PREPARE add_customer_org_stmt FROM @add_customer_org;
 EXECUTE add_customer_org_stmt;
 DEALLOCATE PREPARE add_customer_org_stmt;
 
--- Backfill: adopt every unowned customer into the lowest-numbered ACTIVE organization.
---
--- Existing rows predate the concept of customer ownership, so there is no recorded answer to
--- "whose customer is this?" — the honest choices are to guess once, here, or to leave them NULL
--- and invisible to every scoped administrator. Adopting them preserves the behaviour those rows
--- were created under (visible to the operators who have been managing them) instead of silently
--- emptying the dashboards of an established deployment.
---
--- Scoped to NULL rows only, so it is safe to re-run and never reassigns a customer that has since
--- been given a real owner. If more than one organization is in play, review the result and
--- reassign afterwards; this statement will not touch those rows again.
-UPDATE `Customer`
-SET `organization_id` = (SELECT MIN(id) FROM organizations WHERE status = 'ACTIVE')
-WHERE `organization_id` IS NULL
-  AND EXISTS (SELECT 1 FROM organizations WHERE status = 'ACTIVE');
-
 CREATE TABLE IF NOT EXISTS `Invoice`
 (
     `amount`        float(53),
@@ -279,14 +263,44 @@ CREATE TABLE IF NOT EXISTS `Invoice`
     CONSTRAINT `FK_Invoice_Customer` FOREIGN KEY (`customer`) REFERENCES `Customer` (`id`)
 ) engine = InnoDB;
 
+-- Idempotent relaxation of Invoice.customer for draft invoices. POST /invoice/create has always
+-- described itself as creating a standalone invoice to be linked to a customer later, but the
+-- column was NOT NULL, so that path could never actually be used. Guarded on information_schema
+-- because MySQL has no `MODIFY COLUMN IF`; re-running is a no-op and nothing is destroyed (going
+-- NOT NULL -> NULL never rejects existing rows).
+SET @relax_invoice_customer := (
+    SELECT IF(COUNT(*) = 1,
+        'ALTER TABLE `Invoice` MODIFY COLUMN `customer` bigint NULL',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Invoice'
+      AND COLUMN_NAME = 'customer' AND IS_NULLABLE = 'NO');
+PREPARE relax_invoice_customer_stmt FROM @relax_invoice_customer;
+EXECUTE relax_invoice_customer_stmt;
+DEALLOCATE PREPARE relax_invoice_customer_stmt;
+
 CREATE TABLE IF NOT EXISTS `Services`
 (
     `price`       float(53),
-    `id`          bigint NOT NULL AUTO_INCREMENT,
+    `id`          bigint  NOT NULL AUTO_INCREMENT,
     `description` varchar(255),
     `name`        varchar(255),
+    `active`      boolean NOT NULL DEFAULT TRUE,
     PRIMARY KEY (`id`)
 ) engine = InnoDB;
+
+-- Idempotent add of Services.active for catalogs created before service retirement shipped.
+-- DEFAULT TRUE means every pre-existing service reads back as offered, which is the only correct
+-- interpretation of a catalog that had no notion of being retired.
+SET @add_services_active := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE `Services` ADD COLUMN `active` boolean NOT NULL DEFAULT TRUE',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Services' AND COLUMN_NAME = 'active');
+PREPARE add_services_active_stmt FROM @add_services_active;
+EXECUTE add_services_active_stmt;
+DEALLOCATE PREPARE add_services_active_stmt;
 
 -- @ElementCollection table for Invoice.services (List<InvoiceLineItem>); composite PK
 -- (item_order, invoice_id), NO surrogate id — exactly as Hibernate maps an @OrderColumn collection.
@@ -354,6 +368,41 @@ CREATE TABLE IF NOT EXISTS userorganizations
     FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT UQ_UserOrganizations_User_Org UNIQUE (user_id, organization_id)
 );
+
+-- ── Backfill: customer ownership (must follow the organizations tables above) ───────────
+--
+-- Adopts every unowned customer into the lowest-numbered ACTIVE organization.
+--
+-- ORDERING MATTERS, which is why this sits here rather than beside the `Customer` ALTER that adds
+-- the column. It reads `organizations`, so it cannot run before that table exists. Placed up there
+-- it read naturally and was wrong on a FRESH database: `organizations` is created further down, so
+-- the backfill died with error 1146 (table doesn't exist) and — because both the mysql CLI and
+-- Workbench halt on error — every statement after it silently never ran. Existing databases hid the
+-- bug entirely, since they already had the table from an earlier run.
+--
+-- Existing rows predate the concept of customer ownership, so there is no recorded answer to
+-- "whose customer is this?" — the honest choices are to guess once, here, or to leave them NULL
+-- and invisible to every scoped administrator. Adopting them preserves the behaviour those rows
+-- were created under (visible to the operators who have been managing them) instead of silently
+-- emptying the dashboards of an established deployment.
+--
+-- Scoped to NULL rows only, so it is safe to re-run and never reassigns a customer that has since
+-- been given a real owner. If more than one organization is in play, review the result and
+-- reassign afterwards; this statement will not touch those rows again.
+--
+-- The `id` > 0 predicate is there for MySQL Workbench, not for correctness. Workbench connects
+-- with safe-update mode on by default, which rejects any UPDATE whose WHERE clause does not
+-- reference a KEY column (Error 1175) — and `organization_id` is not indexed. Since `id` is the
+-- PRIMARY KEY and auto-increment values start at 1, the condition matches every row and changes
+-- nothing about what this statement does; it just lets the file run as-is in Workbench instead of
+-- requiring each person to disable a safety setting before applying the schema. A migration script
+-- that only works after you have turned off a safety feature is a migration script that eventually
+-- gets run with that feature off against the wrong database.
+UPDATE `Customer`
+SET `organization_id` = (SELECT MIN(id) FROM organizations WHERE status = 'ACTIVE')
+WHERE `id` > 0
+  AND `organization_id` IS NULL
+  AND EXISTS (SELECT 1 FROM organizations WHERE status = 'ACTIVE');
 
 -- ── Authenticator-app (TOTP) multi-factor authentication ───────────────────────────────
 CREATE TABLE IF NOT EXISTS totpcredentials

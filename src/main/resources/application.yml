@@ -43,13 +43,18 @@ spring:
       # schema.sql (src/main/resources/schema.sql) is the single, idempotent definition of
       # every JdbcTemplate-managed table. Flyway was removed — its baseline bookkeeping kept
       # desyncing from the live database and blocking startup — and schema.sql replaces it.
-      #   mode: never  -> NOT run automatically; run it by hand to initialise a fresh database
-      #                   (e.g.  mysql -u root -p db2 < src/main/resources/schema.sql).
+      #   mode: never  -> NOT run automatically; must be run by hand against every target DB.
       #   mode: always -> Spring Boot applies it on every startup. Safe to enable, because the
       #                   script is idempotent (CREATE TABLE IF NOT EXISTS / INSERT ... ON
       #                   DUPLICATE KEY) and contains NO DROP statements.
+      # Set to always now that dev points at one shared Aiven database (start.sh DB=aiven):
+      # whichever developer's machine boots the app next applies any schema.sql change that
+      # hasn't been run against Aiven yet, instead of relying on someone remembering to run it
+      # by hand in Workbench first (the gap that caused the userevents.detail 500 incident).
+      # Any DDL made directly in Workbench should still be mirrored into schema.sql by hand —
+      # this only replays what's in the file, it doesn't pull live schema back into git.
       # Hibernate ddl-auto:update still owns the JPA customer/invoice/services tables.
-      mode: never
+      mode: always
       continue-on-error: true
   servlet:
     multipart:

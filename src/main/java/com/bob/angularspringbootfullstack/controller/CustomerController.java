@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -205,9 +206,76 @@ public class CustomerController {
                         .build());
     }
 
-    // TODO: Add PUT /invoice/{invoiceId}/addtocustomer/{customerId} endpoint to link an
-    //  existing standalone invoice to a customer. Requires nullable = true on Invoice.customer
-    //  and a new service method that loads the invoice by ID and sets the customer field.
+    /**
+     * Links an existing standalone (draft) invoice to a customer.
+     *
+     * <p>The completion of {@code POST /invoice/create}, which raises an invoice with no owner.
+     * Distinct from {@code POST /invoice/addtocustomer/{customerId}} below, which <em>creates</em>
+     * a new invoice already attached: the two differ in whether the invoice exists yet, and
+     * conflating them into one endpoint would mean a request whose meaning depended on whether a
+     * field happened to be populated.
+     *
+     * <p>{@code PUT} because assigning an owner is idempotent — repeating it lands the invoice on
+     * the same customer.
+     *
+     * @param user       the authenticated user making the request
+     * @param invoiceId  the id of the existing invoice
+     * @param customerId the id of the customer to attach it to
+     * @return 200 OK with the authenticated user and the now-owned invoice
+     */
+    @PutMapping("/invoice/{invoiceId}/addtocustomer/{customerId}")
+    public ResponseEntity<HttpResponse> linkInvoiceToCustomer(@AuthenticationPrincipal UserDTO user,
+                                                              @PathVariable Long invoiceId,
+                                                              @PathVariable Long customerId) {
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "invoice", customerService.linkInvoiceToCustomer(invoiceId, customerId)))
+                        .message("Invoice linked to customer successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Applies edits to an existing invoice (ROADMAP §2 — "Edit invoices").
+     *
+     * <p>Invoices were create-only, so a wrong amount or a status needing correction could only be
+     * addressed by issuing a second invoice — leaving the incorrect one in the customer's history
+     * and in every revenue figure derived from it.
+     *
+     * <p>{@code PATCH} because the service applies only the editable fields: the invoice number
+     * and the owning customer are deliberately not changeable here (the number is an external
+     * reference already on documents the customer holds; reassigning ownership is the separate
+     * operation above).
+     *
+     * <p>Authorization: {@code PATCH} falls through to SecurityConfig's
+     * {@code .requestMatchers(POST, "/**")}-adjacent rules via {@code anyRequest().authenticated()},
+     * with method-level intent recorded here — {@code UPDATE:CUSTOMER} or {@code UPDATE:USER} is
+     * the same pair that gates creating one, since being able to rewrite an invoice is at least as
+     * consequential as raising it.
+     *
+     * @param user      the authenticated user making the request
+     * @param invoiceId the id of the invoice to edit
+     * @param invoice   the submitted values
+     * @return 200 OK with the authenticated user and the updated invoice
+     */
+    @PatchMapping("/invoice/update/{invoiceId}")
+    @PreAuthorize("hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER')")
+    public ResponseEntity<HttpResponse> updateInvoice(@AuthenticationPrincipal UserDTO user,
+                                                      @PathVariable Long invoiceId,
+                                                      @RequestBody @Valid Invoice invoice) {
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "invoice", customerService.updateInvoice(invoiceId, invoice)))
+                        .message("Invoice updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
 
     /**
      * Creates a new standalone invoice (not yet linked to a customer).

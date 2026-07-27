@@ -181,7 +181,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             // emailed link (built below); keeping it out of the stored key makes verification lookups
             // host-independent, so changing ui.app.url never invalidates a pending link.
             // TODO: the `url` column now holds a bare key, not a URL — consider renaming it to
-            //  `verification_key` (needs a DB migration on local + Aiven; see schema.sql / psqlschema.sql / aivendatabase.sql).
+            //  `verification_key` (a guarded rename in schema.sql, applied to local + Aiven).
             String key = UUID.randomUUID().toString();
             String verificationURL = getVerificationURL(key, ACCOUNT.getType());
             jdbcTemplate.update(INSERT_ACCOUNT_VERIFICATION_URL_QUERY, of("userId", user.getId(), "url", key));

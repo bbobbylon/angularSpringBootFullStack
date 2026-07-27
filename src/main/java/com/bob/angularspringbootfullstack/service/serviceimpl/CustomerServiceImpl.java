@@ -170,6 +170,56 @@ public class CustomerServiceImpl implements CustomerService {
 
     /**
      * {@inheritDoc}
+     *
+     * <p>Copies only the editable fields onto the managed entity rather than saving the submitted
+     * object outright. Saving the request body directly would be shorter and wrong: the client
+     * sends a partially-populated {@code Invoice}, so every field it omits — the invoice number,
+     * the owning customer, the line items — would be written back as {@code null}, silently
+     * erasing them. Reading the row first and assigning field by field means an edit can only ever
+     * change what it names.
+     *
+     * <p>{@code services} is replaced only when the caller actually sends a list. An edit to a
+     * status or an amount has no business clearing an invoice's line items, and a client that does
+     * not render them has no way to send them back.
+     */
+    @Override
+    public Invoice updateInvoice(Long invoiceId, Invoice edits) {
+        Invoice invoice = invoiceRepo.findById(invoiceId)
+                .orElseThrow(() -> new ApiException("Invoice not found"));
+
+        invoice.setStatus(edits.getStatus());
+        invoice.setTotalAmount(edits.getTotalAmount());
+        invoice.setAmount(edits.getAmount());
+        invoice.setInvoiceDate(edits.getInvoiceDate());
+        if (edits.getServices() != null && !edits.getServices().isEmpty()) {
+            invoice.setServices(edits.getServices());
+        }
+        return invoiceRepo.save(invoice);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Both rows are loaded before anything is written, so a bad customer id fails without
+     * having half-applied the change.
+     */
+    @Override
+    public Invoice linkInvoiceToCustomer(Long invoiceId, Long customerId) {
+        Invoice invoice = invoiceRepo.findById(invoiceId)
+                .orElseThrow(() -> new ApiException("Invoice not found"));
+        Customer customer = customerRepo.findById(customerId)
+                .orElseThrow(() -> new ApiException("Customer not found"));
+
+        invoice.setCustomer(customer);
+        // Kept in step with the JPA association: customerId is a denormalized column used by the
+        // direct queries, and a row whose two ownership fields disagree is a bug waiting to be
+        // reported as "the invoice is on the wrong customer" by whichever query happens to run.
+        invoice.setCustomerId(customerId);
+        return invoiceRepo.save(invoice);
+    }
+
+    /**
+     * {@inheritDoc}
      */
     @Override
     public Page<Customer> searchCustomers(String customerName, int page, int size) {
@@ -190,7 +240,7 @@ public class CustomerServiceImpl implements CustomerService {
      */
     @Override
     public Iterable<Services> getServices() {
-        return servicesRepo.findAll();
+        return servicesRepo.findByActiveTrue();
     }
 
     /**

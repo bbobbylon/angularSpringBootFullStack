@@ -100,6 +100,43 @@ public interface CustomerService {
     void addInvoiceToCustomer(Long customerId, Invoice invoice);
 
     /**
+     * Applies edits to an existing invoice.
+     *
+     * <p>Invoices were create-only until now, which meant a typo in an amount or a status that
+     * needed correcting could only be fixed by raising a second invoice — leaving the wrong one
+     * permanently in the customer's history and in every revenue total derived from it.
+     *
+     * <p>Three fields are deliberately <b>not</b> taken from the caller, whatever the request body
+     * contains: the invoice number (a stable external reference — changing it would break every
+     * document already sent to the customer), the creation identity of the row, and the owning
+     * customer. Reassigning an invoice to a different customer is a different operation with
+     * different consequences for both parties' billing histories, and it has its own endpoint
+     * ({@link #linkInvoiceToCustomer}) rather than hiding inside a general edit.
+     *
+     * @param invoiceId the id of the invoice to edit
+     * @param edits     the submitted values; only the editable fields are read
+     * @return the updated invoice
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no invoice with the given ID exists
+     */
+    Invoice updateInvoice(Long invoiceId, Invoice edits);
+
+    /**
+     * Attaches an existing standalone (draft) invoice to a customer.
+     *
+     * <p>The other half of {@code POST /invoice/create}: that endpoint raises an invoice with no
+     * customer, and this one gives it an owner once it is known. Distinct from
+     * {@link #addInvoiceToCustomer}, which creates a brand-new invoice already attached — the two
+     * differ in whether the invoice exists yet, which is why they are separate rather than one
+     * method with a nullable id.
+     *
+     * @param invoiceId  the id of the existing invoice
+     * @param customerId the id of the customer to attach it to
+     * @return the invoice, now owned by the customer
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if either id does not exist
+     */
+    Invoice linkInvoiceToCustomer(Long invoiceId, Long customerId);
+
+    /**
      * Returns a paginated page of customers whose name contains the given search term.
      *
      * @param name the substring to search for within customer names
@@ -119,12 +156,17 @@ public interface CustomerService {
     Invoice getInvoice(Long invoiceId);
 
     /**
-     * Returns all entries from the {@link Services} catalog.
+     * Returns the entries from the {@link Services} catalog that are still on offer.
      * <p>
      * Used to populate the service dropdown on the new-invoice form so users
      * can select from predefined offerings rather than entering free text.
      *
-     * @return all service catalog entries, unpaginated
+     * <p>Retired services are excluded. Offering a discontinued service on a new invoice is worse
+     * than merely untidy — it is how a business accidentally sells something it no longer
+     * provides. Administrators see the full catalog, retired entries included, through
+     * {@code ServicesCatalogService}.
+     *
+     * @return the active service catalog entries, unpaginated
      */
     Iterable<Services> getServices();
 
