@@ -101,7 +101,21 @@ public enum EventType {
      * dashboard distinguish "caught and handled with an authenticator" from "caught and fell back
      * to an emailed code".
      */
-    SUSPICIOUS_LOGIN("We noticed a sign-in that didn't match your usual device or location, so we asked for extra verification :|");
+    SUSPICIOUS_LOGIN("We noticed a sign-in that didn't match your usual device or location, so we asked for extra verification :|"),
+    /**
+     * Fired when the user connects an identity provider to their account from the Security
+     * Center (ROADMAP §1.4). Audited separately from {@link #PROFILE_UPDATE} because adding a
+     * sign-in method is a credential change, not a profile edit — it belongs in the same class
+     * of events as enrolling a second factor, and a user reviewing their activity log needs to
+     * be able to spot one they did not perform.
+     */
+    PROVIDER_LINKED("You connected an identity provider to your account :)"),
+    /**
+     * Fired when the user disconnects an identity provider. Recorded for the same reason as
+     * {@link #PROVIDER_LINKED}: removing a way into the account is as security-relevant as
+     * adding one.
+     */
+    PROVIDER_UNLINKED("You disconnected an identity provider from your account :|");
 
     /**
      * -- GETTER --

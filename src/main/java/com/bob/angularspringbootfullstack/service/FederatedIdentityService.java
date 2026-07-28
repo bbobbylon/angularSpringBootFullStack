@@ -76,6 +76,35 @@ public interface FederatedIdentityService {
     void unlinkProvider(Long userId, String provider);
 
     /**
+     * Attaches a verified provider identity to an <em>already signed-in</em> account (ROADMAP §1.4).
+     *
+     * <h3>Why this is not {@link #findOrCreateFederatedUser}</h3>
+     * That method answers "who is this provider identity?" and is the right question for a login.
+     * It is the wrong question for linking, where the account is already known and the provider
+     * identity is the new information. Routing "Connect a provider" through the login path is what
+     * made the Security Center button switch your session to whichever account the identity happened
+     * to resolve to, rather than attaching it to you.
+     *
+     * <h3>The guard that matters</h3>
+     * Refuses when the identity is <b>already linked to a different account</b>. Without that check
+     * linking is an account-takeover primitive: sign in as a low-privilege account, "connect" a
+     * provider identity belonging to an administrator, and you have attached their sign-in method to
+     * your account. The provider-verified email does not help here, because links are keyed on the
+     * provider's subject rather than on email.
+     *
+     * <p>Idempotent when the identity is already linked to <em>this</em> account: that is the state
+     * the caller asked for, so it reports success and writes nothing.
+     *
+     * @param userId   the signed-in account, resolved server-side from a single-use link ticket
+     * @param provider the registration id being connected
+     * @param subject  the provider's stable subject identifier for the authenticated identity
+     * @return true when a new link was written, false when it already existed on this account
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException when the identity belongs to
+     *         another account
+     */
+    boolean linkProviderToUser(Long userId, String provider, String subject);
+
+    /**
      * One connected identity provider, as shown in the Security Center.
      *
      * @param provider  the registration id ({@code google} / {@code github} / {@code microsoft})

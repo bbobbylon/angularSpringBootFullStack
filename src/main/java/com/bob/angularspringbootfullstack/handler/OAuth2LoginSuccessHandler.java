@@ -1,6 +1,8 @@
 package com.bob.angularspringbootfullstack.handler;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.exception.ApiException;
+import com.bob.angularspringbootfullstack.controller.FederatedAuthController;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.FederatedIdentityService;
@@ -10,6 +12,7 @@ import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +22,8 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+
+import static com.bob.angularspringbootfullstack.enumeration.EventType.PROVIDER_LINKED;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -93,6 +98,19 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
             String provider = oauthToken.getAuthorizedClientRegistrationId();
             FederatedProfile profile = extractProfile(provider, oauthToken.getPrincipal());
+
+            // ── Account-link handshake (ROADMAP §1.4) ────────────────────────────────────────
+            // A link intent parked by FederatedAuthController#startLink means the user was ALREADY
+            // signed in and asked to attach this identity to their existing account. That is a
+            // different question from "who is this identity?", so it must not go through
+            // find-or-create: doing so is what used to switch the session to whichever account the
+            // provider identity happened to resolve to. No tokens are issued here — the caller's
+            // existing session simply continues.
+            Long linkUserId = consumeLinkIntent(request);
+            if (linkUserId != null) {
+                handleAccountLink(response, provider, profile, linkUserId);
+                return;
+            }
 
             UserDTO userDTO = federatedIdentityService.findOrCreateFederatedUser(
                     provider, profile.subject(), profile.email(), profile.firstName(), profile.lastName(), profile.imageUrl());
@@ -206,6 +224,53 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
      * profile fields the local account needs at creation time (FR-FED-6 — nothing more
      * than this is ever persisted from the provider).
      */
+    /**
+     * Reads and clears any pending link intent for this handshake.
+     *
+     * <p>Cleared unconditionally, whether or not it is used: an intent that survived into a later,
+     * unrelated sign-in would silently attach that identity to the earlier user's account.
+     *
+     * @param request the callback request, whose session may carry the intent
+     * @return the user id to link to, or null for an ordinary sign-in
+     */
+    private static Long consumeLinkIntent(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null) return null;
+        Object value = session.getAttribute(FederatedAuthController.LINK_INTENT_SESSION_KEY);
+        session.removeAttribute(FederatedAuthController.LINK_INTENT_SESSION_KEY);
+        return value instanceof Long userId ? userId : null;
+    }
+
+    /**
+     * Attaches the verified identity to the account that asked for it and returns the browser to the
+     * Security Center.
+     *
+     * <p>Redirects rather than issuing tokens: the user never stopped being signed in, and minting a
+     * fresh session here would be the very behaviour this branch exists to prevent. The outcome is
+     * reported through a query flag so the SPA can raise the right toast — including the refusal,
+     * which is a normal thing to hit (connecting an identity that already belongs to someone else)
+     * rather than an error state.
+     *
+     * @param response the response used for the redirect
+     * @param provider the registration id being connected
+     * @param profile  the verified provider identity
+     * @param userId   the account the link was requested for
+     */
+    private void handleAccountLink(HttpServletResponse response, String provider,
+                                   FederatedProfile profile, Long userId) throws IOException {
+        try {
+            boolean linked = federatedIdentityService.linkProviderToUser(userId, provider, profile.subject());
+            if (linked) {
+                UserDTO owner = userService.getUserById(userId);
+                eventPublisher.publishEvent(new NewUserEvent(owner.getEmail(), PROVIDER_LINKED, provider));
+            }
+            response.sendRedirect(uiAppUrl + "/security?linked=" + URLEncoder.encode(provider, UTF_8));
+        } catch (ApiException exception) {
+            log.warn("Federated link refused for userId {} provider '{}': {}", userId, provider, exception.getMessage());
+            response.sendRedirect(uiAppUrl + "/security?linkError=" + URLEncoder.encode(exception.getMessage(), UTF_8));
+        }
+    }
+
     private record FederatedProfile(String subject, String email, String firstName, String lastName, String imageUrl) {
     }
 }

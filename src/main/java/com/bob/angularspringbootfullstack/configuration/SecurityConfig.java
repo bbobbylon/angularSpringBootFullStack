@@ -194,6 +194,24 @@ class SecurityConfig {
                             // suffices; every handler scopes its work to the token's principal.
                             .requestMatchers("/user/totp/**").authenticated()
                             .requestMatchers("/user/sessions/**").authenticated()
+                            // The Angular SPA is compiled into this jar's static resources (see
+                            // Dockerfile) and served from this SAME origin in Docker/prod — unlike
+                            // local dev, where Angular runs on its own dev server (port 4200) and
+                            // never touches this filter chain at all. Without this permit, the broad
+                            // GET/** rule below demands READ:USER on the SPA's own index.html/JS/CSS,
+                            // making it impossible for an unauthenticated browser to ever load the
+                            // login page — a chicken-and-egg 401 that only surfaces once the app is
+                            // actually deployed with Angular baked in, not in local dev.
+                            .requestMatchers(GET, "/", "/index.html", "/favicon.ico", "/manifest.webmanifest",
+                                    "/*.js", "/*.css", "/*.ico", "/*.png", "/*.svg", "/*.jpg", "/*.jpeg",
+                                    "/*.webp", "/*.woff", "/*.woff2", "/*.ttf", "/*.map").permitAll()
+                            .requestMatchers(GET, "/assets/**").permitAll()
+                            // Angular's builder places CSS-referenced binary assets (the
+                            // self-hosted IBM Plex/bootstrap-icons fonts, in this app's case) under
+                            // /media/ in the build output — a separate location from /assets/ that
+                            // the permit above doesn't cover, discovered when self-hosted fonts
+                            // 401'd in production despite the /assets/** and /*.woff2 permits.
+                            .requestMatchers(GET, "/media/**").permitAll()
                             .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
                             .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
                             .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")

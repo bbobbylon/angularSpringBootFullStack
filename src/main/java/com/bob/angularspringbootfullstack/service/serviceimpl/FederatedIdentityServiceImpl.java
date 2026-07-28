@@ -174,6 +174,35 @@ public class FederatedIdentityServiceImpl implements FederatedIdentityService {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public boolean linkProviderToUser(Long userId, String provider, String subject) {
+        List<Long> owners = jdbcTemplate.queryForList(SELECT_USER_ID_BY_PROVIDER_SUBJECT_QUERY,
+                Map.of("provider", provider, "subject", subject), Long.class);
+
+        if (!owners.isEmpty()) {
+            Long owner = owners.getFirst();
+            if (owner.equals(userId)) {
+                // Already connected to this account — the requested end state already holds.
+                return false;
+            }
+            // The takeover guard. Deliberately does not say WHICH account holds the identity: that
+            // would turn the link endpoint into a probe for "does an account exist with this
+            // provider identity?", which is the same enumeration channel the login path works hard
+            // to close.
+            log.warn("[FEDERATION] Refused link: provider '{}' identity already belongs to userId {} (requested by userId {})",
+                    provider, owner, userId);
+            throw new ApiException("That account is already connected to a different user.");
+        }
+
+        insertProviderLink(userId, provider, subject);
+        log.info("[FEDERATION] Linked provider '{}' to userId {}", provider, userId);
+        return true;
+    }
+
+    /**
      * Runs a scalar COUNT, treating a null result as zero.
      *
      * @param query      the counting query
