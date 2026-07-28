@@ -59,6 +59,7 @@ In-depth guides live in [`documentation/`](documentation/):
 | [Architecture](documentation/architecture.md) | Tiers, layers, request lifecycle, frontend |
 | [API Reference](documentation/api-reference.md) | Every REST endpoint, grouped by controller |
 | [Security](documentation/security.md) | JWT, refresh rotation, MFA, federation, RBAC |
+| [Roles & Scenarios](documentation/roles-and-scenarios.md) | **Who can do what** — capability matrix per role + end-to-end scenarios |
 | [Database](documentation/database.md) | Schema, tables, relationships, reference data |
 | [Configuration](documentation/configuration.md) | Env vars, profiles, `application.yml` |
 | [Deployment](documentation/deployment.md) | Docker, Compose, Azure CI/CD, cloud |

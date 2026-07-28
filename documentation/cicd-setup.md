@@ -90,15 +90,27 @@ want to move.
 [`dependency-check-maven`](../pom.xml) plugin is bound into the build and **fails on any dependency
 with CVSS ≥ 7**, so a vulnerable transitive dependency breaks the build rather than shipping.
 
-**Frontend** — Node 22, `npm ci`, then a production Angular build.
+**Frontend** — Node 22, `npm ci`, then four gates in deliberate order: `npm audit --audit-level=high`
+(CVE scan), `npm run lint`, `npm test -- --no-watch` (Vitest, headless), and finally a production
+Angular build. Lint runs *before* the tests because a missing `for` attribute is cheap to find and
+there is no value in spending a test run to report it.
+
+**CI is now a deploy gate, not just a signal.** Both deploy workflows call this one via
+`workflow_call` and will not build an image until it passes. They previously triggered
+independently on a push to `master`, so they raced — a commit with failing tests could reach the
+registry before CI finished going red.
 
 ### Known CI gaps
 
+All three previously-recorded gaps are **closed** (frontend tests now run in CI; the 13 standing
+lint errors — 10 of them real accessibility defects — were fixed and `npm run lint` now gates;
+`npm audit --audit-level=high` was added). What remains:
+
 | Gap | Impact | Fix |
 |---|---|---|
-| **Frontend tests never run** | The 15 Vitest specs pass locally but CI only builds. A broken spec merges silently. | Add `npm test` (i.e. `ng test --no-watch`) to the frontend job |
-| **`ng lint` is red** (13 pre-existing errors, 10 accessibility) | Lint cannot be enforced, so it will keep drifting | Fix the 13, then add `npm run lint` as a gate |
-| **No `npm audit`** | Backend dependencies are CVE-scanned; frontend ones are not | Add `npm audit --audit-level=high` |
+| **No end-to-end test** | Every layer is unit-tested, but nothing exercises a real browser against a running stack. A break at a seam — interceptor ↔ backend, OAuth redirect — passes CI. | Playwright against `docker-compose up` |
+| **`npm audit` moderate findings are not gated** | Deliberate: Angular's transitive dev-dependency churn produces a steady trickle, and a permanently-red gate gets ignored. High/critical do fail. | Revisit only if moderates stop being noise |
+| **Deploy is never rehearsed** | The pipeline is verified by reading, not by running. Neither cloud path has executed end to end. | One dispatch to a throwaway `qa` environment |
 
 ---
 

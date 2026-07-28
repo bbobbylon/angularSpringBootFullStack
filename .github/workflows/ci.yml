@@ -16,6 +16,11 @@ on:
     branches: ["**"]
   pull_request:
     branches: [master]
+  # Callable from deploy.yml / deploy-gcp.yml so a deployment runs these exact checks
+  # first, rather than racing them. Without this the two workflows both trigger on a
+  # push to master and run concurrently — a commit whose tests are failing gets built,
+  # pushed and rolled out while CI is still on its way to red.
+  workflow_call:
 
 jobs:
   backend:

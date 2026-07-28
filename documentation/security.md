@@ -345,12 +345,12 @@ In the interest of honesty (and as a to-do list). Status legend: ⚠️ = built-
 - ✅ **Login-analytics dashboard (FR-TPF-2)** — `/admin/security/overview`, org-scoped, is the review surface for the above.
 - ✅ **Profile image storage** — `ImageStorageService` abstraction with local and S3 implementations; no hardcoded developer path.
 - ✅ **General request rate limiting** — `RateLimitFilter` (Bucket4j) returns 429 with `Retry-After`; per-account brute-force lockout is now persistent with administrative unlock.
+- ✅ **Federated account linking is a distinct flow.** "Connect a provider" no longer runs an ordinary login. The SPA mints a single-use, five-minute link ticket over an authenticated call; the browser carries it to `GET /oauth2/link/{provider}`, which validates it and records the intent in the session the OAuth handshake already uses; the callback then attaches `(provider, subject)` to **that** account and issues no tokens, so the caller's session simply continues. Refuses when the identity already belongs to another account — without which linking would be an account-takeover primitive, since links are keyed on the provider subject rather than on the verified email. Both directions are audited (`PROVIDER_LINKED` / `PROVIDER_UNLINKED`).
 - ✅ **Security-critical-path tests** — refresh rotation *and* replay detection, TOTP challenge binding, and organization scope (reads as well as writes) are covered. The frontend has specs too (see [testing.md](testing.md)).
 
 **Operational / hardening gaps:**
 - ❌ **Prod secrets** (JWT secret, OAuth client secrets, mail creds) must be supplied by the platform, not `.env`.
 - ❌ **Brute-force counting is audit-event based** (per-email sliding window) rather than a distributed counter — correct for a single instance, but two instances count separately.
-- ❌ **Federated *linking* is not a distinct flow.** "Connect a provider" in the Security Center runs an ordinary federated login, so the OAuth callback resolves an account from the provider identity rather than attaching it to the already-signed-in user. Connecting an identity whose email differs from the current account therefore switches the session to that account instead of linking. Unlinking is safe and correctly guarded; linking needs a dedicated flow that carries the authenticated user through the OAuth round trip.
 - ❌ **A real production boot with `ddl-auto: validate`** against a `schema.sql`-only database has never been exercised — only the offline `JpaSchemaSyncTest`.
 
 **Explicitly out of scope this revision:** machine-to-machine (client-credentials) authorization, SCIM provisioning, and SAML federation.

@@ -12,7 +12,8 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | **Understand the whole system** | [developer-guide.md](developer-guide.md) — the in-depth, end-to-end walkthrough |
 | **Trace one feature end-to-end** | [flows/](flows/README.md) — every use case from button click → JWT/headers → controller → DB → UI change |
 | **Work in the codebase day-to-day** | [development-workflow.md](development-workflow.md) — IDE setup, the `start.sh` loop, debugging, branch workflow |
-| **See project status & what's planned** | [project-status-and-roadmap.md](project-status-and-roadmap.md) — proposed-vs-actual, known gaps, prioritized backlog |
+| **See what's planned** | [`ROADMAP.md`](../ROADMAP.md) — the single live planning document |
+| **Look back at how it was built** | [history/PROJECT-HISTORY.md](history/PROJECT-HISTORY.md) — the single archive: milestones, delivery timeline, retired docs |
 | **Look back at how it was built** | [history/PROJECT-HISTORY.md](history/PROJECT-HISTORY.md) — evolution narrative, M0–M7 milestones, retired-doc registry, branch snapshot |
 
 ## Reference guides
@@ -27,6 +28,7 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | [configuration.md](configuration.md) | Environment variables, Spring profiles, annotated `application.yml`, gotchas |
 | [deployment.md](deployment.md) | Docker image, Compose, Azure CI/CD, cloud platforms |
 | [cicd-setup.md](cicd-setup.md) | **CI/CD hub** — pipeline setup for **AWS, Google Cloud, and Azure** side by side, the shared build→registry→runtime shape, required secrets, and which security controls only become effective once deployed |
+| [roles-and-scenarios.md](roles-and-scenarios.md) | **Who can do what** — the seven roles, the authority vs. organization-scope axes, a full capability matrix, and worked scenarios for users, help desk, org admins, platform admins and security incidents |
 | [frontend-guide.md](frontend-guide.md) | Angular internals — routes→components, services, guards, interceptors, `DataState`/signals, **Transloco i18n**, **capability-level UI gating**, the command palette |
 | [email-and-notifications.md](email-and-notifications.md) | Email (verification/reset) + SMS-stub + Angular toast notifications; the verification-link model |
 | [testing.md](testing.md) | Test inventory, how to run, how to write backend/frontend tests, the coverage roadmap |

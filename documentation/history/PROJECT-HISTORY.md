@@ -97,15 +97,20 @@ Where the old planning/one-off docs went. The retired planning files were **cons
 
 | Document | What it was | Status / where it went | Recover with |
 |---|---|---|---|
-| `plan.md` | Original approved UI + auth master plan (M0–M7) | Consolidated → `ROADMAP.md`; deleted 2026-07-24 | `git show HEAD:plan.md` |
-| `phase2-proposals.md` | Phase-2 proposals (user-type classification, batch upload, M2M API) | Consolidated → `ROADMAP.md §3`; deleted | `git show HEAD:phase2-proposals.md` |
-| `rollout-plan.md` | Rollout / sequencing plan | Consolidated → `ROADMAP.md`; deleted | `git show HEAD:rollout-plan.md` |
-| `assignments/week-5-plan.md` | Near-term weekly roadmap slice | Consolidated → `ROADMAP.md §1`; deleted earlier | `git log --all -- assignments/week-5-plan.md` then `git show <sha>:assignments/week-5-plan.md` |
-| `BRANCH_COMPARISON.md` | One-off `master` vs branch migration writeup (2026-06-28) | Snapshot embedded below (Appendix A); **removal candidate** | still in working tree (until removed) |
-| `assignments/architecture.md` | Early assignment architecture doc | Superseded by [`documentation/architecture.md`](../architecture.md); **removal candidate** | still in working tree (until removed) |
+| `plan.md` | Original approved UI + auth master plan (M0–M7) | Consolidated → `ROADMAP.md`; deleted 2026-07-24 | `git log --all -- plan.md` |
+| `phase2-proposals.md` | Phase-2 proposals (user-type classification, batch upload, M2M API) | Consolidated → `ROADMAP.md §3`; deleted | `git log --all -- phase2-proposals.md` |
+| `rollout-plan.md` | Rollout / sequencing plan | Consolidated → `ROADMAP.md`; deleted | `git log --all -- rollout-plan.md` |
+| `assignments/week-5-plan.md` | Near-term weekly roadmap slice | Consolidated → `ROADMAP.md §1`; deleted | `git log --all -- assignments/week-5-plan.md` |
+| `BRANCH_COMPARISON.md` | One-off `master` vs branch migration writeup (2026-06-28) | Snapshot preserved in **Appendix A**; deleted 2026-07-27 | `git log --all -- BRANCH_COMPARISON.md` |
+| `branch-changelog.md` | Chronological record of everything that landed on the branch | Timeline preserved in **Appendix B**; deleted 2026-07-27 | `git log --all -- branch-changelog.md` |
+| `documentation/project-status-and-roadmap.md` | Built-vs-documented reconciliation against the submitted deliverables | Superseded — its "actual" column is now the shipped app, and its backlog moved to `ROADMAP.md`; deleted 2026-07-27 | `git log --all -- documentation/project-status-and-roadmap.md` |
+| `assignments/architecture.md` | Early assignment architecture doc | Superseded by [`documentation/architecture.md`](../architecture.md) | still in working tree |
 
-> **Deletion policy:** the two "removal candidate" files are kept until you OK removing them. Their
-> essential content is either embedded here (Appendix A) or superseded by a current guide.
+> **Consolidation policy (2026-07-27).** There is now exactly **one live planning document** —
+> [`ROADMAP.md`](../../ROADMAP.md) — and exactly **one archive**, this file. Everything retired has
+> its essential content preserved in an appendix below, and every deleted file remains recoverable
+> from git history. The point is that a reader never has to work out which of four planning
+> documents is the current one.
 
 ---
 
@@ -138,6 +143,27 @@ Do **not** point the branch at an old `master` database and hand-patch columns. 
 with the branch's `schema.sql`, update `.env` for new variables, then boot and let Hibernate validate.
 *(This exact class of drift later recurred against Aiven `db3` — see `ROADMAP.md §5` and the 2026-07
 schema-portability work.)*
+
+---
+
+## Appendix B — Branch delivery timeline
+
+Preserved from the retired `branch-changelog.md`. What landed on `MastersProjectSRSImpl`, in order.
+
+| Phase | When | What landed |
+|---|---|---|
+| **A** — Security feature drop | 2026-06-11 | Admin/RBAC surface, TOTP MFA, refresh sessions & rotation, organization scoping (~5.7k insertions) |
+| **B** — SRS implementation | 2026-06-13 | Requirements traced into code (+1,337) |
+| **C** — Documentation corpus | 2026-06-13 → 06-16 | The `documentation/` guides and the flow docs (~7.6k insertions) |
+| **D** — Production hardening + UI consistency | 2026-06-17 | Prod profile hardening, the `sc-*` design layer |
+| **E** — Prod-readiness finish | 2026-06-18 | JPA schema sync, config fail-fast |
+| **F** — TesseraApp rebrand + billing/services | 2026-06-18 | SecureCapita → TesseraApp, billing and services-catalog screens |
+| **G** — Security & cloud hardening | 2026-07-21 → 07-24 | Rate limiting, security headers, S3 image storage, multi-env config + CI/CD, analytics authz, non-fatal audit |
+| **H** — Threat protection | 2026-07-25 | FR-TPF-1 login anomaly detection + step-up, org-scoped analytics, `X-Forwarded-For` trust fix, frontend test harness proven |
+| **I** — Feature completion | 2026-07-26 | Security dashboard (FR-TPF-2), business CRUD (invoice edit, services catalog), capability-level RBAC gating, six-language i18n, CI gating on lint + audit, security-path tests, federated link/unlink |
+
+For the current state rather than the history, see [`ROADMAP.md`](../../ROADMAP.md) and
+[`documentation/README.md`](../README.md).
 
 ---
 

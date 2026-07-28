@@ -24,7 +24,7 @@ The honest state of automated testing in TesseraApp: the current test inventory,
 
 ## 1. Current test inventory
 
-**21 backend test classes / 116 `@Test` methods**, plus **4 frontend spec files / 35 specs**. Only one
+**21 backend test classes / 116 `@Test` methods**, plus **7 frontend spec files / 79 specs**. Only one
 backend class needs a database; everything else runs in milliseconds against mocks, standalone
 MockMvc, or Hibernate's offline schema export — which is the whole point of how they are written.
 
@@ -64,11 +64,29 @@ MockMvc, or Hibernate's offline schema export — which is the whole point of ho
 
 | Spec | Tests | What it locks in |
 |------|------:|------------------|
+| `service/user.service.authority.spec.ts` | 20 | **JWT authority decoding** — exact (not prefix) matching, expiry beating a privileged claim, memo invalidation across token rotation, and six shapes of corrupt token that must grant nothing *without throwing* |
+| `interceptor/token.interceptor.spec.ts` | 15 | **Silent refresh on 401** — one refresh shared by concurrent 401s, retry replaying method/URL/body, token clearing on refresh failure, and parked requests failing rather than hanging |
 | `shared/command-palette/command-palette.component.spec.ts` | 12 | Hotkey gating, authority-filtered command sets, filtering, keyboard model |
 | `directive/has-authority.directive.spec.ts` | 9 | Capability gating: hide vs disable, `else` templates, accessibility of the disabled state |
+| `guard/authentication.guard.spec.ts` | 9 | The session gate, driven against **real token storage** as well as a double — a corrupt token must redirect to `/login`, not throw out of the guard |
 | `guard/admin.guard.spec.ts` | 7 | Route gating + the localized, non-enumerating denial message |
 | `guard/capability.guard.spec.ts` | 7 | Route-data-driven gating, fail-closed on a missing declaration |
-| **Total** | **35** | |
+| **Total** | **79** | |
+
+> **Five of these are true regression tests.** They were confirmed to fail against the pre-fix code
+> before the fixes landed — a green suite written after the fix proves only that the suite runs. They
+> cover three defects found while writing them: a failed token refresh left concurrently-parked
+> requests hanging forever (no value, no error, no completion), an unparseable token in
+> `localStorage` threw *out of* `authenticationGuard` instead of redirecting, and the interceptor's
+> public-route check matched substrings of the whole URL, so `/customer/search?name=login` was sent
+> unauthenticated.
+
+> **Two test helpers support these.** `testing/jwt.ts` builds unsigned tokens in shapes a real
+> `TokenProvider` would never emit (no `exp`, no `authorities`, truncated) — legitimate, because the
+> browser never verifies a signature. `testing/local-storage.ts` installs an in-memory `Storage` over
+> the global: the `@angular/build:unit-test` environment provides a `window` but its `localStorage`
+> is an inert placeholder with no `getItem`/`setItem`/`clear`, so any spec touching tokens fails on
+> a "not a function" `TypeError` unrelated to the code under test.
 
 > **Why so little needs MySQL.** Only `contextLoads` boots the real application context. Everything else was written to exercise its target without a context or a connection, so the meaningful unit/slice tests stay green in CI with no database.
 
@@ -269,32 +287,47 @@ Beyond the JUnit/Vitest suites, the build wires two Maven quality plugins (neith
 
 ## 9. Known coverage gaps & roadmap
 
-Stated plainly: coverage is **modest** — 5 backend classes / 13 tests and 0 frontend specs. The existing tests are well-targeted (anti-enumeration, the error envelope, service rules, schema drift, and a context-load wiring check), but the project's headline security features are **not** directly tested, and the SPA is entirely untested. Status legend: ✅ covered · 🔄 partial · ❌ not covered.
+Stated plainly: coverage is **modest but real** — 195 tests across 28 files, and every headline
+security claim now has at least one dedicated test. What remains uncovered is a specific, nameable
+shape: **nothing exercises the real filter chain, and nothing exercises a real browser.** Every
+test below either mocks its collaborators or drives a standalone `MockMvc` that skips
+`SecurityConfig` by design. Status legend: ✅ covered · 🔄 partial · ❌ not covered.
 
 | Area | Status | Where it lives | Gap |
 |------|:------:|----------------|-----|
-| Service business rules (customer/invoice) | ✅ | `CustomerServiceImplTest` | Only the customer service; other services untested |
-| Error → `HttpResponse` envelope | ✅ | `GlobalExceptionHandlerTest` | — |
+| Refresh-token **rotation & reuse detection** | ✅ | `SessionServiceImplTest` | — |
+| **TOTP** challenge binding / single-use recovery codes | ✅ | `TotpServiceImplTest` | RFC-6238 time-window drift not directly exercised |
+| **Organization-scoped** admin authorization | ✅ | `AdminUserControllerOrgScopeTest`, `AnalyticsControllerOrgScopeTest` | — |
+| Brute-force per-account lockout | ✅ | `UserControllerBruteForceLockTest` | — |
 | Login anti-enumeration | ✅ | `UserControllerLoginEnumerationTest` | — |
-| `schema.sql` ↔ JPA drift | ✅ | `JpaSchemaSyncTest` | Offline only; no real prod-profile `validate` boot ever run |
+| Anomaly detection / step-up (FR-TPF-1) | ✅ | `LoginRiskServiceImplTest` | — |
+| `X-Forwarded-For` trust | ✅ | `RequestUtilsIpAddressTest` | Trust depth is config; no deployed proxy has confirmed it |
+| Error → `HttpResponse` envelope | ✅ | `GlobalExceptionHandlerTest`, `ErrorDetailScrubberTest` | — |
+| Service business rules (customer/invoice) | ✅ | `CustomerServiceImplTest` | Only the customer service; other services untested |
+| **Frontend token refresh on 401** | ✅ | `token.interceptor.spec.ts` | — |
+| **Frontend session gate + JWT decoding** | ✅ | `authentication.guard.spec.ts`, `user.service.authority.spec.ts` | — |
+| Frontend capability gating (guards, directives) | ✅ | `admin.guard`, `capability.guard`, `has-authority.directive` specs | — |
+| `schema.sql` ↔ JPA drift | 🔄 | `JpaSchemaSyncTest` | **Offline only.** No prod-profile `ddl-auto=validate` boot has ever run against a `schema.sql`-only database |
 | Context wiring | 🔄 | `AngularSpringBootFullStackApplicationTests` | Boots, asserts nothing; requires live MySQL; not hermetic |
-| Refresh-token **rotation & reuse detection** | ❌ | `SessionServiceImpl` (token-issuance seam) | The project's headline security feature has no dedicated test |
-| **TOTP** enrollment / challenge-bound verify / single-use recovery codes | ❌ | `TotpServiceImpl`, `TotpUtils`, `TotpController` | No test for RFC-6238 verification or challenge binding |
-| **Organization-scoped** admin authorization | ❌ | `AdminUserController`, `OrganizationServiceImpl` | No test that out-of-scope access returns 403 / `APPLICATION_ADMIN` bypasses |
-| Real `SecurityConfig` matchers / `CustomAuthFilter` | ❌ | `configuration/`, `filter/` | Slice tests bypass the filter chain by design |
-| Brute-force per-account lockout | ❌ | `UserController.authenticate` + `EventService` | 5-failures/15-min window untested |
-| Frontend interceptors (`tokenInterceptor`, `cacheInterceptor`) | ❌ | `tesseraapp/src/app/interceptor/` | Guards, the capability directives and the command palette have specs; the interceptors — the most logic-dense pieces — do not |
+| Frontend HTTP cache (`cacheInterceptor`) | ❌ | `tesseraapp/src/app/interceptor/cache.interceptor.ts` | Client-only cache with no cross-user invalidation — the one interceptor still unspecced |
+| Real `SecurityConfig` matchers / `CustomAuthFilter` | ❌ | `configuration/`, `filter/` | Slice tests bypass the filter chain by design, so matcher **ordering** — the thing most likely to break — is unverified |
 | HTTP-level integration (real requests, fixtures) | ❌ | — | No `TestRestTemplate`/Testcontainers layer |
+| End-to-end (browser against a running stack) | ❌ | — | Seams pass CI: interceptor ↔ backend, OAuth redirect round-trip, federated link flow |
 
 ### Roadmap to broaden (prioritized)
 
 | Priority | Step | Why first |
 |:--------:|------|-----------|
-| **P1** | Unit-test the security-critical seams with Mockito (same pattern as [§3](#3-writing-a-backend-unit-test-mock-the-reposservices)): `SessionServiceImpl` rotation + family-wide reuse revocation; `TotpServiceImpl`/`TotpUtils` verify + recovery-code single-use; `AdminUserController` org-scope 403/bypass | These are the headline claims and carry the most risk if they regress; they need no DB |
-| **P1** | Specs for `tokenInterceptor` and `cacheInterceptor` ([§7](#7-frontend-testing-angular-21-vitest)) | The silent-refresh path is the highest-leverage untested logic left; `adminGuard` is now covered |
-| **P2** | Replace/supplement `contextLoads` with a **Testcontainers MySQL** `@SpringBootTest` so integration is hermetic and CI-friendly (removes the "needs local MySQL" footgun in [§5](#5-integration-approach-contextloads-against-local-mysql)) | Unblocks DB-backed tests in CI without a manual MySQL |
-| **P2** | Add a `@SpringBootTest(webEnvironment=RANDOM_PORT)` + `TestRestTemplate` happy-path per controller, asserting the `HttpResponse` envelope and real `SecurityConfig` authority rules | Covers the filter chain the standalone slices skip |
-| **P3** | A real prod-profile boot with `ddl-auto=validate` against a `schema.sql`-only database, to retire `JpaSchemaSyncTest`'s "offline stand-in" caveat | Confirms the drift guard's premise end-to-end |
-| **P3** | Wire `dependency-check` and the test suite into CI so they gate merges | Makes the gates above continuous, not on-demand |
+| **P1** | A real prod-profile boot with `ddl-auto=validate` against a `schema.sql`-only MySQL | The single largest untested assumption in the project: `JpaSchemaSyncTest` validates the *premise* offline, but a deploy that builds cleanly and then fails at startup is the most likely production failure |
+| **P1** | Add a `@SpringBootTest(webEnvironment=RANDOM_PORT)` + `TestRestTemplate` happy path per controller, asserting the envelope and the **real** `SecurityConfig` authority rules | Covers the filter chain every slice test skips — including `PUBLIC_URLS` ↔ `PUBLIC_ROUTES` lockstep and matcher ordering, which have no automated guard at all |
+| **P2** | Replace/supplement `contextLoads` with a **Testcontainers MySQL** `@SpringBootTest` | Unblocks DB-backed tests in CI without a manual MySQL, and removes the "needs local MySQL" footgun in [§5](#5-integration-approach-contextloads-against-local-mysql) |
+| **P2** | Specs for `cacheInterceptor` | The last unspecced interceptor; its invalidation rules are the kind of logic that silently serves one user another's data |
+| **P3** | Playwright end-to-end against `docker-compose up` | The only way to catch seam breaks; also the only way to exercise a federated login round-trip |
+| **P3** | Distributed-state tests for rate limiting and brute-force counters once they move off per-instance memory | Meaningless until the state is actually shared — see [cicd-setup.md §6](cicd-setup.md#6-security-controls-that-depend-on-the-pipeline) |
+
+> **Closed since the last revision.** Refresh rotation, TOTP, org scoping, brute-force lockout, the
+> `tokenInterceptor` refresh path and the frontend JWT-decoding edges all moved from ❌ to ✅. CI now
+> runs the dependency-check gate, `npm audit`, `ng lint` and both test suites on every push, and
+> gates both deploy pipelines — so these are continuous rather than on-demand.
 
 > **Standing honesty rule for this doc:** when coverage genuinely improves, update [§1](#1-current-test-inventory)'s counts and this register from the code — never from another doc. The "near-zero tests" framing in older artifacts is stale; "modest but real" is accurate; do not let either drift into "well-tested" without the tests to back it.

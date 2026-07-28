@@ -38,9 +38,19 @@ on:
   #   branches: [master]
 
 jobs:
+  # Same gate as the AWS pipeline: run the full CI suite before building or shipping.
+  verify:
+    name: Verify (CI)
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   deploy:
     name: Build → Artifact Registry → Cloud Run
     runs-on: ubuntu-latest
+    needs: verify
+    # Binds the run to a GitHub Environment, so qa/stage/prod can carry their own
+    # secrets and required reviewers rather than all sharing the repository-level set.
+    environment: ${{ github.event.inputs.environment || 'prod' }}
     env:
       IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.AR_REPO }}/${{ secrets.CLOUD_RUN_SERVICE }}:${{ github.sha }}
       TARGET_ENV: ${{ github.event.inputs.environment || 'prod' }}
