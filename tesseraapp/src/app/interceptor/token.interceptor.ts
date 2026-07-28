@@ -7,9 +7,39 @@ import { UserService } from '../service/user.service';
 import { ProfileInterface } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 
+/**
+ * The settled result of a refresh attempt, broadcast to every request that parked itself
+ * behind the in-flight refresh.
+ *
+ * <p>Failure is modelled as a *value* rather than an RxJS error because the channel carrying it
+ * is a long-lived {@link BehaviorSubject} shared by the whole application. Calling
+ * {@code subject.error()} would terminate that subject permanently, so the first failed refresh
+ * of the session would leave every later refresh with a dead notification channel. Emitting a
+ * failure marker lets each waiter re-raise the error on its own stream while the shared subject
+ * stays usable for the next cycle.
+ */
+type RefreshOutcome =
+  | { readonly settled: 'success'; readonly response: CustomHttpResponseInterface<ProfileInterface> }
+  | { readonly settled: 'failure'; readonly error: unknown };
+
 // Module-level state: persists across requests so concurrent 401s share one refresh.
 let isTokenRefreshing = false;
-const refreshTokenSubject = new BehaviorSubject<CustomHttpResponseInterface<ProfileInterface> | null>(null);
+const refreshTokenSubject = new BehaviorSubject<RefreshOutcome | null>(null);
+
+/**
+ * Test-only hook that returns the shared refresh state to its initial values.
+ *
+ * <p>The state above is module-level by design — one refresh must be shared by every concurrent
+ * request — but that also means it outlives any individual {@code TestBed}. Without this, a spec
+ * that leaves a refresh in flight silently changes the branch the *next* spec takes, turning an
+ * unrelated failure into a cascade. Production code must never call this: clearing the flag while
+ * a refresh is genuinely in flight would let a second refresh start and rotate the token out from
+ * under the first.
+ */
+export function __resetTokenRefreshStateForTests(): void {
+  isTokenRefreshing = false;
+  refreshTokenSubject.next(null);
+}
 
 /**
  * tokenInterceptor — Angular functional HTTP interceptor.
@@ -45,10 +75,18 @@ export const tokenInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, n
    *                                        token, not the access token
    *
    * Every other route is considered protected and will receive the token.
+   *
+   * Matched against whole path *segments*, not as substrings of the raw URL. A plain
+   * {@code url.includes('login')} also matches a protected request that merely mentions one of
+   * these words in a query value — {@code /customer/search?name=login} — and such a request would
+   * then be sent with no Authorization header at all, come back 401, and (being on the
+   * pass-through branch) not even attempt a refresh. Trimming the query string and comparing
+   * segments keeps the decision tied to the endpoint being called rather than to user input.
    */
   const publicRoutes = ['login', 'register', 'verify', 'resetpassword', 'refresh'];
+  const pathSegments = req.url.split(/[?#]/)[0].split('/');
 
-  if (publicRoutes.some((route) => req.url.includes(route))) {
+  if (publicRoutes.some((route) => pathSegments.includes(route))) {
     return next(req);
   }
 
@@ -89,9 +127,15 @@ function addAuthorizationTokenHeader(request: HttpRequest<unknown>, token: strin
  * are cleared and the error propagates.
  *
  * If a refresh is already in flight (concurrent 401s), this call waits on
- * refreshTokenSubject until the active refresh emits a response, then retries
- * with the token from that response — preventing a thundering-herd of parallel
- * refresh calls.
+ * refreshTokenSubject until the active refresh settles, then either retries with
+ * the new token or re-raises the refresh failure — preventing a thundering-herd
+ * of parallel refresh calls.
+ *
+ * <p><b>Why the failure branch also notifies.</b> Both outcomes must be broadcast, not just
+ * success. A refresh that fails while other requests are parked behind it would otherwise leave
+ * them subscribed to a subject that never emits again: no value, no error, no completion. The
+ * user sees spinners that never resolve and is never redirected to log in, because nothing on
+ * those streams ever reaches the error handler that would sign them out.
  *
  * @param req         - the original request that received the 401
  * @param next        - the next handler used to retry the request
@@ -108,7 +152,7 @@ function handleRefreshToken(req: HttpRequest<unknown>, next: HttpHandlerFn, user
         // DEBUG ONLY — DO NOT SHIP ENABLED: prints credentials/PII to the console.
         // console.log('Token Refresh Response:', response);
         isTokenRefreshing = false;
-        refreshTokenSubject.next(response);
+        refreshTokenSubject.next({ settled: 'success', response });
         // DEBUG ONLY — DO NOT SHIP ENABLED: prints credentials/PII to the console.
         // console.log('New Token:', response.data!.access_token);
         // console.log('Sending original request:', req);
@@ -118,14 +162,21 @@ function handleRefreshToken(req: HttpRequest<unknown>, next: HttpHandlerFn, user
         isTokenRefreshing = false;
         localStorage.removeItem(Key.TOKEN);
         localStorage.removeItem(Key.REFRESH_TOKEN);
+        // Release the parked requests before propagating, so they fail alongside this one
+        // instead of hanging on a subject that will never emit again.
+        refreshTokenSubject.next({ settled: 'failure', error });
         return throwError(() => error);
       }),
     );
   }
-  // Refresh already in flight — wait for the subject to emit a real response, then retry.
+  // Refresh already in flight — wait for it to settle, then retry or fail with it.
   return refreshTokenSubject.pipe(
-    filter((response): response is CustomHttpResponseInterface<ProfileInterface> => response !== null),
+    filter((outcome): outcome is RefreshOutcome => outcome !== null),
     take(1),
-    switchMap((response) => next(addAuthorizationTokenHeader(req, response.data!.access_token))),
+    switchMap((outcome) =>
+      outcome.settled === 'success'
+        ? next(addAuthorizationTokenHeader(req, outcome.response.data!.access_token))
+        : throwError(() => outcome.error),
+    ),
   );
 }

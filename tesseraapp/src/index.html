@@ -24,16 +24,14 @@
   <meta name="description" content="TesseraApp - Customer &amp; billing management platform">
   <meta name="theme-color" content="#0d6efd">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
-    rel="stylesheet">
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-    integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+"
-    crossorigin="anonymous">
+  <!-- Fonts (IBM Plex Sans/Mono) and Bootstrap Icons are SELF-HOSTED, not loaded from
+       Google Fonts or a CDN. They used to be linked from fonts.googleapis.com and
+       cdn.jsdelivr.net, which broke in production: Spring Boot serves this document out
+       of src/main/resources/static/ and applies the CSP from SecurityConfig, whose
+       `style-src 'self'` and `font-src 'self'` directives blocked both. Local `ng serve`
+       sends no CSP, so it only ever failed once deployed. They now come through the
+       bundled stylesheet (see the `styles` array in angular.json and src/fonts.css),
+       which also removes two third-party DNS + TLS handshakes from the critical path. -->
 </head>
 <body>
   <app-root></app-root>

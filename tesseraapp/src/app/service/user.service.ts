@@ -368,6 +368,23 @@ export class UserService {
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
+   * Starts connecting an identity provider to the caller's own account (ROADMAP §1.4).
+   *
+   * Returns a single-use, five-minute ticket plus the URL to navigate to. The two-step shape exists
+   * because the browser leaves the app during the OAuth handshake, and a JWT cannot ride a
+   * top-level navigation — so the account is decided *here*, while the caller is still
+   * authenticated, and carried across in the ticket rather than inferred from the provider response.
+   *
+   * @param provider - the registration id to connect
+   * @returns Observable of the envelope carrying `ticket` and `linkUrl`
+   */
+  startProviderLink$ = (provider: string): Observable<CustomHttpResponseInterface<{ ticket: string; linkUrl: string }>> =>
+    this.http
+      .post<CustomHttpResponseInterface<{ ticket: string; linkUrl: string }>>(
+        `${this.server}/user/sessions/providers/link/${provider}`, {})
+      .pipe(catchError(this.handleError));
+
+  /**
    * Disconnects one provider from the caller's own account
    * ({@code DELETE /user/sessions/providers/{provider}}).
    *
@@ -410,8 +427,31 @@ export class UserService {
     window.location.assign(`${this.server}/oauth2/authorization/${provider}`);
   }
 
-  isAuthenticated = (): boolean =>
-    !!this.jwtHelper.decodeToken<string>(localStorage.getItem(Key.TOKEN) ?? '') && !this.jwtHelper.isTokenExpired(localStorage.getItem(Key.TOKEN) ?? '');
+  /**
+   * Whether storage currently holds a decodable, unexpired access token.
+   *
+   * <p>Consulted by {@code authenticationGuard} on every protected navigation, so its failure
+   * mode matters more than its happy path. {@link JwtHelperService#decodeToken} *throws* on a
+   * value that does not split into three dot-separated parts — it does not return null — and a
+   * throw here escapes the guard and aborts the router navigation, stranding the user on the
+   * current page instead of sending them to {@code /login}. Storage can hold such a value
+   * legitimately: a half-written token, a leftover from an older build, or anything a user has
+   * typed into devtools. A token we cannot read is treated exactly like no token at all.
+   *
+   * @returns true only when a well-formed, unexpired token is present
+   */
+  isAuthenticated = (): boolean => {
+    const token = localStorage.getItem(Key.TOKEN) ?? '';
+    if (!token) {
+      return false;
+    }
+    try {
+      return !!this.jwtHelper.decodeToken<string>(token) && !this.jwtHelper.isTokenExpired(token);
+    } catch {
+      // Unreadable token: fail closed to "signed out" so the guard can redirect normally.
+      return false;
+    }
+  };
 
   /**
    * Returns whether the current access token grants at least one of the given authorities.
@@ -452,16 +492,31 @@ export class UserService {
    */
   private grantedAuthorities(): string[] {
     const token = localStorage.getItem(Key.TOKEN) ?? '';
-    if (!token || this.jwtHelper.isTokenExpired(token)) {
+    try {
+      if (!token || this.jwtHelper.isTokenExpired(token)) {
+        this.cachedToken = '';
+        this.cachedAuthorities = [];
+        return this.cachedAuthorities;
+      }
+      if (token !== this.cachedToken) {
+        this.cachedToken = token;
+        const claim = this.jwtHelper.decodeToken<{ authorities?: unknown }>(token)?.authorities;
+        // The claim is attacker-editable (the client never verifies the signature), so its shape
+        // is checked rather than asserted. A bare string would otherwise be kept as-is and every
+        // later `granted.includes(...)` would run String.prototype.includes — matching by
+        // substring, so a token claiming "UPDATE:USERS" would satisfy a check for "UPDATE:USER".
+        this.cachedAuthorities = Array.isArray(claim) ? claim.filter((entry): entry is string => typeof entry === 'string') : [];
+      }
+      return this.cachedAuthorities;
+    } catch {
+      // An unreadable token throws out of the helper rather than decoding to nothing. Templates
+      // call this during change detection, so letting it escape takes down the whole render pass
+      // — the user gets a blank screen instead of a page with the privileged controls withheld.
+      // Grant nothing, and drop the memo so a subsequent good token is not shadowed by it.
       this.cachedToken = '';
       this.cachedAuthorities = [];
       return this.cachedAuthorities;
     }
-    if (token !== this.cachedToken) {
-      this.cachedToken = token;
-      this.cachedAuthorities = this.jwtHelper.decodeToken<{ authorities?: string[] }>(token)?.authorities ?? [];
-    }
-    return this.cachedAuthorities;
   }
 
   /**

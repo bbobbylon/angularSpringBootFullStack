@@ -525,7 +525,8 @@
     "phoneSaved": "Phone number saved — SMS verification is now enabled",
     "sessionRevoked": "Session revoked",
     "otherSessionsRevoked": "Logged out of other sessions",
-    "providerDisconnected": "Provider disconnected"
+    "providerDisconnected": "Provider disconnected",
+    "providerLinked": "Connected {{provider}} to your account"
   },
   "palette": {
     "sectionNavigate": "Navigate",

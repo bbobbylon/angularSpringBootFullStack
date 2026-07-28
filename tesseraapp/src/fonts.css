@@ -1,0 +1,54 @@
+/*
+ * Self-hosted web fonts (IBM Plex Sans / IBM Plex Mono).
+ *
+ * WHY THESE ARE SELF-HOSTED RATHER THAN LOADED FROM GOOGLE FONTS
+ * -------------------------------------------------------------
+ * In production the SPA is served by Spring Boot out of `src/main/resources/static/`
+ * (see the Dockerfile's `COPY --from=frontend-build ... ./src/main/resources/static/`),
+ * so the SPA document carries the Content-Security-Policy set in `SecurityConfig`.
+ * That policy is `font-src 'self'` and `style-src 'self' 'unsafe-inline'`, which means
+ * a stylesheet from `fonts.googleapis.com` and a woff2 from `fonts.gstatic.com` are
+ * both *blocked* — the app silently fell back to system fonts in production while
+ * looking correct in local development, where `ng serve` sends no such header.
+ *
+ * There were two ways out. Adding the Google origins to `font-src`/`style-src` would
+ * have worked, but it widens the policy to a third party for a purely cosmetic asset,
+ * and every widening has to be defended forever after. Self-hosting keeps the policy
+ * at `'self'` — the tightest form — and removes two DNS + TLS handshakes from the
+ * critical path at the same time, so the secure option is also the fast one.
+ *
+ * WHY THESE PARTICULAR FILES
+ * --------------------------
+ * Weights match what the old Google Fonts request asked for: Sans 400/500/600/700 and
+ * Mono 400/500/600. Only the `latin` and `latin-ext` subsets are imported — `latin-ext`
+ * is what carries the accented characters the Spanish, French, German and Portuguese
+ * translations need. Fontsource's all-subsets stylesheets would additionally emit
+ * Cyrillic, Greek and Vietnamese woff2 files into `dist/`; the browser would never
+ * request them (unicode-range keeps them dormant), but they would still be built,
+ * deployed and cached by the service worker if one is ever added. Chinese is not
+ * covered by IBM Plex and falls back to the system CJK face either way.
+ *
+ * Each import already declares `font-display: swap`, so text paints immediately in the
+ * fallback face and re-renders when the web font arrives — no invisible-text period.
+ *
+ * Loaded via the `styles` array in `angular.json`, ahead of `styles.css`, which is
+ * where `--font-sans` / `--font-mono` reference these families.
+ */
+
+/* IBM Plex Sans — body copy and headings. */
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-sans/latin-700.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-400.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-500.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-600.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-700.css';
+
+/* IBM Plex Mono — numeric columns, codes, IDs and the command palette. */
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+@import '@fontsource/ibm-plex-mono/latin-600.css';
+@import '@fontsource/ibm-plex-mono/latin-ext-400.css';
+@import '@fontsource/ibm-plex-mono/latin-ext-500.css';
+@import '@fontsource/ibm-plex-mono/latin-ext-600.css';

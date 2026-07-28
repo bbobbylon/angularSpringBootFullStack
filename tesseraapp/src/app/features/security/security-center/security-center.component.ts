@@ -9,6 +9,7 @@ import { UserService } from '../../../service/user.service';
 import { ProviderLinkInterface } from '../../../interface/security.interface';
 import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
+import { environment } from '../../../../environments/environment';
 import { UserInterface } from '../../../interface/user.interface';
 import { SessionInterface, TotpSetupInterface } from '../../../interface/security.interface';
 import { UserEventsInterface } from '../../../interface/user-events.interface';
@@ -111,6 +112,7 @@ export class SecurityCenterComponent implements OnInit {
    */
   ngOnInit(): void {
     this.loadConnectedProviders();
+    this.reportLinkOutcome();
     this.userService
       .profile$()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -406,6 +408,28 @@ export class SecurityCenterComponent implements OnInit {
    * provider list, and this panel should then simply show nothing rather than an error — federated
    * login being unconfigured is a normal state, not a fault.
    */
+  /**
+   * Reports the outcome of a link handshake and cleans the flag out of the URL.
+   *
+   * <p>The backend redirects back here with {@code ?linked=} or {@code ?linkError=} because a link
+   * completes in the browser's address bar, not in an XHR response. The flag is stripped afterwards
+   * so a refresh does not replay the toast, and so the URL the user might bookmark or share carries
+   * no leftover state.
+   */
+  private reportLinkOutcome(): void {
+    const params = new URLSearchParams(window.location.search);
+    const linked = params.get('linked');
+    const linkError = params.get('linkError');
+    if (!linked && !linkError) return;
+
+    if (linked) {
+      this.notification.onSuccess(this.transloco.translate('toasts.providerLinked', { provider: linked }));
+    } else if (linkError) {
+      this.notification.onError(linkError);
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
   private loadConnectedProviders(): void {
     this.userService
       .connectedProviders$()
@@ -425,17 +449,35 @@ export class SecurityCenterComponent implements OnInit {
   }
 
   /**
-   * Starts the OAuth2 flow to connect an additional provider.
+   * Connects an additional identity provider to *this* account.
    *
-   * <p>Reuses the ordinary login initiation: signing in with a provider whose subject is unknown
-   * but whose email matches this account is exactly what links it (the find-or-create convergence
-   * step). There is no separate "link" endpoint to maintain, and no second code path that could
-   * diverge from the one login already exercises.
+   * <p>Mints a single-use link ticket first, then navigates to the backend's link entry point.
+   * Previously this called {@code initiateFederatedLogin} directly, which ran an ordinary federated
+   * sign-in: the callback resolved an account from the provider identity and issued tokens for it,
+   * so connecting an identity whose email differed from this account silently switched the session
+   * to a different user. The ticket is what tells the callback "attach this to me" instead of
+   * "log me in as whoever this is".
    *
    * @param provider - the registration id to connect
    */
   protected connectProvider(provider: string): void {
-    this.userService.initiateFederatedLogin(provider);
+    if (this.isLoading()) return;
+    this.isLoading.set(true);
+
+    this.userService
+      .startProviderLink$(provider)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          // A full-page navigation, not an XHR: the OAuth2 Authorization Code flow is a chain of
+          // browser redirects, so the whole window has to travel.
+          window.location.assign(`${environment.apiUrl}${response.data!.linkUrl}`);
+        },
+        error: (error: Error) => {
+          this.isLoading.set(false);
+          this.notification.onError(error.message);
+        },
+      });
   }
 
   /**

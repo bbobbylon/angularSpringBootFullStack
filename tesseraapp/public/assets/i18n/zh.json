@@ -525,7 +525,8 @@
     "phoneSaved": "手机号码已保存——短信验证现已启用",
     "sessionRevoked": "会话已撤销",
     "otherSessionsRevoked": "已退出其他会话",
-    "providerDisconnected": "提供方已断开连接"
+    "providerDisconnected": "提供方已断开连接",
+    "providerLinked": "已将 {{provider}} 连接到您的账户"
   },
   "palette": {
     "sectionNavigate": "导航",

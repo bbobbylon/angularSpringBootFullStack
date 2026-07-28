@@ -525,7 +525,8 @@
     "phoneSaved": "Telefonnummer gespeichert – die SMS-Verifizierung ist jetzt aktiv",
     "sessionRevoked": "Sitzung widerrufen",
     "otherSessionsRevoked": "Von anderen Sitzungen abgemeldet",
-    "providerDisconnected": "Anbieter getrennt"
+    "providerDisconnected": "Anbieter getrennt",
+    "providerLinked": "{{provider}} wurde mit Ihrem Konto verbunden"
   },
   "palette": {
     "sectionNavigate": "Navigieren",
