@@ -136,6 +136,36 @@ describe('tokenInterceptor', () => {
       expect(authOn(0)).toBe(`Bearer ${STALE_TOKEN}`);
     });
 
+    it('omits the header entirely for a visitor with no token, rather than sending "Bearer null"', () => {
+      // The distinction matters because the two are not equivalent to the backend. An absent header
+      // takes CustomAuthFilter's "no Authorization header" skip and the request proceeds as
+      // anonymous; a header reading the literal "Bearer null" is a *present* header, so the filter
+      // tries to parse "null" as a JWT and answers 400. This surfaced on /assets/i18n/en.json — a
+      // public static asset with no auth requirement whatsoever — failing on every logged-out page
+      // load, because template interpolation had stringified a null token into the header.
+      localStorage.removeItem(Key.TOKEN);
+
+      collect(intercept('/assets/i18n/en.json'));
+
+      expect(handled[0].headers.has('Authorization')).toBe(false);
+    });
+
+    it('treats the literal strings "null" and "undefined" in storage as no token at all', () => {
+      // Both are truthy nine- and four-character strings, so a plain `token ? ... : req` check lets
+      // them straight through into the header. Any code path that ever did
+      // localStorage.setItem(Key.TOKEN, possiblyUndefinedValue) writes one of these, and nothing
+      // else clears it back to a real absence — so without this guard that browser is wedged for
+      // good, every request 400ing, and clearing site data is the only cure.
+      for (const poisoned of ['null', 'undefined']) {
+        handled = [];
+        localStorage.setItem(Key.TOKEN, poisoned);
+
+        collect(intercept('/user/profile'));
+
+        expect(handled[0].headers.has('Authorization'), `"${poisoned}" should not be sent as a token`).toBe(false);
+      }
+    });
+
     it('leaves public routes completely untouched', () => {
       // Not merely "no token" — the same request object, unmodified. The login POST must not
       // carry a stale Authorization header from a previous session, which the backend would

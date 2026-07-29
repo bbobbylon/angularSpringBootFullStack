@@ -141,9 +141,19 @@ class SecurityConfig {
                             // img-src includes https: to allow S3-hosted profile images when
                             // IMAGE_STORAGE_TYPE=s3. Adjust connect-src when adding third-party
                             // analytics or error-reporting endpoints.
+                            //
+                            // The sha256 hash in script-src allow-lists ONE specific inline
+                            // script: index.html's tiny theme-flash-prevention snippet (reads
+                            // localStorage before first paint so there's no dark/light flash).
+                            // It's the exact hash Chrome's own CSP violation reports for that
+                            // script's content — NOT a blanket 'unsafe-inline' — so any other
+                            // inline script (or a change to this one's contents, which changes
+                            // its hash) stays blocked. If that script is ever edited, recompute
+                            // the hash (the browser console error reports the new one directly)
+                            // and update it here.
                             .contentSecurityPolicy(csp -> csp.policyDirectives(
                                     "default-src 'self'; " +
-                                    "script-src 'self'; " +
+                                    "script-src 'self' 'sha256-+tarR50wdDg867HQDss7r1ZcpsJqINIeko9y0srSPCw='; " +
                                     "style-src 'self' 'unsafe-inline'; " +
                                     "img-src 'self' data: blob: https:; " +
                                     "font-src 'self'; " +
@@ -212,6 +222,23 @@ class SecurityConfig {
                             // the permit above doesn't cover, discovered when self-hosted fonts
                             // 401'd in production despite the /assets/** and /*.woff2 permits.
                             .requestMatchers(GET, "/media/**").permitAll()
+                            // Direct navigation (or a hard refresh) to an Angular client-side
+                            // route — e.g. typing /login in the address bar — hits Spring
+                            // Security BEFORE the WebMvcConfig SPA-fallback ever gets a chance to
+                            // forward it to index.html, since security filters run ahead of MVC
+                            // dispatch. Every path here is a real entry in app.routes.ts; none
+                            // collides with a real backend endpoint — this app's API is entirely
+                            // singular/namespaced (/customer/**, /admin/services/**, /user/**),
+                            // while these frontend routes are plural or bare (/customers,
+                            // /services, /billing) by an existing, already-consistent convention.
+                            // This permits loading the SPA shell only — the actual protected DATA
+                            // for these pages still comes from those separate, still-authenticated
+                            // API endpoints, so this grants no new access to anything real.
+                            .requestMatchers(GET, "/login", "/verify", "/resetpassword", "/register",
+                                    "/customers", "/customers/**", "/customer/new", "/invoice/new",
+                                    "/invoices", "/invoice/**", "/profile", "/security", "/users",
+                                    "/users/**", "/roles", "/billing", "/services", "/services/manage",
+                                    "/analytics", "/security-overview").permitAll()
                             .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
                             .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
                             .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")

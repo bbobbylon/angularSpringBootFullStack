@@ -90,7 +90,24 @@ export const tokenInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, n
     return next(req);
   }
 
-  return next(addAuthorizationTokenHeader(req, localStorage.getItem(Key.TOKEN))).pipe(
+  // A missing token must produce a request with NO Authorization header, not one
+  // carrying the literal string "Bearer null" — `token` is JS `null` for a fresh,
+  // logged-out visitor, and template-literal interpolation would otherwise stringify
+  // it. That header isn't absent from the backend's point of view, so CustomAuthFilter's
+  // "no Authorization header" skip never applies; it tries to parse "null" as a JWT and
+  // 400s. Discovered because /assets/i18n/en.json — a public static asset with no auth
+  // requirement at all — was 400ing on every anonymous page load.
+  //
+  // Also guard against the STRING "null"/"undefined" (four or nine real characters, not
+  // the JS value) — truthy, so `token ? ... : req` alone wouldn't catch it. A browser
+  // that hit some earlier bug writing one of these literal strings into storage (any code
+  // path doing localStorage.setItem(Key.TOKEN, possiblyUndefinedValue) would do this) stays
+  // broken forever otherwise, since nothing else ever clears it back to a real absence.
+  const rawToken = localStorage.getItem(Key.TOKEN);
+  const token = rawToken && rawToken !== 'null' && rawToken !== 'undefined' ? rawToken : null;
+  const authorizedRequest = token ? addAuthorizationTokenHeader(req, token) : req;
+
+  return next(authorizedRequest).pipe(
     catchError((error: HttpErrorResponse) => {
       if (error instanceof HttpErrorResponse && error.status === 401) {
         return handleRefreshToken(req, next, userService);
@@ -110,11 +127,12 @@ export const tokenInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, n
  * Bearer token without touching anything else (URL, body, method, etc.).
  *
  * @param request - the original outgoing HTTP request
- * @param token   - the JWT access token retrieved from localStorage; may be
- *                  null if the user has never logged in or has cleared storage
+ * @param token   - a real JWT access token; every call site guarantees a non-null,
+ *                  non-empty string, so a missing token means never calling this at
+ *                  all rather than passing a placeholder through it (see tokenInterceptor)
  * @returns a cloned HttpRequest carrying the Authorization: Bearer <token> header
  */
-function addAuthorizationTokenHeader(request: HttpRequest<unknown>, token: string | null): HttpRequest<unknown> {
+function addAuthorizationTokenHeader(request: HttpRequest<unknown>, token: string): HttpRequest<unknown> {
   return request.clone({ setHeaders: { Authorization: `Bearer ${token}` } });
 }
 

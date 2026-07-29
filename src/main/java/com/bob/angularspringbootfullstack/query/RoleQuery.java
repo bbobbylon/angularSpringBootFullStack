@@ -30,7 +30,11 @@ public class RoleQuery {
      * the complete role information for a user.
      * Parameter: id (user_id)
      */
-    public static final String SELECT_ROLE_BY_ID_QUERY = "SELECT r.id, r.name, r.permission FROM roles r JOIN userroles ur ON ur.role_id = r.id JOIN Users u ON u.id = ur.user_id WHERE u.id = :id";
+    // Lowercase "users" — the actual table name per schema.sql. Windows/native MySQL is
+    // case-insensitive and tolerated "Users" silently; Aiven (Linux-hosted, case-sensitive)
+    // does not, so this broke real registration/login responses in production the first
+    // time this code path ran against it.
+    public static final String SELECT_ROLE_BY_ID_QUERY = "SELECT r.id, r.name, r.permission FROM roles r JOIN userroles ur ON ur.role_id = r.id JOIN users u ON u.id = ur.user_id WHERE u.id = :id";
     /**
      * Selects every role row ordered by ID.
      * <p>

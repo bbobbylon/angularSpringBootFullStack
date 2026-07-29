@@ -32,9 +32,18 @@ AWS_REGION=us-east-1 ./aws/setup.sh \
   --domain      app.tessera.example.com \
   --aiven-host  mysql-xyz.aivencloud.com \
   --aiven-port  28674 \
-  --aiven-db    defaultdb \
+  --aiven-db    db3 \
   --aiven-user  avnadmin
 ```
+
+> **`--aiven-db` must be `db3`, not `defaultdb`.** `defaultdb` is the empty database Aiven
+> auto-creates with every service; this application's data — users, roles, customers, invoices —
+> lives in **`db3`** (see [database.md §17.4](../documentation/database.md#174-migrating-native--aiven-how-db3-was-created)
+> for how it was migrated there). Pointing a task at `defaultdb` produces the most confusing
+> possible failure: the SPA loads perfectly, then every sign-in attempt fails, because the schema
+> may well be there but there is not a single user row in it. Unlike `mysql-xyz.aivencloud.com`
+> above, `defaultdb` is a real Aiven database name, so it does not look like a placeholder —
+> which is exactly how it gets copied verbatim.
 
 `--domain` is the **hostname only** — the script builds `http://${DOMAIN}` itself (not `https://`:
 see [Troubleshooting](#troubleshooting-real-errors-hit-running-setupsh) for why). Omit
@@ -160,7 +169,7 @@ aws secretsmanager update-secret --region us-east-1 \
 aws secretsmanager update-secret --region us-east-1 \
   --secret-id tessera-app/aiven-port     --secret-string '28674'
 aws secretsmanager update-secret --region us-east-1 \
-  --secret-id tessera-app/aiven-db       --secret-string 'defaultdb'
+  --secret-id tessera-app/aiven-db       --secret-string 'db3'
 aws secretsmanager update-secret --region us-east-1 \
   --secret-id tessera-app/aiven-user     --secret-string 'avnadmin'
 aws secretsmanager update-secret --region us-east-1 \
@@ -183,10 +192,14 @@ mysql \
   --password \
   --ssl-ca=aiven-ca.pem \
   --ssl-mode=REQUIRED \
-  defaultdb < src/main/resources/schema.sql
+  db3 < src/main/resources/schema.sql
 ```
 
 The schema is idempotent (`CREATE TABLE IF NOT EXISTS`, no DROPs) so re-running it is safe.
+
+Note the database name is **`db3`** here too. Running this against `defaultdb` is not destructive —
+it just creates a second, empty copy of the schema in the wrong place, which then looks like a
+working database to anything that connects to it while containing no accounts to sign in with.
 
 ---
 
@@ -200,7 +213,7 @@ export AWS_REGION=us-east-1
 export ECR_IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tessera-app:latest"
 export AIVEN_HOST=mysql-xyz.aivencloud.com
 export AIVEN_PORT=28674
-export AIVEN_DB=defaultdb
+export AIVEN_DB=db3
 export AIVEN_USER=avnadmin
 export S3_BUCKET=tessera-app-images
 # http:// unless you've already completed Step 8 (HTTPS) for real — see Troubleshooting.
@@ -350,7 +363,7 @@ prompts for the value rather than taking it as a visible argument):
 | `ECS_SERVICE` | e.g. `tessera-app-service` |
 | `AIVEN_HOST` | Aiven console → Service → Overview → Host |
 | `AIVEN_PORT` | Aiven console → Service → Overview → Port |
-| `AIVEN_DB` | e.g. `defaultdb` |
+| `AIVEN_DB` | **`db3`** — not `defaultdb`, which is Aiven's empty auto-created database |
 | `AIVEN_USER` | e.g. `avnadmin` |
 | `S3_BUCKET` | e.g. `tessera-app-images` |
 | `APP_DOMAIN` | `http://your-alb-dns-name` unless Step 8 (real HTTPS) is actually done, then `https://your-real-domain` |

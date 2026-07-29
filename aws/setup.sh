@@ -69,7 +69,12 @@ SERVICE="${ECS_SERVICE:-tessera-app-service}"
 DOMAIN="${APP_DOMAIN:-}"
 AIVEN_HOST="${AIVEN_HOST:-}"
 AIVEN_PORT="${AIVEN_PORT:-3306}"
-AIVEN_DB="${AIVEN_DB:-tessera}"
+# db3 is this application's real Aiven database (see documentation/database.md §17.4). The two
+# tempting wrong values both fail confusingly rather than loudly: `tessera` does not exist on the
+# Aiven instance at all, and `defaultdb` is the empty database Aiven auto-creates with every
+# service — connect to that and the app boots fine, serves the SPA, and rejects every sign-in
+# because there are no user rows to authenticate against.
+AIVEN_DB="${AIVEN_DB:-db3}"
 AIVEN_USER="${AIVEN_USER:-avnadmin}"
 AIVEN_PASSWORD="${AIVEN_PASSWORD:-}"
 

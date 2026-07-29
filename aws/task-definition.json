@@ -6,7 +6,7 @@
     "ECR_IMAGE_URI": "Full ECR image URI, e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/tessera-app:abc1234",
     "AIVEN_HOST": "Aiven MySQL hostname, e.g. mysql-abc123.aivencloud.com",
     "AIVEN_PORT": "Aiven MySQL port, e.g. 28674",
-    "AIVEN_DB": "Aiven MySQL database name, e.g. defaultdb",
+    "AIVEN_DB": "Aiven MySQL database name — use db3, this app's real database. NOT defaultdb (Aiven's empty auto-created database) and NOT tessera (does not exist): both let the app boot and serve the SPA while failing every sign-in.",
     "AIVEN_USER": "Aiven MySQL username, e.g. avnadmin",
     "S3_BUCKET": "S3 bucket name for profile images, e.g. tessera-app-images",
     "APP_DOMAIN": "Public URL of the app, e.g. https://app.tessera.example.com",
