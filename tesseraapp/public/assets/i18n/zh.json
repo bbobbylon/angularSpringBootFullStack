@@ -209,7 +209,8 @@
     "catalogValue": "目录总值",
     "createInvoice": "创建发票",
     "emptyTitle": "目录中暂无服务",
-    "emptyHint": "服务目录为空。请从管理面板添加服务。",
+    "emptyHint": "尚未发布任何服务。发布后将在此处显示，可直接添加到发票中。",
+    "emptyHintAdmin": "发布您的第一个服务，使其可在新发票中选择。",
     "manageCatalog": "管理目录"
   },
   "securityCenter": {

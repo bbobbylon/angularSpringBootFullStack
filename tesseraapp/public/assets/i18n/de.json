@@ -209,7 +209,8 @@
     "catalogValue": "Katalogwert",
     "createInvoice": "Rechnung erstellen",
     "emptyTitle": "Keine Leistungen im Katalog",
-    "emptyHint": "Der Leistungskatalog ist leer. Fügen Sie Leistungen über die Administration hinzu.",
+    "emptyHint": "Es wurden noch keine Leistungen veröffentlicht. Sobald das geschehen ist, erscheinen sie hier und können einer Rechnung hinzugefügt werden.",
+    "emptyHintAdmin": "Veröffentlichen Sie Ihre erste Leistung, damit sie für neue Rechnungen auswählbar wird.",
     "manageCatalog": "Katalog verwalten"
   },
   "securityCenter": {

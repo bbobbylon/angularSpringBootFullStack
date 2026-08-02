@@ -209,7 +209,8 @@
     "catalogValue": "Catalog value",
     "createInvoice": "Create Invoice",
     "emptyTitle": "No services in catalog",
-    "emptyHint": "The service catalog is empty. Add services from the admin panel.",
+    "emptyHint": "No services have been published yet. Once they are, they'll appear here ready to add to an invoice.",
+    "emptyHintAdmin": "Publish your first service to make it selectable on new invoices.",
     "manageCatalog": "Manage catalog"
   },
   "securityCenter": {

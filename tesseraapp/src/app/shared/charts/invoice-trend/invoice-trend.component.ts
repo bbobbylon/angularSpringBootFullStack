@@ -49,7 +49,13 @@ export class InvoiceTrendComponent implements OnInit {
   });
   readonly DataState = DataState;
 
-  readonly expanded = signal(false);
+  /**
+   * Toggles whether this panel is expanded or collapsed.
+   *
+   * <p>**Expanded by default**, matching {@code CustomerTrendComponent}: analytics that require a
+   * click to reveal are analytics nobody reads. The toggle remains for folding the panel away.
+   */
+  readonly expanded = signal(true);
 
   private readonly invoices = computed<InvoiceInterface[]>(
     () => this.state().appData?.data?.invoices?.content ?? [],

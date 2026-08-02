@@ -54,8 +54,15 @@ export class CustomerTrendComponent implements OnInit {
     () => this.state().appData?.data?.page?.content ?? [],
   );
 
-  /** Toggles whether this panel is expanded or collapsed. Collapsed by default. */
-  readonly expanded = signal(false);
+  /**
+   * Toggles whether this panel is expanded or collapsed.
+   *
+   * <p>**Expanded by default.** It previously started collapsed, which meant the analytics above
+   * the customer list were invisible until the user thought to click a chevron — so the most
+   * informative part of the page was, in practice, never seen. The toggle is kept so the panel can
+   * still be folded away when the table itself is the focus.
+   */
+  readonly expanded = signal(true);
 
   // ── Monthly acquisition bars ─────────────────────────────────────────────
 

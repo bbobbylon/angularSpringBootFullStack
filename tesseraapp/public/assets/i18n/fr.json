@@ -209,7 +209,8 @@
     "catalogValue": "Valeur du catalogue",
     "createInvoice": "Créer une facture",
     "emptyTitle": "Aucun service au catalogue",
-    "emptyHint": "Le catalogue de services est vide. Ajoutez des services depuis le panneau d'administration.",
+    "emptyHint": "Aucun service n'a encore été publié. Dès qu'ils le seront, ils apparaîtront ici, prêts à être ajoutés à une facture.",
+    "emptyHintAdmin": "Publiez votre premier service pour qu'il soit sélectionnable sur les nouvelles factures.",
     "manageCatalog": "Gérer le catalogue"
   },
   "securityCenter": {

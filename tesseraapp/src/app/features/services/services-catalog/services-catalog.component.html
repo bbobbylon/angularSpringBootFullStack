@@ -80,10 +80,22 @@
           }
         </div>
       } @else {
+        <!-- Empty state. The hint is audience-dependent: this is the MARKETPLACE view that every
+             signed-in user sees, so the default copy must not instruct a ROLE_USER to go and add
+             services somewhere they have no access to. Only a caller who can actually manage the
+             catalog is shown the call to action, and they get a link rather than a description of
+             where to navigate. -->
         <div class="sc-empty sc-reveal">
           <span class="sc-empty__icon"><i class="bi bi-grid-3x3"></i></span>
           <p class="sc-empty__title">{{ t('servicesCatalog.emptyTitle') }}</p>
-          <p class="sc-empty__hint">{{ t('servicesCatalog.emptyHint') }}</p>
+          @if (isAdmin) {
+            <p class="sc-empty__hint">{{ t('servicesCatalog.emptyHintAdmin') }}</p>
+            <a [routerLink]="['/services/manage']" class="btn btn-primary btn-sm mt-2">
+              <i class="bi bi-gear"></i> {{ t('servicesCatalog.manageCatalog') }}
+            </a>
+          } @else {
+            <p class="sc-empty__hint">{{ t('servicesCatalog.emptyHint') }}</p>
+          }
         </div>
       }
     }

@@ -161,10 +161,17 @@
   stroke-width: 0.4;
   vector-effect: non-scaling-stroke;
 }
+/* Data-point dots. These are zero-length paths with a round linecap rather than <circle>, so the
+   dot's DIAMETER is its stroke-width (see the comment in analytics.component.html). Combined with
+   vector-effect: non-scaling-stroke, that keeps them perfectly circular despite the parent svg's
+   preserveAspectRatio="none" stretching x and y by different factors. Size is therefore animated
+   via stroke-width, not r — `r` has no effect on a path. */
 .sc-chart-dot {
-  transition: r 150ms ease;
+  fill: none;
+  stroke-width: 5px;
+  transition: stroke-width 150ms ease;
 }
-.sc-chart-dot:hover { r: 2; }
+.sc-chart-dot:hover { stroke-width: 8px; }
 
 .sc-dual-chart-labels {
   display: flex;

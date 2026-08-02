@@ -209,7 +209,8 @@
     "catalogValue": "Valor do catálogo",
     "createInvoice": "Criar fatura",
     "emptyTitle": "Nenhum serviço no catálogo",
-    "emptyHint": "O catálogo de serviços está vazio. Adicione serviços pelo painel de administração.",
+    "emptyHint": "Ainda não há serviços publicados. Assim que houver, eles aparecerão aqui prontos para serem adicionados a uma fatura.",
+    "emptyHintAdmin": "Publique o seu primeiro serviço para que ele possa ser selecionado em novas faturas.",
     "manageCatalog": "Gerenciar catálogo"
   },
   "securityCenter": {
