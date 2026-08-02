@@ -24,6 +24,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import static com.bob.angularspringbootfullstack.service.serviceimpl.SecurityDashboardServiceImpl.DEFAULT_LIST_SIZE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,9 +75,9 @@ class SecurityDashboardServiceImplTest {
     @BeforeEach
     void stubEmptyPanels() {
         when(securityDashboardRepo.countSecurityEvents(any(), any())).thenReturn(Map.of());
-        when(securityDashboardRepo.findRecentSuspiciousLogins(any(), anyInt(), any())).thenReturn(List.of());
+        when(securityDashboardRepo.findRecentSuspiciousLogins(any(), anyInt(), anyInt(), any())).thenReturn(List.of());
         when(securityDashboardRepo.findDailyLoginOutcomes(any(), any())).thenReturn(List.of());
-        when(securityDashboardRepo.findRestrictedAccounts(anyInt(), any())).thenReturn(List.of());
+        when(securityDashboardRepo.findRestrictedAccounts(anyInt(), anyInt(), any())).thenReturn(List.of());
         when(securityDashboardRepo.findMfaAdoption(any())).thenReturn(new MfaAdoption(0, 0, 0, 0));
         when(securityDashboardRepo.findSessionActivity(any())).thenReturn(new SessionActivity(0, 0));
     }
@@ -84,7 +85,7 @@ class SecurityDashboardServiceImplTest {
     @Test
     @DisplayName("an organization admin with no active memberships sees nothing, not everything")
     void emptyScopeYieldsEmptyOverviewWithoutQuerying() {
-        SecurityOverview overview = service.getOverview(List.of(), 7);
+        SecurityOverview overview = overviewOf(List.of(), 7);
 
         assertTrue(overview.scoped(), "the response must still declare itself scoped");
         assertTrue(overview.suspiciousLogins().isEmpty());
@@ -94,9 +95,9 @@ class SecurityDashboardServiceImplTest {
         // Asserting zeros alone would still pass if the unscoped query had run and simply returned
         // nothing. The decision must be made before any query, so that it cannot depend on data.
         verify(securityDashboardRepo, never()).countSecurityEvents(any(), any());
-        verify(securityDashboardRepo, never()).findRecentSuspiciousLogins(any(), anyInt(), any());
+        verify(securityDashboardRepo, never()).findRecentSuspiciousLogins(any(), anyInt(), anyInt(), any());
         verify(securityDashboardRepo, never()).findDailyLoginOutcomes(any(), any());
-        verify(securityDashboardRepo, never()).findRestrictedAccounts(anyInt(), any());
+        verify(securityDashboardRepo, never()).findRestrictedAccounts(anyInt(), anyInt(), any());
         verify(securityDashboardRepo, never()).findMfaAdoption(any());
         verify(securityDashboardRepo, never()).findSessionActivity(any());
     }
@@ -104,10 +105,10 @@ class SecurityDashboardServiceImplTest {
     @Test
     @DisplayName("an unscoped administrator passes a null scope through to every panel")
     void unscopedCallerQueriesEverything() {
-        service.getOverview(null, 7);
+        overviewOf(null, 7);
 
         verify(securityDashboardRepo).countSecurityEvents(any(), isNull());
-        verify(securityDashboardRepo).findRecentSuspiciousLogins(any(), anyInt(), isNull());
+        verify(securityDashboardRepo).findRecentSuspiciousLogins(any(), anyInt(), anyInt(), isNull());
         verify(securityDashboardRepo).findMfaAdoption(isNull());
         verify(securityDashboardRepo).findSessionActivity(isNull());
     }
@@ -115,14 +116,14 @@ class SecurityDashboardServiceImplTest {
     @Test
     @DisplayName("a scoped administrator's organization ids reach every panel, so none can leak across tenants")
     void scopedCallerPassesOrganizationIdsToEveryPanel() {
-        service.getOverview(ORG_IDS, 7);
+        overviewOf(ORG_IDS, 7);
 
         // Every panel, not just the obvious ones: a single unscoped query would leak a different
         // organization's security posture just as effectively as six would.
         verify(securityDashboardRepo).countSecurityEvents(any(), eqScope());
-        verify(securityDashboardRepo).findRecentSuspiciousLogins(any(), anyInt(), eqScope());
+        verify(securityDashboardRepo).findRecentSuspiciousLogins(any(), anyInt(), anyInt(), eqScope());
         verify(securityDashboardRepo).findDailyLoginOutcomes(any(), eqScope());
-        verify(securityDashboardRepo).findRestrictedAccounts(anyInt(), eqScope());
+        verify(securityDashboardRepo).findRestrictedAccounts(anyInt(), anyInt(), eqScope());
         verify(securityDashboardRepo).findMfaAdoption(eqScope());
         verify(securityDashboardRepo).findSessionActivity(eqScope());
         verify(securityDashboardRepo, never()).findMfaAdoption(isNull());
@@ -131,7 +132,7 @@ class SecurityDashboardServiceImplTest {
     @Test
     @DisplayName("an absurd window is clamped rather than executed")
     void windowIsClampedToTheMaximum() {
-        SecurityOverview overview = service.getOverview(null, 100_000);
+        SecurityOverview overview = overviewOf(null, 100_000);
 
         assertEquals(90, overview.windowDays());
         assertEquals(90, overview.trend().size(), "the trend must cover exactly the clamped window");
@@ -140,7 +141,7 @@ class SecurityDashboardServiceImplTest {
     @Test
     @DisplayName("a zero or negative window is clamped up to one day rather than producing an empty chart")
     void windowIsClampedToTheMinimum() {
-        SecurityOverview overview = service.getOverview(null, 0);
+        SecurityOverview overview = overviewOf(null, 0);
 
         assertEquals(1, overview.windowDays());
         assertEquals(1, overview.trend().size());
@@ -148,9 +149,58 @@ class SecurityDashboardServiceImplTest {
     }
 
     @Test
+    @DisplayName("an absurd page size is clamped rather than executed, and the response admits it")
+    void listSizeIsClampedToTheMaximum() {
+        SecurityOverview overview = service.getOverview(null, 7, 0, 5_000, 0, 5_000);
+
+        // Bounding the query itself, not merely the rows rendered: an unclamped size makes
+        // ?suspiciousSize=5000000 a full read of the audit table for anyone who can reach the
+        // endpoint — the same denial of service the window clamp exists to prevent.
+        ArgumentCaptor<Integer> size = ArgumentCaptor.forClass(Integer.class);
+        verify(securityDashboardRepo).findRecentSuspiciousLogins(any(), anyInt(), size.capture(), isNull());
+        assertEquals(100, size.getValue());
+
+        // The metadata must report the size actually used. If it echoed the requested 5000 instead,
+        // the pager would divide the total by a size the server never applied and offer pages that
+        // do not exist.
+        assertEquals(100, overview.suspiciousLoginsPage().size());
+        assertEquals(100, overview.restrictedAccountsPage().size());
+    }
+
+    @Test
+    @DisplayName("a zero or negative page size is clamped up to one rather than returning nothing at all")
+    void listSizeIsClampedToTheMinimum() {
+        SecurityOverview overview = service.getOverview(null, 7, 0, 0, 0, -3);
+
+        assertEquals(1, overview.suspiciousLoginsPage().size());
+        assertEquals(1, overview.restrictedAccountsPage().size());
+    }
+
+    @Test
+    @DisplayName("the two tables size independently, so resizing one does not disturb the other")
+    void eachTableCarriesItsOwnPageSize() {
+        SecurityOverview overview = service.getOverview(null, 7, 0, 10, 2, 50);
+
+        ArgumentCaptor<Integer> suspiciousSize = ArgumentCaptor.forClass(Integer.class);
+        verify(securityDashboardRepo).findRecentSuspiciousLogins(any(), anyInt(), suspiciousSize.capture(), isNull());
+        assertEquals(10, suspiciousSize.getValue());
+
+        ArgumentCaptor<Integer> restrictedPage = ArgumentCaptor.forClass(Integer.class);
+        ArgumentCaptor<Integer> restrictedSize = ArgumentCaptor.forClass(Integer.class);
+        verify(securityDashboardRepo).findRestrictedAccounts(restrictedPage.capture(), restrictedSize.capture(), isNull());
+        assertEquals(2, restrictedPage.getValue(), "the restricted table's own page index must survive");
+        assertEquals(50, restrictedSize.getValue());
+
+        // An admin working down a lockout list in tens must not have it resized because they widened
+        // the flagged-sign-ins table above it.
+        assertEquals(10, overview.suspiciousLoginsPage().size());
+        assertEquals(50, overview.restrictedAccountsPage().size());
+    }
+
+    @Test
     @DisplayName("the window start is anchored to midnight, so the oldest bar is a whole day")
     void windowStartsAtMidnightOfTheFirstDay() {
-        service.getOverview(null, 7);
+        overviewOf(null, 7);
 
         ArgumentCaptor<LocalDateTime> since = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(securityDashboardRepo).countSecurityEvents(since.capture(), isNull());
@@ -166,7 +216,7 @@ class SecurityDashboardServiceImplTest {
         when(securityDashboardRepo.countSecurityEvents(any(), any()))
                 .thenReturn(Map.of("LOGIN_ATTEMPT_FAILURE", 12L));
 
-        Map<String, Long> counts = service.getOverview(null, 7).eventCounts();
+        Map<String, Long> counts = overviewOf(null, 7).eventCounts();
 
         assertEquals(12L, counts.get("LOGIN_ATTEMPT_FAILURE"));
         // "0 suspicious logins" reassures; a missing tile is an unanswered question.
@@ -184,7 +234,7 @@ class SecurityDashboardServiceImplTest {
                 new DailyEventCount(today, "LOGIN_ATTEMPT_FAILURE", 4L),
                 new DailyEventCount(today, "SUSPICIOUS_LOGIN", 1L)));
 
-        List<LoginOutcomeTrendPoint> trend = service.getOverview(null, 5).trend();
+        List<LoginOutcomeTrendPoint> trend = overviewOf(null, 5).trend();
 
         assertEquals(5, trend.size(), "one point per day, including the four with no events");
         assertEquals(today.minusDays(4), trend.getFirst().day(), "oldest first");
@@ -204,7 +254,7 @@ class SecurityDashboardServiceImplTest {
         when(securityDashboardRepo.findDailyLoginOutcomes(any(), any())).thenReturn(List.of(
                 new DailyEventCount(null, "LOGIN_ATTEMPT_FAILURE", 3L)));
 
-        List<LoginOutcomeTrendPoint> trend = service.getOverview(null, 3).trend();
+        List<LoginOutcomeTrendPoint> trend = overviewOf(null, 3).trend();
 
         // Six other panels are riding on this call. One unusable row must cost one data point,
         // not the screen.
@@ -224,8 +274,24 @@ class SecurityDashboardServiceImplTest {
     @Test
     @DisplayName("the response declares whether it is scoped, so the UI cannot present a slice as the whole")
     void overviewDeclaresItsScope() {
-        assertFalse(service.getOverview(null, 7).scoped());
-        assertTrue(service.getOverview(ORG_IDS, 7).scoped());
+        assertFalse(overviewOf(null, 7).scoped());
+        assertTrue(overviewOf(ORG_IDS, 7).scoped());
+    }
+
+    /**
+     * Requests an overview at the default paging, which is what almost every test here wants.
+     *
+     * <p>Both tables' page and size are supplied explicitly rather than defaulted by the service,
+     * because the service has no defaults — the controller owns them. Routing the common case
+     * through one helper keeps the paging arguments from crowding out the window argument, which is
+     * the one most of these tests are actually about.
+     *
+     * @param scope      the caller's organization restriction, or {@code null} for unscoped
+     * @param windowDays the requested window, deliberately unclamped so clamping tests can pass junk
+     * @return the assembled overview
+     */
+    private SecurityOverview overviewOf(Collection<Long> scope, int windowDays) {
+        return service.getOverview(scope, windowDays, 0, DEFAULT_LIST_SIZE, 0, DEFAULT_LIST_SIZE);
     }
 
     /** Matcher for "the caller's organization ids", kept in one place for readability. */

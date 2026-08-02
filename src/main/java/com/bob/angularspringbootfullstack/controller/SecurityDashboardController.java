@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.Optional;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
+import static com.bob.angularspringbootfullstack.service.serviceimpl.SecurityDashboardServiceImpl.DEFAULT_LIST_SIZE;
 import static com.bob.angularspringbootfullstack.service.serviceimpl.SecurityDashboardServiceImpl.DEFAULT_WINDOW_DAYS;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
@@ -73,14 +74,31 @@ public class SecurityDashboardController {
      *             endpoint in this application
      * @param days how many days of history to summarise; defaults to a week and is clamped by the
      *             service, since it is caller-supplied input to a set of aggregate queries
-     * @return 200 OK with {@code user} and {@code overview}
+     * @param suspiciousPage 0-based page of the flagged sign-ins table, defaulting to the first.
+     *                       Its own parameter rather than a shared {@code page} because the two
+     *                       tables are read independently — paging through flagged sign-ins must not
+     *                       silently reset the restricted-accounts list the admin was working down
+     * @param suspiciousSize rows per page for the flagged sign-ins table (defaults to
+     *                       {@value DEFAULT_LIST_SIZE}); clamped by the service, which also reports
+     *                       the clamped value back in the table's {@code PageInfo}
+     * @param restrictedPage 0-based page of the locked/disabled accounts table, same reasoning
+     * @param restrictedSize rows per page for that table. Its own parameter rather than a shared
+     *                       {@code size} so an admin can page a long lockout list in tens while
+     *                       still scanning flagged sign-ins fifty at a time
+     * @return 200 OK with {@code user} and {@code overview}; each paged table carries its own
+     *         {@code PageInfo} inside the overview
      */
     @GetMapping("/overview")
     @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
     public ResponseEntity<HttpResponse> getOverview(@AuthenticationPrincipal UserDTO user,
-                                                    @RequestParam Optional<Integer> days) {
+                                                    @RequestParam Optional<Integer> days,
+                                                    @RequestParam(defaultValue = "0") int suspiciousPage,
+                                                    @RequestParam(defaultValue = "" + DEFAULT_LIST_SIZE) int suspiciousSize,
+                                                    @RequestParam(defaultValue = "0") int restrictedPage,
+                                                    @RequestParam(defaultValue = "" + DEFAULT_LIST_SIZE) int restrictedSize) {
         SecurityOverview overview = securityDashboardService.getOverview(
-                resolveScope(user), days.orElse(DEFAULT_WINDOW_DAYS));
+                resolveScope(user), days.orElse(DEFAULT_WINDOW_DAYS),
+                suspiciousPage, suspiciousSize, restrictedPage, restrictedSize);
 
         return ResponseEntity.ok(
                 HttpResponse.builder()

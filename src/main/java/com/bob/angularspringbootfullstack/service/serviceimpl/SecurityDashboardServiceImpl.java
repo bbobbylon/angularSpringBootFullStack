@@ -68,14 +68,29 @@ public class SecurityDashboardServiceImpl implements SecurityDashboardService {
     public static final int DEFAULT_WINDOW_DAYS = 7;
 
     /**
-     * How many flagged sign-ins and restricted accounts to list.
+     * How many flagged sign-ins and restricted accounts to list when the caller expresses no
+     * preference.
      *
-     * <p>A cap rather than pagination because these are triage lists, not records to browse: fifty
-     * unreviewed anomalies already means the reader's job is to find a pattern, and page fifty-one
-     * would not help them do it. The counters above the table report the true totals, so a capped
-     * list never masks the scale of what happened.
+     * <p>Fifty because these are triage lists rather than records to browse: at that many unreviewed
+     * anomalies the reader's job is already to find a pattern, not to read every row. It is a
+     * default rather than a cap — the reader can ask for a different page size — and the counters
+     * above each table report the true totals either way, so no page size ever masks the scale of
+     * what happened.
      */
-    private static final int LIST_LIMIT = 50;
+    public static final int DEFAULT_LIST_SIZE = 50;
+
+    /**
+     * The largest page either triage table will serve.
+     *
+     * <p>Same reasoning as {@link #MAX_WINDOW_DAYS}: the size arrives from a query parameter, so
+     * {@code ?suspiciousSize=1000000} is a full-table read requested by anyone who can reach the
+     * endpoint. A hundred matches the ceiling {@code UserRepoImpl} already applies to the admin
+     * directory, so the two paged admin surfaces bound their queries identically.
+     */
+    private static final int MAX_LIST_SIZE = 100;
+
+    /** Smallest page worth serving — a zero or negative size would return nothing at all. */
+    private static final int MIN_LIST_SIZE = 1;
 
     /** The event types the counters always report, in the order the dashboard reads best. */
     private static final List<EventType> REPORTED_EVENT_TYPES = List.of(
@@ -91,7 +106,9 @@ public class SecurityDashboardServiceImpl implements SecurityDashboardService {
      * {@inheritDoc}
      */
     @Override
-    public SecurityOverview getOverview(Collection<Long> organizationIds, int windowDays) {
+    public SecurityOverview getOverview(Collection<Long> organizationIds, int windowDays,
+                                        int suspiciousLoginsPage, int suspiciousLoginsSize,
+                                        int restrictedAccountsPage, int restrictedAccountsSize) {
         int window = Math.clamp(windowDays, MIN_WINDOW_DAYS, MAX_WINDOW_DAYS);
         boolean scoped = organizationIds != null;
 
@@ -112,13 +129,32 @@ public class SecurityDashboardServiceImpl implements SecurityDashboardService {
 
         SessionActivity sessions = securityDashboardRepo.findSessionActivity(organizationIds);
 
+        // Page indexes are clamped at 0 but deliberately NOT clamped against the total: a request
+        // beyond the last page returns an empty list with honest metadata, which the pager renders
+        // as "page N of M" and the user can navigate out of. Silently snapping to the last page
+        // would make the controls lie about where they are.
+        int suspiciousPage = Math.max(suspiciousLoginsPage, 0);
+        int restrictedPage = Math.max(restrictedAccountsPage, 0);
+
+        // Sizes are clamped rather than rejected, for the same reason the window is: they arrive
+        // from query parameters, and a mistyped or hostile value should degrade to the nearest sane
+        // page rather than 500 or sweep the table. The clamped value is what goes into the PageInfo
+        // too, so a caller who asks for 5000 rows is told what they actually received.
+        int suspiciousSize = Math.clamp(suspiciousLoginsSize, MIN_LIST_SIZE, MAX_LIST_SIZE);
+        int restrictedSize = Math.clamp(restrictedAccountsSize, MIN_LIST_SIZE, MAX_LIST_SIZE);
+
+        long suspiciousTotal = securityDashboardRepo.countRecentSuspiciousLogins(since, organizationIds);
+        long restrictedTotal = securityDashboardRepo.countRestrictedAccounts(organizationIds);
+
         return new SecurityOverview(
                 window,
                 scoped,
                 zeroFilled(securityDashboardRepo.countSecurityEvents(since, organizationIds)),
-                securityDashboardRepo.findRecentSuspiciousLogins(since, LIST_LIMIT, organizationIds),
+                securityDashboardRepo.findRecentSuspiciousLogins(since, suspiciousPage, suspiciousSize, organizationIds),
+                SecurityOverview.PageInfo.of(suspiciousPage, suspiciousSize, suspiciousTotal),
                 buildTrend(securityDashboardRepo.findDailyLoginOutcomes(since, organizationIds), firstDay, today),
-                securityDashboardRepo.findRestrictedAccounts(LIST_LIMIT, organizationIds),
+                securityDashboardRepo.findRestrictedAccounts(restrictedPage, restrictedSize, organizationIds),
+                SecurityOverview.PageInfo.of(restrictedPage, restrictedSize, restrictedTotal),
                 securityDashboardRepo.findMfaAdoption(organizationIds),
                 sessions.activeSessions(),
                 sessions.accountsWithSessions());

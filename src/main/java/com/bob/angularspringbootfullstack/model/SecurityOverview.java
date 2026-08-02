@@ -43,11 +43,61 @@ public record SecurityOverview(int windowDays,
                                boolean scoped,
                                Map<String, Long> eventCounts,
                                List<SuspiciousLoginEntry> suspiciousLogins,
+                               PageInfo suspiciousLoginsPage,
                                List<LoginOutcomeTrendPoint> trend,
                                List<RestrictedAccount> restrictedAccounts,
+                               PageInfo restrictedAccountsPage,
                                MfaAdoption mfaAdoption,
                                long activeSessions,
                                long accountsWithSessions) {
+
+    /**
+     * Pagination metadata for one of the dashboard's two growing tables.
+     *
+     * <h3>Why this exists at all</h3>
+     * Both {@code suspiciousLogins} and {@code restrictedAccounts} were previously fetched with a
+     * bare {@code LIMIT} and no total, so the screen showed the newest N rows and said nothing about
+     * the remainder. On an audit surface that is the one ambiguity you cannot ship: "three flagged
+     * sign-ins this week" and "the three most recent of three hundred" call for entirely different
+     * responses, and the rendered table looked identical either way.
+     *
+     * <h3>Why a nested record rather than flat fields</h3>
+     * Four more components per table would have pushed {@link SecurityOverview} to fifteen
+     * positional arguments, where a transposed pair of {@code int}s compiles happily and reports the
+     * wrong page. Grouping them keeps each table's metadata addressable as a unit — and serialises
+     * to a nested JSON object the Angular pager can bind to directly, instead of six loose keys the
+     * template has to reassemble.
+     *
+     * @param page          the 0-based index of the page contained in the sibling list
+     * @param size          rows per page, echoed so the client need not assume the server's default
+     * @param totalElements total matching rows, ignoring pagination
+     * @param totalPages    total pages at this size; 0 when there are no rows at all
+     */
+    public record PageInfo(int page, int size, long totalElements, int totalPages) {
+
+        /**
+         * Derives {@code totalPages} rather than trusting a caller to compute it consistently.
+         *
+         * @param page          the 0-based page index being returned
+         * @param size          rows per page; guarded against zero so this cannot divide by zero
+         * @param totalElements total matching rows
+         * @return the populated metadata
+         */
+        public static PageInfo of(int page, int size, long totalElements) {
+            return new PageInfo(page, size, totalElements,
+                    (int) Math.ceil((double) totalElements / Math.max(size, 1)));
+        }
+
+        /**
+         * The metadata for a table with no rows — used by {@link SecurityOverview#empty(int)}.
+         *
+         * @param size the page size that would have applied, so the client's controls stay stable
+         * @return zeroed metadata describing an empty table
+         */
+        public static PageInfo empty(int size) {
+            return new PageInfo(0, size, 0L, 0);
+        }
+    }
 
     /**
      * The overview an administrator sees when their organization scope is empty (FR-ORG-2).
@@ -62,7 +112,10 @@ public record SecurityOverview(int windowDays,
      * @return an overview whose every figure is zero or empty, flagged as scoped
      */
     public static SecurityOverview empty(int windowDays) {
-        return new SecurityOverview(windowDays, true, Map.of(), List.of(), List.of(), List.of(),
+        return new SecurityOverview(windowDays, true, Map.of(),
+                List.of(), PageInfo.empty(0),
+                List.of(),
+                List.of(), PageInfo.empty(0),
                 new MfaAdoption(0, 0, 0, 0), 0, 0);
     }
 }

@@ -112,10 +112,17 @@ The review surface for the anomaly detection in [security.md §10](security.md).
 
 | Method | Path | Auth | Returns (`data`) |
 |--------|------|------|------------------|
-| GET | `/admin/security/overview?days` | `UPDATE:USER`/`UPDATE:ROLE` | `{ user, overview }` |
+| GET | `/admin/security/overview?days&suspiciousPage&suspiciousSize&restrictedPage&restrictedSize` | `UPDATE:USER`/`UPDATE:ROLE` | `{ user, overview }` |
 
 `days` defaults to 7 and is **clamped server-side to 1–90** — it is caller-supplied input to a set of
 aggregate queries, and an unclamped `?days=100000` is a denial of service that needs no vulnerability.
+
+The two growing tables — flagged sign-ins and restricted accounts — page **independently**, each with
+its own index and row count, so an admin working down the lockout list does not lose their place by
+stepping through flagged sign-ins above it. Both sizes default to 50 and are **clamped to 1–100** for
+the same reason `days` is clamped. Each table's `PageInfo` inside `overview` reports the size the
+server actually applied, not the one that was requested — otherwise a client that asked for 5000 rows
+would compute its page count from a size the query never used and offer pages that do not exist.
 
 The whole screen is one response on purpose. Six endpoints would give six different instants of the
 same database with no way to tell which panel was stale.

@@ -292,6 +292,21 @@ else
 fi
 ECR_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${ECR_REPO}"
 
+# Expire untagged images. push-to-ecr.sh always pushes the SAME tag (:latest), and re-tagging
+# does not delete the image that previously held the tag — it just leaves it untagged. So every
+# deploy orphans a ~550 MB image that nothing references and nothing cleans up.
+#
+# That matters here specifically because ECR's free tier is 500 MB/month: a single image already
+# sits at the limit, so the orphans are pure overage from the second deploy onward. Observed on
+# 2026-08-02 with three untagged images accumulated in one day.
+#
+# One day rather than zero so a rollback window survives: if a deploy turns out bad, yesterday's
+# image is still pullable by digest even though its tag has moved on.
+aws ecr put-lifecycle-policy --repository-name "$ECR_REPO" --region "$REGION" \
+  --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Expire untagged images after 1 day","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":1},"action":{"type":"expire"}}]}' \
+  >/dev/null
+ok "Lifecycle policy set: untagged images expire after 1 day"
+
 # ── 4. Secrets Manager ────────────────────────────────────────────────────────
 echo ""
 echo "── Step 4/9 — Secrets Manager ───────────────────────────────"

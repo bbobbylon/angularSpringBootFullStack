@@ -91,8 +91,29 @@ public class SecurityDashboardQuery {
             "JOIN users u ON u.id = uev.user_id " +
             "WHERE ev.type = 'SUSPICIOUS_LOGIN' AND uev.created_at >= :since " +
             SCOPE_MARKER + " " +
-            "ORDER BY uev.created_at DESC " +
-            "LIMIT :limit";
+            "ORDER BY uev.created_at DESC, uev.id DESC " +
+            "LIMIT :size OFFSET :offset";
+
+    /**
+     * Total flagged sign-ins in the window, for the pager.
+     *
+     * <p><b>Why this exists.</b> The select above used to end in a bare {@code LIMIT :limit} with no
+     * offset and no total, so the dashboard rendered the newest N flagged sign-ins and said nothing
+     * about the rest. On an audit table that is the one thing you cannot leave ambiguous: "three
+     * flagged logins this week" and "the three most recent of three hundred" demand completely
+     * different responses, and the screen looked identical either way.
+     *
+     * <p>Deliberately mirrors the select's {@code WHERE} clause and scope marker exactly — a count
+     * that filters differently from the rows it counts produces a pager that disagrees with its own
+     * table, which is worse than no pager at all.
+     */
+    public static final String COUNT_RECENT_SUSPICIOUS_LOGINS_QUERY =
+            "SELECT COUNT(*) " +
+            "FROM userevents uev " +
+            "JOIN events ev ON ev.id = uev.event_id " +
+            "JOIN users u ON u.id = uev.user_id " +
+            "WHERE ev.type = 'SUSPICIOUS_LOGIN' AND uev.created_at >= :since " +
+            SCOPE_MARKER;
 
     /**
      * Daily counts of the three login outcomes, for the trend chart.
@@ -136,8 +157,25 @@ public class SecurityDashboardQuery {
             "FROM users u " +
             "WHERE (u.non_locked = FALSE OR u.enabled = FALSE) " +
             SCOPE_MARKER + " " +
-            "ORDER BY last_failure_at IS NULL, last_failure_at DESC " +
-            "LIMIT :limit";
+            "ORDER BY last_failure_at IS NULL, last_failure_at DESC, u.id DESC " +
+            "LIMIT :size OFFSET :offset";
+
+    /**
+     * Total accounts currently locked out or disabled, for the pager.
+     *
+     * <p>Same reasoning as {@link #COUNT_RECENT_SUSPICIOUS_LOGINS_QUERY}: without a total, a
+     * truncated list of locked-out accounts is indistinguishable from a complete one, and the
+     * administrator triaging "I can't get in" has no way to know whether the account they are
+     * looking for was simply cut off the end.
+     *
+     * <p>The correlated {@code last_failure_at} subquery from the select is omitted — it exists
+     * purely to order the rows, and computing it per row only to count them would be wasted work.
+     * The {@code WHERE} clause and scope marker are identical, which is what has to match.
+     */
+    public static final String COUNT_RESTRICTED_ACCOUNTS_QUERY =
+            "SELECT COUNT(*) FROM users u " +
+            "WHERE (u.non_locked = FALSE OR u.enabled = FALSE) " +
+            SCOPE_MARKER;
 
     /**
      * Multi-factor adoption across the in-scope population, in one pass.
