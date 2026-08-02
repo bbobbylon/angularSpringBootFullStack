@@ -23,10 +23,11 @@ const DEV_API_PORT = 8080;
  * reachable because Spring Boot binds to all interfaces by default.
  *
  * A dev-server proxy would be the other obvious fix, but it is the wrong tool for THIS
- * app: its SPA routes and API routes share a URL space — `/user/verify/account/:key` and
- * `/oauth2/callback` are both real Angular routes AND real backend endpoints — so any
- * path-prefix proxy rule would swallow the email-verification landing page and the OAuth2
- * callback route.
+ * app: its SPA routes and API routes share a URL space — `/oauth2/callback` is both a real
+ * Angular route and a real backend prefix (`/oauth2/**`) — so a path-prefix proxy rule would
+ * swallow the federated-login landing page. (The email-verification landing page used to be a
+ * second such overlap; it now lives at `/verify/{type}/:key`, outside the API's `/user/**`
+ * namespace, precisely so one link resolves the same way on both topologies.)
  *
  * The guard covers non-browser execution (a spec running under a bare Node environment);
  * jsdom and every real browser take the second branch.

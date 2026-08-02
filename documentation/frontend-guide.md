@@ -56,8 +56,8 @@ All routes are lazy via `loadComponent` (`app.routes.ts:11`). Public auth/verifi
 | `verify` | `VerifyComponent` | 🔓 none | `:17` | Generic verify landing. |
 | `resetpassword` | `ResetPasswordComponent` | 🔓 none | `:21` | Forgot-password request form. |
 | `register` | `RegisterComponent` | 🔓 none | `:25` | New-account signup. |
-| `user/verify/account/:key` | `VerifyComponent` | 🔓 none | `:32` | Matches the backend account-verification email link (`/user/verify/account/{uuid}`). |
-| `user/verify/password/:key` | `VerifyComponent` | 🔓 none | `:36` | Matches the backend password-reset email link. |
+| `verify/account/:key` | `VerifyComponent` | 🔓 none | `:32` | Landing page for the account-verification email link. Carries `data: { verificationType: 'account' }`. **No `/user` prefix** — that would collide with the real `GET /user/verify/account/{key}` endpoint once the SPA and API share an origin; see [email-and-notifications.md §2.1](email-and-notifications.md). |
+| `verify/password/:key` | `VerifyComponent` | 🔓 none | `:36` | Same, for the password-reset link. `data: { verificationType: 'password' }`. |
 | `oauth2/callback` | `Oauth2CallbackComponent` | 🔓 none | `:43` | Federated login landing; tokens or an MFA handoff arrive in the URL fragment (public — user is mid-auth). |
 | `''` (full) | `HomeComponent` | 🔑 `authenticationGuard` | `:47` | Dashboard: paginated customer table + stats + insights. |
 | `customers` | `CustomersComponent` | 🔑 `authenticationGuard` | `:53` | Customer list + search. |

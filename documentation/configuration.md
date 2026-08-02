@@ -129,6 +129,24 @@ Uploaded profile images are written to and served from a single filesystem direc
 > **Note:** unlike the DB/JWT/mail secrets, this default lives in the **base** `application.yml` (not `application-dev.yml`), so the fallback applies under the `prod` profile too — a missing `IMAGE_STORAGE_PATH` will not fail fast; it silently uses `~/tesseraapp/images`. Always set it explicitly in containers.
 > **History:** this replaced a brittle hardcoded `~/Downloads/images` path that only worked on the original developer's machine (`UserRepoImpl.java:138`); any doc still citing `~/Downloads/images` (e.g. `developer-guide.md`, `flows/10-profile-and-account.md`) is stale — **the code wins**.
 
+### Reverse proxy / load balancer — required when deployed
+
+Two independent settings, both defaulting to "no proxy". Local runs need neither; **any** load-balanced deployment (ECS behind an ALB, Cloud Run, App Service) needs both, and each fails silently rather than loudly when left at its default.
+
+| Variable | Purpose | Default | Behind one ALB |
+|----------|---------|---------|----------------|
+| `FORWARD_HEADERS_STRATEGY` | Whether Spring rebuilds the request's **public** scheme/host/port from `X-Forwarded-Proto` / `-Host` / `-Port` (`server.forward-headers-strategy`) | `none` | `framework` |
+| `TRUSTED_PROXY_COUNT` | How many proxy hops append to **`X-Forwarded-For`**, i.e. which entry is the real client IP (`app.security.trusted-proxy-count`) | `0` | `1` (`2` with a CDN in front) |
+
+They are easy to confuse and govern different things:
+
+- **`FORWARD_HEADERS_STRATEGY` affects URLs the app *generates*.** `OAuth2ClientConfig` registers every provider with the redirect-URI template `{baseUrl}/login/oauth2/code/{registrationId}`, and `{baseUrl}` is resolved per request. Left at `none` behind a proxy, the container sees a plain-HTTP request to its own task IP and emits `http://10.0.1.23:8080/login/oauth2/code/google` — a URL registered nowhere and reachable by nobody. Every federated sign-in then fails with `redirect_uri_mismatch`, while working perfectly on localhost.
+- **`TRUSTED_PROXY_COUNT` affects the client IP the app *reads*.** Left at `0` behind a proxy, `RequestUtils.getIpAddress` ignores `X-Forwarded-For` and returns the load balancer's address for everyone. Two security controls degrade quietly: the rate limiter collapses every user into a single bucket (so the whole tenant throttles as one caller), and the login-anomaly detector's `NEW_NETWORK` signal can never fire, because every sign-in appears to come from the same network. Set it *too high* and an attacker-supplied header entry becomes trusted — which is the exact vulnerability the mechanism exists to prevent, so match the real topology rather than padding it.
+
+`TrustedProxyConfigurer` prints the effective value at startup (`[NET] trusted-proxy-count=…`). Check that line in the deployment log; it is the cheapest confirmation that the setting took effect.
+
+> Both are already set in `aws/task-definition.json`. Mirror them in any other deployment target.
+
 ### Federated login (OAuth2 / OIDC) — optional
 
 A provider's login button appears only when its `CLIENT_ID` is set (the SPA discovers configured providers via `GET /oauth2/providers`). With none set, the app logs `Federated login providers configured: none`.
@@ -140,7 +158,18 @@ A provider's login button appears only when its `CLIENT_ID` is set (the SPA disc
 | `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | Microsoft (Entra) app registration |
 | `MICROSOFT_TENANT_ID` | `common` \| `consumers` \| `organizations` \| tenant GUID |
 
-Register this callback in each provider console: `http://localhost:8080/login/oauth2/code/{provider}` where `{provider}` is `google`, `github`, or `microsoft`. See [security.md](security.md#federated-login) for the full flow and [flows/04-federated-oauth2.md](flows/04-federated-oauth2.md) for the click-to-token walkthrough.
+Register **both** callbacks in each provider console — all three providers accept a list, so one app registration serves local and deployed use with no code change and no per-environment client id:
+
+```
+http://localhost:8080/login/oauth2/code/{provider}     # start.sh
+https://<your-domain>/login/oauth2/code/{provider}      # deployed
+```
+
+…where `{provider}` is `google`, `github`, or `microsoft`. The deployed callback additionally requires `FORWARD_HEADERS_STRATEGY=framework` (see the section above) — without it the app sends a redirect URI matching neither entry.
+
+> **Microsoft specifically:** register the redirect URI under the **Web** platform, not SPA or mobile, and leave *Allow public client flows* set to **No**. Registering it as a SPA makes Entra reject the (correct) `client_secret_post` authentication with `AADSTS90023: Public clients can't send a client secret`. That is a portal setting; the Spring configuration in `OAuth2ClientConfig` is already right.
+
+See [security.md](security.md#federated-login) for the full flow and [flows/04-federated-oauth2.md](flows/04-federated-oauth2.md) for the click-to-token walkthrough.
 
 #### Step-by-step: enabling GitHub (the fastest provider)
 

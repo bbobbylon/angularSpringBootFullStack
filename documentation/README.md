@@ -28,6 +28,8 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 | [configuration.md](configuration.md) | Environment variables, Spring profiles, annotated `application.yml`, gotchas |
 | [deployment.md](deployment.md) | Docker image, Compose, Azure CI/CD, cloud platforms |
 | [cicd-setup.md](cicd-setup.md) | **CI/CD hub** — pipeline setup for **AWS, Google Cloud, and Azure** side by side, the shared build→registry→runtime shape, required secrets, and which security controls only become effective once deployed |
+| [../aws/RUNBOOK.md](../aws/RUNBOOK.md) | **AWS deploy runbook** — the linear, assumes-nothing procedure: prerequisites → infrastructure → **application setup** (apply `schema.sql`, grant an admin role) → the redeploy loop → verification. Written so a teammate can deploy without asking anyone |
+| [../aws/README.md](../aws/README.md) | AWS reference — what each resource is for, plus a troubleshooting log of every real error hit building this deployment |
 | [roles-and-scenarios.md](roles-and-scenarios.md) | **Who can do what** — the seven roles, the authority vs. organization-scope axes, a full capability matrix, and worked scenarios for users, help desk, org admins, platform admins and security incidents |
 | [frontend-guide.md](frontend-guide.md) | Angular internals — routes→components, services, guards, interceptors, `DataState`/signals, **Transloco i18n**, **capability-level UI gating**, the command palette |
 | [email-and-notifications.md](email-and-notifications.md) | Email (verification/reset) + SMS-stub + Angular toast notifications; the verification-link model |
@@ -40,7 +42,8 @@ The full documentation set for TesseraApp — an Angular 21 + Spring Boot 4 user
 - **Tracing a feature or bug:** [flows/](flows/README.md) → `00-anatomy-of-a-request.md` (the shared spine) → the specific flow doc for your screen
 - **Reviewing security:** security.md → `SecurityConfig.java` / `TokenProvider.java` / `SessionServiceImpl.java`
 - **Integrating a client:** api-reference.md → security.md (§3 tokens)
-- **Deploying:** configuration.md → deployment.md → **cicd-setup.md** (pick a cloud) → database.md (apply `schema.sql`)
+- **Deploying to AWS (the live environment):** **[aws/RUNBOOK.md](../aws/RUNBOOK.md)** — start there, it is self-contained
+- **Deploying anywhere else:** configuration.md → deployment.md → **cicd-setup.md** (pick a cloud) → database.md (apply `schema.sql`)
 
 ---
 

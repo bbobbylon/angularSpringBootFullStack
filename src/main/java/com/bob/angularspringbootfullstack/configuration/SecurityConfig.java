@@ -226,19 +226,33 @@ class SecurityConfig {
                             // route — e.g. typing /login in the address bar — hits Spring
                             // Security BEFORE the WebMvcConfig SPA-fallback ever gets a chance to
                             // forward it to index.html, since security filters run ahead of MVC
-                            // dispatch. Every path here is a real entry in app.routes.ts; none
-                            // collides with a real backend endpoint — this app's API is entirely
-                            // singular/namespaced (/customer/**, /admin/services/**, /user/**),
-                            // while these frontend routes are plural or bare (/customers,
-                            // /services, /billing) by an existing, already-consistent convention.
+                            // dispatch. Every path here is a real entry in app.routes.ts.
+                            //
+                            // The invariant that makes this safe is a NAMESPACE SPLIT: the API is
+                            // entirely singular/namespaced (/user/**, /customer/**, /admin/**),
+                            // while SPA routes are plural or bare (/customers, /services, /billing).
+                            // Permitting a path here therefore cannot expose a controller, because
+                            // no controller answers on these paths — Spring MVC finds no handler and
+                            // WebMvcConfig forwards to index.html.
+                            //
+                            // That invariant had exactly one breach, and it was load-bearing:
+                            // the email-verification landing page was routed at
+                            // /user/verify/{type}/:key in Angular, byte-for-byte the same URL as
+                            // UserController#verifyAccount. In split-origin dev the SPA answered it;
+                            // once Angular is baked into this jar there is one origin, the real
+                            // @GetMapping wins, and the recipient of an activation email is shown
+                            // the raw JSON envelope. It now lives at /verify/{type}/:key — hence
+                            // "/verify/**" below — and the split holds everywhere. Do not add an SPA
+                            // route under /user, /customer, or /admin.
+                            //
                             // This permits loading the SPA shell only — the actual protected DATA
                             // for these pages still comes from those separate, still-authenticated
                             // API endpoints, so this grants no new access to anything real.
-                            .requestMatchers(GET, "/login", "/verify", "/resetpassword", "/register",
-                                    "/customers", "/customers/**", "/customer/new", "/invoice/new",
-                                    "/invoices", "/invoice/**", "/profile", "/security", "/users",
-                                    "/users/**", "/roles", "/billing", "/services", "/services/manage",
-                                    "/analytics", "/security-overview").permitAll()
+                            .requestMatchers(GET, "/login", "/verify", "/verify/**", "/resetpassword",
+                                    "/register", "/customers", "/customers/**", "/customer/new",
+                                    "/invoice/new", "/invoices", "/invoice/**", "/profile", "/security",
+                                    "/users", "/users/**", "/roles", "/billing", "/services",
+                                    "/services/manage", "/analytics", "/security-overview").permitAll()
                             .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
                             .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
                             .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")

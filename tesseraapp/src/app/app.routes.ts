@@ -14,6 +14,29 @@ export const routes: Routes = [
     path: 'login',
     loadComponent: () => import('./features/auth/login/login.component').then((m) => m.LoginComponent),
   },
+  // Matches the URLs the backend emits in account/password verification emails.
+  // Format: /verify/{account|password}/{uuid-key} — see UserRepoImpl#getVerificationURL.
+  //
+  // The /user prefix is deliberately absent. These were `user/verify/...`, mirroring the backend
+  // endpoint exactly, which works only while Angular runs on its own dev server. In Docker/prod the
+  // SPA is served from the SAME origin as the API, so Spring MVC matched the real
+  // UserController#verifyAccount handler first and the recipient was shown the raw JSON envelope
+  // instead of this screen. Bare/plural paths belong to the SPA, /user/** belongs to the API — that
+  // split is what makes one emailed link behave identically in both topologies.
+  //
+  // Declared before the bare 'verify' route so the intent reads top-down (Angular backtracks past a
+  // leaf route that cannot consume the whole URL anyway), and the flow is carried in static `data`
+  // so VerifyComponent no longer has to infer it from how the path happens to be spelled.
+  {
+    path: 'verify/account/:key',
+    data: { verificationType: 'account' },
+    loadComponent: () => import('./features/auth/verify/verify.component').then((m) => m.VerifyComponent),
+  },
+  {
+    path: 'verify/password/:key',
+    data: { verificationType: 'password' },
+    loadComponent: () => import('./features/auth/verify/verify.component').then((m) => m.VerifyComponent),
+  },
   {
     path: 'verify',
     loadComponent: () => import('./features/auth/verify/verify.component').then((m) => m.VerifyComponent),
@@ -25,17 +48,6 @@ export const routes: Routes = [
   {
     path: 'register',
     loadComponent: () => import('./features/auth/register/register.component').then((m) => m.RegisterComponent),
-  },
-  // Matches the URLs the backend emits in account/password verification emails.
-  // Format: /user/verify/{account|password}/{uuid-key}
-  // See UserRepoImpl#sendAccountVerificationEmail / sendPasswordResetEmail.
-  {
-    path: 'user/verify/account/:key',
-    loadComponent: () => import('./features/auth/verify/verify.component').then((m) => m.VerifyComponent),
-  },
-  {
-    path: 'user/verify/password/:key',
-    loadComponent: () => import('./features/auth/verify/verify.component').then((m) => m.VerifyComponent),
   },
   // Federated login landing (SRS FR-FED-4): the backend's OAuth2 success handler
   // redirects here with tokens (or an MFA handoff) in the URL fragment. Public by

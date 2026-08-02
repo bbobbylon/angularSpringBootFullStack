@@ -4,7 +4,7 @@
 > account creation: **A** creates a disabled account and emails a link; **B** is the user clicking
 > that link to enable it.
 
-**Routes:** `/register` → `RegisterComponent` · `/user/verify/account/:key` → `VerifyComponent`
+**Routes:** `/register` → `RegisterComponent` · `/verify/account/:key` → `VerifyComponent`
 **Endpoints:** `POST /user/register` (public) · `GET /user/verify/account/{key}` (public)
 
 ---
@@ -53,7 +53,7 @@ sequenceDiagram
     SRV->>DB: INSERT users (enabled = FALSE)
     SRV->>DB: INSERT role mapping (default ROLE_USER)
     SRV->>DB: INSERT accountverifications (user_id, url = UUID key)
-    SRV->>EMAIL: send verification link<br/>{uiAppUrl}/user/verify/account/{key}
+    SRV->>EMAIL: send verification link<br/>{uiAppUrl}/verify/account/{key}
     SRV-->>CTRL: UserDTO (enabled:false)
     CTRL-->>SVC: 201 Created + Location + HttpResponse { data:{ user } }
     SVC-->>CMP: Observable next(response)  :54
@@ -91,7 +91,7 @@ stateDiagram-v2
 ## B · Account-email verification
 
 ### What the user does
-Clicks the emailed link → browser opens the SPA at `/user/verify/account/:key`
+Clicks the emailed link → browser opens the SPA at `/verify/account/:key` (no `/user` prefix — that path belongs to the API and would be answered by the real controller once both are served from one origin)
 (`app.routes.ts:32`). `VerifyComponent` fires the verification call automatically on load — there is
 no button; the route param *is* the trigger.
 
@@ -106,7 +106,7 @@ sequenceDiagram
     participant SRV as UserServiceImpl
     participant DB as Database
 
-    U->>RT: open emailed link /user/verify/account/{key}
+    U->>RT: open emailed link /verify/account/{key}
     RT->>CMP: route activates → ngOnInit  :62
     CMP->>CMP: paramMap.switchMap → startWith(LOADING)  :63-83
     Note over CMP: getAccountType(url) → 'account'  :68,158

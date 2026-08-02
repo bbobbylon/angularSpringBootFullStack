@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.handler;
 import com.bob.angularspringbootfullstack.constants.CapabilityCatalog;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.utils.AuthDiagnosticsLogger;
+import com.bob.angularspringbootfullstack.utils.BrowserErrorPage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -76,9 +77,24 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
         // controller, so ErrorDetailScrubber's ResponseBodyAdvice does not see it. The message
         // therefore survives in production — correctly, since it is deliberate user-facing text
         // rather than the incidental exception detail that advice exists to strip.
+        String reason = CapabilityCatalog.messageFor(request);
+
+        // Same 403, different presentation, when a human navigated here instead of the SPA calling
+        // us — see CustomAuthenticationEntryPoint for the full rationale. The capability phrase is
+        // reused verbatim, so both representations say exactly the same thing and neither reveals
+        // whether the underlying record exists.
+        if (BrowserErrorPage.isBrowserNavigation(request)) {
+            BrowserErrorPage.write(response, FORBIDDEN.value(),
+                    "403 · Forbidden",
+                    "You don't have access to this",
+                    reason,
+                    "/", "Back to dashboard");
+            return;
+        }
+
         HttpResponse httpResponse = HttpResponse.builder()
                 .timeStamp(now().toString())
-                .reason(CapabilityCatalog.messageFor(request))
+                .reason(reason)
                 .status(FORBIDDEN)
                 .statusCode(FORBIDDEN.value())
                 .build();

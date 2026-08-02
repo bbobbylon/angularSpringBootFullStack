@@ -15,6 +15,29 @@ jwt:
 
 server:
   port: ${CONTAINER_PORT:8080}
+  # ── Reverse-proxy awareness ────────────────────────────────────────────────────────────
+  # Controls whether Spring reconstructs the request's PUBLIC scheme/host/port from the
+  # X-Forwarded-Proto / X-Forwarded-Host / X-Forwarded-Port headers a load balancer adds.
+  #
+  # Why it matters here specifically: OAuth2ClientConfig registers every provider with the
+  # redirect-uri template "{baseUrl}/login/oauth2/code/{registrationId}", and {baseUrl} is
+  # resolved per-request from what the servlet container believes it is serving. Behind an
+  # ALB with this unset, the container sees a plain-HTTP request to its own task IP, so the
+  # redirect_uri sent to Google/GitHub/Microsoft becomes "http://10.0.1.23:8080/login/..."
+  # — a URL that is not registered in any provider console and is not reachable from a
+  # browser. The provider answers redirect_uri_mismatch and federated login is dead in that
+  # environment while working perfectly on localhost. `framework` makes Spring honour the
+  # forwarded headers so {baseUrl} resolves to the real public origin instead.
+  #
+  # Left OFF (`none`) by default: trusting those headers when NOTHING strips them means any
+  # caller can claim any origin. Turn it on only where a proxy you control is guaranteed to
+  # be in front — every deployment path already does (aws/task-definition.json and the GCP /
+  # Azure workflows set FORWARD_HEADERS_STRATEGY=framework).
+  #
+  # Note this is a SEPARATE concern from app.security.trusted-proxy-count, which governs
+  # X-Forwarded-FOR (the client IP used by rate limiting and anomaly detection). Both need
+  # setting behind a load balancer; neither implies the other.
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
 
 spring:
   profiles:

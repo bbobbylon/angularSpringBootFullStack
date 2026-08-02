@@ -71,13 +71,28 @@ Both email flows persist a **bare UUID key**, not a URL, and attach the host onl
 | Artefact | Value | Where |
 | --- | --- | --- |
 | DB lookup key (`url` column) | bare UUID, e.g. `abc-12ef-uuid` | `INSERT_ACCOUNT_VERIFICATION_URL_QUERY` / `INSERT_PASSWORD_VERIFICATION_QUERY` (`UserRepoImpl.java:199`, `:529`) |
-| Clickable link in the email | `{UI_APP_URL}/user/verify/{type}/{key}` | `getVerificationURL(key, type)` (`UserRepoImpl.java:259-263`) |
+| Clickable link in the email | `{UI_APP_URL}/verify/{type}/{key}` | `getVerificationURL(key, type)` (`UserRepoImpl#getVerificationURL`) |
 
-`getVerificationURL` is now the **only** consumer of the link's host (`UserRepoImpl.java:259-263`): it trims a trailing slash off `uiAppUrl` and appends `/user/verify/{type}/{key}`, producing e.g. `http://localhost:4200/user/verify/account/<uuid>`. The `{type}` segment comes from `VerificationType.getType()`, which lowercases the enum name (`VerificationType.java:42-43`) → `account` or `password`.
+`getVerificationURL` is now the **only** consumer of the link's host: it trims a trailing slash off `uiAppUrl` and appends `/verify/{type}/{key}`, producing e.g. `http://localhost:4200/verify/account/<uuid>`. The `{type}` segment comes from `VerificationType.getType()`, which lowercases the enum name (`VerificationType.java:42-43`) → `account` or `password`.
+
+> **The `/user` prefix was removed on 2026-07-29 and its absence is load-bearing.** The link used to be `{UI_APP_URL}/user/verify/{type}/{key}` — byte-for-byte the backend's own `GET /user/verify/{type}/{key}` endpoint. That is harmless while Angular runs on its own dev server (different origin, different port, no ambiguity), and broken the moment the SPA is compiled into the jar and served from the same origin as the API: Spring MVC matches the real `@GetMapping` handler ahead of the SPA forward, so the recipient of an activation email is shown the raw `HttpResponse` JSON instead of the verify screen. See §2.1 below.
 
 **Why the host is kept out of the stored key.** Because the persisted key is host-independent, changing `UI_APP_URL` re-points all *future* emails **without invalidating any pending verification rows** — the later lookup matches on the UUID alone (`SELECT … WHERE url = :url`). This replaced an earlier `ServletUriComponentsBuilder.fromCurrentContextPath()` approach that derived the host from the inbound request and therefore emitted *this backend's* origin instead of the SPA's (`UserRepoImpl.java:249-252`, comment).
 
-**Why the link must point at the SPA, not the backend.** The link resolves to the Angular `VerifyComponent` (routes `user/verify/account/:key` and `user/verify/password/:key`, `app.routes.ts`). The component reads `:key` back off the path and calls the backend (`GET /user/verify/{type}/{key}`) itself. If the link pointed at the backend's REST endpoint, the user would land on raw JSON (`HttpResponse`) and skip the verify UI entirely (`UserRepoImpl.java:115-120`).
+### 2.1 Why the link must point at the SPA, not the backend
+
+The link resolves to the Angular `VerifyComponent` (routes `verify/account/:key` and `verify/password/:key`, `app.routes.ts`). The component reads `:key` back off the path and calls the backend (`GET /user/verify/{type}/{key}`) itself. If the link pointed at the backend's REST endpoint, the user would land on raw JSON (`HttpResponse`) and skip the verify UI entirely.
+
+**Pointing at the SPA is not enough on its own — the path also has to be one no controller answers.** This app keeps a strict namespace split:
+
+| Namespace | Owner | Examples |
+| --- | --- | --- |
+| `/user/**`, `/customer/**`, `/admin/**` | the REST API | `GET /user/verify/account/{key}`, `POST /customer/create` |
+| bare or plural paths | the Angular SPA | `/login`, `/customers`, `/billing`, `/verify/account/:key` |
+
+The split is what makes `SecurityConfig`'s SPA-permit list safe: permitting a path there cannot expose a controller, because no controller answers on those paths — Spring MVC finds no handler and `WebMvcConfig` forwards to `index.html`. The verification route was the one breach of that rule, which is why it moved rather than being special-cased. **Do not add an SPA route under `/user`, `/customer`, or `/admin`.**
+
+Route order in `app.routes.ts` is also deliberate: `verify/account/:key` and `verify/password/:key` are declared *before* the bare `verify` route, and each carries `data: { verificationType }`. `VerifyComponent` reads that instead of sniffing `window.location.href` for the substring `"password"` — the previous approach, which was a hidden dependency on how the path happened to be spelled and would have silently mis-detected the flow during this very move.
 
 **The two verify routes are public — and must stay so in lockstep.** Both `/user/verify/account/**` and `/user/verify/password/**` appear in `Constants.PUBLIC_URLS` (the filter-chain `permitAll` set, `constants/Constants.java:18-26`) **and** in `Constants.PUBLIC_ROUTES` (the `CustomAuthFilter` skip list, `:60-65`). A route public in one list but not the other breaks on a stale `Authorization` header — see [security.md](security.md).
 
@@ -107,19 +122,36 @@ UI_APP_URL=http://localhost:4200          # used for CORS and as the base for em
 
 ## 4. Where the templates and strings live
 
-There is **no template engine** (no Thymeleaf/FreeMarker, no `.html`/`.ftl` resources). Every user-facing email string is an inline plain-text literal in `EmailServiceImpl`:
+There is still **no template engine** (no Thymeleaf/FreeMarker, no `.html`/`.ftl` resources). Since 2026-07-29 the branded HTML is rendered by a small hand-written builder instead — `utils/EmailTemplate.java` — and the copy that feeds it lives in `EmailServiceImpl`.
+
+**Why a renderer and not a template engine.** Three emails did not justify a dependency plus a second rendering pipeline, and email markup has to be inline-styled and table-based anyway (see below), which is exactly the kind of output a template engine makes *harder* to keep correct rather than easier.
 
 | String | Value | Location |
 | --- | --- | --- |
-| `From:` address | `bobsangularemail@gmail.com` (hardcoded) | `EmailServiceImpl.java:57` |
-| Subject (account) | `TesseraApp - Account Verification Email` | `EmailServiceImpl.java:59` |
-| Subject (password) | `TesseraApp - Password Verification Email` | `EmailServiceImpl.java:59` |
-| Body (account) | `Hello {firstName} … Welcome to TesseraApp! Please click the link to activate your account. {url} …` | `EmailServiceImpl.java:86-88` |
-| Body (password) | `Hello {firstName} … Reset Password Request. Please click the link … {url} … If you did not request a password reset, please ignore this email.` | `EmailServiceImpl.java:83-85` |
+| `From:` address | `bobsangularemail@gmail.com`, display name `TesseraApp` | `EmailServiceImpl.FROM_ADDRESS` / `FROM_NAME` |
+| Subject (account) | `TesseraApp - Account Verification Email` | `EmailServiceImpl#sendVerificationEmail` |
+| Subject (password) | `TesseraApp - Password Verification Email` | `EmailServiceImpl#sendVerificationEmail` |
+| Copy (both flows) | eyebrow, heading, intro, CTA label, closing note | `EmailServiceImpl#copyFor` → `VerificationCopy` record |
 
-The subject is `String.format("TesseraApp - %s Verification Email", StringUtils.capitalize(type.name().toLowerCase()))` (`EmailServiceImpl.java:59`), so `ACCOUNT` → `Account`, `PASSWORD` → `Password`.
+The subject is still `String.format("TesseraApp - %s Verification Email", StringUtils.capitalize(type.name().toLowerCase()))`, so `ACCOUNT` → `Account`, `PASSWORD` → `Password`.
 
-The body is selected by a `switch (verificationType)` in the private `getEmailMessage` (`EmailServiceImpl.java:81-92`). **Localising template changes to one method is deliberate:** when a new `VerificationType` is added (e.g. an email-change confirmation), the new `case` branch is the only place to touch besides the enum. The `default` branch throws `ApiException("Unable to send email …")` (`EmailServiceImpl.java:89`) — a fail-closed guard against a new enum value shipping without a template.
+The body copy is selected by a `switch (verificationType)` in the private `copyFor`, which returns a `VerificationCopy` record. **Localising template changes to one method is deliberate** and survives the HTML change: when a new `VerificationType` is added (e.g. an email-change confirmation), the new `case` branch is the only place to touch besides the enum. The `default` branch throws `ApiException("Unable to send email …")` — a fail-closed guard against a new enum value shipping without copy. The record additionally means the plain-text and HTML bodies are built from **one** source and cannot drift apart.
+
+### 4.1 Why the markup looks dated on purpose
+
+`EmailTemplate` emits markup no one would write for a browser, and each choice answers a specific client:
+
+| Choice | Reason |
+| --- | --- |
+| Table-based layout | Outlook renders with Word's HTML engine — no flexbox, no grid |
+| Every rule inline | Gmail strips `<style>` blocks and rewrites CSS |
+| Opaque hex, never `rgba()` | Word drops `rgba()`, which would render the dark card transparent (i.e. white) |
+| "Bulletproof" button (table cell + `bgcolor`) plus a copyable raw URL below it | Corporate gateways strip anchor styling; a verification email whose only affordance is an unrendered button is a dead end |
+| `color-scheme: dark light` meta | Stops Apple Mail applying its own dark-mode inversion on top of an already-dark design |
+| Text wordmark, no image | Clients block images by default until the sender is trusted |
+| Hidden preheader div | Otherwise the inbox snippet scrapes the wordmark instead of the message |
+
+All caller-supplied values pass through `EmailTemplate.escape(...)` on the way in. That matters because `firstName` is user-controlled at registration and the step-up emails interpolate risk summaries assembled from request metadata — neither may be allowed to close a tag.
 
 > **In-app strings live elsewhere.** The success/error messages the user sees as toasts come from the controller `HttpResponse.message` (e.g. "Email sent to reset password…") or the SPA, not from this email layer. See the response-envelope contract in [api-reference.md](api-reference.md).
 
@@ -129,14 +161,16 @@ The body is selected by a `switch (verificationType)` in the private `getEmailMe
 
 `EmailServiceImpl` (`service/serviceimpl/EmailServiceImpl.java:31`) is a thin, **synchronous, exception-transparent** wrapper over Spring's `JavaMailSender`.
 
-- **Composition.** Builds a `SimpleMailMessage` — `setTo(email)`, `setFrom(...)`, `setText(getEmailMessage(...))`, `setSubject(...)` — then `mailSender.send(msg)` and a single info log (`EmailServiceImpl.java:54-61`). Plain text only (`SimpleMailMessage`), no HTML/multipart.
+- **Composition.** Builds a `MimeMessage` via `MimeMessageHelper(message, true, "UTF-8")` — the `true` is what permits a second body part — then `setTo` / `setFrom(address, displayName)` / `setSubject` / **`setText(plain, html)`**, `mailSender.send(message)`, and a single info log. The two-argument `setText` is what produces `multipart/alternative`: the first argument becomes `text/plain`, the second `text/html`, and the client picks.
+- **Why both parts, every time.** The plain-text part is written deliberately, not machine-stripped from the markup. It keeps the emails readable in text-only clients and the plain-text preview panes some corporate gateways force, and it materially helps deliverability — an HTML-only body containing a link is a classic spam signal, and these are precisely the messages that must not land in a junk folder.
+- **Checked exceptions are rewrapped, not declared.** `MessagingException` / `UnsupportedEncodingException` become `MailPreparationException` in the private `send(...)` helper. Two reasons: `NotificationServiceImpl` invokes these methods inside a `Runnable`, which cannot propagate a checked exception at all; and `MailPreparationException` **is** a `MailException`, so a composition failure lands in the same `.exceptionally(...)` handler as an SMTP failure and the caller's error logging keeps working unchanged.
 - **`JavaMailSender` wiring.** Auto-configured by `MailSenderAutoConfiguration` from the `spring.mail.*` properties (`application.yml:63-82`): Gmail SMTP with STARTTLS required and 5 s connect/read/write timeouts; credentials from `MAIL_USERNAME` / `MAIL_PASSWORD` (`EmailServiceImpl.java:14-20`).
 - **Exceptions are not caught here — on purpose.** Any `MailException` (parse/connect/auth failure) propagates to the caller so `NotificationServiceImpl`'s `.exceptionally(...)` logs one accurate error. Catching here would force the caller to log a misleading success (`EmailServiceImpl.java:37-44`).
 
 | Concern | Behaviour | Source |
 | --- | --- | --- |
 | Threading | Synchronous; the async boundary is the caller's | `EmailServiceImpl.java:24-26` |
-| Format | Plain text (`SimpleMailMessage`) | `EmailServiceImpl.java:55` |
+| Format | `multipart/alternative` — branded HTML (`EmailTemplate`) + a deliberate plain-text part | `EmailServiceImpl#send` |
 | Failure handling | Propagates (transparent) | `EmailServiceImpl.java:60` |
 | Unknown `VerificationType` | Throws `ApiException` from `getEmailMessage` | `EmailServiceImpl.java:89` |
 

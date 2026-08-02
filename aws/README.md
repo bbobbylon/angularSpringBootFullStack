@@ -1,8 +1,61 @@
 # TesseraApp — AWS Deployment Guide
 
-End-to-end checklist for deploying TesseraApp to AWS using ECS Fargate + **Aiven MySQL** (managed DB) + S3 (image storage) + ALB (HTTPS termination) + Secrets Manager (secrets injection).
+End-to-end checklist for deploying TesseraApp to AWS using ECS Fargate + **Aiven MySQL** (managed DB) + S3 (image storage) + ALB (currently **plain HTTP** — see below) + Secrets Manager (secrets injection).
 
 ---
+
+## Current deployment — the two environments
+
+Everything in this repo is written to run identically in both. Where behaviour differs, it is
+configuration, not code — see
+[`documentation/security.md` §11.1](../documentation/security.md#111-deployment-parity--what-changes-between-startsh-and-aws)
+for the full parity table.
+
+| | Local (`./start.sh`) | AWS (ECS Fargate) |
+|---|---|---|
+| **App URL** | `http://localhost:4200` (Angular dev server) | `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com` |
+| **API URL** | `http://localhost:8080` (separate origin) | same origin as the app — Angular is compiled into the jar |
+| **`UI_APP_URL`** | `http://localhost:4200` | `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com` |
+| **`APP_DOMAIN`** (setup.sh / GitHub Secret) | n/a | `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com` |
+| **Database** | `db2` (local MySQL) | `db3` (Aiven) |
+| **Images** | local filesystem | S3 (`tessera-app-images`) |
+| **Spring profile** | `dev` | `prod` |
+| **OAuth2 callback** | `http://localhost:8080/login/oauth2/code/{provider}` | `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com/login/oauth2/code/{provider}` |
+
+Set `UI_APP_URL` with **no trailing slash**. `UserRepoImpl#getVerificationURL` trims one defensively,
+but nothing else does.
+
+### ⚠️ The ALB is plain HTTP today, and three things depend on that changing
+
+Step 8 (ACM + HTTPS listener) has not been done, so the app is served over `http://`. It works —
+but four capabilities are either degraded or outright blocked until there is TLS, and two of them
+are things this project actively cares about:
+
+| Affected | Effect over plain HTTP |
+|---|---|
+| **Google federated login** | **Blocked.** Google requires the `https` scheme on every authorized redirect URI, with an exception *only* for `localhost`. You cannot register the ALB's `http://` callback at all. |
+| **Microsoft (Entra) federated login** | **Blocked**, same rule — Entra rejects non-`https` redirect URIs outside `http://localhost`. |
+| **GitHub federated login** | Works. GitHub permits `http` callback URLs, so this is the one provider that can be demonstrated on the current URL. |
+| **WebAuthn / passkeys** (roadmap §3.1) | Would not work. The WebAuthn API requires a *secure context* — HTTPS, or `localhost` as a special case. Worth knowing before that work starts. |
+| **HSTS** | Sent but inert; the header only means anything over TLS. |
+
+**The cheapest fix that unblocks all of these is CloudFront**, not a domain purchase: put a
+CloudFront distribution in front of the ALB and use its auto-issued `*.cloudfront.net` certificate.
+That gives you a real, publicly trusted HTTPS origin for free, and `https://d1234abcd5678.cloudfront.net`
+*is* accepted by Google and Entra as a redirect URI. The trade-off is that the hostname is randomly
+assigned and cannot be customised (see Troubleshooting) — fine for a demo, not for a product. Buying
+a cheap domain and doing Step 8 properly is the other route.
+
+Whichever you choose, remember `UI_APP_URL` / `APP_DOMAIN` must be updated to the new
+`https://…` origin **and the task definition re-registered** — it is read once at container start.
+
+---
+
+> 📕 **Looking for "just tell me the steps"?** See **[RUNBOOK.md](RUNBOOK.md)** — the linear,
+> assumes-nothing procedure, including the application-level setup (apply `schema.sql` to `db3`,
+> grant yourself an admin role) that this file does not cover and that infrastructure success does
+> not give you. **This** file is the reference: what each resource is for, and a troubleshooting log
+> of every real error hit building it. Use the runbook to *do*; use this one when something *breaks*.
 
 ## Fastest path — one-command bootstrap
 
@@ -126,10 +179,12 @@ aws s3api put-bucket-policy --bucket tessera-app-images --policy '{
   }]
 }'
 
-# Replace YOUR_DOMAIN with your actual domain:
+# Both origins the images are actually loaded from — the deployed app and the local dev server.
+# Replace the ALB hostname if yours differs; add the https:// origin too once Step 8 or CloudFront
+# is in place, since a scheme change makes this a different origin as far as the browser is concerned.
 aws s3api put-bucket-cors --bucket tessera-app-images --cors-configuration '{
   "CORSRules":[{
-    "AllowedOrigins":["https://YOUR_DOMAIN", "http://localhost:4200"],
+    "AllowedOrigins":["http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com", "http://localhost:4200"],
     "AllowedMethods":["GET"],
     "AllowedHeaders":["*"],
     "MaxAgeSeconds":3600
@@ -174,8 +229,16 @@ aws secretsmanager update-secret --region us-east-1 \
   --secret-id tessera-app/aiven-user     --secret-string 'avnadmin'
 aws secretsmanager update-secret --region us-east-1 \
   --secret-id tessera-app/db-password    --secret-string 'your-real-aiven-password'
-# ... repeat for mail-*, twilio-*, google-*, github-*
+# ... repeat for mail-*, twilio-*, google-*, github-*, microsoft-*
 ```
+
+> **A provider whose secrets are missing here simply will not appear on the login screen.**
+> `OAuth2ClientConfig#federatedProviderCatalog` skips any provider with a blank client id, and the
+> SPA renders exactly what `GET /oauth2/providers` returns. That is by design (a deployment with only
+> GitHub credentials gets a working GitHub button and no dead ones) but it means a provider that works
+> locally can be silently absent when deployed — which is precisely what happened with Microsoft, whose
+> secrets existed in `.env` but not in Secrets Manager or `task-definition.json`. Counting the buttons
+> on the deployed login screen is the fastest way to see which client ids actually reached the container.
 
 ---
 
@@ -366,7 +429,7 @@ prompts for the value rather than taking it as a visible argument):
 | `AIVEN_DB` | **`db3`** — not `defaultdb`, which is Aiven's empty auto-created database |
 | `AIVEN_USER` | e.g. `avnadmin` |
 | `S3_BUCKET` | e.g. `tessera-app-images` |
-| `APP_DOMAIN` | `http://your-alb-dns-name` unless Step 8 (real HTTPS) is actually done, then `https://your-real-domain` |
+| `APP_DOMAIN` | Currently `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com`. Change to `https://your-real-domain` only once Step 8 (real HTTPS) is genuinely done — see the plain-HTTP caveats at the top |
 
 ---
 
@@ -377,6 +440,44 @@ script-level bugs are already fixed in `aws/setup.sh` and `aws/task-definition.j
 documented here so you recognize the symptom instantly if it resurfaces (e.g. a teammate on an
 older checkout, or the same mistake in a hand-run manual command) instead of re-debugging from
 scratch.
+
+### Tasks fail to place: "failed to validate logger args ... awslogs-region is required"
+**Symptom:** the service loops `has started 1 tasks` → `was unable to place a task` forever, with
+`ResourceInitializationError: failed to validate logger args: unable to get awslogs driver
+arguments: awslogs-region is required`. `runningCount` on the new revision never leaves 0. The
+previous revision keeps serving, so **the app stays up** — this fails the rollout, not the site.
+**Cause:** `AWS_REGION` was not exported before `envsubst`. `aws/task-definition.json` uses
+`"awslogs-region": "${AWS_REGION}"`, and **`envsubst` replaces an unset variable with an empty
+string and exits 0** — it does not warn and it does not fail. The result is structurally valid
+JSON, so `register-task-definition` accepts it happily; the emptiness only surfaces when ECS tries
+to start a container with a log driver that has no region.
+**Why the obvious guard misses it:** checking the filled JSON for a leftover `${` finds nothing —
+the token *was* substituted, just with nothing. You have to check for empty **values**, not
+unresolved tokens. The `BAD=$(… | jq …)` guard in [RUNBOOK.md Part D](RUNBOOK.md#part-d--redeploy-the-90-second-loop)
+does exactly that, across `environment`, `secrets` and `logConfiguration.options`.
+**Fix:** `export AWS_REGION=us-east-1` before `envsubst`, re-register, and point the service back
+at a known-good revision meanwhile:
+```bash
+aws ecs update-service --cluster tessera-app-cluster --service tessera-app-service \
+  --task-definition tessera-app:<last-good-revision> --force-new-deployment --region us-east-1
+```
+Find the last good one by comparing log config across revisions:
+```bash
+aws ecs describe-task-definition --task-definition tessera-app:8 --region us-east-1 \
+  --query 'taskDefinition.containerDefinitions[0].logConfiguration.options'
+```
+
+### An `aws` command "won't finish" — you have to hold Enter to get back to a prompt
+**Cause:** not a hang. AWS CLI v2 pipes output through a pager by default (`more` on Windows,
+`less` elsewhere), and `more` advances one line per Enter. Commands that return a large object —
+`ecs update-service` dumps the entire service, every deployment and event included — take a very
+long time to page through one line at a time.
+**Escape right now:** press `q` (or `Ctrl+C`).
+**Fix permanently:** `aws configure set cli_pager ""`. Per-shell `export AWS_PAGER=""` and
+per-command `--no-cli-pager` also work.
+**Why it matters beyond irritation:** in a script or a CI job the pager has no terminal to page to,
+so the command blocks on input that never arrives and the job times out with no error. That is why
+every AWS invocation in these scripts ends in `--query … --output text` or `>/dev/null`.
 
 ### `chmod: cannot access 'aws/setup.sh': No such file or directory`
 **Cause:** not running from the repo root — `aws/setup.sh` is a relative path.
@@ -505,6 +606,41 @@ those links until someone noticed and fixed it by hand.
 **Fix:** `setup.sh` now defaults to `http://${DOMAIN}`. Update `APP_DOMAIN` (both the GitHub Secret
 and, if you registered a task definition by hand, the env var) to `https://your-real-domain` only
 once Step 8 is genuinely complete.
+
+### Federated login: the provider console refuses to accept the ALB's `http://` callback
+**Symptom:** adding `http://tessera-app-alb-….elb.amazonaws.com/login/oauth2/code/google` in the
+Google Cloud console (or the equivalent under Entra's **Authentication** blade) is rejected outright
+at save time, with a message about the URI needing to use HTTPS.
+**Cause:** not a bug and not fixable in this repo. Google and Microsoft both require the `https`
+scheme on redirect URIs, with a carve-out **only** for `http://localhost`. That carve-out is exactly
+why federated login works on `start.sh` and cannot be made to work on a plain-HTTP ALB.
+**Fix:** give the deployment a real HTTPS origin — CloudFront in front of the ALB (free, uses its
+auto-issued `*.cloudfront.net` certificate, accepted by both providers) or Step 8 with a domain you
+own. GitHub is the exception: it accepts `http` callbacks, so it is the one provider that can be
+demoed on the current URL. See the caveat table at the top of this file.
+
+### Federated login redirects to `http://10.0.x.x:8080/...` instead of the ALB
+**Symptom:** the provider returns `redirect_uri_mismatch`, and the URI in the error is the ECS task's
+own private IP rather than any hostname you registered anywhere.
+**Cause:** `server.forward-headers-strategy` left at its default `none`. `OAuth2ClientConfig`
+registers every provider with the template `{baseUrl}/login/oauth2/code/{registrationId}`, and
+`{baseUrl}` is resolved per request from what the servlet container thinks it is serving. Behind an
+ALB with forwarded headers ignored, that is the container's own scheme, address and port.
+**Fix:** `FORWARD_HEADERS_STRATEGY=framework` — already set in `aws/task-definition.json`. It is off
+by default on purpose: trusting `X-Forwarded-*` when nothing strips them lets any caller claim any
+origin. Requires a task-definition revision, since it is a plain environment value.
+
+### Rate limiting throttles everyone at once / anomaly detection never fires
+**Symptom:** one user tripping the rate limiter appears to 429 the whole app; the security dashboard
+never records a `NEW_NETWORK` signal no matter which device signs in.
+**Cause:** `app.security.trusted-proxy-count` (env `TRUSTED_PROXY_COUNT`) left at its default `0`,
+which makes `RequestUtils.getIpAddress` ignore `X-Forwarded-For` and return the transport peer — the
+**load balancer** — for every request. Every user therefore shares one rate-limit bucket and one
+apparent network, so FR-TPF-1 step-up looks present and does nothing.
+**Fix:** `TRUSTED_PROXY_COUNT=1` behind a single ALB (`2` with CloudFront in front of it) — already
+set in `aws/task-definition.json`. Confirm from the boot log line `[NET] trusted-proxy-count=…`.
+Do not pad the number: set it too high and an attacker-supplied header entry becomes trusted, which
+is the exact vulnerability the mechanism exists to prevent.
 
 ### ACM: "Additional verification required to request certificates for one or more domain names"
 **Cause:** requesting a certificate for a placeholder domain that nobody can actually prove

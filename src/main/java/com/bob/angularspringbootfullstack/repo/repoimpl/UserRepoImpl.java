@@ -231,8 +231,16 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * {@code key} is what gets persisted (in the {@code url} column) and later matched on, while
      * this method merely wraps that key in the configured frontend origin ({@link #uiAppUrl}) to
      * produce something clickable. The link resolves to the Angular {@code VerifyComponent}
-     * (route {@code /user/verify/{type}/{key}}), which reads the {@code key} back off the path and
-     * calls the backend to verify it.
+     * (route {@code /verify/{type}/{key}}), which reads the {@code key} back off the path and calls
+     * the backend's {@code GET /user/verify/{type}/{key}} endpoint to actually verify it.
+     * <p>
+     * The emitted path deliberately omits the {@code /user} prefix the backend endpoint carries.
+     * With Angular on its own dev server the two live on different origins and either spelling
+     * works, but in Docker/prod the SPA is baked into this jar and the browser hits the <em>same</em>
+     * origin as the API — so a link to {@code /user/verify/account/<uuid>} is dispatched to
+     * {@code UserController#verifyAccount} and the recipient is shown the raw JSON envelope instead
+     * of the verification screen. Keeping user-facing routes in the SPA's bare namespace and the API
+     * under {@code /user/**} is what makes one link behave identically in both topologies.
      * <p>
      * Because the persisted key no longer contains the host, changing {@link #uiAppUrl} re-points
      * future emails <em>without</em> invalidating any pending verification rows — the lookup matches
@@ -242,12 +250,12 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * @param key  the bare UUID identifying this verification instance (also the DB lookup key)
      * @param type the verification type segment ({@code account} or {@code password})
      * @return the absolute frontend verification URL, e.g.
-     *         {@code http://localhost:4200/user/verify/account/<uuid>}
+     *         {@code http://localhost:4200/verify/account/<uuid>}
      */
     private String getVerificationURL(String key, String type) {
-        // Tolerate a trailing slash on the configured origin so we never emit "//user/verify".
+        // Tolerate a trailing slash on the configured origin so we never emit "//verify".
         String base = uiAppUrl.endsWith("/") ? uiAppUrl.substring(0, uiAppUrl.length() - 1) : uiAppUrl;
-        return base + "/user/verify/" + type + "/" + key;
+        return base + "/verify/" + type + "/" + key;
     }
 
     /**

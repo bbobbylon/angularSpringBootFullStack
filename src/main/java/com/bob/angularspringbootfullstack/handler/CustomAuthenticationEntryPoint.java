@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.handler;
 
 import com.bob.angularspringbootfullstack.model.HttpResponse;
+import com.bob.angularspringbootfullstack.utils.BrowserErrorPage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,6 +26,14 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
  * <p>
  * This is part of the Spring Security filter chain and provides better UX by
  * returning meaningful error messages as JSON.
+ * <p>
+ * <strong>Two representations, one status.</strong> Since the SPA is served from this same origin
+ * in Docker/prod, this handler also answers plain browser navigations — someone typing a protected
+ * URL, or following a stale link. Those callers were getting the JSON envelope rendered as raw text
+ * in the viewport. {@link BrowserErrorPage} distinguishes the two cases on fetch metadata, and a
+ * navigation now gets a styled page. The JSON path is unchanged and remains the default: the
+ * frontend's token interceptor performs its silent refresh off this exact {@code 401}, so anything
+ * that altered the status or reached the interceptor as HTML would disable automatic re-auth.
  */
 @Component
 public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
@@ -51,6 +60,19 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
      */
     @Override
     public void commence(@NonNull HttpServletRequest request, HttpServletResponse response, @NonNull AuthenticationException authException) throws IOException {
+        // A human navigated here rather than the SPA calling us. Same 401, readable presentation,
+        // and a way back into the app instead of a dead end. Returns early so the JSON path below
+        // stays byte-for-byte what the token interceptor already handles.
+        if (BrowserErrorPage.isBrowserNavigation(request)) {
+            BrowserErrorPage.write(response, UNAUTHORIZED.value(),
+                    "401 · Unauthorized",
+                    "You need to sign in",
+                    "This page is only available to signed-in accounts. Your session may also have "
+                            + "expired since you last used it.",
+                    "/login", "Go to sign in");
+            return;
+        }
+
         HttpResponse httpResponse = HttpResponse.builder()
                 .timeStamp(now().toString())
                 .reason("I don't think you are logged in :(  Please login to access this resource!")

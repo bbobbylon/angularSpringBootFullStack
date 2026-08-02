@@ -299,6 +299,11 @@ create_secret "google-client-id"      "CHANGE_ME.apps.googleusercontent.com"
 create_secret "google-client-secret"  "CHANGE_ME"
 create_secret "github-client-id"      "CHANGE_ME"
 create_secret "github-client-secret"  "CHANGE_ME"
+# Microsoft (Entra / Azure AD v2). A provider's sign-in button renders only when its CLIENT_ID
+# reaches the container, so leaving these unset here is what kept Microsoft off the deployed
+# login screen while it appeared locally from .env.
+create_secret "microsoft-client-id"     "CHANGE_ME"
+create_secret "microsoft-client-secret" "CHANGE_ME"
 
 warn "Update every CHANGE_ME secret before your first deployment:"
 warn "  aws secretsmanager update-secret --region ${REGION} --secret-id ${PREFIX}/mail-username --secret-string 'you@gmail.com'"
@@ -469,7 +474,8 @@ for s in JWT_SECRET:jwt-secret DB_PASSWORD:db-password MAIL_USERNAME:mail-userna
          MAIL_PASSWORD:mail-password TWILIO_SID:twilio-sid TWILIO_TOKEN:twilio-token \
          TWILIO_FROM_NUMBER:twilio-from-number GOOGLE_CLIENT_ID:google-client-id \
          GOOGLE_CLIENT_SECRET:google-client-secret GITHUB_CLIENT_ID:github-client-id \
-         GITHUB_CLIENT_SECRET:github-client-secret; do
+         GITHUB_CLIENT_SECRET:github-client-secret MICROSOFT_CLIENT_ID:microsoft-client-id \
+         MICROSOFT_CLIENT_SECRET:microsoft-client-secret; do
   var_name="${s%%:*}_ARN"
   secret_name="${s##*:}"
   arn=$(aws secretsmanager describe-secret --secret-id "tessera-app/${secret_name}" \

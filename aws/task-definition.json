@@ -21,7 +21,10 @@
     "GOOGLE_CLIENT_ID_ARN": "Full ARN of tessera-app/google-client-id",
     "GOOGLE_CLIENT_SECRET_ARN": "Full ARN of tessera-app/google-client-secret",
     "GITHUB_CLIENT_ID_ARN": "Full ARN of tessera-app/github-client-id",
-    "GITHUB_CLIENT_SECRET_ARN": "Full ARN of tessera-app/github-client-secret"
+    "GITHUB_CLIENT_SECRET_ARN": "Full ARN of tessera-app/github-client-secret",
+    "MICROSOFT_CLIENT_ID_ARN": "Full ARN of tessera-app/microsoft-client-id",
+    "MICROSOFT_CLIENT_SECRET_ARN": "Full ARN of tessera-app/microsoft-client-secret",
+    "_federation_note": "A provider's button appears on the login screen ONLY if its CLIENT_ID reaches the container (OAuth2ClientConfig#federatedProviderCatalog skips any provider with a blank id). Microsoft was absent from this template entirely, which is why it shows locally (.env has MICROSOFT_CLIENT_ID) and not on ECS. Also register BOTH callback URLs in each provider console — http://localhost:8080/login/oauth2/code/{provider} for start.sh and https://<APP_DOMAIN>/login/oauth2/code/{provider} for ECS; providers accept a list, so one app registration serves both and no code change is needed to switch."
   },
   "family": "tessera-app",
   "networkMode": "awsvpc",
@@ -48,7 +51,10 @@
         { "name": "UI_APP_URL", "value": "${APP_DOMAIN}" },
         { "name": "IMAGE_STORAGE_TYPE", "value": "s3" },
         { "name": "AWS_S3_BUCKET", "value": "${S3_BUCKET}" },
-        { "name": "AWS_REGION", "value": "${AWS_REGION}" }
+        { "name": "AWS_REGION", "value": "${AWS_REGION}" },
+        { "name": "FORWARD_HEADERS_STRATEGY", "value": "framework" },
+        { "name": "TRUSTED_PROXY_COUNT", "value": "1" },
+        { "name": "MICROSOFT_TENANT_ID", "value": "common" }
       ],
       "secrets": [
         {
@@ -94,6 +100,14 @@
         {
           "name": "GITHUB_CLIENT_SECRET",
           "valueFrom": "${GITHUB_CLIENT_SECRET_ARN}"
+        },
+        {
+          "name": "MICROSOFT_CLIENT_ID",
+          "valueFrom": "${MICROSOFT_CLIENT_ID_ARN}"
+        },
+        {
+          "name": "MICROSOFT_CLIENT_SECRET",
+          "valueFrom": "${MICROSOFT_CLIENT_SECRET_ARN}"
         }
       ],
       "logConfiguration": {

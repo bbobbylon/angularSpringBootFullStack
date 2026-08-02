@@ -22,6 +22,7 @@ The complete authentication and authorization model: how login works, how JWTs a
 9. [Federated login (OAuth2 / OIDC)](#9-federated-login-oauth2--oidc)
 10. [Password & account security](#10-password--account-security)
 11. [Transport, CORS & headers](#11-transport-cors--headers)
+    - [11.1 Deployment parity — what changes between `start.sh` and AWS](#111-deployment-parity--what-changes-between-startsh-and-aws)
 12. [Public endpoints](#12-public-endpoints)
 13. [Known limitations & remaining work](#13-known-limitations--remaining-work)
 14. [Organization-scoped administration](#14-organization-scoped-administration)
@@ -200,6 +201,18 @@ See the catalog in [database.md §12](database.md#12-reference-data). Quick ment
 
 Both return the application's standard `HttpResponse` JSON envelope rather than Spring's default HTML.
 
+**Except for top-level browser navigations, which get a styled page (2026-07-29).** Once the SPA is served from the same origin as the API, these handlers also answer a human who typed a protected URL or followed a stale link — and that person was being shown a wall of raw JSON. `utils/BrowserErrorPage` distinguishes the two callers and renders a branded 401/403 page for the navigation case. **The status code is unchanged in both branches; only the representation differs.**
+
+The detection signal matters more than it looks:
+
+| Signal | Verdict | Why |
+|---|---|---|
+| `X-Requested-With: XMLHttpRequest` | JSON, always | Definitive "this is a programmatic call" |
+| `Sec-Fetch-Mode: navigate` (+ `Sec-Fetch-Dest: document`) | HTML | Fetch metadata is set by the *browser*, not by page script, so it cannot be forged. This is the branch that runs in practice |
+| No fetch metadata at all | JSON unless it is a `GET` that explicitly asks for `text/html` **and** carries no `Authorization` header | Conservative fallback for older clients |
+
+> **Why not just content-negotiate on `Accept`?** Because Angular's `HttpClient` sets no `Accept` header of its own, so an XHR can arrive with none or with a browser-supplied default. Getting that wrong means serving HTML to `token.interceptor`, whose silent-refresh path keys off a clean JSON `401` — the whole reason `defaultAuthenticationEntryPointFor(AnyRequestMatcher)` exists (see the comment in `SecurityConfig`). The bias throughout is toward JSON: a false negative degrades one person's error page, a false positive signs everybody out.
+
 ---
 
 ## 7. Refresh-session rotation & reuse detection
@@ -312,9 +325,60 @@ OAuth2LoginSuccessHandler                           (the token-exchange seam, FR
 **Security headers** (`SecurityConfig`):
 - `X-Frame-Options: DENY` (clickjacking),
 - `X-Content-Type-Options: nosniff`,
-- HSTS — `max-age=31536000; includeSubDomains`.
+- HSTS — `max-age=31536000; includeSubDomains` (**inert over plain HTTP**, so it does nothing locally and everything behind the load balancer's TLS),
+- **Content-Security-Policy** — `default-src 'self'`, with `script-src` allow-listing exactly one inline script *by SHA-256 hash* (the theme-flash-prevention snippet in `index.html`) rather than opening `'unsafe-inline'`. `style-src` does permit `'unsafe-inline'` because Angular injects component styles at runtime; `img-src` includes `https:` for S3-hosted avatars.
+- **Referrer-Policy** — `strict-origin-when-cross-origin`, so path parameters never leak to third-party pages,
+- **Permissions-Policy** — `camera=(), microphone=(), geolocation=(), payment=()`.
 
-**CORS** allows the SPA origins (`http://localhost:4200`, `http://localhost:3000`, `https://angularsecureapp.org`), permits the `Authorization`/`Jwt-Token`/content headers, **exposes** `Authorization`/`Jwt-Token`/`File-Name` so the SPA can read rotated tokens and download filenames, and allows credentials.
+> **CSP is the one control that is deliberately asymmetric.** `ng serve` sends no CSP header at all, so the policy is only ever *enforced* once the SPA is served out of `src/main/resources/static/` by Spring Boot. That asymmetry has already produced one production-only bug — the CDN-hosted icon font and Google Fonts were blocked by `style-src`/`font-src 'self'`, so every `bi-*` icon silently rendered as nothing in production while looking perfect locally. The fix was to self-host rather than widen the policy. If you add a third-party origin, assume it will fail in production only.
+
+**CORS — note there are currently TWO configurations, and they do not agree.**
+
+| Bean | Origins | Reached via |
+|---|---|---|
+| `SecurityConfig.corsConfigurationSource()` | **Hardcoded**: `http://localhost:4200`, `http://localhost:3000`, `https://angularsecureapp.org` | `http.cors(c -> c.configurationSource(corsConfigurationSource()))` — the Spring Security filter chain |
+| `AngularSpringBootFullStackApplication.corsFilter()` | **Config-driven**: `app.cors.allowed-origin-patterns` (env `CORS_ALLOWED_ORIGINS`), which `application-prod.yml` defaults to `${UI_APP_URL}` | A servlet `CorsFilter` bean, auto-registered by Boot |
+
+Both permit `Authorization`/`Jwt-Token` on the way in and **expose** `Authorization`/`Jwt-Token`/`File-Name` on the way out so the SPA can read rotated tokens and download filenames; both allow credentials.
+
+The security chain's source is the one that answers preflights, so **the hardcoded list is effectively authoritative** and `angularsecureapp.org` is a stale origin still shipping in the jar. This is not currently breaking anything — the deployed shape serves the SPA and the API from **one origin**, so those calls are same-origin and never trigger a CORS check at all, which is exactly why the divergence has gone unnoticed. It becomes a real bug the moment anything genuinely cross-origin is added (a second frontend, a mobile client, a split-origin staging deploy).
+
+> ⬜ **Backlog item:** delete the hardcoded list and have `SecurityConfig` read `app.cors.allowed-origin-patterns` like the filter does, so there is one source of truth. Deliberately *not* fixed in passing — CORS changes are the kind that look inert in a single-origin deployment and then fail only for the one client you forgot about.
+
+**Reverse-proxy awareness.** `server.forward-headers-strategy` (env `FORWARD_HEADERS_STRATEGY`, default `none`, set to `framework` in every deployment path) controls whether Spring reconstructs the public scheme/host/port from `X-Forwarded-Proto`/`-Host`/`-Port`. It is **off by default on purpose**: trusting those headers when nothing strips them lets any caller claim any origin. It is required in AWS because `OAuth2ClientConfig` registers every provider with `{baseUrl}/login/oauth2/code/{registrationId}` — see §11.1.
+
+---
+
+### 11.1 Deployment parity — what changes between `start.sh` and AWS
+
+Most of this guide describes behaviour that is identical everywhere. The table below is the exception list: **controls whose effectiveness depends on configuration that differs by environment.** Everything marked ⚠️ is a control that can appear to work locally while being degraded or absent when deployed.
+
+| Control | What it actually depends on | Local (`start.sh`) | AWS (ECS, `prod`) |
+|---|---|---|---|
+| ⚠️ **Anomaly detection / step-up (FR-TPF-1)** | The real client IP, via `app.security.trusted-proxy-count` | `0` — correct, no proxy | Must be `1` behind an ALB. **At `0` every request appears to come from the load balancer**, so `NEW_NETWORK` can never fire and the control is silently dead |
+| ⚠️ **Rate limiting (`RateLimitFilter`)** | Same client-IP resolution | Per-caller buckets | At `TRUSTED_PROXY_COUNT=0`, every user collapses into **one** bucket — the whole tenant throttles as a single caller |
+| ⚠️ **Federated login redirect** | `{baseUrl}`, resolved from forwarded headers | Correct without config | Needs `FORWARD_HEADERS_STRATEGY=framework`, else `redirect_uri` becomes `http://<task-ip>:8080/...` and every provider answers `redirect_uri_mismatch` |
+| ⚠️ **Which providers appear** | Presence of each `*_CLIENT_ID` | Whatever `.env` has | Whatever the task definition injects — a provider present in one and not the other is exactly why Microsoft showed locally and not when deployed |
+| ⚠️ **Email (verification, step-up codes, security alerts)** | `MAIL_USERNAME` / `MAIL_PASSWORD` | `.env` | Secrets Manager — the bootstrap scripts seed these as `CHANGE_ME`, and step-up **withholds tokens until the emailed code is entered**, so unset mail credentials lock out any account the risk engine flags |
+| ⚠️ **Profile images** | `IMAGE_STORAGE_TYPE` | `local` filesystem | `s3` — needs the task role to hold `s3:PutObject`/`s3:GetObject` on the bucket |
+| ⚠️ **Schema + seed data** | `schema.sql`, applied **by hand** (`sql.init.mode: never`) | `db2` | `db3`. Tables can exist without seed rows, which is how the services catalogue ends up empty while the app boots fine |
+| ⚠️ **JPA schema drift** | `ddl-auto` | `update` — silently fixes drift | `validate` — **fails fast at startup**. Never yet exercised end-to-end (see §13) |
+| ✅ HSTS | TLS termination | Inert (plain HTTP) | Active at the ALB |
+| ✅ CSP / Referrer / Permissions | Served by Spring, not `ng serve` | Not enforced | Enforced |
+| ✅ Error-detail scrubbing | `app.error.expose-details` | `true` | `false` — `devMessage`/raw `reason` suppressed |
+| ✅ Refresh rotation, reuse detection, TOTP, RBAC, org scoping | Database state only | Identical | Identical — these are DB-backed and survive multi-instance |
+| ✅ Actuator exposure | `management.endpoints.web.exposure` | `health, info`, `show-details: never` | Same — no new surface when public |
+| ➖ SMS 2FA | `TWILIO_*` | Stubbed | Stubbed — identical, and documented in §13 |
+
+**Post-deploy smoke test**, in the order that isolates faults fastest:
+
+1. `GET /actuator/health` → `{"status":"UP"}`. Anything else means the app never booted; check `ddl-auto: validate` failures in the CloudWatch log first.
+2. Sign in with a password account. Confirms `JWT_SECRET`, the datasource, and `db3` seed data.
+3. Load the login screen and count provider buttons — that number *is* `/oauth2/providers`, and it tells you which `*_CLIENT_ID`s actually reached the container.
+4. Complete one federated sign-in. This is the single best test of `FORWARD_HEADERS_STRATEGY`; a `redirect_uri_mismatch` means it did not take effect.
+5. Register a throwaway account and click the emailed link. Confirms mail credentials, the HTML template, and that the link lands on `/verify/account/:key` rather than raw JSON.
+6. Navigate directly to a protected URL while signed out → styled 401 page, not JSON.
+7. Check the boot log for `[NET] trusted-proxy-count=` and confirm it is not `0`.
 
 ---
 

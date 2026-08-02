@@ -20,7 +20,7 @@ let planning re-scatter — that is the exact problem this consolidation just un
 - [`documentation/README.md`](documentation/README.md) — the documentation hub.
 - [`documentation/roles-and-scenarios.md`](documentation/roles-and-scenarios.md) — who can do what, end to end, for every role.
 - [`documentation/history/PROJECT-HISTORY.md`](documentation/history/PROJECT-HISTORY.md) — the archive: milestones, delivery timeline, retired-document registry.
-- [`software_requirements_specification.md`](software_requirements_specification.md) — the SRS.
+- [`assignments/software_requirements_specification.md`](assignments/software_requirements_specification.md) — the SRS.
 
 **Status legend:** ⬜ not started · 🔄 in progress · ✅ done.
 
@@ -115,6 +115,52 @@ The backend security paths are covered (§5 debt closed). The frontend gaps that
   claim. This is the code path behind the "Jump back in" stale-flag bug, so a regression here is
   proven possible.
 
+### 2.4 🔴 Two defects found by probing the live deployment (2026-07-29)
+
+Both were found by curling the deployed ALB, not by any test. Neither is reproducible locally with
+the dev profile, which is why 195 green tests missed them.
+
+**(a) A rejected JWT returns `400`, not `401` — so the silent refresh can never fire.**
+
+```
+curl -H "Authorization: Bearer bad.token" -H "X-Requested-With: XMLHttpRequest" .../customer/list
+→ 400 {"devMessage":"Could not decode the token…","reason":…}
+```
+
+**The observed status is 400. The cause is NOT yet established — do not fix from a guess.**
+
+What is confirmed:
+- Production returns `400` with `reason`/`devMessage` = *"Could not decode the token. The input is
+  not a valid Base64-encoded JWT."* for a malformed bearer token on an authenticated GET.
+- `ExceptionUtils.processError` maps `JWTVerificationException` (which `JWTDecodeException`
+  extends) to **`UNAUTHORIZED`**, with the canned message *"Invalid token. Please log in again."*
+
+Those two cannot both describe the same code path: the message returned is auth0's raw decode text,
+not the canned one, so the response did **not** come from `processError`'s 401 branch. Something
+upstream or downstream — most likely `HandleException`'s `BadCredentialsException` branch after a
+rethrow, since that branch returns 400 and passes `exception.getMessage()` straight through — is
+answering instead.
+
+Why it matters: `token.interceptor.ts` retries **only on 401**. Any path that turns an invalid or
+expired token into a 400 silently disables the silent refresh for that path.
+
+Next step is to pinpoint, not to patch: log or breakpoint the actual handler for a malformed token
+and for a genuinely expired one (they may differ), then decide where the mapping should live. Note
+`SecurityConfig`'s `defaultAuthenticationEntryPointFor(AnyRequestMatcher)` does not help here — it
+governs requests that reach the *entry point*, i.e. ones carrying no credential at all, whereas a
+present-but-invalid token throws earlier in the filter.
+
+**(b) Filter-written error bodies bypass `ErrorDetailScrubber`, leaking `devMessage` in prod.**
+
+The response above carries `devMessage` and `path` even though `application-prod.yml` pins
+`app.error.expose-details: false` and the active profile is confirmed `prod`. The scrubber is a
+`ResponseBodyAdvice`, so it only sees bodies serialized through a controller's message converter.
+`ExceptionUtils` writes straight to the servlet output stream inside the filter chain, before any
+controller is selected — the advice is structurally unable to reach it. (`CustomAccessDeniedHandler`
+already documents this for its own body; the consequence for the *filter* path was missed.)
+Fix by scrubbing at the point of writing in `ExceptionUtils`, gated on the same property, rather
+than by widening the advice.
+
 ### 2.3 ⬜ Exercise a real production boot
 
 `ddl-auto=validate` against a MySQL initialised **only** by `schema.sql`. Only the offline
@@ -154,7 +200,35 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | ⬜ **List sorting / filtering / server-side paging** | `customer.service.ts:57`. Customers and invoices load unsorted; the page is already paged but not sortable or filterable. Becomes a real problem at a few thousand rows. | Push sort/filter into the query params and the SQL — the org-scoping work already established the "filter in SQL, never post-filter a page" rule for exactly this reason. |
 | ⬜ **Invoice total aggregation query** | `InvoiceRepo.java:15`. Billing sums invoices client-side, so the total is only ever as complete as the page you fetched. | A `@Query` returning `SUM(totalAmount)`, org-scoped. |
 | ⬜ **P2-2 — Batch upload** | CSV/Excel import for customers and invoices — the most-requested "real business app" feature still missing. | Per-row validation with a partial-success report (`{ imported, failed: [{row, reason}] }`), per-chunk commits, a dedupe key, async job for large files. Gate on `UPDATE:CUSTOMER`. Apache Commons CSV (+ POI only for `.xlsx`). Open: CSV-only vs Excel, sync row cap, dedupe policy. |
+| ⬜ **Favorites / pinned destinations bar** | Navigation has outgrown the navbar: the Admin dropdown alone holds six destinations, and Services splits into browse vs. manage, so common pages are two clicks deep behind a menu that has to be opened to be read. A pinned row surfaces each person's actual working set. | **Build it on `command-palette.service.ts`, not on a new route list** — see below. |
 | ⬜ **Backend-driven i18n** | Server-generated messages (validation, email bodies, capability-denied text) stay English while the UI switches language. | Spring `MessageSource` + `Accept-Language`; the `CapabilityCatalog` phrases are the natural first target since they already have a message template. |
+
+#### Favorites bar — design decisions taken up front (2026-07-29)
+
+**Reuse the command-palette registry.** `command-palette.service.ts` already holds every navigable
+destination with its label, icon and required authorities. Favorites must be *a set of ids into that
+registry*, never a parallel list of routes — otherwise the two drift the first time someone adds a
+page, and only one of them gets it. Corollary: the add/remove affordance is a star on each palette
+result, which teaches the feature exactly when someone is hunting for a page.
+
+Two decisions to settle before implementation:
+
+1. **Storage — `localStorage` or a `userpreferences` table?**
+   `localStorage` mirrors how the theme toggle already works and is roughly an hour of work, but the
+   pins are per-browser and vanish on a new device. A DB-backed table is closer to half a day and
+   makes the workspace follow the *identity* rather than the browser — a better fit for what this app
+   is demonstrating, and it reuses the existing Query + RowMapper + Repo/RepoImpl pattern. **Leaning
+   DB-backed**, with `localStorage` as the offline cache rather than the source of truth.
+2. **RBAC filtering must happen on *render*, not only on *add*.**
+   Authorities change: a role reassignment can strip `UPDATE:USER` from someone who pinned
+   `/analytics` last week. A pin that survives into a menu and then 403s is worse than no pin. The
+   existing `*appHasAuthority` directive handles this for free — which is the second reason to reuse
+   the palette registry, since that is where the authority metadata already lives. Also decide
+   whether a now-invisible pin is *hidden* or *removed*; hidden is kinder, because a temporary role
+   change should not silently destroy someone's setup.
+
+Open: where the bar physically sits (a second row under the navbar vs. inline beside the command
+palette trigger), and whether there is a cap on pin count.
 | ⬜ **Real SMS delivery** | `NotificationServiceImpl.java:54` — SMS 2FA sends only when Twilio credentials are set, and is otherwise a documented no-op. Honest, but it means one advertised factor is not exercisable. | Either wire Twilio properly or drop SMS from the factor list; a factor that silently does nothing is worse than one that does not exist. |
 | ⬜ **Email verification host** | `VERIFY_EMAIL_HOST` is reserved and unused (`UI_APP_URL` drives links today). Keep or remove deliberately — do not let it rot as ambiguous config. | |
 
@@ -193,7 +267,6 @@ Open items only — completed rows moved to the archive. Verified against the tr
 | `navbar.component.ts:15` | Decouple user data from the `/customer/list` response | Refactor — fetch `/user/profile` independently |
 | `new-customer.component.ts:25/76/83` | Lighter user-only prefill endpoint | Refactor — stop fetching all customers to prefill one field |
 | `profile.component.ts:17` | Reactive forms for profile | Refactor |
-| `verify.component.ts:67` | Robust route detection instead of `window.location.href` | Refactor |
 | `customer.service.ts:57` | Sorting / filtering / infinite scroll | §3.3 |
 
 ---
@@ -218,6 +291,29 @@ Open items only — completed rows moved to the archive. Verified against the tr
 Newest first. Anything older lives in
 [`documentation/history/PROJECT-HISTORY.md`](documentation/history/PROJECT-HISTORY.md).
 
+- ✅ **Single-origin parity pass** (2026-07-29) — four defects that exist *only* when the SPA and API
+  share an origin, i.e. only once deployed. All were invisible in split-origin local dev.
+  - **SPA/API route collision.** The email-verification landing page was routed at
+    `/user/verify/{type}/:key` in Angular — byte-for-byte the backend's own `@GetMapping`. On one
+    origin the real controller wins and the recipient of an activation email is shown the raw JSON
+    envelope. Moved to `/verify/{type}/:key`, restoring the app's namespace split (bare/plural =
+    SPA, `/user` `/customer` `/admin` = API) and documenting it as an invariant in `SecurityConfig`.
+    Closes the `verify.component.ts:67` TODO on the way past: the flow is now carried in route
+    `data`, not sniffed out of `window.location.href`.
+  - **Plain-text emails → branded HTML.** New `EmailTemplate` renders the app's dark/iris design as
+    table-based, inline-styled, `multipart/alternative` mail (the plain-text part is kept and
+    written deliberately — it is both a fallback and a deliverability signal). No template engine
+    added.
+  - **JSON 401/403 shown to humans.** `BrowserErrorPage` content-negotiates on *fetch metadata*
+    (`Sec-Fetch-Mode: navigate`), not `Accept` — Angular's `HttpClient` sets no `Accept` of its own,
+    so negotiating on it would have served HTML to the token interceptor and silently killed
+    auto-refresh. Navigations get a styled page; XHR keeps the exact JSON body it had.
+  - **OAuth2 redirect_uri behind a load balancer.** `server.forward-headers-strategy` was unset, so
+    `{baseUrl}` in the redirect-uri template resolved to the container's own `http://<task-ip>:8080`
+    instead of the public origin. Now env-driven (`FORWARD_HEADERS_STRATEGY`, default `none`), set
+    to `framework` in the ECS task definition. Microsoft was also missing from
+    `aws/task-definition.json` entirely — hence a provider that appears locally and not when
+    deployed — and is now wired through Secrets Manager alongside Google and GitHub.
 - ✅ **Documentation consolidation** (2026-07-26) — one live plan (this file), one archive, and a new [`roles-and-scenarios.md`](documentation/roles-and-scenarios.md) giving the end-to-end capability matrix and walk-throughs for all seven roles. Three superseded planning documents deleted after their content was preserved.
 - ✅ **Federated account linking, enterprise pattern** (2026-07-26) — "Connect a provider" from the Security Center. The design problem: linking acts on behalf of a signed-in user, but a JWT cannot ride a top-level navigation. Solved with a **single-use, five-minute, provider-bound ticket** that grants nothing on its own — redeeming it does not authenticate anybody, it only says which local account a *separately verified* provider identity attaches to. The security property is `FederatedIdentityService.linkProviderToUser` **refusing an identity that already belongs to another account**: without it, "Connect a provider" is an account-takeover primitive, and the usual "the email was verified" reasoning does not help because links are keyed on the provider's stable subject, not on email. Unlinking is refused when it would remove the last sign-in method. **10 tests.**
 - ✅ **Six-language i18n** (2026-07-26) — Transloco runtime switching across 26 of 28 templates plus toasts and the command palette; `en`/`es`/`fr`/`de`/`pt`/`zh`, each labelled in its own language.

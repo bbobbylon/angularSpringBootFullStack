@@ -48,7 +48,7 @@ src/app/
 | Path | Component | Access |
 |------|-----------|--------|
 | `/login`, `/register`, `/resetpassword`, `/verify` | auth flows | public |
-| `/user/verify/account/:key`, `/user/verify/password/:key` | email-link landings | public |
+| `/verify/account/:key`, `/verify/password/:key` | email-link landings | public |
 | `/oauth2/callback` | federated-login landing | public |
 | `/` | Home (dashboard) | authenticated |
 | `/profile` | Profile | authenticated |
