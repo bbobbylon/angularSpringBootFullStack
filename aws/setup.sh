@@ -51,7 +51,7 @@ set -euo pipefail
 # path. MSYS2_ARG_CONV_EXCL excludes only the one literal value that must stay a
 # URL path, leaving every other argument's normal (correct) translation intact.
 # No-op on Linux/macOS, where neither variable means anything.
-export MSYS2_ARG_CONV_EXCL="/actuator/health"
+export MSYS2_ARG_CONV_EXCL="/actuator/health:/ecs/tessera-app"
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 # Every setting may be supplied as an environment variable OR as a flag; flags win.
@@ -186,6 +186,32 @@ aws iam put-role-policy --role-name ecsTaskExecutionRole \
       \"Resource\":\"arn:aws:logs:${REGION}:*:log-group:/ecs/tessera-app:*\"
     }]
   }"
+
+# ── CloudWatch log group + retention ───────────────────────────────────────────
+# The awslogs driver CAN create this group itself (task-definition.json sets
+# awslogs-create-group:true, and the policy above grants the permission) — but a
+# driver-created group is born with retention "Never Expire", and nothing ever
+# revisits that. Ingestion stays comfortably inside the free tier's 5 GB/month for a
+# single task, but ARCHIVED STORAGE then grows without bound against a separate 5 GB
+# allowance, so the cost shows up months later with no signal that anything changed.
+#
+# Creating it here instead means retention is set from the very first event rather
+# than applied retroactively to a group that already accumulated. Both commands are
+# idempotent: create-log-group returns ResourceAlreadyExistsException (swallowed) on
+# a re-run, and put-retention-policy simply overwrites.
+#
+# 7 days is deliberate, not arbitrary. Retention is only worth what you would
+# actually investigate, and for a single-task deployment that is "the current
+# deploy and the one before it" — never last month. Raise it if you ever need to
+# correlate an incident across a longer window.
+LOG_GROUP="/ecs/tessera-app"
+LOG_RETENTION_DAYS="${LOG_RETENTION_DAYS:-7}"
+aws logs create-log-group --log-group-name "$LOG_GROUP" --region "$REGION" 2>/dev/null \
+  && ok "Created CloudWatch log group $LOG_GROUP" \
+  || ok "CloudWatch log group $LOG_GROUP already exists"
+aws logs put-retention-policy --log-group-name "$LOG_GROUP" \
+  --retention-in-days "$LOG_RETENTION_DAYS" --region "$REGION"
+ok "Log retention set to ${LOG_RETENTION_DAYS} days on $LOG_GROUP"
 
 # Task role: what the running container itself can do (S3 image storage)
 if ! aws iam get-role --role-name tessera-app-task-role >/dev/null 2>&1; then

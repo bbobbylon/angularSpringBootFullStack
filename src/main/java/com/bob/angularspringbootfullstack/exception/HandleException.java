@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.exception;
 
 import com.auth0.jwt.exceptions.JWTDecodeException;
+import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -239,6 +240,48 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                         .status(INTERNAL_SERVER_ERROR)
                         .statusCode(INTERNAL_SERVER_ERROR.value())
                         .build(), INTERNAL_SERVER_ERROR);
+    }
+
+    /**
+     * Returns <b>401</b> for any JWT verification failure that reaches a controller — an expired,
+     * malformed, or badly-signed token (ROADMAP §2.4(a)).
+     *
+     * <h3>Why this handler has to exist</h3>
+     * {@code TokenProvider#getSubject} keeps every token failure inside the
+     * {@link JWTVerificationException} family, because {@code ExceptionUtils#processError} decides
+     * 401-vs-400 on exactly that type. That covers the <em>filter</em> path. But the refresh flow
+     * calls {@code getSubject} from {@code SessionServiceImpl} — inside a controller — so its
+     * exceptions arrive here instead. Without this method they would fall through to the catch-all
+     * {@code @ExceptionHandler(Exception.class)} and surface as a <b>500</b>, turning a routine
+     * expired-token refresh into an apparent server fault.
+     *
+     * <p>The two paths must agree: a client cannot be expected to treat the same failure as 401 on
+     * one endpoint and 500 on another, and {@code token.interceptor.ts} retries only on 401.
+     *
+     * <h3>Why the reason is canned</h3>
+     * The underlying message is auth0's raw text ("The Token's Signature resulted invalid when
+     * verified using the Algorithm: HmacSHA512"), which names the signing algorithm and the failure
+     * mode. That is a hint to an attacker probing for token weaknesses and of no use to a legitimate
+     * client, whose only available action is to log in again. The detail is logged server-side.
+     *
+     * <p>Note {@link JWTDecodeException} is a <em>subclass</em> of this type and keeps its own
+     * handler above; Spring dispatches to the most specific match. That handler stays for tokens
+     * decoded outside {@code getSubject}, which never enter this family.
+     *
+     * @param exception the token verification failure
+     * @return 401 UNAUTHORIZED with a generic, non-diagnostic reason
+     */
+    @ExceptionHandler(JWTVerificationException.class)
+    public ResponseEntity<HttpResponse> jwtVerificationException(JWTVerificationException exception) {
+        log.error("JWT verification failed: {}", exception.getMessage());
+        return new ResponseEntity<>(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .reason("Invalid token. Please log in again.")
+                        .devMessage(exception.getMessage())
+                        .status(UNAUTHORIZED)
+                        .statusCode(UNAUTHORIZED.value())
+                        .build(), UNAUTHORIZED);
     }
 
     /**

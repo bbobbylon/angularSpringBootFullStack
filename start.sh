@@ -31,7 +31,12 @@
 #    ./start.sh
 # ═══════════════════════════════════════════════════════════════════
 ENV=local
-DB=aiven   # native | local | aiven
+# native = the MySQL already installed on this host (db2). This is the default ON PURPOSE:
+# DB=aiven pointed local development at db3 — the SAME database the deployed ECS task serves —
+# so every local experiment, seeder run and hand-edit was mutating production data. Switch to
+# aiven only when you deliberately need to inspect or repair the deployed database, and switch
+# back afterwards. See ROADMAP.md §5.
+DB=native   # native | local | aiven
 
 # Serve the Angular dev server on ALL network interfaces instead of localhost only
 # (true | false), so you can open the app from a phone or tablet on the same wifi.

@@ -293,15 +293,29 @@ public class TokenProvider {
             request.setAttribute("invalidClaim", e.getMessage());
             throw e;
         } catch (com.auth0.jwt.exceptions.JWTDecodeException | IllegalArgumentException decodeEx) {
-            // Token couldn't be decoded (not valid Base64 or malformed). Map to a clear client error.
+            // Token couldn't be decoded (not valid Base64 or malformed).
+            //
+            // This MUST stay inside the JWTVerificationException family. ExceptionUtils#processError
+            // decides 401-vs-400 with `exception instanceof JWTVerificationException`, so rethrowing
+            // as BadCredentialsException (as this line used to) silently downgraded every malformed
+            // token to 400 — and token.interceptor.ts retries only on 401, so the silent refresh
+            // never fired for a truncated or corrupted token. Confirmed against the live ALB
+            // 2026-08-02: `Bearer bad.token` returned 400, not 401. See ROADMAP §2.4(a).
+            //
+            // The old BadCredentialsException also overloaded that type to mean two unrelated
+            // things — "wrong email/password" and "unparseable token" — which HandleException then
+            // had to tell apart by string-matching the message for "Could not decode". Keeping the
+            // JWT failures in their own family removes the need for that guess entirely.
             String msg = "Could not decode the token. The input is not a valid Base64-encoded JWT.";
             request.setAttribute("invalidToken", decodeEx.getMessage());
-            throw new org.springframework.security.authentication.BadCredentialsException(msg);
+            throw new JWTVerificationException(msg);
         } catch (JWTVerificationException verificationEx) {
-            // Any other verification issues (signature invalid, claim checks) - return a clear message
+            // Any other verification issue (invalid signature, failed claim check). Same reasoning as
+            // above: previously rethrown as ApiException, which also lands in processError's 400
+            // branch. A token with a bad signature is an authentication failure, not a bad request.
             String msg = "Invalid token. " + verificationEx.getMessage();
             request.setAttribute("invalidToken", verificationEx.getMessage());
-            throw new com.bob.angularspringbootfullstack.exception.ApiException(msg);
+            throw new JWTVerificationException(msg);
         }
     }
 }

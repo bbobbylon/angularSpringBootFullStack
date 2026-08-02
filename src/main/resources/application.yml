@@ -47,6 +47,20 @@ spring:
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}
   jpa:
+    # Close the EntityManager when the service method returns, instead of holding it open for the
+    # whole request while the view renders. Boot leaves this ON by default and warns about it at
+    # every startup ("spring.jpa.open-in-view is enabled by default...").
+    #
+    # Safe to turn off here because every JPA association in this codebase is EAGER — Customer's
+    # invoices and Invoice's line items are both fetched inside the repository call (see the
+    # @BatchSize notes on those fields), so nothing is left uninitialised for Jackson to touch
+    # during serialisation and there is no LazyInitializationException to inherit.
+    #
+    # The real win is connection hold time: with it on, a pooled connection stays checked out until
+    # the response is fully written, so slow serialisation or a slow client occupies a database
+    # connection that is doing nothing. It also makes any future LAZY mapping fail loudly at
+    # development time rather than silently issuing extra queries mid-render.
+    open-in-view: false
     # SQL logging is OFF by default (prod-safe: avoids leaking query text and the
     # per-statement overhead). Devs opt in with SHOW_SQL=true in their .env.
     show-sql: ${SHOW_SQL:false}
@@ -108,16 +122,87 @@ spring:
             required: true
     verify:
       host: ${VERIFY_EMAIL_HOST}
+# ── Logging ───────────────────────────────────────────────────────────────────────────────
+# Levels are ENVIRONMENT-DRIVEN rather than commented-out source lines, so verbosity can be
+# raised on an already-deployed container (ECS task definition, docker-compose, .env) without
+# a code change, a rebuild, or a new image. Same opt-in shape as SHOW_SQL: safe default,
+# explicit override. Every default below is the value the app ran with before this block
+# existed, so behaviour is unchanged until a variable is actually set.
+#
+# On ECS these are plain `environment` entries in aws/task-definition.json, which are baked
+# into a task-definition REVISION — changing one therefore requires re-registering the task
+# definition, not just restarting the service (see RUNBOOK Part D).
+#
+# ⚠️ Free-tier note: CloudWatch Logs bills ingestion beyond 5 GB/month, and
+# org.springframework.security at DEBUG logs the entire filter chain FOR EVERY REQUEST — it is
+# by far the fastest way to spend that allowance. Turn it on to diagnose a specific problem,
+# then put it back to INFO. It also prints request details, so it is a disclosure risk if the
+# log group is readable by anyone who should not see them.
 logging:
   level:
     # Yauaa (the user-agent parser) prints a multi-line version banner plus config-load lines at
     # INFO whenever its analyzer initialises. RequestUtils now builds the analyzer once, so clamping
     # this to WARN keeps that one-time startup output quiet without losing real warnings/errors.
     nl.basjes.parse.useragent: WARN
-    # To enable verbose debug logging during development, uncomment:
-    #org.springframework.security: DEBUG
-    #org.springframework.web: DEBUG
-    #org.hibernate: DEBUG
+
+    # This application's own packages — controllers, services, repos, AuthDiagnosticsLogger,
+    # NewUserEventListener. DEBUG here is the cheap, targeted first move when something is wrong
+    # in OUR code, and it stays far quieter than turning up a framework package.
+    com.bob.angularspringbootfullstack: ${LOG_LEVEL_APP:INFO}
+
+    # Spring Security's filter chain. DEBUG explains WHY a request was rejected — which matcher
+    # matched, which authority was missing. The natural companion to a [RBAC-DENY] line that does
+    # not obviously explain itself. Extremely chatty; see the free-tier warning above.
+    org.springframework.security: ${LOG_LEVEL_SECURITY:INFO}
+
+    # Spring MVC request mapping and dispatch. DEBUG shows which handler a URL resolved to,
+    # useful when a route 404s in the deployed jar but works locally (the SPA-forwarding rules in
+    # WebMvcConfig only apply when Angular is served from the same origin, i.e. prod, not dev).
+    org.springframework.web: ${LOG_LEVEL_WEB:INFO}
+
+    # Hibernate.
+    #
+    # ⚠️ DEBUG HERE *DOES* PRINT SQL, and `show-sql: false` does NOT prevent it. These are two
+    # independent mechanisms and it is easy to assume otherwise:
+    #   • spring.jpa.show-sql=true  → Hibernate writes statements to System.out, prefixed "Hibernate: ".
+    #     This is what application-prod.yml pins to false.
+    #   • logger org.hibernate.SQL at DEBUG → Hibernate logs the same statements through SLF4J/Logback.
+    #     Completely separate path. show-sql has no effect on it whatsoever.
+    # So LOG_LEVEL_HIBERNATE=DEBUG puts query text into CloudWatch even under the prod profile.
+    # Statements are emitted with `?` placeholders rather than bound values, so this discloses the
+    # SCHEMA (tables, columns, join shape) rather than row data — still a map of the system, and not
+    # something to leave switched on. Confirmed on ECS 2026-08-02: 546 org.hibernate.SQL events in
+    # 15 minutes with prod's show-sql:false in force.
+    org.hibernate: ${LOG_LEVEL_HIBERNATE:INFO}
+
+# Spring Boot's auto-configuration report — logged at startup under the header
+# "CONDITIONS EVALUATION REPORT" (note: plural CONDITIONS; grepping for the singular finds
+# nothing). Lists which @Conditional beans matched, which did not, and why. This is the
+# PRODUCTION-AVAILABLE equivalent of the "CONDITION EVALUATION DELTA" that spring-boot-devtools
+# prints on a local restart — devtools is excluded from the packaged jar, so that delta cannot
+# exist on ECS. Answers questions like "did S3ImageStorageService actually activate in this
+# container, or did it silently fall back to LocalImageStorageService?" (verified on ECS
+# 2026-08-02: prints `S3ImageStorageService matched`, the inverse of a local run).
+#
+# ⚠️ `debug` IS MUCH BROADER THAN ITS NAME SUGGESTS — DO NOT LEAVE IT ON IN PRODUCTION.
+# Spring Boot's debug mode does not only emit the report; it switches a selection of core loggers
+# to DEBUG, and **Hibernate is one of them**. That turns on org.hibernate.SQL, which logs every
+# statement through SLF4J — a path spring.jpa.show-sql=false does NOT close (see the Hibernate
+# note above). Setting DEBUG_REPORT=true therefore reopens exactly the query-text disclosure the
+# prod profile's show-sql:false was written to prevent.
+#
+# Measured on ECS 2026-08-02 with this flag on: the report itself is ~930 lines once per boot,
+# plus ~2-3 DEBUG lines per ALB health check forever, PLUS 546 org.hibernate.SQL statements in a
+# single 15-minute window of ordinary browsing (~390 MB/month projected, ~8% of the CloudWatch
+# free tier). Reverted to false in task-definition revision 11 the same day.
+#
+# Use it briefly, to answer a specific question, on a deployment nobody else is using — then
+# turn it straight back off.
+#
+# If you ever want the report WITHOUT debug mode's other effects, leave DEBUG_REPORT=false and
+# instead set this single logger to DEBUG — it emits the same report and nothing else:
+#   logging.level.org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLogger=DEBUG
+debug: ${DEBUG_REPORT:false}
 
 ui:
   app:

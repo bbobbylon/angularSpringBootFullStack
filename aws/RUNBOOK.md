@@ -24,6 +24,7 @@ Its companion, [`README.md`](README.md), is the **reference**: what each AWS res
 - [Part E — Verify a deployment](#part-e--verify-a-deployment)
 - [Part F — Known limitations right now](#part-f--known-limitations-right-now)
 - [Part G — Clean rebuild from zero](#part-g--clean-rebuild-from-zero)
+- [Part H — Reading the logs](#part-h--reading-the-logs)
 - [Appendix — Every environment variable](#appendix--every-environment-variable)
 
 ---
@@ -505,6 +506,216 @@ sign-in works against the new ALB, not when the resources merely exist.
 
 ---
 
+## Part H — Reading the logs
+
+### H1. Where the logs actually are
+
+There is **no log file anywhere** — not in the container, not on a volume, not on a host you
+can reach. That is correct for Fargate, not an oversight: a file written inside the container
+is destroyed when the task stops, which is exactly the moment you most want to read it.
+
+```
+Spring Boot (Logback console appender)
+   │  no logback-spring.xml in the repo; no logging.file.* set anywhere
+   ▼
+Container stdout/stderr   (Dockerfile: ENTRYPOINT ["java","-jar","app.jar"], no redirection)
+   ▼
+ECS awslogs driver        (task-definition.json → logConfiguration)
+   ▼
+CloudWatch Logs
+   ├─ Group:     /ecs/tessera-app
+   ├─ Region:    us-east-1
+   ├─ Stream:    ecs/tessera-app/<task-uuid>   ← one per task, so one per restart
+   └─ Retention: 7 days                        ← set by setup.sh; see H5
+```
+
+ECS treats logging as a hard dependency: if the awslogs driver cannot initialise, the task does
+not start at all. That is why a missing `AWS_REGION` surfaces as `ResourceInitializationError`
+rather than as silently missing logs.
+
+### H2. Reading them
+
+**Live tail** — the day-to-day loop. `MSYS2_ARG_CONV_EXCL` is mandatory on Git Bash (see Part E
+for why the log-group name gets mangled without it):
+
+```bash
+MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
+  aws logs tail /ecs/tessera-app --since 15m --follow --region us-east-1
+```
+
+Run it in one window while you `--force-new-deployment` in another to watch a boot in real time.
+
+**Logs Insights** — CloudWatch console ▸ Logs Insights. Always scope to the log group:
+
+```
+SOURCE logGroups(namePrefix: ["/ecs/tessera-app"]) START=-3600s END=0s
+| fields @timestamp, @message
+| sort @timestamp desc
+| limit 100
+```
+
+```
+-- Auth and RBAC decisions (AuthDiagnosticsLogger's four tags)
+SOURCE logGroups(namePrefix: ["/ecs/tessera-app"]) START=-86400s END=0s
+| fields @timestamp, @message
+| filter @message like /\[AUTH-GRANT\]|\[AUTH-DENY\]|\[AUTH-LOCK\]|\[RBAC-DENY\]/
+| sort @timestamp desc
+| limit 50
+```
+
+```
+-- Crash-loop detector: a healthy service is ONE stream with many events.
+-- Ten streams of ~200 events each = ten tasks that booted and died.
+SOURCE logGroups(namePrefix: ["/ecs/tessera-app"]) START=-3600s END=0s
+| stats count(*) as events by @logStream
+| sort events asc
+```
+
+### H3. Why you can't find the startup block
+
+**`| sort @timestamp desc | limit 100` returns the 100 most recent events.** The boot sequence
+happens once, when the task starts — possibly days ago. On a service that has been up a while it
+is nowhere near the most recent 100 lines, so a descending query will *never* show it no matter
+how far back `START` goes.
+
+To read a boot, go to the **beginning of a stream** instead — each stream starts at container
+start, so its first lines are always the banner and startup:
+
+```bash
+# Newest stream name, then its first 100 lines in order.
+STREAM=$(MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' aws logs describe-log-streams \
+  --log-group-name /ecs/tessera-app --order-by LastEventTime --descending \
+  --max-items 1 --query 'logStreams[0].logStreamName' --output text --region us-east-1)
+
+MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' aws logs get-log-events \
+  --log-group-name /ecs/tessera-app --log-stream-name "$STREAM" \
+  --start-from-head --limit 100 --region us-east-1 \
+  --query 'events[].message' --output text
+```
+
+Or in Insights, `sort @timestamp asc` with a window that contains a deploy.
+
+### H4. Local console vs AWS — what exists and what cannot
+
+Running `./start.sh` puts **three** output sources in one terminal. Only one of them exists on ECS,
+which is why the deployed logs feel sparse even though nothing is being dropped.
+
+| Local console output | On AWS | Why |
+|---|---|---|
+| Spring Boot startup: banner, `Starting AngularSpringBootFullStackApplication`, active profile, Spring Data scan, Tomcat init, HikariPool, Hibernate `HHH…` + Database info, `Started … in Ns` | ✅ **Present** | Identical INFO logging — both profiles inherit the one `logging:` block in the base `application.yml`. If you can't see it, read H3. |
+| `[NET] trusted-proxy-count=…`, `Federated login providers configured: […]` | ✅ Present | The two boot markers worth grepping on every deploy (Part E). |
+| `[AUTH-GRANT]` / `[AUTH-DENY]`, `NewUserEvent received`, `Opened refresh session family` | ✅ Present | Runtime logging, unchanged. |
+| `spring.jpa.open-in-view` WARN | ✅ Present | — |
+| **Vite / Angular dev server** | ❌ Cannot exist | Angular is compiled into the jar at image-build time. There is no Angular *process* in prod — Tomcat serves static files. |
+| **Maven** (`[INFO] --- spring-boot:run`, compiling, reactor summary) | ❌ Cannot exist | The jar is prebuilt in the image; Maven is not in the runtime layer. |
+| **devtools**: `Restarting due to N class path changes`, `[restartedMain]` thread, `GracefulShutdown` on reload, `CONDITION EVALUATION DELTA` | ❌ Cannot exist | `spring-boot-devtools` is `<optional>true</optional>` / `runtime` scope, excluded from the packaged jar, and self-disables when it detects `java -jar`. Hot-restart in production would be a liability. Prod threads are `[main]` and `[nio-8080-exec-N]`, never `[restartedMain]`. |
+| **`DemoDataSeeder`** | ❌ Dev only | Seeder runs on the `dev` profile. |
+| **Hibernate SQL** | ⚠️ Off by default, but **reachable** | `application-prod.yml` pins `show-sql: false`, which closes the *System.out* path only. The `org.hibernate.SQL` **logger** at DEBUG is a separate SLF4J path that `show-sql` does not affect — so `LOG_LEVEL_HIBERNATE=DEBUG` **or** `DEBUG_REPORT=true` will put query text in CloudWatch under the prod profile. See [H6](#h6-turning-verbosity-up-on-a-deployed-task). |
+| **ANSI colour** | ❌ No TTY | Spring Boot auto-detects a terminal to decide on colour; a container has none. Same text, plain. |
+
+Two consequences worth internalising:
+
+- **Prod logs matter more than dev logs.** `application-prod.yml` sets `expose-details: false`, which
+  strips `devMessage` and the raw exception `reason` out of the HTTP response. That detail does not
+  disappear — it lives *only* in CloudWatch now.
+- **`PID 1`** in every prod line (`INFO 1 ---`) confirms Java is PID 1, as the `ENTRYPOINT` intends.
+  Locally you see the real OS PID.
+
+### H5. Free tier — the two things that actually cost
+
+CloudWatch's free tier is **always-free**, not a 12-month trial: 5 GB ingestion, 5 GB archived
+storage, 5 GB scanned by Logs Insights, 10 custom metrics, 10 alarms, 3 dashboards — per month.
+
+**1. Retention.** `awslogs-create-group: true` creates a group with retention **Never Expire**.
+Ingestion for one task stays far under 5 GB, but archived storage then grows forever against a
+separate allowance, and you find out months later. `setup.sh` now creates the group explicitly and
+sets **7 days**. Override with `LOG_RETENTION_DAYS=14 ./aws/setup.sh …`, or on an existing group:
+
+```bash
+MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
+  aws logs put-retention-policy --log-group-name /ecs/tessera-app \
+    --retention-in-days 7 --region us-east-1
+```
+
+**2. Query scope.** Logs Insights bills on **bytes scanned**, and scanned bytes are determined
+*only* by log groups × time range:
+
+- `| limit 100` does **not** reduce cost — it truncates results after the scan.
+- `| filter …` does **not** reduce cost either — same reason.
+- `SOURCE logGroups(namePrefix: [], …)` with an **empty** prefix scans **every** log group in the
+  account. Always name the group.
+
+Start at 1 hour and widen only when you need to. Seven days is what your *retention* should be,
+not your default query window.
+
+**Do not enable Container Insights.** It is a one-click checkbox on the ECS cluster and it looks
+like exactly what you want, but it publishes dozens of custom metrics per task and blows past the
+10-free-custom-metric allowance immediately. On free tier, use log-based metric filters instead:
+
+```bash
+MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
+aws logs put-metric-filter --region us-east-1 \
+  --log-group-name /ecs/tessera-app \
+  --filter-name auth-lockouts \
+  --filter-pattern '"[AUTH-LOCK]"' \
+  --metric-transformations metricName=AuthLockouts,metricNamespace=TesseraApp,metricValue=1
+```
+
+### H6. Turning verbosity up on a deployed task
+
+Log levels are environment-driven (`application.yml` → `logging.level`), so you can raise them
+without a code change or a rebuild. Defaults are `INFO`, so nothing changes until you set one.
+
+| Variable | Default | Use it when |
+|---|---|---|
+| `LOG_LEVEL_APP` | `INFO` | Something is wrong in **our** code. Cheapest, most targeted knob — start here. |
+| `LOG_LEVEL_SECURITY` | `INFO` | You need to know *why* a request was rejected — which matcher matched, which authority was missing. |
+| `LOG_LEVEL_WEB` | `INFO` | A route 404s in the deployed jar but works locally (SPA forwarding only applies in prod). |
+| `LOG_LEVEL_HIBERNATE` | `INFO` | JPA/entity problems. ⚠️ DEBUG **does** print SQL — `show-sql: false` does not stop it (see below). |
+| `DEBUG_REPORT` | `false` | "Did `S3ImageStorageService` actually activate, or did it fall back to local?" Prints the auto-configuration report at startup — the prod-available substitute for devtools' condition delta. **Broader than it sounds — see the note below.** |
+
+> ### ⚠️ `show-sql: false` does NOT prevent SQL from being logged
+>
+> These are **two independent mechanisms**, and conflating them is the trap:
+>
+> | Mechanism | What turns it on | What prod does |
+> |---|---|---|
+> | `spring.jpa.show-sql=true` | Hibernate writes to **System.out**, prefixed `Hibernate: ` | Pinned **false** in `application-prod.yml` |
+> | Logger `org.hibernate.SQL` at **DEBUG** | Hibernate logs the same statements via **SLF4J/Logback** | **Not covered by `show-sql` at all** |
+>
+> So **`LOG_LEVEL_HIBERNATE=DEBUG` *or* `DEBUG_REPORT=true` puts query text into CloudWatch even
+> under the prod profile.** Statements carry `?` placeholders rather than bound values, so what
+> leaks is the **schema** — tables, columns, join shape — not row data. Still a map of the system.
+>
+> **Observed for real on 2026-08-02:** `DEBUG_REPORT=true` on revision 10 produced **546
+> `org.hibernate.SQL` events in 15 minutes** of ordinary browsing (~390 MB/month projected, ~8% of
+> the free tier). Reverted in revision 11 the same day.
+>
+> **`DEBUG_REPORT=true` is not only a boot report.** Spring Boot's debug mode switches a selection
+> of core loggers — embedded container, **Hibernate**, Spring Boot internals — to DEBUG. The report
+> itself is ~930 lines once per boot; the mode then adds ~2-3 DEBUG lines per ALB health check
+> indefinitely, *plus* all the Hibernate SQL above.
+>
+> The report's header is **`CONDITIONS EVALUATION REPORT`** — plural. Grepping for the singular
+> form silently finds nothing.
+>
+> For the report *without* debug mode's other effects, leave `DEBUG_REPORT=false` and set
+> `logging.level.org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLogger=DEBUG`.
+
+These are plain `environment` entries, so they are baked into a task-definition **revision**:
+
+```bash
+# 1. Edit the value in aws/task-definition.json
+# 2. Re-register (full export + guard sequence in Part D)
+# 3. aws ecs update-service … --force-new-deployment
+```
+
+> ⚠️ `LOG_LEVEL_SECURITY=DEBUG` logs the entire Spring Security filter chain **for every request**.
+> It is by far the fastest way to spend the 5 GB/month ingestion allowance, and it prints request
+> detail. Diagnose with it, then put it back to `INFO`.
+
+---
+
 ## Appendix — Every environment variable
 
 Set in `aws/task-definition.json`. Plain values are in `environment`; the rest are `secrets` resolved from Secrets Manager at container start.
@@ -523,6 +734,9 @@ Set in `aws/task-definition.json`. Plain values are in `environment`; the rest a
 | `FORWARD_HEADERS_STRATEGY` | env | `framework` — see C3 |
 | `TRUSTED_PROXY_COUNT` | env | `1` — see C3 |
 | `MICROSOFT_TENANT_ID` | env | `common` (not sensitive) |
+| `LOG_LEVEL_APP` / `LOG_LEVEL_SECURITY` / `LOG_LEVEL_WEB` / `LOG_LEVEL_HIBERNATE` | env | All `INFO`. Raise one to `DEBUG` to diagnose, then put it back — see [H6](#h6-turning-verbosity-up-on-a-deployed-task) |
+| `DEBUG_REPORT` | env | `false`. `true` prints the auto-configuration report at startup — see [H6](#h6-turning-verbosity-up-on-a-deployed-task) |
+| `LOG_RETENTION_DAYS` | `setup.sh` only | `7`. Not read by the app; consumed by `setup.sh` when it sets CloudWatch retention — see [H5](#h5-free-tier--the-two-things-that-actually-cost) |
 | `JWT_SECRET` | secret | `openssl rand -base64 48` |
 | `MYSQL_PASSWORD` | secret | Aiven password |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | secret | Gmail address + 16-char app password |
