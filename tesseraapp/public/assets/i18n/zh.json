@@ -32,7 +32,11 @@
     "back": "返回",
     "description": "描述",
     "price": "价格",
-    "amount": "金额"
+    "amount": "金额",
+    "pageXofY": "第 {{page}} 页，共 {{total}} 页",
+    "nTotal": "共 {{count}} 条",
+    "acrossNPages": "分布在 {{count}} 页",
+    "viewAll": "查看全部"
   },
   "nav": {
     "customers": "客户",

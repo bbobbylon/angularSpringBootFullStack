@@ -32,7 +32,11 @@
     "back": "Voltar",
     "description": "Descrição",
     "price": "Preço",
-    "amount": "Valor"
+    "amount": "Valor",
+    "pageXofY": "Página {{page}} de {{total}}",
+    "nTotal": "{{count}} no total",
+    "acrossNPages": "em {{count}} páginas",
+    "viewAll": "Ver tudo"
   },
   "nav": {
     "customers": "Clientes",

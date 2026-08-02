@@ -1,5 +1,5 @@
 import { DatePipe, NgClass } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, Input, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, Input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgForm } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
@@ -15,6 +15,7 @@ import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { NotificationsService } from '../../../service/notifications-service';
 import { UserService } from '../../../service/user.service';
 import { RequiresAuthorityDirective } from '../../../directive/has-authority.directive';
+import { PAGE_SIZE_OPTIONS, PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
 
@@ -28,7 +29,7 @@ import { TranslocoService } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-customer-details',
-  imports: [NgClass, DatePipe, RouterModule, FormsModule, NavbarComponent, ExtractArrayValuePipe, RequiresAuthorityDirective, TranslocoDirective],
+  imports: [NgClass, DatePipe, RouterModule, FormsModule, NavbarComponent, ExtractArrayValuePipe, RequiresAuthorityDirective, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './customer-details.component.html',
   standalone: true,
   styleUrl: './customer-details.component.css',
@@ -46,6 +47,86 @@ export class CustomerDetailsComponent implements OnInit {
   readonly DataState = DataState;
   /** Drives the template — emits the full customer state (user + customer record) once loaded. */
   customerState = signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerStateInterface>>>({ dataState: DataState.LOADING });
+  // ── Invoice pagination (client-side) ──────────────────────────────────────────────────────
+  // Sliced in the browser, not fetched per page. This customer's invoices arrive eagerly with the
+  // customer itself — Customer.invoices is an EAGER @OneToMany (see its @BatchSize note), so the
+  // whole collection is already in memory by the time the template renders. Requesting pages from
+  // the server would add a round trip to re-fetch data we are holding, and would break the summary
+  // panel above the table, whose totals (Total Billed / Paid / Active / Pending) reduce over every
+  // invoice rather than the visible ones.
+
+  /**
+   * Rows per page, chosen by the reader. Ten matches the admin directory and NFR-PERF-3's stated
+   * default, so the history opens at the size it always has.
+   */
+  protected readonly invoicePageSize = signal(10);
+
+  /** Requested 0-based page. May exceed the range transiently — see {@link safeInvoicePage}. */
+  protected readonly invoicePage = signal(0);
+
+  /** Every invoice on this customer, in the order the server returned them. */
+  protected readonly allInvoices = computed(
+    () => this.customerState().appData?.data?.customers?.invoices ?? [],
+  );
+
+  protected readonly invoiceTotalPages = computed(() =>
+    Math.ceil(this.allInvoices().length / this.invoicePageSize()),
+  );
+
+  /**
+   * The requested page clamped to what exists.
+   *
+   * <p>Derived rather than corrected on mutation: the customer record is re-fetched after an edit,
+   * so the invoice count can change underneath the pager. Clamping here means the table cannot end
+   * up rendering an empty slice the user has no obvious way out of.
+   */
+  protected readonly safeInvoicePage = computed(() =>
+    Math.min(this.invoicePage(), Math.max(this.invoiceTotalPages() - 1, 0)),
+  );
+
+  /** The slice actually rendered. The summary panel still reduces over {@link allInvoices}. */
+  protected readonly pagedInvoices = computed(() => {
+    const size = this.invoicePageSize();
+    const start = this.safeInvoicePage() * size;
+    return this.allInvoices().slice(start, start + size);
+  });
+
+  /**
+   * Whether the footer — position readout, size selector and prev/next — is worth rendering.
+   *
+   * <p>Gated on the invoice count rather than the page count so the size selector cannot delete
+   * itself: at 100 rows per page a 30-invoice history is a single page, and a {@code totalPages > 1}
+   * gate would hide the footer along with the only control that could restore a smaller size.
+   */
+  protected readonly showInvoiceFoot = computed(() => this.allInvoices().length > PAGE_SIZE_OPTIONS[0]);
+
+  /** Hidden below two pages: a lone "1" is indistinguishable from having no pager. */
+  protected readonly showInvoicePager = computed(() => this.invoiceTotalPages() > 1);
+
+  /**
+   * Moves the invoice table to a page.
+   *
+   * @param page - target 0-based page index; clamped to the available range
+   */
+  protected goToInvoicePage(page: number): void {
+    this.invoicePage.set(Math.min(Math.max(page, 0), Math.max(this.invoiceTotalPages() - 1, 0)));
+  }
+
+  /**
+   * Changes how many invoices are listed per page and returns to the first page.
+   *
+   * <p>{@link safeInvoicePage} clamps out-of-range indexes on its own, but clamping lands on the
+   * last page of the resized history — an odd destination for someone who only asked to see more
+   * rows at once. Resetting puts them at the most recent invoices, which is where this table is
+   * read from.
+   *
+   * @param size - the new row count, one of the selector's offered values
+   */
+  protected changeInvoicePageSize(size: number): void {
+    this.invoicePageSize.set(size);
+    this.invoicePage.set(0);
+  }
+
   private readonly avatarColors = ['0D8ABC', '2ECC71', 'E74C3C', '9B59B6', 'F39C12', '1ABC9C', 'E67E22'];
   protected readonly router = inject(Router);
   protected readonly customerService = inject(CustomerService);

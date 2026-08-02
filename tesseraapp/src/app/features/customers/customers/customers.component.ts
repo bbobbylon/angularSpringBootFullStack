@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { NgClass, NgOptimizedImage } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { combineLatest, debounceTime, map, of, startWith, Subject, switchMap } from 'rxjs';
+import { debounceTime, map, of, startWith, Subject, switchMap } from 'rxjs';
 import { catchError, filter } from 'rxjs/operators';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
@@ -13,6 +13,7 @@ import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { CustomerTrendComponent } from '../../../shared/charts/customer-trend/customer-trend.component';
+import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
@@ -25,7 +26,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-customers',
-  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, CustomerTrendComponent, TranslocoDirective],
+  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, CustomerTrendComponent, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.css',
   standalone: true,
@@ -72,8 +73,35 @@ export class CustomersComponent implements OnInit {
    * {@code /customer/list}. A non-empty string routes to {@code /customer/search}.
    */
   private currentSearchTerm = signal('');
-  private readonly _currentPageObs$ = toObservable(this.currentPage);
-  private readonly _currentSearchTermObs$ = toObservable(this.currentSearchTerm);
+
+  /**
+   * Rows fetched per page. Changing it resets {@link currentPage} — see {@link changePageSize}.
+   *
+   * <p>Twenty is what this screen has always requested (it was {@code CustomerService}'s default
+   * argument); it is now stated here because the value is a user preference rather than a
+   * service-layer fallback.
+   */
+  private pageSize = signal(20);
+
+  /** Read-only view of the row count, for the template's size selector. */
+  pageSize$ = this.pageSize.asReadonly();
+
+  /**
+   * Page, size and search term as one derived value — the single input to the fetch pipeline.
+   *
+   * <p>This replaced a {@code combineLatest} over separate {@code toObservable} bridges. Because
+   * each bridge runs its own effect, the two places that legitimately write two signals at once —
+   * {@link changePageSize} and the debounced search subscription, both of which reset the page
+   * index — made {@code combineLatest} emit twice in a single flush and issue two requests.
+   * {@code switchMap} cancelled one, so nothing looked broken, but the server answered both.
+   * Deriving a single value collapses that to one emission regardless of how many inputs moved.
+   */
+  private readonly query = computed(() => ({
+    page: this.currentPage(),
+    size: this.pageSize(),
+    term: this.currentSearchTerm(),
+  }));
+  private readonly _query$ = toObservable(this.query);
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
@@ -93,10 +121,10 @@ export class CustomersComponent implements OnInit {
   private readonly avatarColors = ['0D8ABC', '2ECC71', 'E74C3C', '9B59B6', 'F39C12', '1ABC9C', 'E67E22'];
 
   /**
-   * Wires {@link customersState$} to react to changes in both page index and search term.
+   * Wires {@link customersState} to react to changes in page index, row count or search term.
    *
-   * {@link combineLatest} ensures a new fetch fires whenever either subject emits.
-   * {@link switchMap} cancels any in-flight request when a new emission arrives,
+   * All three travel together in {@link query}, so one fetch fires per change no matter how many
+   * of them moved. {@link switchMap} cancels any in-flight request when a new emission arrives,
    * preventing stale responses from overwriting newer results.
    */
   ngOnInit(): void {
@@ -111,9 +139,9 @@ export class CustomersComponent implements OnInit {
         this.currentPage.set(0);
       });
 
-    const customers$ = combineLatest([this._currentPageObs$, this._currentSearchTermObs$]).pipe(
-      switchMap(([page, name]) =>
-        (name ? this.customerService.searchCustomers$(name, page) : this.customerService.customers$(page)).pipe(
+    const customers$ = this._query$.pipe(
+      switchMap(({ page, size, term }) =>
+        (term ? this.customerService.searchCustomers$(term, page, size) : this.customerService.customers$(page, size)).pipe(
           map((response) => {
             return { dataState: DataState.LOADED, appData: response };
           }),
@@ -159,6 +187,25 @@ export class CustomersComponent implements OnInit {
    */
   goToPage(pageIndex: number): void {
     this.currentPage.set(pageIndex);
+  }
+
+  /**
+   * Changes how many customers are fetched per page and returns to the first page.
+   *
+   * <p>The reset is the whole reason this is a method rather than a two-way binding on the
+   * selector. Page indexes are only meaningful relative to a row count: someone reading page 6 of a
+   * 10-row listing who switches to 100 rows is asking for rows 500–599 of a list that may now be
+   * five pages long, and would land on an empty table with no indication of why. Returning to the
+   * first page is the only interpretation that always has an answer.
+   *
+   * <p>The active search term is preserved — {@link query} carries it independently, so widening
+   * the page size while filtering does not silently drop the filter.
+   *
+   * @param size - the new row count, one of the selector's offered values
+   */
+  changePageSize(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(0);
   }
 
   /**

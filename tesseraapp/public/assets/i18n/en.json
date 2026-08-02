@@ -32,7 +32,11 @@
     "back": "Back",
     "description": "Description",
     "price": "Price",
-    "amount": "Amount"
+    "amount": "Amount",
+    "pageXofY": "Page {{page}} of {{total}}",
+    "nTotal": "{{count}} total",
+    "acrossNPages": "across {{count}} pages",
+    "viewAll": "View all"
   },
   "nav": {
     "customers": "Customers",

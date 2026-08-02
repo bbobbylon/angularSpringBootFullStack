@@ -32,7 +32,11 @@
     "back": "Retour",
     "description": "Description",
     "price": "Prix",
-    "amount": "Montant"
+    "amount": "Montant",
+    "pageXofY": "Page {{page}} sur {{total}}",
+    "nTotal": "{{count}} au total",
+    "acrossNPages": "sur {{count}} pages",
+    "viewAll": "Tout afficher"
   },
   "nav": {
     "customers": "Clients",

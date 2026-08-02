@@ -164,15 +164,7 @@
           </div>
 
           <div class="d-flex align-items-center justify-content-between sc-panel__foot">
-            <div class="d-flex align-items-center gap-2">
-              <label class="form-label mb-0 small text-muted" for="pageSize">{{ t('common.rowsPerPage') }}</label>
-              <select (change)="changePageSize(+$any($event.target).value)" id="pageSize"
-                      class="form-select form-select-sm w-auto">
-                @for (option of pageSizeOptions; track option) {
-                  <option [selected]="option === pageSize()" [value]="option">{{ option }}</option>
-                }
-              </select>
-            </div>
+            <app-page-size-select (sizeSelected)="changePageSize($event)" [size]="pageSize()"></app-page-size-select>
             <nav [attr.aria-label]="t('common.pageNavigation')">
               <ul class="pagination justify-content-end mb-0">
                 <li [ngClass]="0 === currentPage() ? 'disabled' : ''"

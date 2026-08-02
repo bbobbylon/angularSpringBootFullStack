@@ -32,7 +32,11 @@
     "back": "Volver",
     "description": "Descripción",
     "price": "Precio",
-    "amount": "Importe"
+    "amount": "Importe",
+    "pageXofY": "Página {{page}} de {{total}}",
+    "nTotal": "{{count}} en total",
+    "acrossNPages": "en {{count}} páginas",
+    "viewAll": "Ver todo"
   },
   "nav": {
     "customers": "Clientes",

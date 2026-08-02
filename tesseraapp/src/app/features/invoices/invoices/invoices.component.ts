@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { DatePipe, NgClass } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { map, of, startWith, switchMap } from 'rxjs';
@@ -14,6 +14,7 @@ import { saveAs } from 'file-saver';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { InvoiceTrendComponent } from '../../../shared/charts/invoice-trend/invoice-trend.component';
+import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
 
@@ -30,7 +31,7 @@ import { TranslocoService } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-invoices',
-  imports: [NgClass, RouterModule, NavbarComponent, DatePipe, InvoiceTrendComponent, TranslocoDirective],
+  imports: [NgClass, RouterModule, NavbarComponent, DatePipe, InvoiceTrendComponent, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './invoices.component.html',
   styleUrl: './invoices.component.css',
   standalone: true,
@@ -55,7 +56,28 @@ export class InvoicesComponent implements OnInit {
   protected currentPage = signal(0);
   /** Readonly view of the current page for the template's pagination controls. */
   currentPage$ = this.currentPage.asReadonly();
-  private readonly _currentPageObs$ = toObservable(this.currentPage);
+
+  /**
+   * Rows fetched per page. Changing it resets {@link currentPage} — see {@link changePageSize}.
+   *
+   * <p>Twenty is what this screen has always requested (it was {@code CustomerService}'s default
+   * argument); it is stated here now that it is a user preference rather than a service fallback.
+   */
+  protected pageSize = signal(20);
+
+  /** Readonly view of the row count, for the template's size selector. */
+  pageSize$ = this.pageSize.asReadonly();
+
+  /**
+   * Page index and row count as one derived value — the single input to the fetch pipeline.
+   *
+   * <p>One source rather than two {@code toObservable} bridges combined with {@code combineLatest}:
+   * {@link changePageSize} writes both signals in one go, and two independent bridges would each
+   * fire an effect in the same flush, issuing two requests for the same intent. {@code switchMap}
+   * would cancel one, but the server would still have answered it.
+   */
+  private readonly query = computed(() => ({ page: this.currentPage(), size: this.pageSize() }));
+  private readonly _query$ = toObservable(this.query);
   private readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
@@ -71,7 +93,7 @@ export class InvoicesComponent implements OnInit {
   protected fileStatus = signal<{ status: string; type: string; percent: number } | undefined>(undefined);
 
   /**
-   * Wires the {@code currentPage} signal to the invoice-list endpoint.
+   * Wires the {@link query} signal to the invoice-list endpoint.
    *
    * {@code toObservable} converts the signal into an Observable so we can keep
    * using {@code switchMap}'s cancel-on-new-emission behavior — pagination clicks
@@ -80,10 +102,10 @@ export class InvoicesComponent implements OnInit {
    * the template never blanks out between fetches.
    */
   ngOnInit(): void {
-    this._currentPageObs$
+    this._query$
       .pipe(
-        switchMap((page) =>
-          this.customerService.invoices$(page).pipe(
+        switchMap(({ page, size }) =>
+          this.customerService.invoices$(page, size).pipe(
             map((response) => {
               this.data.set(response);
               return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>;
@@ -120,6 +142,20 @@ export class InvoicesComponent implements OnInit {
    */
   goToPage(pageIndex: number): void {
     this.currentPage.set(pageIndex);
+  }
+
+  /**
+   * Changes how many invoices are fetched per page and returns to the first page.
+   *
+   * <p>Page indexes only mean anything relative to a row count — page 6 of a 10-row listing is a
+   * different set of records than page 6 of a 100-row one, and is quite likely past the end.
+   * Resetting is the only interpretation guaranteed to land on rows that exist.
+   *
+   * @param size - the new row count, one of the selector's offered values
+   */
+  changePageSize(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(0);
   }
 
   /**

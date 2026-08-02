@@ -1,0 +1,10 @@
+<!-- The select is WRAPPED by its label rather than linked by for/id: the security overview renders
+     two of these on one page, and a hardcoded id would collide. See the component's class docs. -->
+<label *transloco="let t" class="d-flex align-items-center gap-2 mb-0">
+  <span class="form-label mb-0 small text-muted">{{ t('common.rowsPerPage') }}</span>
+  <select (change)="choose($any($event.target).value)" class="form-select form-select-sm w-auto">
+    @for (option of options(); track option) {
+      <option [selected]="option === size()" [value]="option">{{ option }}</option>
+    }
+  </select>
+</label>

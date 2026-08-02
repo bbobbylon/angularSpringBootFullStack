@@ -102,12 +102,24 @@
             </span>
           </div>
 
+          <!-- Headline reads the SERVER's total, not the loaded array. Once the list below is paged,
+               restrictedAccounts() holds one page, so counting it would under-report the tile the
+               moment there is more than one page — the summary would quietly contradict its table.
+               The locked/not-enabled split is still computed client-side from the loaded rows, so it
+               is only shown while the whole set is on screen; beyond that it would describe the
+               current page while sitting under a total, which is worse than not breaking it down. -->
           <div class="sc-panel sc-panel--flush sc-secops__tile" [class.is-alert]="lockedCount() > 0">
             <span class="sc-secops__tile-label eyebrow">{{ t('security.tiles.restricted') }}</span>
-            <span class="sc-secops__tile-value">{{ restrictedAccounts().length | number }}</span>
-            <span class="sc-secops__tile-note">
-              {{ lockedCount() }} locked · {{ disabledCount() }} not enabled
-            </span>
+            <span class="sc-secops__tile-value">{{ restrictedPageInfo().totalElements | number }}</span>
+            @if (!showRestrictedPager()) {
+              <span class="sc-secops__tile-note">
+                {{ lockedCount() }} locked · {{ disabledCount() }} not enabled
+              </span>
+            } @else {
+              <span class="sc-secops__tile-note">
+                {{ t('common.acrossNPages', { count: restrictedPageInfo().totalPages }) }}
+              </span>
+            }
           </div>
 
           <div class="sc-panel sc-panel--flush sc-secops__tile">
@@ -249,6 +261,44 @@
                 </tbody>
               </table>
             </div>
+
+            <!-- Prev/next plus a position readout, rather than the numbered-button pager used on
+                 Customers and Users. That pager renders one button PER PAGE, which is fine for a
+                 customer list and unusable for an audit log that can reach hundreds of pages. The
+                 total is spelled out because it is the number that resolves "is this all of them?" -->
+            @if (showSuspiciousFoot()) {
+              <div class="sc-panel__foot d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <app-page-size-select (sizeSelected)="changeSuspiciousSize($event)"
+                                        [size]="suspiciousSize()"></app-page-size-select>
+                  <span class="text-muted small mono">
+                    {{ t('common.pageXofY', { page: suspiciousPageInfo().page + 1, total: suspiciousPageInfo().totalPages }) }}
+                    · {{ t('common.nTotal', { count: suspiciousPageInfo().totalElements }) }}
+                  </span>
+                </div>
+                @if (showSuspiciousPager()) {
+                  <nav [attr.aria-label]="t('common.pageNavigation')">
+                    <ul class="pagination pagination-sm mb-0">
+                      <li class="page-item" [class.disabled]="suspiciousPageInfo().page === 0">
+                        <button type="button" class="page-link"
+                                [disabled]="suspiciousPageInfo().page === 0"
+                                (click)="goToSuspiciousPage(suspiciousPageInfo().page - 1)">
+                          &laquo; {{ t('common.prev') }}
+                        </button>
+                      </li>
+                      <li class="page-item"
+                          [class.disabled]="suspiciousPageInfo().page >= suspiciousPageInfo().totalPages - 1">
+                        <button type="button" class="page-link"
+                                [disabled]="suspiciousPageInfo().page >= suspiciousPageInfo().totalPages - 1"
+                                (click)="goToSuspiciousPage(suspiciousPageInfo().page + 1)">
+                          {{ t('common.next') }} &raquo;
+                        </button>
+                      </li>
+                    </ul>
+                  </nav>
+                }
+              </div>
+            }
           }
         </section>
 
@@ -294,6 +344,40 @@
                   </li>
                 }
               </ul>
+
+              @if (showRestrictedFoot()) {
+                <div class="sc-panel__foot d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <app-page-size-select (sizeSelected)="changeRestrictedSize($event)"
+                                          [size]="restrictedSize()"></app-page-size-select>
+                    <span class="text-muted small mono">
+                      {{ t('common.pageXofY', { page: restrictedPageInfo().page + 1, total: restrictedPageInfo().totalPages }) }}
+                      · {{ t('common.nTotal', { count: restrictedPageInfo().totalElements }) }}
+                    </span>
+                  </div>
+                  @if (showRestrictedPager()) {
+                    <nav [attr.aria-label]="t('common.pageNavigation')">
+                      <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item" [class.disabled]="restrictedPageInfo().page === 0">
+                          <button type="button" class="page-link"
+                                  [disabled]="restrictedPageInfo().page === 0"
+                                  (click)="goToRestrictedPage(restrictedPageInfo().page - 1)">
+                            &laquo; {{ t('common.prev') }}
+                          </button>
+                        </li>
+                        <li class="page-item"
+                            [class.disabled]="restrictedPageInfo().page >= restrictedPageInfo().totalPages - 1">
+                          <button type="button" class="page-link"
+                                  [disabled]="restrictedPageInfo().page >= restrictedPageInfo().totalPages - 1"
+                                  (click)="goToRestrictedPage(restrictedPageInfo().page + 1)">
+                            {{ t('common.next') }} &raquo;
+                          </button>
+                        </li>
+                      </ul>
+                    </nav>
+                  }
+                </div>
+              }
             }
           </section>
 

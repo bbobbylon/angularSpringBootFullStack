@@ -101,7 +101,10 @@
                 </tr>
                 </thead>
                 <tbody>
-                  @for (service of services(); track service.id) {
+                  <!-- pagedServices(), not services(). The summary bar above deliberately still
+                       reads the FULL list, so its offered/retired counts and catalog value stay
+                       totals rather than becoming per-page figures. -->
+                  @for (service of pagedServices(); track service.id) {
                     @if (editingId() === service.id) {
                       <!-- Inline edit row. Replaces the row in place rather than opening a modal so
                            the surrounding catalog stays visible — pricing decisions are usually made
@@ -179,6 +182,41 @@
                 </tbody>
               </table>
             </div>
+
+<!-- The footer is gated on the row COUNT, not on the page count: at 100 rows/page a 40-entry
+                 catalog is one page, and gating on `showCatalogPager()` would hide the very control
+                 needed to go back to 10. The prev/next nav inside still hides below two pages. -->
+            @if (showCatalogFoot()) {
+              <div class="sc-panel__foot d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <app-page-size-select (sizeSelected)="changeCatalogPageSize($event)"
+                                        [size]="catalogPageSize()"></app-page-size-select>
+                  <span class="text-muted small mono">
+                    {{ t('common.pageXofY', { page: safeCatalogPage() + 1, total: catalogTotalPages() }) }}
+                    · {{ t('common.nTotal', { count: services().length }) }}
+                  </span>
+                </div>
+                @if (showCatalogPager()) {
+                  <nav [attr.aria-label]="t('common.pageNavigation')">
+                    <ul class="pagination pagination-sm mb-0">
+                      <li class="page-item" [class.disabled]="safeCatalogPage() === 0">
+                        <button type="button" class="page-link" [disabled]="safeCatalogPage() === 0"
+                                (click)="goToCatalogPage(safeCatalogPage() - 1)">
+                          &laquo; {{ t('common.prev') }}
+                        </button>
+                      </li>
+                      <li class="page-item" [class.disabled]="safeCatalogPage() >= catalogTotalPages() - 1">
+                        <button type="button" class="page-link"
+                                [disabled]="safeCatalogPage() >= catalogTotalPages() - 1"
+                                (click)="goToCatalogPage(safeCatalogPage() + 1)">
+                          {{ t('common.next') }} &raquo;
+                        </button>
+                      </li>
+                    </ul>
+                  </nav>
+                }
+              </div>
+            }
           }
         </section>
       }

@@ -255,7 +255,10 @@
                     </tr>
                     </thead>
                     <tbody>
-                      @for (invoice of state?.appData?.data?.customers?.invoices; track invoice.id) {
+                      <!-- pagedInvoices(), not the raw collection. The summary list above still
+                           reduces over every invoice, so Total Billed / Paid / Active / Pending
+                           stay true totals rather than becoming per-page figures. -->
+                      @for (invoice of pagedInvoices(); track invoice.id) {
                         <tr>
                           <td>{{ invoice.invoiceNumber }}</td>
                           <td>
@@ -290,6 +293,41 @@
                       }
                     </tbody>
                   </table>
+
+<!-- Gated on the invoice COUNT, not the page count: at 100 rows/page a 30-invoice
+                       history is one page, and a totalPages gate would hide the size selector that
+                       is the only way back to 10. Prev/next inside still hides below two pages. -->
+                  @if (showInvoiceFoot()) {
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
+                      <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <app-page-size-select (sizeSelected)="changeInvoicePageSize($event)"
+                                              [size]="invoicePageSize()"></app-page-size-select>
+                        <span class="text-muted small">
+                          {{ t('common.pageXofY', { page: safeInvoicePage() + 1, total: invoiceTotalPages() }) }}
+                          · {{ t('common.nTotal', { count: allInvoices().length }) }}
+                        </span>
+                      </div>
+                      @if (showInvoicePager()) {
+                        <nav [attr.aria-label]="t('common.pageNavigation')">
+                          <ul class="pagination pagination-sm mb-0">
+                            <li class="page-item" [class.disabled]="safeInvoicePage() === 0">
+                              <button type="button" class="page-link" [disabled]="safeInvoicePage() === 0"
+                                      (click)="goToInvoicePage(safeInvoicePage() - 1)">
+                                &laquo; {{ t('common.prev') }}
+                              </button>
+                            </li>
+                            <li class="page-item" [class.disabled]="safeInvoicePage() >= invoiceTotalPages() - 1">
+                              <button type="button" class="page-link"
+                                      [disabled]="safeInvoicePage() >= invoiceTotalPages() - 1"
+                                      (click)="goToInvoicePage(safeInvoicePage() + 1)">
+                                {{ t('common.next') }} &raquo;
+                              </button>
+                            </li>
+                          </ul>
+                        </nav>
+                      }
+                    </div>
+                  }
                 </div>
               </div>
             </div>

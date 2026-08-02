@@ -1,11 +1,12 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NgClass, NgOptimizedImage } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
-import { catchError, combineLatest, map, of, startWith, switchMap } from 'rxjs';
+import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { StatsComponent } from '../../../shared/stats/stats.component';
 import { InsightsComponent } from '../../../shared/insights/insights.component';
+import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { CustomerListDataInterface } from '../../../interface/appstates.interface';
@@ -29,7 +30,7 @@ import { TranslocoService } from '@jsverse/transloco';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [NgClass, RouterModule, NavbarComponent, StatsComponent, InsightsComponent, ExtractArrayValuePipe, NgOptimizedImage, TranslocoDirective],
+  imports: [NgClass, RouterModule, NavbarComponent, StatsComponent, InsightsComponent, ExtractArrayValuePipe, NgOptimizedImage, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -37,7 +38,6 @@ import { TranslocoService } from '@jsverse/transloco';
 export class HomeComponent implements OnInit {
   /** Exposes the `DataState` enum to the template for asynchronous data handling. */
   readonly DataState = DataState;
-  readonly pageSizeOptions = [10, 20, 50, 100] as const;
   /** Drives the entire template — set to LOADING/LOADED/ERROR by the page-fetch subscription. */
   homeState = signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerListDataInterface>>>({ dataState: DataState.LOADING });
   /** Current 0-based page index. Changing this triggers a re-fetch via the toObservable bridge. */
@@ -54,22 +54,32 @@ export class HomeComponent implements OnInit {
   private readonly transloco = inject(TranslocoService);
   private readonly avatarColors = ['0D8ABC', '2ECC71', 'E74C3C', '9B59B6', 'F39C12', '1ABC9C', 'E67E22'];
   private data = signal<CustomHttpResponseInterface<CustomerListDataInterface> | undefined>(undefined);
-  private readonly _currentPage$ = toObservable(this.currentPage);
-  private readonly _pageSize$ = toObservable(this.pageSize);
 
   /**
-   * Subscribes the home state signal to the combined page/size stream.
+   * The page index and row count as one derived value — the single input to the fetch pipeline.
    *
-   * Uses {@code combineLatest} so that a change to either the current page or the
-   * page size triggers a new request. {@code switchMap} automatically cancels any
-   * in-flight request when a new emission arrives, preventing stale responses.
+   * <p>Deliberately not {@code combineLatest} of two separate {@code toObservable} bridges, which
+   * is what this used to be. Each bridge owns its own effect, so {@link changePageSize} — which
+   * necessarily writes both signals — made both fire in the same flush and {@code combineLatest}
+   * emit twice. {@code switchMap} cancelled the loser, so the bug was invisible, but the request
+   * was still issued and the server still answered it. Deriving one value means one emission by
+   * construction, no matter how many of its inputs moved.
+   */
+  private readonly query = computed(() => ({ page: this.currentPage(), size: this.pageSize() }));
+  private readonly _query$ = toObservable(this.query);
+
+  /**
+   * Subscribes the home state signal to the page/size query stream.
+   *
+   * {@code switchMap} automatically cancels any in-flight request when a new emission arrives,
+   * preventing a slow response for page 1 from overwriting a fast one for page 2.
    * {@code takeUntilDestroyed} ensures the subscription is cleaned up automatically
    * when the component is destroyed, eliminating the need for manual {@code ngOnDestroy}.
    */
   ngOnInit(): void {
-    combineLatest([this._currentPage$, this._pageSize$])
+    this._query$
       .pipe(
-        switchMap(([page, size]) =>
+        switchMap(({ page, size }) =>
           this.customerService.customers$(page, size).pipe(
             map((response) => {
               // console.log('Fetched customer data:', response);
