@@ -3,12 +3,14 @@ package com.bob.angularspringbootfullstack.controller;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.exception.ApiException;
+import com.bob.angularspringbootfullstack.enumeration.RoleType;
 import com.bob.angularspringbootfullstack.form.SettingsForm;
 import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.RoleService;
+import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +34,7 @@ import java.util.Collection;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ACCOUNT_SETTINGS_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.PROFILE_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ROLE_UPDATE;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.SESSION_REVOKED;
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static java.time.LocalTime.now;
@@ -80,6 +84,7 @@ public class AdminUserController {
     private final RoleService roleService;
     private final EventService eventService;
     private final OrganizationService organizationService;
+    private final SessionService sessionService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -216,6 +221,7 @@ public class AdminUserController {
                                                        @PathVariable String roleName) {
         requireNotSelf(authentication, id, "You cannot change your own role. Ask another administrator.");
         requireOrganizationScope(authentication, id);
+        requireAssignableTier(authentication, roleName);
         UserDTO target = userService.getUserById(id);
         userService.updateUserRole(id, roleName);
         eventPublisher.publishEvent(new NewUserEvent(target.getEmail(), ROLE_UPDATE));
@@ -317,6 +323,55 @@ public class AdminUserController {
     }
 
     /**
+     * Signs a user out of every device by revoking all of their refresh sessions.
+     *
+     * <p>This is the containment action for "that account may be compromised". Locking an account
+     * (via {@code PATCH /{id}/settings}) stops the <em>next</em> sign-in but does nothing to the
+     * sessions already open — access tokens are verified by signature alone, so an attacker holding
+     * one keeps working until it expires, and their refresh token keeps minting new ones for five
+     * days. Revoking the refresh families is what actually ends the intrusion, which is why this
+     * sits beside the lock control rather than behind a separate screen.
+     *
+     * <p>Requires {@code UPDATE:USER} — the same authority as changing account state, because this
+     * is the same kind of act. Organization scope applies, so a tenant administrator can only do it
+     * to their own members.
+     *
+     * <p>Self-targeting is refused: an administrator ending their own sessions belongs on their
+     * Security Center, which can exclude the current device. Doing it here would sign the caller
+     * out mid-request with no way to except themselves.
+     *
+     * <p>Audited as {@code SESSION_REVOKED} against the <b>target</b>, so it lands in the affected
+     * user's own activity history rather than only in the operator's log — the person who was signed
+     * out should be able to see that it happened and when.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the target user's primary key
+     * @return 200 OK with the refreshed target user
+     */
+    @PreAuthorize("hasAuthority('UPDATE:USER')")
+    @DeleteMapping("/{id}/sessions")
+    public ResponseEntity<HttpResponse> revokeUserSessions(Authentication authentication,
+                                                           @PathVariable Long id) {
+        requireNotSelf(authentication, id, "Use your Security Center to manage your own sessions.");
+        requireOrganizationScope(authentication, id);
+        UserDTO target = userService.getUserById(id);
+        sessionService.revokeAllSessions(id);
+        eventPublisher.publishEvent(new NewUserEvent(target.getEmail(), SESSION_REVOKED));
+        log.warn("Admin '{}' revoked ALL sessions for user id {} (email={})",
+                getAuthenticatedUser(authentication).getEmail(), id, target.getEmail());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", getAuthenticatedUser(authentication),
+                                "selectedUser", userService.getUserById(id),
+                                "roles", roleService.getAllRoles()))
+                        .message("All sessions for this user have been revoked.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
      * Rejects administrative operations whose target is the calling administrator's own
      * account. Self-service mutations belong to {@link UserController}; keeping them off
      * the admin surface is what makes FR-RBAC-4 ("a user shall not elevate their own
@@ -359,6 +414,37 @@ public class AdminUserController {
         if (isOrganizationScoped(caller) && !organizationService.isWithinOrganizationScope(caller.getId(), targetId)) {
             log.warn("Org admin '{}' denied access to user id {} (outside organization scope)", caller.getEmail(), targetId);
             throw new AccessDeniedException("This user is outside your organization scope.");
+        }
+    }
+
+    /**
+     * Refuses to assign a role that outranks the caller's own (privilege-elevation-by-proxy).
+     *
+     * <p>{@code UPDATE:ROLE} answers "may you reassign roles at all", and organization scope answers
+     * "to whom" — neither bounds <em>which</em> role. Without this third check a
+     * {@code ROLE_ORGANIZATION_ADMIN} could promote an in-scope user to {@code ROLE_ADMIN}: an
+     * unscoped tier above their own, which they could then act through to reach accounts the scope
+     * check would have denied them directly. The grant is legitimate at every individual step, which
+     * is exactly what makes it worth blocking explicitly.
+     *
+     * <p>Equal tiers are allowed, so an administrator can still create a peer. Only assignment
+     * <em>upward</em> is refused.
+     *
+     * <p>Fails closed on an unrecognised role name — see {@link RoleType#canAssign}. The denial names
+     * the requested role but no account data, so like the scope check it cannot be used to probe
+     * which users exist (NFR-SEC-7); the role catalogue is public to anyone who can reach this
+     * endpoint anyway, since {@code roles} is returned in the response body.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param roleName       the role the caller is attempting to assign
+     */
+    private static void requireAssignableTier(Authentication authentication, String roleName) {
+        UserDTO caller = getAuthenticatedUser(authentication);
+        if (!RoleType.canAssign(caller.getRoleName(), roleName)) {
+            log.warn("Admin '{}' (role {}) denied assignment of role '{}' — at or above their own tier",
+                    caller.getEmail(), caller.getRoleName(), roleName);
+            throw new AccessDeniedException(
+                    "You cannot assign a role with more privileges than your own.");
         }
     }
 }

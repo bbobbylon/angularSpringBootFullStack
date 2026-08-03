@@ -1839,6 +1839,7 @@ real spend is Fargate; see [FUTURE-ENHANCEMENTS §6.6](FUTURE-ENHANCEMENTS.md#66
 ## Related documents
 
 - [IMPLEMENTATION-HISTORY.md](IMPLEMENTATION-HISTORY.md) — what was built, and the problem log
+- [PHASE-2-IMPLEMENTATION.md](PHASE-2-IMPLEMENTATION.md) — everything delivered since the Phase 1 report (Jul 11 → Aug 3, 2026), with the roadmap scorecard and requirement traceability
 - [FUTURE-ENHANCEMENTS.md](FUTURE-ENHANCEMENTS.md) — the backlog and the path to a product
 - [flows/](flows/README.md) — click-to-database traces of every major flow
 - [aws/RUNBOOK.md](../aws/RUNBOOK.md) — the linear AWS deploy procedure

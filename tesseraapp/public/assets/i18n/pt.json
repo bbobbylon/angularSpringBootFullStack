@@ -504,6 +504,9 @@
     "assignedRole": "Função atribuída",
     "updateRole": "Atualizar função",
     "updateState": "Atualizar situação",
+    "revokeSessions": "Encerrar sessões em todos os dispositivos",
+    "revokeSessionsTitle": "Sessões ativas",
+    "revokeSessionsHint": "Encerra todas as sessões abertas nesta conta. Bloquear não basta — uma sessão aberta continua a funcionar até o token expirar.",
     "noActivity": "Nenhuma atividade registrada.",
     "loading": "Carregando conta…"
   },

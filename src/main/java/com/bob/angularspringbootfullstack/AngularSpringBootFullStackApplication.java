@@ -1,17 +1,14 @@
 package com.bob.angularspringbootfullstack;
 
 import org.springframework.boot.SpringApplication;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.web.config.EnableSpringDataWebSupport;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.cors.CorsConfigurationSource;
+
 import org.springframework.web.filter.CorsFilter;
 
-import java.util.Arrays;
-import java.util.List;
 
 import static org.springframework.data.web.config.EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO;
 
@@ -66,44 +63,25 @@ public class AngularSpringBootFullStackApplication {
 
 
     /**
-     * Origin patterns the browser is allowed to call this API from, comma-separated.
-     * <p>
-     * Sourced from configuration ({@code app.cors.allowed-origin-patterns}, env
-     * {@code CORS_ALLOWED_ORIGINS}) rather than hardcoded, because the correct answer is
-     * different in every environment and baking a list into the jar means a rebuild to
-     * change it — and, worse, it means the prod jar ships whatever placeholder domain was
-     * convenient at development time.
-     * <p>
-     * Per-profile values live in {@code application-*.yml}: dev allows the LAN so the app
-     * can be opened from a phone, prod names the real origin(s) and nothing else.
+     * Servlet-level CORS filter, built from the application's single CORS definition.
+     *
+     * <p>It used to construct its own {@link org.springframework.web.cors.CorsConfiguration} from
+     * {@code app.cors.allowed-origin-patterns} while {@code SecurityConfig} hardcoded a different
+     * list — two policies, silently disagreeing. Because the security filter chain is what answers
+     * preflights, the hardcoded one won and this configurable one never took effect. The divergence
+     * stayed invisible only because the deployed shape serves the SPA and API from a single origin,
+     * so almost nothing is genuinely cross-origin; it would have surfaced the moment a second
+     * client, a mobile app, or a split-origin staging deploy appeared.
+     *
+     * <p>Both now read the one bean, so they cannot drift apart again. The parameter is injected
+     * rather than the property, which is what makes that structural rather than a convention
+     * somebody has to remember.
+     *
+     * @param corsConfigurationSource the application's CORS policy, defined in {@code SecurityConfig}
+     * @return a servlet filter applying that same policy
      */
-    @Value("${app.cors.allowed-origin-patterns}")
-    private String allowedOriginPatterns;
-
-    // CORS Filter configuration. Basic boilerplate that is used in almost all Spring Boot applications. It does the same thing as the @CrossOrigin annotation but applies globally to all endpoints. It allows the frontend (running on a different port) to make requests to the backend without being blocked by the browser's same-origin policy. The allowed origins are specified in the configuration, and you can adjust them as needed for your development and production environments.
     @Bean
-    public CorsFilter corsFilter() {
-        UrlBasedCorsConfigurationSource urlBasedCorsConfigurationSource = new UrlBasedCorsConfigurationSource();
-        CorsConfiguration corsConfiguration = new CorsConfiguration();
-        corsConfiguration.setAllowCredentials(true);
-        // setAllowedOriginPATTERNS, not setAllowedOrigins: with allowCredentials(true) the
-        // CORS spec forbids the "*" wildcard, and Spring enforces that by REFUSING to start
-        // if setAllowedOrigins contains one. Patterns are the supported way to express
-        // "any host on my LAN" — Spring matches the request's Origin against them and
-        // echoes back that exact origin, which is spec-compliant. Exact origins (the prod
-        // case) are still written literally and still match exactly.
-        corsConfiguration.setAllowedOriginPatterns(
-                Arrays.stream(allowedOriginPatterns.split(","))
-                        .map(String::trim)
-                        .filter(pattern -> !pattern.isEmpty())
-                        .toList());
-        corsConfiguration.setAllowedHeaders(Arrays.asList("Origin", "Access-Control-Allow-Origin", "Content-Type",
-                "Accept", "Jwt-Token", "Authorization", "Origin", "Accept", "X-Requested-With",
-                "Access-Control-Request-Method", "Access-Control-Request-Headers"));
-        corsConfiguration.setExposedHeaders(Arrays.asList("Origin", "Content-Type", "Accept", "Jwt-Token", "Authorization",
-                "Access-Control-Allow-Origin", "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials", "File-Name"));
-        corsConfiguration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        urlBasedCorsConfigurationSource.registerCorsConfiguration("/**", corsConfiguration);
-        return new CorsFilter(urlBasedCorsConfigurationSource);
+    public CorsFilter corsFilter(CorsConfigurationSource corsConfigurationSource) {
+        return new CorsFilter(corsConfigurationSource);
     }
 }

@@ -504,6 +504,9 @@
     "assignedRole": "Assigned role",
     "updateRole": "Update Role",
     "updateState": "Update State",
+    "revokeSessions": "Sign out everywhere",
+    "revokeSessionsTitle": "Active sessions",
+    "revokeSessionsHint": "Ends every signed-in session on this account. Locking alone does not — an open session keeps working until its token expires.",
     "noActivity": "No recorded activity.",
     "loading": "Loading account…"
   },

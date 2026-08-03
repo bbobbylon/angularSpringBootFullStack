@@ -18,9 +18,14 @@ import java.util.Collection;
  * can be added here as invoice-related query needs grow.
  */
 public interface InvoiceRepo extends PagingAndSortingRepository<Invoice, Long>, ListCrudRepository<Invoice, Long> {
-    // TODO(human): add a @Query method that returns the sum of all invoice totalAmount values.
-    // The method should be named sumTotalBilled() and return a Double.
-    // Use COALESCE in your JPQL so it returns 0 instead of null when there are no invoices.
+
+    // NOTE: a `sumTotalBilled()` aggregate was once planned here and is deliberately NOT added.
+    // That total already exists, computed in SQL, in both the unscoped and org-scoped stats
+    // queries (`CustomerQuery.STATS_QUERY` / `STATS_BY_ORGANIZATION_QUERY`), which is what
+    // populates `Stats.totalBilled` and the dashboard's Total Billed tile. Adding a second
+    // aggregate over the same column would create a competing source of truth for one number —
+    // the exact shape of problem this codebase has been unwinding elsewhere (two CORS configs,
+    // two exception advices). If the JPA side ever needs the figure, call the existing service.
 
     /**
      * Returns a page of invoices belonging to any of the given organizations (FR-ORG-2).

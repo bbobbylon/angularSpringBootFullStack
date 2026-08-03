@@ -504,6 +504,9 @@
     "assignedRole": "Rol asignado",
     "updateRole": "Actualizar rol",
     "updateState": "Actualizar estado",
+    "revokeSessions": "Cerrar sesión en todas partes",
+    "revokeSessionsTitle": "Sesiones activas",
+    "revokeSessionsHint": "Finaliza todas las sesiones iniciadas en esta cuenta. Bloquear no basta: una sesión abierta sigue funcionando hasta que caduque su token.",
     "noActivity": "No hay actividad registrada.",
     "loading": "Cargando cuenta…"
   },

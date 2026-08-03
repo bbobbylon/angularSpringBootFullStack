@@ -504,6 +504,9 @@
     "assignedRole": "已分配角色",
     "updateRole": "更新角色",
     "updateState": "更新状态",
+    "revokeSessions": "登出所有设备",
+    "revokeSessionsTitle": "活动会话",
+    "revokeSessionsHint": "结束该账户所有已登录的会话。仅锁定并不够——已打开的会话在其令牌过期前仍然有效。",
     "noActivity": "暂无活动记录。",
     "loading": "正在加载账户…"
   },

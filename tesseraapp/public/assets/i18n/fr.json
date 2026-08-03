@@ -504,6 +504,9 @@
     "assignedRole": "Rôle attribué",
     "updateRole": "Mettre à jour le rôle",
     "updateState": "Mettre à jour l'état",
+    "revokeSessions": "Déconnecter partout",
+    "revokeSessionsTitle": "Sessions actives",
+    "revokeSessionsHint": "Met fin à toutes les sessions ouvertes sur ce compte. Le verrouillage seul ne suffit pas : une session ouverte reste valable jusqu'à l'expiration de son jeton.",
     "noActivity": "Aucune activité enregistrée.",
     "loading": "Chargement du compte…"
   },

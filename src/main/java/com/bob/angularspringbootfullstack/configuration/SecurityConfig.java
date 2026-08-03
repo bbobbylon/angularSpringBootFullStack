@@ -103,6 +103,25 @@ class SecurityConfig {
     private String uiAppUrl;
 
     /**
+     * Comma-separated origin patterns the browser may call this API from.
+     *
+     * <p>Read from configuration rather than hardcoded because the correct answer differs in every
+     * environment, and baking a list into the jar means a rebuild to change it — and, worse, that
+     * the production jar ships whatever placeholder was convenient during development.
+     *
+     * <p>This bean is the <b>single</b> definition of the application's CORS policy. It used to
+     * have a rival: a servlet-level {@code CorsFilter} in the application class built its own
+     * {@link CorsConfiguration} from this same property, while this class hardcoded a different
+     * list — including a {@code angularsecureapp.org} origin that no longer exists anywhere. Since
+     * the security filter chain is what answers preflights, the hardcoded list silently won and the
+     * configurable one was decorative. That divergence was invisible because the deployed shape
+     * serves the SPA and the API from one origin, so almost nothing is genuinely cross-origin; it
+     * would have surfaced the moment a second client appeared. The filter now consumes this bean.
+     */
+    @Value("${app.cors.allowed-origin-patterns}")
+    private String allowedOriginPatterns;
+
+    /**
      * Builds the application's SecurityFilterChain.
      * <p>
      * Disables CSRF (stateless JWT API doesn't need it) and HTTP Basic, enables
@@ -314,11 +333,17 @@ class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         var corsConfiguration = new CorsConfiguration();
         corsConfiguration.setAllowCredentials(true);
-        corsConfiguration.setAllowedOrigins(List.of(
-                "http://localhost:4200",
-                "http://localhost:3000",
-                "https://angularsecureapp.org"
-        ));
+        // setAllowedOriginPATTERNS, not setAllowedOrigins: with allowCredentials(true) the CORS
+        // spec forbids the "*" wildcard, and Spring enforces that by refusing to start if
+        // setAllowedOrigins contains one. Patterns are the supported way to express "any host on my
+        // LAN" — Spring matches the request's Origin against them and echoes back that exact
+        // origin, which is spec-compliant. Exact origins (the prod case) are written literally and
+        // still match exactly.
+        corsConfiguration.setAllowedOriginPatterns(
+                Arrays.stream(allowedOriginPatterns.split(","))
+                        .map(String::trim)
+                        .filter(pattern -> !pattern.isEmpty())
+                        .toList());
         corsConfiguration.setAllowedHeaders(Arrays.asList(
                 "Origin",
                 "Access-Control-Allow-Origin",

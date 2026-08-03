@@ -5,6 +5,7 @@ import com.bob.angularspringbootfullstack.exception.GlobalExceptionHandler;
 import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.RoleService;
+import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,6 +66,7 @@ class AdminUserControllerOrgScopeTest {
     private UserService userService;
     private EventService eventService;
     private OrganizationService organizationService;
+    private SessionService sessionService;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -73,10 +75,11 @@ class AdminUserControllerOrgScopeTest {
         RoleService roleService = mock(RoleService.class);
         eventService = mock(EventService.class);
         organizationService = mock(OrganizationService.class);
+        sessionService = mock(SessionService.class);
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
         AdminUserController controller = new AdminUserController(userService, roleService, eventService,
-                organizationService, eventPublisher);
+                organizationService, sessionService, eventPublisher);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())

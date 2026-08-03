@@ -6,6 +6,7 @@ import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.RoleService;
+import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -56,18 +58,21 @@ class AdminUserControllerTest {
 
     private UserService userService;
     private OrganizationService organizationService;
+    private RoleService roleService;
+    private SessionService sessionService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         userService = mock(UserService.class);
-        RoleService roleService = mock(RoleService.class);
+        roleService = mock(RoleService.class);
         EventService eventService = mock(EventService.class);
         organizationService = mock(OrganizationService.class);
+        sessionService = mock(SessionService.class);
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
         AdminUserController controller = new AdminUserController(userService, roleService, eventService,
-                organizationService, eventPublisher);
+                organizationService, sessionService, eventPublisher);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -146,5 +151,134 @@ class AdminUserControllerTest {
                 .andExpect(status().isForbidden());
 
         verify(userService, never()).updateUserDTO(any(UpdateForm.class));
+    }
+
+    // ── Role-tier ceiling ─────────────────────────────────────────────────────────────────────
+    //
+    // Organization scope bounds WHO an org admin may act on; it says nothing about WHICH role they
+    // may hand out. Without a ceiling, a tier-5 org admin can promote an in-scope user to
+    // ROLE_ADMIN — an UNSCOPED tier-6 account — and then act through it to reach the very users
+    // the scope check would have denied them. Every individual step is authorised, which is what
+    // makes the composition worth blocking explicitly.
+    //
+    // These tests target the assignment endpoint, and each one stubs the target as IN scope, so a
+    // refusal can only be the tier check rather than the scope check firing early.
+
+    /** Lets the success path build its response without tripping Map.of's null rejection. */
+    private void stubAssignmentSuccessPath() {
+        UserDTO target = new UserDTO();
+        target.setId(TARGET_ID);
+        target.setEmail("target@example.com");
+        when(userService.getUserById(TARGET_ID)).thenReturn(target);
+        when(roleService.getAllRoles()).thenReturn(java.util.List.of());
+        when(organizationService.isWithinOrganizationScope(ADMIN_ID, TARGET_ID)).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("an org admin (tier 5) cannot promote anyone to ROLE_ADMIN (tier 6)")
+    void orgAdminCannotAssignAboveOwnTier() throws Exception {
+        // In scope, so the ONLY thing that can refuse this is the tier ceiling.
+        when(organizationService.isWithinOrganizationScope(ADMIN_ID, TARGET_ID)).thenReturn(true);
+
+        mockMvc.perform(patch("/admin/user/{id}/role/{roleName}", TARGET_ID, "ROLE_ADMIN")
+                        .principal(orgAdminAuth()))
+                .andExpect(status().isForbidden());
+
+        verify(userService, never()).updateUserRole(any(Long.class), any(String.class));
+    }
+
+    @Test
+    @DisplayName("an org admin CAN assign a role below their own tier")
+    void orgAdminCanAssignBelowOwnTier() throws Exception {
+        stubAssignmentSuccessPath();
+
+        mockMvc.perform(patch("/admin/user/{id}/role/{roleName}", TARGET_ID, "ROLE_MODERATOR")
+                        .principal(orgAdminAuth()))
+                .andExpect(status().isOk());
+
+        verify(userService).updateUserRole(TARGET_ID, "ROLE_MODERATOR");
+    }
+
+    @Test
+    @DisplayName("an equal tier is assignable — an admin may create a peer, just not a superior")
+    void equalTierIsAssignable() throws Exception {
+        stubAssignmentSuccessPath();
+
+        mockMvc.perform(patch("/admin/user/{id}/role/{roleName}", TARGET_ID, "ROLE_ORGANIZATION_ADMIN")
+                        .principal(orgAdminAuth()))
+                .andExpect(status().isOk());
+
+        verify(userService).updateUserRole(TARGET_ID, "ROLE_ORGANIZATION_ADMIN");
+    }
+
+    @Test
+    @DisplayName("an unrecognised role name is refused — the ceiling fails closed")
+    void unknownRoleIsRefused() throws Exception {
+        when(organizationService.isWithinOrganizationScope(ADMIN_ID, TARGET_ID)).thenReturn(true);
+
+        mockMvc.perform(patch("/admin/user/{id}/role/{roleName}", TARGET_ID, "ROLE_SUPERUSER")
+                        .principal(orgAdminAuth()))
+                .andExpect(status().isForbidden());
+
+        verify(userService, never()).updateUserRole(any(Long.class), any(String.class));
+    }
+
+    // ── Admin session revocation ──────────────────────────────────────────────────────────────
+    //
+    // Locking an account stops the NEXT sign-in but does nothing to sessions already open: access
+    // tokens verify by signature alone, and the holder's refresh token keeps minting new ones for
+    // five days. Revoking the refresh families is what actually ends an intrusion.
+
+    @Test
+    @DisplayName("an admin can sign a user out of every device")
+    void adminCanRevokeAllSessionsForAUser() throws Exception {
+        stubAssignmentSuccessPath();
+
+        mockMvc.perform(delete("/admin/user/{id}/sessions", TARGET_ID)
+                        .principal(adminAuth()))
+                .andExpect(status().isOk());
+
+        verify(sessionService).revokeAllSessions(TARGET_ID);
+    }
+
+    @Test
+    @DisplayName("an org admin cannot revoke sessions for an out-of-scope user")
+    void revokeSessionsRespectsOrganizationScope() throws Exception {
+        when(organizationService.isWithinOrganizationScope(ADMIN_ID, TARGET_ID)).thenReturn(false);
+
+        mockMvc.perform(delete("/admin/user/{id}/sessions", TARGET_ID)
+                        .principal(orgAdminAuth()))
+                .andExpect(status().isForbidden());
+
+        verify(sessionService, never()).revokeAllSessions(any(Long.class));
+    }
+
+    @Test
+    @DisplayName("an admin cannot revoke their OWN sessions here — that would sign them out mid-request")
+    void revokeSessionsRefusesSelfTarget() throws Exception {
+        mockMvc.perform(delete("/admin/user/{id}/sessions", ADMIN_ID) // targeting self
+                        .principal(adminAuth()))
+                .andExpect(status().is4xxClientError());
+
+        verify(sessionService, never()).revokeAllSessions(any(Long.class));
+    }
+
+    @Test
+    @DisplayName("the top tier can still assign everything below it")
+    void applicationAdminCanAssignAnything() throws Exception {
+        stubAssignmentSuccessPath();
+
+        UserDTO appAdmin = new UserDTO();
+        appAdmin.setId(ADMIN_ID);
+        appAdmin.setEmail("appadmin@example.com");
+        appAdmin.setRoleName("ROLE_APPLICATION_ADMIN");
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+                appAdmin, null, AuthorityUtils.createAuthorityList("UPDATE:ROLE"));
+
+        mockMvc.perform(patch("/admin/user/{id}/role/{roleName}", TARGET_ID, "ROLE_ADMIN")
+                        .principal(auth))
+                .andExpect(status().isOk());
+
+        verify(userService).updateUserRole(TARGET_ID, "ROLE_ADMIN");
     }
 }

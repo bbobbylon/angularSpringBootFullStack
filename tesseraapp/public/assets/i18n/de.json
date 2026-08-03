@@ -504,6 +504,9 @@
     "assignedRole": "Zugewiesene Rolle",
     "updateRole": "Rolle aktualisieren",
     "updateState": "Status aktualisieren",
+    "revokeSessions": "Überall abmelden",
+    "revokeSessionsTitle": "Aktive Sitzungen",
+    "revokeSessionsHint": "Beendet jede angemeldete Sitzung dieses Kontos. Sperren allein genügt nicht — eine offene Sitzung bleibt bis zum Ablauf des Tokens gültig.",
     "noActivity": "Keine Aktivität erfasst.",
     "loading": "Konto wird geladen…"
   },
