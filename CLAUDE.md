@@ -2,12 +2,12 @@
 
 Full-stack app: **Angular (latest) frontend + Spring Boot (Boot 4.0.6 / Java 21) backend**,
 MySQL via `NamedParameterJdbcTemplate`, stateless JWT auth. See `documentation/` for the full
-guides (hub: `documentation/README.md`).
+guides (hub: `documentation/GUIDE.md`).
 
 ## Backend Blueprint (reusable — how this backend is built)
 
 This section exists so the backend's shape is portable across environments (web, terminal,
-teammates). Full detail: **[documentation/backend-blueprint.md](documentation/backend-blueprint.md)**.
+teammates). Full detail: **[documentation/GUIDE.md §5](documentation/GUIDE.md#5-backend-internals)**.
 
 **Layered package layout** (base package `com.bob.angularspringbootfullstack`):
 `controller/` → `service/` + `service/serviceimpl/` → `repo/` + `repo/repoimpl/`, supported by

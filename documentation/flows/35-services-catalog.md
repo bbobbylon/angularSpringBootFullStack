@@ -204,4 +204,4 @@ the empty state until services exist.
 - The interceptor/cache/token machinery every hop rides → [`00-anatomy-of-a-request.md`](./00-anatomy-of-a-request.md)
 - The admin-only siblings reusing the same `/customer/**` GETs (Billing, Analytics) → [`32-dashboard.md`](./32-dashboard.md)
 - The list idiom this page deliberately does *not* use (paging/search) → [`30 §A`](./30-customers.md)
-- Static endpoint catalog & schema → [`../api-reference.md`](../api-reference.md) · [`../database.md`](../database.md)
+- Static endpoint catalog & schema → [`../GUIDE.md` §8](../GUIDE.md#8-api-reference) · [`../GUIDE.md` §9](../GUIDE.md#9-database)

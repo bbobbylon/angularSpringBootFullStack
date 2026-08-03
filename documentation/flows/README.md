@@ -161,7 +161,7 @@ AI anomaly detection and a login-analytics dashboard (**FR-EXT-2**) are *planned
 These flow docs are the **dynamic** view — what happens *over time* on a single request.
 They complement, and link back to, the **static** reference docs:
 
-- [`../architecture.md`](../architecture.md) — the component/layer structure (the boxes).
-- [`../security.md`](../security.md) — the security model and threat posture.
-- [`../api-reference.md`](../api-reference.md) — the endpoint catalog (request/response shapes).
-- [`../database.md`](../database.md) — the schema the repositories read and write.
+- [`../GUIDE.md` §1](../GUIDE.md#1-architecture) — the component/layer structure (the boxes).
+- [`../GUIDE.md` §7](../GUIDE.md#7-security-model) — the security model and threat posture.
+- [`../GUIDE.md` §8](../GUIDE.md#8-api-reference) — the endpoint catalog (request/response shapes).
+- [`../GUIDE.md` §9](../GUIDE.md#9-database) — the schema the repositories read and write.

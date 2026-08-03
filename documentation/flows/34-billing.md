@@ -232,5 +232,5 @@ service rows are folded from `content[]` in the browser, so `totalElements > siz
 - The invoices this page aggregates (list / new / detail) → [`31-invoices.md`](./31-invoices.md)
 - `STATS_QUERY` and its other consumer (the home dashboard) → [`32 §A`](./32-dashboard.md)
 - The admin authority model this page *displays* but does not *enforce* server-side → [`20-admin-users-rbac.md`](./20-admin-users-rbac.md)
-- The `GET /**` matcher fall-through that makes the admin gate frontend-only → [`00 §6-7`](./00-anatomy-of-a-request.md) · [`../security.md`](../security.md)
+- The `GET /**` matcher fall-through that makes the admin gate frontend-only → [`00 §6-7`](./00-anatomy-of-a-request.md) · [`../GUIDE.md` §7](../GUIDE.md#7-security-model)
 - The shared list idiom & pagination envelope → [`30 §A`](./30-customers.md)

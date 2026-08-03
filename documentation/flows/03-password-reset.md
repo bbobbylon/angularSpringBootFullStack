@@ -106,7 +106,7 @@ on submit transitioning to the `account` success card.
 > ("Email sent to reset password…", `UserController.java:540`). Whether the flow is *fully*
 > enumeration-safe depends on `userService.resetPassword` not throwing differently for an unknown
 > email — the project's stated policy is to never reveal account existence
-> ([security.md](../security.md)). If an unknown email surfaces an error here, that's the spot to
+> ([GUIDE.md §7](../GUIDE.md#7-security-model)). If an unknown email surfaces an error here, that's the spot to
 > make it return the same generic success.
 
 ---

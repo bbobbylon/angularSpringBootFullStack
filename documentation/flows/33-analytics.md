@@ -154,7 +154,7 @@ Monthly grouping is done in JS off `createdAt` (customers, `ts:165-183`) and `in
 > directly and receive the same system-wide data — the `adminGuard` only changes what *renders*
 > (per NFR-SEC-4, `admin.guard.ts:14-16`). There is no server-side admin double-check on the data
 > behind this page. Treat the hub as an admin *convenience surface*, not an access-control boundary;
-> the data it shows is not actually admin-scoped. See [`../security.md`](../security.md).
+> the data it shows is not actually admin-scoped. See [`../GUIDE.md` §7](../GUIDE.md#7-security-model).
 
 Also note `isAdmin` (`ts:128`) is a **different** authority set from the route guard: it adds
 `DELETE:USER` and only toggles the in-header "Billing Overview" button (`html:14-18`), nothing more.
@@ -350,4 +350,4 @@ this flow does not rotate tokens.
 - The dashboard that *does* use `statusBreakdown` and shares both endpoints → [`32-dashboard.md`](./32-dashboard.md)
 - The list idiom & pagination envelope this hub reuses → [`30 §A`](./30-customers.md)
 - The invoice page + `services[]` line items the service-utilisation chart aggregates → [`31-invoices.md`](./31-invoices.md)
-- Why frontend admin gates are usability-only, not a security boundary → [`../security.md`](../security.md)
+- Why frontend admin gates are usability-only, not a security boundary → [`../GUIDE.md` §7](../GUIDE.md#7-security-model)

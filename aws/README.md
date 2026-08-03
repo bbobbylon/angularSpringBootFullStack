@@ -8,7 +8,7 @@ End-to-end checklist for deploying TesseraApp to AWS using ECS Fargate + **Aiven
 
 Everything in this repo is written to run identically in both. Where behaviour differs, it is
 configuration, not code — see
-[`documentation/security.md` §11.1](../documentation/security.md#111-deployment-parity--what-changes-between-startsh-and-aws)
+[`GUIDE.md` §7.8](../documentation/GUIDE.md#7-security-model)
 for the full parity table.
 
 | | Local (`./start.sh`) | AWS (ECS Fargate) |
@@ -91,7 +91,7 @@ AWS_REGION=us-east-1 ./aws/setup.sh \
 
 > **`--aiven-db` must be `db3`, not `defaultdb`.** `defaultdb` is the empty database Aiven
 > auto-creates with every service; this application's data — users, roles, customers, invoices —
-> lives in **`db3`** (see [database.md §17.4](../documentation/database.md#174-migrating-native--aiven-how-db3-was-created)
+> lives in **`db3`** (see [GUIDE.md §9.7](../documentation/GUIDE.md#9-database)
 > for how it was migrated there). Pointing a task at `defaultdb` produces the most confusing
 > possible failure: the SPA loads perfectly, then every sign-in attempt fails, because the schema
 > may well be there but there is not a single user row in it. Unlike `mysql-xyz.aivencloud.com`

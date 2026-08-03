@@ -3,7 +3,7 @@
 The Angular 21 single-page app for TesseraApp. It talks to the Spring Boot REST API for authentication, profile/security management, the admin dashboard, and customer/invoice features.
 
 > **Backend & full docs:** see the repo root [`README.md`](../README.md) and [`documentation/`](../documentation/).
-> Architecture context: [documentation/architecture.md §6](../documentation/architecture.md#6-frontend-architecture) · API: [documentation/api-reference.md](../documentation/api-reference.md).
+> Architecture context: [GUIDE.md §1](../documentation/GUIDE.md#1-architecture) · API: [GUIDE.md §8](../documentation/GUIDE.md#8-api-reference).
 
 ---
 
@@ -78,7 +78,7 @@ Every protected request → tokenInterceptor:
 
 - Tokens are stored in `localStorage` under the `Key` enum (`Key.TOKEN`, `Key.REFRESH_TOKEN`).
 - `authenticationGuard` checks `UserService.isAuthenticated()` (valid, non-expired JWT) and redirects to `/login` otherwise.
-- **Don't attach tokens manually** — the interceptor owns that (and the refresh dance). Backend token mechanics: [documentation/security.md](../documentation/security.md).
+- **Don't attach tokens manually** — the interceptor owns that (and the refresh dance). Backend token mechanics: [GUIDE.md §7](../documentation/GUIDE.md#7-security-model).
 
 ---
 
@@ -89,7 +89,7 @@ npm install
 npm start        # dev server → http://localhost:4200 (API calls go to http://localhost:8080)
 ```
 
-> The full stack is usually launched from the repo root via `./start.sh` (which starts both the API and this app). See [documentation/getting-started.md](../documentation/getting-started.md).
+> The full stack is usually launched from the repo root via `./start.sh` (which starts both the API and this app). See [GUIDE.md §2](../documentation/GUIDE.md#2-getting-started).
 
 Other scripts:
 
@@ -104,6 +104,6 @@ npm run format       # Prettier (write)
 
 ## Notes & known rough edges
 
-- **API base URL is `http://localhost:8080`** in the services. Deploying against a different backend origin means updating the environment files and rebuilding (a known limitation — see [deployment.md §7](../documentation/deployment.md#7-pre-deployment-checklist)).
-- In Docker/production the built app is **compiled into the Spring Boot JAR** and served from `:8080` — there's no separate frontend server (see [architecture.md §7](../documentation/architecture.md#7-runtime-topology)).
+- **API base URL is environment-driven** — every service reads `environment.apiUrl`. Dev is `http://localhost:8080`; production is `''` (same-origin relative URLs, because the SPA is served from inside the Spring Boot jar). `angular.json` `fileReplacements` swaps the file at build time, so **no rebuild is needed to change the backend origin** (see [GUIDE.md §6.1](../documentation/GUIDE.md#61-bootstrap-and-providers)).
+- In Docker/production the built app is **compiled into the Spring Boot JAR** and served from `:8080` — there's no separate frontend server (see [GUIDE.md §1](../documentation/GUIDE.md#1-architecture)).
 - Generated with Angular CLI 21. Use `ng generate component features/<area>/<name>` to scaffold new standalone components.

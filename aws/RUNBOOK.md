@@ -385,9 +385,9 @@ Then, in a browser:
 
 **The cheapest fix is CloudFront**, not a domain purchase: a distribution in front of the ALB using its auto-issued `*.cloudfront.net` certificate gives a real, publicly trusted HTTPS origin for free, and `https://d1234abcd5678.cloudfront.net` **is** accepted by Google and Entra. The hostname is randomly assigned and cannot be customised. Afterwards: update `APP_DOMAIN`/`UI_APP_URL` to the new origin, re-register the task definition, add the new callback URLs in all three provider consoles, and set `TRUSTED_PROXY_COUNT=2` (CloudFront adds a hop).
 
-**Security state is per-instance.** The brute-force counter, the rate limiter's buckets, and `ProviderLinkTicketService` all live in the task's memory. Harmless at `desiredCount: 1`; a real bypass the moment a second task runs, because an attacker routed to the other instance gets a fresh budget. Tracked in [`ROADMAP.md`](../ROADMAP.md) §3.1.
+**Security state is per-instance.** The brute-force counter, the rate limiter's buckets, and `ProviderLinkTicketService` all live in the task's memory. Harmless at `desiredCount: 1`; a real bypass the moment a second task runs, because an attacker routed to the other instance gets a fresh budget. Tracked in [`documentation/FUTURE-ENHANCEMENTS.md`](../documentation/FUTURE-ENHANCEMENTS.md) §3.1.
 
-**A production boot against a `schema.sql`-only database with `ddl-auto: validate` has never been exercised end to end.** Only the offline `JpaSchemaSyncTest` has run, and it catches entity/DDL drift but not a schema the app has never actually started against. Tracked in `ROADMAP.md` §2.3.
+**A production boot against a `schema.sql`-only database with `ddl-auto: validate` has never been exercised end to end.** Only the offline `JpaSchemaSyncTest` has run, and it catches entity/DDL drift but not a schema the app has never actually started against. Tracked in `FUTURE-ENHANCEMENTS.md` §2.3.
 
 ---
 
@@ -750,7 +750,7 @@ Set in `aws/task-definition.json`. Plain values are in `environment`; the rest a
 ## Related documents
 
 - [`aws/README.md`](README.md) — AWS reference + troubleshooting log of real errors
-- [`documentation/security.md` §11.1](../documentation/security.md) — local-vs-AWS parity table for every security control
-- [`documentation/configuration.md`](../documentation/configuration.md) — every environment variable, with dev defaults
-- [`documentation/database.md`](../documentation/database.md) — schema ownership and the `db3` migration
-- [`ROADMAP.md`](../ROADMAP.md) — the single source of truth for planned and deferred work
+- [`GUIDE.md` §7.8](../documentation/GUIDE.md#7-security-model) — local-vs-AWS parity table for every security control
+- [`GUIDE.md` §3](../documentation/GUIDE.md#3-configuration) — every environment variable, with dev defaults
+- [`GUIDE.md` §9](../documentation/GUIDE.md#9-database) — schema ownership and the `db3` migration
+- [`documentation/FUTURE-ENHANCEMENTS.md`](../documentation/FUTURE-ENHANCEMENTS.md) — the single source of truth for planned and deferred work

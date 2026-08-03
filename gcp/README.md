@@ -81,7 +81,7 @@ AWS ECS deploy does. Non-sensitive Aiven config (host/port/db/user) is passed as
 **password** lives in Secret Manager. No VPC connector is needed because Aiven is publicly reachable.
 
 **Later: Cloud SQL** — run `./gcp/cloudsql-setup.sh` to provision a managed MySQL instance, migrate `db3`
-into it (same `mysqldump` flow as [database.md §17.4](../documentation/database.md#174-migrating-native--aiven-how-db3-was-created)),
+into it (same `mysqldump` flow as [GUIDE.md §9.7](../documentation/GUIDE.md#9-database)),
 and add the Cloud Run `--add-cloudsql-instances` connection. Boilerplate is included but commented off.
 
 ---
