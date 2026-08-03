@@ -1,4 +1,4 @@
-<app-navbar [user]="user()"></app-navbar>
+<app-navbar></app-navbar>
 
 <main *transloco="let t" class="sc-catalog">
   <div class="container">
@@ -57,7 +57,7 @@
         </div>
 
         <div class="sc-svc-grid sc-reveal" style="--d: 80ms;">
-          @for (svc of services(); track svc.id) {
+          @for (svc of pagedServices(); track svc.id) {
             <article class="sc-svc-card">
               <div class="sc-svc-card__icon">
                 <i class="bi bi-grid-1x2-fill"></i>
@@ -79,6 +79,41 @@
             </article>
           }
         </div>
+
+        <!-- Gated on the service COUNT, not the page count: at 100 cards/page a 30-service catalog
+             is one page, and a totalPages gate would hide the size selector that is the only way
+             back to 10. Prev/next inside still hides below two pages. -->
+        @if (showCatalogFoot()) {
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <app-page-size-select (sizeSelected)="changeCatalogPageSize($event)"
+                                    [size]="catalogPageSize()"></app-page-size-select>
+              <span class="text-muted small">
+                {{ t('common.pageXofY', { page: safeCatalogPage() + 1, total: catalogTotalPages() }) }}
+                · {{ t('common.nTotal', { count: services().length }) }}
+              </span>
+            </div>
+            @if (showCatalogPager()) {
+              <nav [attr.aria-label]="t('common.pageNavigation')">
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" [class.disabled]="safeCatalogPage() === 0">
+                    <button type="button" class="page-link" [disabled]="safeCatalogPage() === 0"
+                            (click)="goToCatalogPage(safeCatalogPage() - 1)">
+                      &laquo; {{ t('common.prev') }}
+                    </button>
+                  </li>
+                  <li class="page-item" [class.disabled]="safeCatalogPage() >= catalogTotalPages() - 1">
+                    <button type="button" class="page-link"
+                            [disabled]="safeCatalogPage() >= catalogTotalPages() - 1"
+                            (click)="goToCatalogPage(safeCatalogPage() + 1)">
+                      {{ t('common.next') }} &raquo;
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+            }
+          </div>
+        }
       } @else {
         <!-- Empty state. The hint is audience-dependent: this is the MARKETPLACE view that every
              signed-in user sees, so the default copy must not instruct a ROLE_USER to go and add

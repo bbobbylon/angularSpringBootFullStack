@@ -169,7 +169,7 @@
         <li class="nav-item dropdown">
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
              id="navbarDropdownProfile" role="button">
-            @if (user; as u) {
+            @if (user(); as u) {
               @if (u.imageUrl && !avatarFailed()) {
                 <div class="sc-nav-avatar">
                   <img (error)="onAvatarError()" [alt]="u.firstName" [ngSrc]="u.imageUrl"
@@ -185,7 +185,7 @@
             }
           </a>
           <ul aria-labelledby="navbarDropdownProfile" class="dropdown-menu dropdown-menu-end">
-            @if (user; as u) {
+            @if (user(); as u) {
               <li><a [routerLink]="['/profile']" class="dropdown-item">
                 <i class="bi bi-person-circle"></i>{{ u.firstName }} {{ u.lastName }}</a>
               </li>

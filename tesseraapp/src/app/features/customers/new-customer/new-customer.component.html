@@ -4,7 +4,7 @@
 @if (newCustomerState(); as state) {
   @switch (state.dataState) {
     @case (DataState.LOADED) {
-      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <app-navbar></app-navbar>
       <main class="sc-page">
         <div class="container">
           <nav aria-label="breadcrumb">

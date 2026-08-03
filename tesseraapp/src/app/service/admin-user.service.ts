@@ -105,6 +105,27 @@ export class AdminUserService {
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
+   * Signs a managed user out of every device
+   * ({@code DELETE /admin/user/:id/sessions}, requires UPDATE:USER).
+   *
+   * <p>This is the containment action, and it is distinct from locking the account. Locking stops
+   * the <em>next</em> sign-in; it does nothing to sessions already open, because access tokens are
+   * verified by signature alone and the holder's refresh token keeps minting new ones for five
+   * days. Revoking the refresh families is what actually ends an intrusion — so on a suspected
+   * compromise an administrator normally does both.
+   *
+   * <p>Organization-scoped and self-target-refused server-side; an administrator ending their own
+   * sessions does it from their Security Center, which can spare the current device.
+   *
+   * @param id - the managed user's primary key
+   * @returns Observable of the API envelope carrying the refreshed {@code selectedUser}
+   */
+  revokeSessions$ = (id: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/sessions`)
+      .pipe(catchError(this.handleError));
+
+  /**
    * Normalises HTTP errors into a single Observable<never> so all callers receive a
    * consistent Error instance — same contract as {@code UserService#handleError}.
    *

@@ -163,6 +163,32 @@ export class UserDetailsComponent implements OnInit {
   }
 
   /**
+   * Signs the managed user out of every device via
+   * {@code DELETE /admin/user/:id/sessions}.
+   *
+   * <p>Deliberately separate from the account-state form rather than another checkbox on it.
+   * Locking and revoking answer different questions — "can they sign in again?" versus "are they
+   * still signed in right now?" — and only the second one ends an intrusion already in progress.
+   * Bundling them would also make revocation a side effect of saving unrelated settings.
+   *
+   * <p>No confirmation dialog: a browser {@code confirm()} would block the extension-driven flows
+   * this project uses, and the action is recoverable — the user simply signs in again. The button
+   * carries the warning styling instead.
+   */
+  protected revokeSessions(): void {
+    const id = this.data()?.data?.selectedUser?.id;
+    if (!id) return;
+    this.isLoading.set(true);
+    this.adminUserService
+      .revokeSessions$(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.applyMutation(response, 'All sessions for this user have been revoked'),
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
    * Navigates to a different page of the managed user's audit event history
    * (FR-ADMIN-2). Fetches via {@code GET /admin/user/:id/events?page=n} and patches
    * only the events slice so the identity card and management forms stay intact.

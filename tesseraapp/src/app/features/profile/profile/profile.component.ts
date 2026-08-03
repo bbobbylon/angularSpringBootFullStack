@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, Input, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, Input, OnInit, signal } from '@angular/core';
 import { DatePipe, NgClass } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { UserService } from '../../../service/user.service';
+import { CurrentUserService } from '../../../service/current-user.service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { NotificationsService } from '../../../service/notifications-service';
@@ -75,6 +76,23 @@ export class ProfileComponent implements OnInit {
   private readonly transloco = inject(TranslocoService);
   /** Caches the most recent successful API response so all update methods can stay in LOADED state while requests are in flight. */
   private data = signal<CustomHttpResponseInterface<ProfileInterface> | undefined>(undefined);
+
+  private readonly currentUser = inject(CurrentUserService);
+
+  constructor() {
+    // Republish the user to the shared identity signal whenever this screen receives a fresh one.
+    //
+    // The navbar reads that signal rather than an @Input, so without this a name or avatar edit
+    // would apply here and leave the header showing the old value until a full page reload. It
+    // used to self-correct only by accident: the updated user rode back up through the binding
+    // this screen no longer has.
+    //
+    // An effect on `data` rather than a call in each handler — every one of the seven update paths
+    // already funnels through `data.set(...)`, so watching that seam covers them all and cannot be
+    // forgotten when an eighth is added. `set()` ignores undefined, so the initial empty state and
+    // any response without a user are no-ops.
+    effect(() => this.currentUser.set(this.data()?.data?.user));
+  }
 
   /**
    * Initializes the component by fetching the user's profile information.

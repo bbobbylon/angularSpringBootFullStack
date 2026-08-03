@@ -1,11 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, Input, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
-import { UserInterface } from '../../../interface/user.interface';
 import { CustomerListDataInterface } from '../../../interface/appstates.interface';
 import { CustomerService } from '../../../service/customer.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -16,16 +15,17 @@ import { TranslocoService } from '@jsverse/transloco';
 /**
  * New customer creation form component.
  *
- * On init, fetches the authenticated user via {@link CustomerService#customers$} so
- * the navbar can display the current user. On submit, POSTs the form values to
- * {@code POST /customer/create} via {@link CustomerService#newCustomer$} and resets
- * the form to its default values on success.
+ * <p>POSTs the form values to {@code POST /customer/create} via
+ * {@link CustomerService#newCustomer$} and resets the form to its defaults on success.
  *
- * State is held in {@link newCustomerState}, a writable signal mutated via {@code .set()}
- * from the init fetch and the create-customer event handler.
+ * <h3>This screen fetches nothing on init, deliberately</h3>
+ * It used to call {@code customers$()} — pulling an entire page of customers — purely so the navbar
+ * could show the caller's name, discarding everything else in the response. The navbar now reads
+ * the user from {@link CurrentUserService}, so that request has no remaining purpose and is gone.
  *
- * TODO: Replace the {@code customers$()} init call with a lighter user-only endpoint
- * once one exists — we only need the {@code user} field for the navbar.
+ * <p>The consequence is that the form has nothing to wait for: {@link newCustomerState} starts at
+ * {@code LOADED} rather than {@code LOADING}. The state machine is kept because the create flow
+ * still uses it to surface errors, not because anything loads.
  */
 @Component({
   selector: 'app-new-customer',
@@ -35,20 +35,19 @@ import { TranslocoService } from '@jsverse/transloco';
   styleUrls: ['./new-customer.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class NewCustomerComponent implements OnInit {
+export class NewCustomerComponent {
   /** Exposes {@link DataState} to the template for switch-case rendering. */
   readonly DataState = DataState;
 
-  /** Drives the template's loading/success/error rendering for the creation flow. */
-  newCustomerState = signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerListDataInterface>>>({
-    dataState: DataState.LOADING,
-  });
-
   /**
-   * The currently authenticated user, passed in when this component is used in an
-   * embedded context. Falls back to the API-fetched user when used as a routed page.
+   * Drives the template's rendering for the creation flow.
+   *
+   * <p>Starts {@code LOADED}: there is no init request to wait on, and starting at
+   * {@code LOADING} would show a spinner that nothing would ever resolve.
    */
-  @Input() user: UserInterface | undefined;
+  newCustomerState = signal<GlobalStateInterface<CustomHttpResponseInterface<CustomerListDataInterface>>>({
+    dataState: DataState.LOADED,
+  });
 
   /** Application title signal — retained for potential future page-title binding. */
   readonly title = signal('tesseraapp');
@@ -71,37 +70,6 @@ export class NewCustomerComponent implements OnInit {
   private readonly notification = inject(NotificationsService);
   /** Translates toast copy at call time, so a language switch applies to the next toast. */
   private readonly transloco = inject(TranslocoService);
-  /**
-   * Caches the most recent successful API response so the form stays in
-   * {@code DataState.LOADED} while a create request is in flight.
-   */
-  private data = signal<CustomHttpResponseInterface<CustomerListDataInterface> | undefined>(undefined);
-
-  //TODO change functinoality to just get the user data instead of calling the customerService and fetching all customers, we just need the user data to prefill the form and then submit the form to create a new customer
-  /**
-   * Fetches the authenticated user's data on component init to populate the navbar.
-   *
-   * Uses {@link CustomerService#customers$} as a temporary approach — only the
-   * {@code user} field of the response is needed; the customer page data is discarded.
-   *
-   * TODO: Replace with a lighter user-only endpoint once available.
-   */
-  ngOnInit(): void {
-    this.customerService
-      .customers$()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (response) => {
-          // console.log('Fetched New customer data:', response);
-          this.data.set(response);
-          this.newCustomerState.set({ dataState: DataState.LOADED, appData: response });
-        },
-        error: (error: string) => {
-          this.notification.onError(error);
-          this.newCustomerState.set({ dataState: DataState.ERROR, error });
-        },
-      });
-  }
 
   /**
    * Submits the new customer form to {@code POST /customer/create}.
@@ -116,22 +84,22 @@ export class NewCustomerComponent implements OnInit {
    */
   createNewCustomer(newCustomerForm: NgForm): void {
     this.isLoading.set(true);
-    this.newCustomerState.set({ dataState: DataState.LOADED, appData: this.data() });
     this.customerService
       .newCustomer$(newCustomerForm.value)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          // console.log('Fetched customer data:', response);
           newCustomerForm.reset({ type: 'INDIVIDUAL', status: 'ACTIVE' });
           this.isLoading.set(false);
           this.notification.onSuccess(this.transloco.translate('toasts.customerCreated'));
-          this.newCustomerState.set({ dataState: DataState.LOADED, appData: this.data() });
+          this.newCustomerState.set({ dataState: DataState.LOADED });
         },
         error: (error: string) => {
+          // Stays LOADED, not ERROR: the form must remain on screen with the user's typing intact
+          // so they can correct and resubmit. The toast carries the failure.
           this.isLoading.set(false);
           this.notification.onError(error);
-          this.newCustomerState.set({ dataState: DataState.LOADED, error, appData: this.data() });
+          this.newCustomerState.set({ dataState: DataState.LOADED, error });
         },
       });
   }

@@ -1,7 +1,7 @@
 <!-- Three-branch state rendering (LOADING skeletons / ERROR / LOADED), the pattern the
      other routed pages follow. -->
 @if (homeState(); as state) {
-  <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+  <app-navbar></app-navbar>
 
   <main *transloco="let t" class="sc-dash">
     <div class="container">

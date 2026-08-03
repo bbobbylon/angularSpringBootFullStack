@@ -35,11 +35,18 @@ export class CustomerService {
   /**
    * Fetches aggregated dashboard statistics: total customers, invoices, and billed amount.
    *
-   * Currently unused — stats are fetched alongside the customer list via {@code customers$}
-   * and passed to {@link StatsComponent} via {@code @Input}.
+   * Currently unused by the dashboard — stats are fetched alongside the customer list via
+   * {@code customers$} and passed to {@link StatsComponent} via {@code @Input}.
    *
-   * TODO: Wire this method into {@link StatsComponent} once the rest of the application is
-   *  complete, so the stats panel fetches and refreshes independently of the customer list.
+   * <p>An earlier note here proposed wiring this into {@link StatsComponent} so the panel could
+   * refresh independently of the list. That was reconsidered and rejected; the reasoning lives on
+   * {@code StatsComponent} itself, next to the code it governs. In short: the panel renders on the
+   * one screen that must load customers anyway, so self-fetching would issue a second request for
+   * figures already present in the first — and the two could then disagree, being two reads of a
+   * moving database rather than one.
+   *
+   * <p>Kept because it is the correct call for any *other* consumer that wants the system-wide
+   * totals without a page of customers attached.
    *
    * @returns Observable emitting a {@link StatsDataInterface} response containing the system-wide totals
    */
