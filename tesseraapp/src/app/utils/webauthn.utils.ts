@@ -13,6 +13,8 @@
  * re-encode anything).
  */
 
+import { Key } from '../enumeration/key.enumeration';
+
 /** Whether this browser supports WebAuthn at all — gates every passkey UI element. */
 export function isWebAuthnSupported(): boolean {
   return typeof window !== 'undefined' && !!window.PublicKeyCredential;
@@ -24,8 +26,8 @@ export function isWebAuthnSupported(): boolean {
  * `navigator.credentials.create()`, and returns the resulting credential re-serialized
  * to JSON for the backend's verify endpoint.
  *
- * @param publicKey the `publicKey` object from `POST /user/webauthn/register/options`
- * @returns the credential response, ready to POST to `/user/webauthn/register/verify`
+ * @param publicKey the `publicKey` object from `POST /user/webauthn/enroll/options`
+ * @returns the credential response, ready to POST to `/user/webauthn/enroll/complete`
  * @throws whatever `navigator.credentials.create()` throws — most commonly `NotAllowedError`
  *         when the user cancels or dismisses the platform prompt
  */
@@ -50,4 +52,26 @@ export async function startAuthentication(publicKey: PublicKeyCredentialRequestO
   const options = PublicKeyCredential.parseRequestOptionsFromJSON(publicKey);
   const credential = (await navigator.credentials.get({ publicKey: options })) as PublicKeyCredential;
   return credential.toJSON();
+}
+
+/**
+ * Whether the post-login "add a passkey?" prompt should be shown for this user: the browser
+ * supports WebAuthn, the account has no passkey yet, and the prompt has not already been shown
+ * once on this device (set by either adding a passkey or dismissing the prompt — see
+ * `Key.PASSKEY_PROMPT_DISMISSED`). A localStorage flag rather than a backend one deliberately:
+ * it is scoped per-device, and "have you been asked on THIS device" is the right question — a
+ * user who skipped it on their laptop may still reasonably be offered it on a new phone, where a
+ * platform authenticator actually exists to enroll.
+ *
+ * @param usingPasskey whether the account already has at least one registered passkey
+ * @returns true when the prompt should be shown after a successful login
+ */
+export function shouldPromptForPasskey(usingPasskey: boolean | undefined): boolean {
+  if (!isWebAuthnSupported() || usingPasskey) return false;
+  return localStorage.getItem(Key.PASSKEY_PROMPT_DISMISSED) !== '1';
+}
+
+/** Marks the prompt as handled on this device — called on both "Add a passkey" and "Maybe later". */
+export function dismissPasskeyPrompt(): void {
+  localStorage.setItem(Key.PASSKEY_PROMPT_DISMISSED, '1');
 }

@@ -1,0 +1,8 @@
+/* ============================================================================
+   Passkey welcome — reuses the shared "access console" card styling
+   (.sc-auth__form, .sc-form, .sc-field, .sc-input, .sc-submit) from the AUTH
+   SCREENS section of src/styles.css. Only host-level display is component-scoped.
+   ============================================================================ */
+:host {
+  display: block;
+}

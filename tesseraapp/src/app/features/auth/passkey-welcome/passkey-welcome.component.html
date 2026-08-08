@@ -1,0 +1,42 @@
+<!--
+  Post-login passkey nudge. Deliberately NOT the full two-panel "access console" shell
+  login/register use (branded aside + trust list) — this is a lightweight, skippable
+  interstitial, not a first impression, so it reuses only the sc-auth__form card styling from
+  src/styles.css.
+-->
+<div class="d-flex justify-content-center align-items-center" style="min-height: 100vh; padding: 24px;">
+  <div class="sc-auth__form" style="max-width: 420px; width: 100%;">
+    <p class="eyebrow">One more thing</p>
+    <h2 class="sc-auth__title">
+      <i class="bi bi-fingerprint" style="margin-right: 8px;"></i>Add a passkey?
+    </h2>
+    <p class="sc-auth__hint">
+      Sign in next time with your fingerprint, face, or screen lock — no password to type or
+      steal. You can always add one later from Security Center.
+    </p>
+
+    <form #nameForm="ngForm" (ngSubmit)="addPasskey(nameForm)" class="sc-form" novalidate>
+      <div class="sc-field">
+        <label class="form-label" for="deviceName">Name this passkey</label>
+        <input [disabled]="adding()" class="form-control sc-input" id="deviceName" maxlength="100"
+               name="deviceName" ngModel placeholder="MacBook Touch ID" type="text">
+      </div>
+
+      <button [disabled]="adding()" class="btn btn-primary sc-submit" type="submit">
+        @if (adding()) {
+          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"></span>
+          <span>Follow your device's prompt&hellip;</span>
+        } @else {
+          <i class="bi bi-fingerprint"></i>
+          <span>Add a passkey</span>
+        }
+      </button>
+    </form>
+
+    <div class="sc-auth__links" style="text-align: center;">
+      <button (click)="skip()" [disabled]="adding()" class="btn btn-link p-0" type="button">
+        Maybe later
+      </button>
+    </div>
+  </div>
+</div>

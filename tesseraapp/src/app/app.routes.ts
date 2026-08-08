@@ -56,6 +56,15 @@ export const routes: Routes = [
     path: 'oauth2/callback',
     loadComponent: () => import('./features/auth/oauth2-callback/oauth2-callback.component').then((m) => m.Oauth2CallbackComponent),
   },
+  // Skippable, one-time-per-device passkey nudge shown right after a successful password/MFA
+  // login when the account has no passkey yet (LoginComponent redirects here instead of '/' —
+  // see webauthn.utils.ts#shouldPromptForPasskey). Requires authenticationGuard because tokens
+  // are already stored by the time the user lands here.
+  {
+    path: 'welcome-passkey',
+    canActivate: [authenticationGuard],
+    loadComponent: () => import('./features/auth/passkey-welcome/passkey-welcome.component').then((m) => m.PasskeyWelcomeComponent),
+  },
   {
     path: '',
     pathMatch: 'full',

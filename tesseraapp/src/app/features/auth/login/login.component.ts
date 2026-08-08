@@ -10,7 +10,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom, retry } from 'rxjs';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { isWebAuthnSupported, startAuthentication } from '../../../utils/webauthn.utils';
+import { isWebAuthnSupported, shouldPromptForPasskey, startAuthentication } from '../../../utils/webauthn.utils';
+import { UserInterface } from '../../../interface/user.interface';
 
 /**
  * Handles login and MFA verification flows.
@@ -140,6 +141,16 @@ export class LoginComponent implements OnInit {
   }
 
   /**
+   * Routes home after ANY successful login — password, MFA-verified, or passkey — detouring
+   * through the one-time "Add a passkey?" prompt first when {@link shouldPromptForPasskey} says
+   * to (account has none yet, browser supports WebAuthn, not already dismissed on this device).
+   * Centralized here rather than duplicated per success branch, since this component has three.
+   */
+  private navigateHome(user: UserInterface | undefined): void {
+    this.router.navigate([shouldPromptForPasskey(user?.usingPasskey) ? '/welcome-passkey' : '/']);
+  }
+
+  /**
    * Runs a usernameless passkey sign-in: fetches request options, prompts the browser to pick a
    * registered passkey via {@link startAuthentication}, then posts the assertion for
    * verification. On success this goes straight to tokens — no risk-based step-up and no second
@@ -159,7 +170,7 @@ export class LoginComponent implements OnInit {
       const response = await firstValueFrom(this.userService.webauthnLoginVerify$(credential));
       localStorage.setItem(Key.TOKEN, response.data!.access_token);
       localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
-      await this.router.navigate(['/']);
+      this.navigateHome(response.data!.user);
       this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
     } catch (error) {
       if (!(error instanceof DOMException)) {
@@ -200,7 +211,7 @@ export class LoginComponent implements OnInit {
       next: (response) => {
         localStorage.setItem(Key.TOKEN, response.data!.access_token);
         localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
-        this.router.navigate(['/']);
+        this.navigateHome(response.data!.user);
         this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
       },
       error: (error: string) => {
@@ -276,7 +287,7 @@ export class LoginComponent implements OnInit {
           } else {
             localStorage.setItem(Key.TOKEN, response.data!.access_token);
             localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
-            this.router.navigate(['/']);
+            this.navigateHome(response.data!.user);
             this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
           }
         },
