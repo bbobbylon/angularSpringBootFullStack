@@ -189,6 +189,60 @@ export class UserDetailsComponent implements OnInit {
   }
 
   /**
+   * Revokes one of the managed user's passkeys — the admin "help reset" action for a lost or
+   * compromised device. There is no "regenerate": a passkey's private key never leaves its
+   * authenticator, so this forces the user to enroll a fresh one (or fall back to password/TOTP)
+   * on their next sign-in.
+   *
+   * @param id - the credential's database id (never the WebAuthn credential id itself)
+   */
+  protected revokePasskey(id: number): void {
+    const targetId = this.data()?.data?.selectedUser?.id;
+    if (!targetId) return;
+    this.isLoading.set(true);
+    this.adminUserService
+      .revokePasskey$(targetId, id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.applyPasskeyMutation(response, 'Passkey revoked'),
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /** Revokes ALL of the managed user's passkeys in one action — the bulk form of {@link revokePasskey}. */
+  protected revokeAllPasskeys(): void {
+    const targetId = this.data()?.data?.selectedUser?.id;
+    if (!targetId) return;
+    this.isLoading.set(true);
+    this.adminUserService
+      .revokeAllPasskeys$(targetId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.applyPasskeyMutation(response, 'All passkeys revoked'),
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
+   * Merges a passkey-mutation response into the cached detail state. Same shape as
+   * {@link applyMutation} plus the refreshed {@code passkeys} slice those two endpoints also return.
+   */
+  private applyPasskeyMutation(response: CustomHttpResponseInterface<AdminUserDetailInterface>, message: string): void {
+    const current = this.data();
+    this.data.set({
+      ...current!,
+      data: {
+        ...current!.data!,
+        selectedUser: response.data?.selectedUser ?? current!.data!.selectedUser,
+        passkeys: response.data?.passkeys ?? [],
+      },
+    });
+    this.isLoading.set(false);
+    this.notification.onSuccess(message);
+    this.userState.set({ dataState: DataState.LOADED, appData: this.data() });
+  }
+
+  /**
    * Navigates to a different page of the managed user's audit event history
    * (FR-ADMIN-2). Fetches via {@code GET /admin/user/:id/events?page=n} and patches
    * only the events slice so the identity card and management forms stay intact.

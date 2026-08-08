@@ -126,6 +126,35 @@ export class AdminUserService {
       .pipe(catchError(this.handleError));
 
   /**
+   * Revokes one of a managed user's passkeys — the admin "help reset" action for a lost or
+   * compromised device ({@code DELETE /admin/user/:id/passkeys/:credentialId}, requires
+   * UPDATE:USER). There is no "regenerate": a passkey's private key never leaves its
+   * authenticator, so this forces the user to enroll a fresh one (or fall back to
+   * password/TOTP) on their next sign-in.
+   *
+   * @param id           - the managed user's primary key
+   * @param credentialId - the credential's database id (never the WebAuthn credential id itself)
+   * @returns Observable of the API envelope carrying the refreshed selectedUser and passkey list
+   */
+  revokePasskey$ = (id: number, credentialId: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/passkeys/${credentialId}`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Revokes ALL of a managed user's passkeys in one action
+   * ({@code DELETE /admin/user/:id/passkeys}, requires UPDATE:USER) — the bulk form of
+   * {@link revokePasskey$}, for an account where every enrolled device is suspect.
+   *
+   * @param id - the managed user's primary key
+   * @returns Observable of the API envelope carrying the refreshed selectedUser and (empty) passkey list
+   */
+  revokeAllPasskeys$ = (id: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/passkeys`)
+      .pipe(catchError(this.handleError));
+
+  /**
    * Normalises HTTP errors into a single Observable<never> so all callers receive a
    * consistent Error instance — same contract as {@code UserService#handleError}.
    *

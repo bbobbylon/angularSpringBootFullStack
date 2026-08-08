@@ -534,7 +534,10 @@
     "sessionRevoked": "Sesión revocada",
     "otherSessionsRevoked": "Se ha cerrado la sesión en los demás dispositivos",
     "providerDisconnected": "Proveedor desconectado",
-    "providerLinked": "Se ha conectado {{provider}} a tu cuenta"
+    "providerLinked": "Se ha conectado {{provider}} a tu cuenta",
+    "passkeyAdded": "Clave de acceso añadida",
+    "passkeyRemoved": "Clave de acceso eliminada",
+    "passkeyCancelled": "Configuración de la clave de acceso cancelada"
   },
   "palette": {
     "sectionNavigate": "Navegar",

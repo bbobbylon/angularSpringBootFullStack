@@ -534,7 +534,10 @@
     "sessionRevoked": "Sitzung widerrufen",
     "otherSessionsRevoked": "Von anderen Sitzungen abgemeldet",
     "providerDisconnected": "Anbieter getrennt",
-    "providerLinked": "{{provider}} wurde mit Ihrem Konto verbunden"
+    "providerLinked": "{{provider}} wurde mit Ihrem Konto verbunden",
+    "passkeyAdded": "Passkey hinzugefügt",
+    "passkeyRemoved": "Passkey entfernt",
+    "passkeyCancelled": "Passkey-Einrichtung abgebrochen"
   },
   "palette": {
     "sectionNavigate": "Navigieren",

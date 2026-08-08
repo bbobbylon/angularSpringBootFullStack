@@ -115,7 +115,28 @@ public enum EventType {
      * {@link #PROVIDER_LINKED}: removing a way into the account is as security-relevant as
      * adding one.
      */
-    PROVIDER_UNLINKED("You disconnected an identity provider from your account :|");
+    PROVIDER_UNLINKED("You disconnected an identity provider from your account :|"),
+    /**
+     * Fired when the user completes registering a new passkey (WebAuthn credential) from the
+     * Account Security Center. Distinct from {@link #MFA_UPDATE}/{@link #TOTP_ENROLLED} because a
+     * passkey is a standalone sign-in credential, not a second factor stacked on a password.
+     */
+    PASSKEY_REGISTERED("You registered a new passkey for signing in :)"),
+    /**
+     * Fired when a passkey is deleted — either by the account owner from the Security Center, or
+     * by an administrator revoking a lost/compromised credential (SRS FR-ADMIN). There is no
+     * "reset" for a passkey: the private key never leaves the authenticator, so revocation is the
+     * only lever anyone (including an admin) has.
+     */
+    PASSKEY_REMOVED("You removed a passkey from your account :|"),
+    /**
+     * Fired when a sign-in completes via a passkey (usernameless WebAuthn assertion) instead of
+     * {@link #LOGIN_ATTEMPT_SUCCESS}, mirroring {@link #FEDERATED_LOGIN}'s reasoning: the audit
+     * trail should record WHICH authentication method was used, and a passkey is phishing-resistant
+     * and device-bound enough that it is not stacked with risk-based step-up (see
+     * {@code PasskeyController#verifyWebAuthn}).
+     */
+    PASSKEY_LOGIN("You signed in with a passkey :)");
 
     /**
      * -- GETTER --

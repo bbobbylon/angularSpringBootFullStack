@@ -265,6 +265,90 @@
       </div>
     </div>
 
+    <!-- ── Passkeys (WebAuthn) ─────────────────────────────────────────────── -->
+    @if (webauthnSupported) {
+      <div class="card mb-4" style="border-radius: 8px;">
+        <div class="card-body">
+          <div class="row align-items-center mb-2">
+            <div class="col">
+              <h5 class="card-title mb-1"><i class="bi bi-fingerprint" style="margin-right: 8px;"></i>Passkeys</h5>
+              <h6 class="card-subtitle text-muted">
+                Sign in with your device's fingerprint, face, or screen lock — no password to type or steal.
+              </h6>
+            </div>
+            <div class="col-auto">
+              <button (click)="openAddPasskey()" [disabled]="isLoading() || passkeyAddOpen()"
+                      class="btn btn-outline-primary btn-sm" type="button">
+                <i class="bi bi-plus-lg" style="margin-right: 4px;"></i>Add a passkey
+              </button>
+            </div>
+          </div>
+
+          @if (passkeyAddOpen()) {
+            <form #passkeyNameForm="ngForm" (ngSubmit)="addPasskey(passkeyNameForm)" class="row g-2 align-items-end mb-3" novalidate>
+              <div class="col-auto">
+                <label class="form-label mb-1" for="passkeyDeviceName">Name this passkey</label>
+                <input [disabled]="passkeyAdding()" class="form-control form-control-sm" id="passkeyDeviceName"
+                       maxlength="100" name="deviceName" ngModel placeholder="MacBook Touch ID" type="text">
+              </div>
+              <div class="col-auto">
+                <button [disabled]="passkeyAdding()" class="btn btn-primary btn-sm" type="submit">
+                  @if (passkeyAdding()) {
+                    <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                    <span>Follow your device's prompt&hellip;</span>
+                  } @else {
+                    <span>Create passkey</span>
+                  }
+                </button>
+              </div>
+              <div class="col-auto">
+                <button (click)="cancelAddPasskey(passkeyNameForm)" [disabled]="passkeyAdding()"
+                        class="btn btn-outline-secondary btn-sm" type="button">
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+            </form>
+          }
+
+          <table class="table table-hover mb-0">
+            <thead>
+            <tr>
+              <th scope="col">Passkey</th>
+              <th scope="col">Created</th>
+              <th scope="col">Last used</th>
+              <th scope="col">{{ t('common.action') }}</th>
+            </tr>
+            </thead>
+            <tbody>
+              @for (passkey of passkeys(); track passkey.id) {
+                <tr>
+                  <td>
+                    <i class="bi" [class.bi-phone]="passkey.transports?.includes('hybrid')"
+                       [class.bi-usb-symbol]="passkey.transports?.includes('usb')"
+                       [class.bi-fingerprint]="!passkey.transports || passkey.transports === 'internal'"
+                       style="margin-right: 6px;"></i>
+                    {{ passkey.deviceName || 'Passkey' }}
+                  </td>
+                  <td>{{ passkey.createdAt | date: 'MMM d, y' }}</td>
+                  <td>{{ passkey.lastUsedAt ? (passkey.lastUsedAt | date: 'MMM d, y, h:mm a') : 'Never' }}</td>
+                  <td>
+                    <button (click)="removePasskey(passkey.id)" [disabled]="isLoading()"
+                            class="btn btn-outline-danger btn-sm" type="button">
+                      {{ t('common.delete') }}
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="text-muted" colspan="4">No passkeys registered yet.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
     <!-- ── Connected accounts (ROADMAP §1.4) ───────────────────────────────── -->
     @if (connectedProviders().length > 0 || connectableProviders().length > 0) {
       <div class="card mb-4" style="border-radius: 8px;">

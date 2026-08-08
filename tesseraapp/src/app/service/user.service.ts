@@ -5,6 +5,7 @@ import { catchError, tap } from 'rxjs/operators';
 import { AccountType, NewPasswordFormInterface, ProfileInterface } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import {
+  PasskeysDataInterface,
   ProviderLinksDataInterface,
   SessionsDataInterface,
   TotpEnableInterface,
@@ -318,6 +319,86 @@ export class UserService {
     this.http
       .get<CustomHttpResponseInterface<TotpStatusInterface>>(`${this.server}/user/totp/status`)
       .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Begins passkey registration ({@code POST /user/webauthn/enroll/options}, authenticated).
+   * Returns the {@code publicKey} creation options for {@link startRegistration} — see
+   * `utils/webauthn.utils.ts`.
+   *
+   * <p>The path says "enroll", not "register": {@code tokenInterceptor} withholds the
+   * Authorization header from any URL with {@code register} (or {@code verify}) as a path segment,
+   * which this authenticated endpoint needs attached.
+   *
+   * @returns Observable of the API envelope carrying the WebAuthn creation options
+   */
+  webauthnEnrollOptions$ = (): Observable<CustomHttpResponseInterface<{ publicKey: unknown }>> =>
+    this.http
+      .post<CustomHttpResponseInterface<{ publicKey: unknown }>>(`${this.server}/user/webauthn/enroll/options`, {})
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Completes passkey registration ({@code POST /user/webauthn/enroll/complete}, authenticated).
+   *
+   * @param deviceName - the nickname the user gave this passkey
+   * @param credential - the browser's registration response from {@link startRegistration}
+   * @returns Observable of the API envelope with the updated user and passkey list
+   */
+  webauthnEnrollComplete$ = (
+    deviceName: string,
+    credential: unknown,
+  ): Observable<CustomHttpResponseInterface<PasskeysDataInterface & { user: UserInterface }>> =>
+    this.http
+      .post<
+        CustomHttpResponseInterface<PasskeysDataInterface & { user: UserInterface }>
+      >(`${this.server}/user/webauthn/enroll/complete`, { deviceName, credential })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Lists the caller's registered passkeys ({@code GET /user/webauthn/list}, authenticated) for
+   * the Security Center's Passkeys card.
+   *
+   * @returns Observable of the API envelope carrying {@link PasskeysDataInterface}
+   */
+  webauthnList$ = (): Observable<CustomHttpResponseInterface<PasskeysDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<PasskeysDataInterface>>(`${this.server}/user/webauthn/list`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Removes one of the caller's own passkeys ({@code DELETE /user/webauthn/:id}, authenticated).
+   *
+   * @param id - the credential's database id (never the WebAuthn credential id itself)
+   * @returns Observable of the API envelope carrying the refreshed passkey list
+   */
+  webauthnDelete$ = (id: number): Observable<CustomHttpResponseInterface<PasskeysDataInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<PasskeysDataInterface>>(`${this.server}/user/webauthn/${id}`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Begins a usernameless passkey sign-in ({@code POST /user/verify/webauthn/options}, public).
+   * No email is sent — the whole point of a discoverable-credential login is that the browser
+   * offers every passkey it holds for this site without the server naming an account first.
+   *
+   * @returns Observable of the API envelope carrying the WebAuthn request options
+   */
+  webauthnLoginOptions$ = (): Observable<CustomHttpResponseInterface<{ publicKey: unknown }>> =>
+    this.http
+      .post<CustomHttpResponseInterface<{ publicKey: unknown }>>(`${this.server}/user/verify/webauthn/options`, {})
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Completes a passkey sign-in ({@code POST /user/verify/webauthn}, public). Mirrors
+   * {@link verifyTotp$}'s response shape (user + token pair) — the route contains "verify", so
+   * the token interceptor correctly attaches no Authorization header.
+   *
+   * @param credential - the browser's authentication response from {@link startAuthentication}
+   * @returns Observable emitting a ProfileInterface response containing tokens
+   */
+  webauthnLoginVerify$ = (credential: unknown): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/webauthn`, { credential })
+      .pipe(catchError(this.handleError));
 
   /**
    * Lists the caller's live refresh sessions ({@code GET /user/sessions}) for the

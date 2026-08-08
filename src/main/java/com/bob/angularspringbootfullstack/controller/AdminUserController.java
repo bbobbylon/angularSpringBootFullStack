@@ -9,6 +9,7 @@ import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
+import com.bob.angularspringbootfullstack.service.PasskeyService;
 import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.UserService;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Collection;
 
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ACCOUNT_SETTINGS_UPDATE;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.PASSKEY_REMOVED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.PROFILE_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ROLE_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.SESSION_REVOKED;
@@ -85,6 +87,7 @@ public class AdminUserController {
     private final EventService eventService;
     private final OrganizationService organizationService;
     private final SessionService sessionService;
+    private final PasskeyService passkeyService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -163,7 +166,12 @@ public class AdminUserController {
                                 "events", eventService.getEventsByUserId(id, 0, DEFAULT_PAGE_SIZE),
                                 "eventsTotalElements", eventsTotalElements,
                                 "eventsTotalPages", eventsTotalPages,
-                                "roles", roleService.getAllRoles()))
+                                "roles", roleService.getAllRoles(),
+                                // Metadata only — id, nickname, transports, timestamps. Never the
+                                // WebAuthn credential id or the stored attestation object; an
+                                // administrator has no legitimate need to see either, and exposing
+                                // them would widen this endpoint's blast radius for no UI benefit.
+                                "passkeys", passkeyService.listCredentials(id)))
                         .message("User retrieved successfully.")
                         .status(OK)
                         .statusCode(OK.value())
@@ -366,6 +374,74 @@ public class AdminUserController {
                                 "selectedUser", userService.getUserById(id),
                                 "roles", roleService.getAllRoles()))
                         .message("All sessions for this user have been revoked.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Revokes one of a managed user's passkeys — the admin "help reset" action for a lost or
+     * compromised device. There is no "regenerate": a passkey's private key never leaves its
+     * authenticator, so revocation (forcing the user to enroll a fresh passkey, or fall back to
+     * password/TOTP, on their next sign-in) is the only lever anyone — including an administrator —
+     * has. Audited as PASSKEY_REMOVED against the <b>target</b>, same convention as
+     * {@link #revokeUserSessions}.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the target user's primary key
+     * @param credentialId   the credential's primary key (never the WebAuthn credential id itself)
+     * @return 200 OK with the refreshed target user's passkey list
+     */
+    @PreAuthorize("hasAuthority('UPDATE:USER')")
+    @DeleteMapping("/{id}/passkeys/{credentialId}")
+    public ResponseEntity<HttpResponse> revokeUserPasskey(Authentication authentication,
+                                                          @PathVariable Long id,
+                                                          @PathVariable Long credentialId) {
+        requireNotSelf(authentication, id, "Use your Security Center to manage your own passkeys.");
+        requireOrganizationScope(authentication, id);
+        UserDTO target = userService.getUserById(id);
+        passkeyService.deleteCredential(id, credentialId);
+        eventPublisher.publishEvent(new NewUserEvent(target.getEmail(), PASSKEY_REMOVED));
+        log.warn("Admin '{}' revoked passkey id {} for user id {} (email={})",
+                getAuthenticatedUser(authentication).getEmail(), credentialId, id, target.getEmail());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", getAuthenticatedUser(authentication),
+                                "selectedUser", userService.getUserById(id),
+                                "passkeys", passkeyService.listCredentials(id)))
+                        .message("Passkey revoked.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Revokes ALL of a managed user's passkeys in one action — the bulk form of
+     * {@link #revokeUserPasskey}, for an account where every enrolled device is suspect. Same
+     * self-target refusal, organization scope, and audit convention.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the target user's primary key
+     * @return 200 OK with the refreshed target user's (now empty) passkey list
+     */
+    @PreAuthorize("hasAuthority('UPDATE:USER')")
+    @DeleteMapping("/{id}/passkeys")
+    public ResponseEntity<HttpResponse> revokeAllUserPasskeys(Authentication authentication, @PathVariable Long id) {
+        requireNotSelf(authentication, id, "Use your Security Center to manage your own passkeys.");
+        requireOrganizationScope(authentication, id);
+        UserDTO target = userService.getUserById(id);
+        passkeyService.deleteAllCredentials(id);
+        eventPublisher.publishEvent(new NewUserEvent(target.getEmail(), PASSKEY_REMOVED));
+        log.warn("Admin '{}' revoked ALL passkeys for user id {} (email={})",
+                getAuthenticatedUser(authentication).getEmail(), id, target.getEmail());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", getAuthenticatedUser(authentication),
+                                "selectedUser", userService.getUserById(id),
+                                "passkeys", passkeyService.listCredentials(id)))
+                        .message("All passkeys for this user have been revoked.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

@@ -222,6 +222,7 @@ class SecurityConfig {
                             // below (which demand UPDATE:USER / READ:USER). Authentication alone
                             // suffices; every handler scopes its work to the token's principal.
                             .requestMatchers("/user/totp/**").authenticated()
+                            .requestMatchers("/user/webauthn/**").authenticated()
                             .requestMatchers("/user/sessions/**").authenticated()
                             // The Angular SPA is compiled into this jar's static resources (see
                             // Dockerfile) and served from this SAME origin in Docker/prod — unlike

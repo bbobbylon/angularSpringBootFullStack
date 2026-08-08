@@ -24,6 +24,10 @@ public class Constants {
                     // token; the server-side challenge minted at first-factor success is the
                     // security boundary (see TotpService#verifyLoginChallenge).
                     "/user/verify/totp/**",
+                    // Passkey (WebAuthn) login: the caller holds no token during a usernameless
+                    // sign-in — the WebAuthn assertion signature itself is the security boundary,
+                    // verified against the stored public key in PasskeyService#finishAuthentication.
+                    "/user/verify/webauthn/**",
                     // Federated login (FR-FED): /oauth2/authorization/{provider} starts the
                     // Authorization Code flow, /login/oauth2/code/{provider} is the provider
                     // callback, and /oauth2/providers lets the SPA discover which providers
@@ -63,6 +67,9 @@ public class Constants {
             // TOTP login completion (FR-MFA-4): the caller holds no token mid-login, so the
             // filter must not attempt to parse a (possibly stale) Bearer header here.
             "/user/verify/totp",
+            // Passkey (WebAuthn) login completion: same reasoning as /user/verify/totp above —
+            // the caller is mid-login and holds no token.
+            "/user/verify/webauthn",
             // Federated login (FR-FED): skipped here so a stale Bearer header from the SPA
             // can never break the browser-redirect OAuth2 dance or provider discovery.
             "/oauth2", "/login/oauth2"

@@ -113,6 +113,13 @@ public class UserDTO {
      */
     private boolean usingTotp;
     /**
+     * Whether the user has at least one registered passkey (WebAuthn credential). Mirrors
+     * {@link com.bob.angularspringbootfullstack.model.User#usingPasskey}; copied automatically by
+     * {@code BeanUtils.copyProperties} in {@code UserDTOMapper}. Informational only — the login
+     * screen does not branch on it, since a passkey sign-in is usernameless.
+     */
+    private boolean usingPasskey;
+    /**
      * Timestamp of when the account was created
      */
     private LocalDateTime createdAt;

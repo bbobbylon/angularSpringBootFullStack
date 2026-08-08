@@ -28,6 +28,12 @@ export interface UserInterface {
    * backend's precedence in {@code UserController#login}.
    */
   usingTotp: boolean;
+  /**
+   * True when at least one passkey (WebAuthn credential) is registered. Informational only —
+   * unlike {@code usingTotp}, the login screen never branches on this, because passkey sign-in
+   * is usernameless/discoverable.
+   */
+  usingPasskey: boolean;
   createdAt: Date;
   roleName: string;
   permissions: string;

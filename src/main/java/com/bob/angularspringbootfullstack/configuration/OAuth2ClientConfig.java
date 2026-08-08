@@ -131,7 +131,33 @@ public class OAuth2ClientConfig {
         if (isNotBlank(githubClientId)) providers.add("github");
         if (isNotBlank(microsoftClientId)) providers.add("microsoft");
         log.info("Federated login providers configured: {}", providers.isEmpty() ? "none" : providers);
+        warnIfPlaceholder("google", googleClientId);
+        warnIfPlaceholder("github", githubClientId);
+        warnIfPlaceholder("microsoft", microsoftClientId);
         return new FederatedProviderCatalog(providers);
+    }
+
+    /**
+     * Logs a boot-time warning when a configured provider's client id still looks like the
+     * {@code CHANGE_ME} placeholder every deploy script seeds Secrets Manager with. Deliberately a
+     * warning, not a fail-fast guard like {@code JwtSecretGuard}: federated login is an optional
+     * feature, and refusing to boot over it would take down the rest of the application for
+     * something that previously only surfaced as a confusing "invalid_client" error page at the
+     * provider — exactly the failure this warning exists to make loud earlier instead.
+     *
+     * <p>The check is a prefix match, not exact equality — {@code secrets-setup.sh} seeds slightly
+     * different placeholder strings per credential (e.g. {@code CHANGE_ME_google_secret}), so this
+     * catches all of them without needing to enumerate every script's exact literal.
+     *
+     * @param provider the registration id, for the log message
+     * @param clientId the configured client id, or blank if this provider is not configured at all
+     */
+    private void warnIfPlaceholder(String provider, String clientId) {
+        if (isNotBlank(clientId) && clientId.toUpperCase().startsWith("CHANGE_ME")) {
+            log.warn("[FEDERATION] {} client-id looks like a placeholder ('CHANGE_ME...') — the {} " +
+                    "login button will render but fail at {}'s authorize endpoint until real credentials are set.",
+                    provider, provider, provider);
+        }
     }
 
     /**

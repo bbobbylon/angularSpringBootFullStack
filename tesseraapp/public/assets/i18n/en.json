@@ -534,7 +534,10 @@
     "sessionRevoked": "Session revoked",
     "otherSessionsRevoked": "Logged out of other sessions",
     "providerDisconnected": "Provider disconnected",
-    "providerLinked": "Connected {{provider}} to your account"
+    "providerLinked": "Connected {{provider}} to your account",
+    "passkeyAdded": "Passkey added",
+    "passkeyRemoved": "Passkey removed",
+    "passkeyCancelled": "Passkey setup cancelled"
   },
   "palette": {
     "sectionNavigate": "Navigate",

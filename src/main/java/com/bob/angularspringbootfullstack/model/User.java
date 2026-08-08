@@ -58,6 +58,15 @@ public class User {
      * authenticator instead of the SMS code path ({@code isUsing2FA}).
      */
     private boolean usingTotp;
+    /**
+     * Whether the user has at least one registered passkey (WebAuthn credential). Denormalized
+     * from the {@code passkeycredentials} table onto {@code users.using_passkey} — kept in
+     * lockstep by {@code PasskeyServiceImpl} — so row mapping and DTO exposure need no join.
+     * Unlike {@link #usingTotp}, this is not consulted during login (passkey sign-in is
+     * usernameless/discoverable, so the server never checks it per-account before offering the
+     * option); it exists purely for the Security Center and admin user-detail displays.
+     */
+    private boolean usingPasskey;
     private LocalDateTime createdAt;
     /**
      * Timestamp of the most recent password change.

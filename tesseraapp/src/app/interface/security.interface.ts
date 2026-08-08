@@ -75,3 +75,25 @@ export interface ProviderLinkInterface {
 export interface ProviderLinksDataInterface {
   providers: ProviderLinkInterface[];
 }
+
+/**
+ * One registered passkey (WebAuthn credential), as returned by {@code GET /user/webauthn/list}
+ * and bundled into the admin user-detail response. Deliberately carries no WebAuthn credential id
+ * or public key — {@code id} is this row's own database primary key, the only handle the frontend
+ * ever needs to revoke it.
+ */
+export interface PasskeyInterface {
+  id: number;
+  /** User-supplied nickname at registration, e.g. "MacBook Touch ID". */
+  deviceName?: string;
+  /** Comma-joined authenticator transports ('internal' | 'hybrid' | 'usb' | 'nfc' | 'ble'). */
+  transports?: string;
+  createdAt: Date;
+  /** Null until the passkey has been used to sign in at least once. */
+  lastUsedAt?: Date;
+}
+
+/** The {@code data} block of the passkey list/register/revoke endpoints. */
+export interface PasskeysDataInterface {
+  passkeys: PasskeyInterface[];
+}

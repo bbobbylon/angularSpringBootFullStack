@@ -4,6 +4,7 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.GlobalExceptionHandler;
 import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
+import com.bob.angularspringbootfullstack.service.PasskeyService;
 import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.UserService;
@@ -76,10 +77,11 @@ class AdminUserControllerOrgScopeTest {
         eventService = mock(EventService.class);
         organizationService = mock(OrganizationService.class);
         sessionService = mock(SessionService.class);
+        PasskeyService passkeyService = mock(PasskeyService.class);
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
         AdminUserController controller = new AdminUserController(userService, roleService, eventService,
-                organizationService, sessionService, eventPublisher);
+                organizationService, sessionService, passkeyService, eventPublisher);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())

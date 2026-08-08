@@ -534,7 +534,10 @@
     "sessionRevoked": "Sessão revogada",
     "otherSessionsRevoked": "Desconectado das outras sessões",
     "providerDisconnected": "Provedor desconectado",
-    "providerLinked": "{{provider}} foi conectado à sua conta"
+    "providerLinked": "{{provider}} foi conectado à sua conta",
+    "passkeyAdded": "Chave de acesso adicionada",
+    "passkeyRemoved": "Chave de acesso removida",
+    "passkeyCancelled": "Configuração da chave de acesso cancelada"
   },
   "palette": {
     "sectionNavigate": "Navegar",

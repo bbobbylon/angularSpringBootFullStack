@@ -143,7 +143,8 @@ ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
      'FEDERATED_LOGIN',
      'TOTP_ENROLLED', 'TOTP_DISABLED', 'RECOVERY_CODE_USED',
      'SESSION_REVOKED', 'TOKEN_REUSE_DETECTED',
-     'SUSPICIOUS_LOGIN', 'PROVIDER_LINKED', 'PROVIDER_UNLINKED'));
+     'SUSPICIOUS_LOGIN', 'PROVIDER_LINKED', 'PROVIDER_UNLINKED',
+     'PASSKEY_REGISTERED', 'PASSKEY_REMOVED', 'PASSKEY_LOGIN'));
 
 INSERT INTO events (type, description)
 VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
@@ -163,7 +164,10 @@ VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
        ('TOKEN_REUSE_DETECTED', 'A previously used refresh token was replayed; the affected session family was revoked for your security :|'),
        ('SUSPICIOUS_LOGIN', 'We noticed a sign-in that didn''t match your usual device or location, so we asked for extra verification :|'),
        ('PROVIDER_LINKED', 'You connected an identity provider to your account :)'),
-       ('PROVIDER_UNLINKED', 'You disconnected an identity provider from your account :|') AS new
+       ('PROVIDER_UNLINKED', 'You disconnected an identity provider from your account :|'),
+       ('PASSKEY_REGISTERED', 'You registered a new passkey for signing in :)'),
+       ('PASSKEY_REMOVED', 'You removed a passkey from your account :|'),
+       ('PASSKEY_LOGIN', 'You signed in with a passkey :)') AS new
 ON DUPLICATE KEY UPDATE description = new.description;
 
 CREATE TABLE IF NOT EXISTS userevents
@@ -194,6 +198,21 @@ SET @add_userevents_detail := (
 PREPARE add_userevents_detail_stmt FROM @add_userevents_detail;
 EXECUTE add_userevents_detail_stmt;
 DEALLOCATE PREPARE add_userevents_detail_stmt;
+
+-- Idempotent add of users.using_passkey for databases created before passkey (WebAuthn) support
+-- shipped. Mirrors using_totp: a denormalized flag so UserDTO/UserInterface can report "does this
+-- account have a passkey" without a join, kept in sync by PasskeyServiceImpl whenever a credential
+-- is added or the user's last one is removed. Same information_schema guard as every other
+-- idempotent ALTER in this file, since MySQL has no ADD COLUMN IF NOT EXISTS.
+SET @add_users_using_passkey := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE users ADD COLUMN using_passkey BOOLEAN DEFAULT FALSE AFTER using_totp',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'using_passkey');
+PREPARE add_users_using_passkey_stmt FROM @add_users_using_passkey;
+EXECUTE add_users_using_passkey_stmt;
+DEALLOCATE PREPARE add_users_using_passkey_stmt;
 
 -- Widen users.image_url for federated avatar URLs.
 --
@@ -516,6 +535,38 @@ CREATE TABLE IF NOT EXISTS mfachallenges
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT UQ_MfaChallenges_User_Id UNIQUE (user_id),
     CONSTRAINT UQ_MfaChallenges_Challenge UNIQUE (challenge)
+);
+
+-- ── Passkeys (WebAuthn) ─────────────────────────────────────────────────────────────────
+-- Unlike totpcredentials (one row per user), a user may register multiple passkeys — one per
+-- device/authenticator — so there is no unique-per-user constraint; credential_id is the
+-- globally-unique key instead. No BLOB columns: attestation_object is the CBOR-encoded WebAuthn
+-- attestation object (which embeds the credential's public key), stored standard-base64 as TEXT —
+-- matching this schema's existing preference for text-encoded secrets (totpcredentials.secret)
+-- over raw binary, and re-parsed by webauthn4j's own ObjectConverter at authentication time rather
+-- than this app hand-decomposing the public key itself. sign_count backs WebAuthn's clone-detection
+-- check (PasskeyServiceImpl refuses an assertion whose counter did not increase, since a genuine
+-- authenticator must never replay a value).
+CREATE TABLE IF NOT EXISTS passkeycredentials
+(
+    id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id             BIGINT UNSIGNED NOT NULL,
+    credential_id       VARCHAR(255) NOT NULL,
+    attestation_object  TEXT         NOT NULL,
+    sign_count          BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    aaguid           VARCHAR(36)  DEFAULT NULL,
+    -- Comma-joined authenticator transports ('internal', 'hybrid', 'usb', 'nfc', 'ble') reported
+    -- at registration; lets the frontend show a platform-vs-phone-vs-security-key icon without a
+    -- full AAGUID -> device-name database.
+    transports       VARCHAR(100) DEFAULT NULL,
+    -- User-supplied nickname at registration (e.g. "MacBook Touch ID", "YubiKey"), the same
+    -- ask-for-one-bit-of-human-context UX this app already uses elsewhere.
+    device_name      VARCHAR(100) DEFAULT NULL,
+    created_at       DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    last_used_at     DATETIME     DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT UQ_PasskeyCredentials_Credential_Id UNIQUE (credential_id),
+    INDEX IX_PasskeyCredentials_User_Id (user_id)
 );
 
 -- ── Server-side refresh sessions (rotation + reuse detection) ───────────────────────────

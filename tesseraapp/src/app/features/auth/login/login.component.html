@@ -73,7 +73,7 @@
         <div class="sc-auth__form sc-reveal" style="--d: 80ms">
           <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
             <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
-            <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+            <span class="sc-auth__brand-text">Tessera<span class="text-accent">App</span></span>
           </a>
 
           <p class="eyebrow">{{ t('login.eyebrow') }}</p>
@@ -120,11 +120,34 @@
             </button>
           </form>
 
-          <!-- Federated entry points (SRS FR-FED / EIR-UI-1). Rendered only for providers
-               the backend reports as configured; clicking hands the whole window to the
-               OAuth2 redirect chain, so these are buttons, not XHR triggers. -->
-          @if (federatedProviders().length > 0) {
+          <!-- Alternative sign-in methods: passkey + federated entry points (SRS FR-FED / EIR-UI-1),
+               sharing one "or continue with" section since both bypass risk-based step-up on the
+               backend the same way (see PasskeyController's class doc) — neither is "weaker" than
+               a password. Passkey gets top billing within the section (full-width, sized like the
+               primary sign-in button) since it needs no redirect and no third-party account; the
+               federated provider buttons sit below it, compact, each handing the whole window to
+               the OAuth2 redirect chain. Both halves are independently feature-gated: the passkey
+               button only for WebAuthn-capable browsers, the provider row only for providers the
+               backend reports as configured. -->
+          @if (webauthnSupported || federatedProviders().length > 0) {
             <div class="sc-fed-divider" role="separator"><span>{{ t('auth.orContinueWith') }}</span></div>
+
+            <!-- Sized to match the primary sign-in button (same .sc-submit class), sitting above
+                 the smaller federated-provider row — passkey is the preferred alternative, the
+                 provider buttons below it are secondary options within the same section. -->
+            @if (webauthnSupported) {
+              <button (click)="loginWithPasskey()" [disabled]="passkeyLoginInProgress()"
+                      class="btn btn-outline-primary sc-submit mb-3" type="button">
+                @if (passkeyLoginInProgress()) {
+                  <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"></span>
+                  <span>Waiting for your passkey&hellip;</span>
+                } @else {
+                  <i class="bi bi-fingerprint"></i>
+                  <span>Sign in with a passkey</span>
+                }
+              </button>
+            }
+
             <div class="sc-fed-buttons">
               @for (provider of federatedProviders(); track provider) {
                 <button (click)="loginWithProvider(provider)"
@@ -154,7 +177,7 @@
         <div class="sc-auth__form sc-reveal" style="--d: 80ms">
           <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
             <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
-            <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+            <span class="sc-auth__brand-text">Tessera<span class="text-accent">App</span></span>
           </a>
 
           <p class="eyebrow">

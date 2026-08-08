@@ -7,9 +7,10 @@ import { LoginStateInterface } from '../../../interface/appstates.interface';
 import { UserService } from '../../../service/user.service';
 import { Key } from '../../../enumeration/key.enumeration';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { retry } from 'rxjs';
+import { firstValueFrom, retry } from 'rxjs';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { isWebAuthnSupported, startAuthentication } from '../../../utils/webauthn.utils';
 
 /**
  * Handles login and MFA verification flows.
@@ -39,6 +40,10 @@ export class LoginComponent implements OnInit {
    * "or continue with" section entirely.
    */
   protected readonly federatedProviders = signal<string[]>([]);
+  /** Whether this browser supports WebAuthn at all — hides the passkey button when false. */
+  protected readonly webauthnSupported = isWebAuthnSupported();
+  /** True while a passkey sign-in ceremony is in flight. */
+  protected readonly passkeyLoginInProgress = signal(false);
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -132,6 +137,37 @@ export class LoginComponent implements OnInit {
    */
   loginWithProvider(provider: string): void {
     this.userService.initiateFederatedLogin(provider);
+  }
+
+  /**
+   * Runs a usernameless passkey sign-in: fetches request options, prompts the browser to pick a
+   * registered passkey via {@link startAuthentication}, then posts the assertion for
+   * verification. On success this goes straight to tokens — no risk-based step-up and no second
+   * factor, mirroring how {@code OAuth2LoginSuccessHandler} already treats federated login as
+   * strong enough on its own (see {@code PasskeyController} for the backend side of that decision).
+   *
+   * <p>A cancelled or dismissed platform prompt throws a {@code DOMException} from
+   * {@code navigator.credentials.get()} without ever reaching the backend — caught here and
+   * treated as a silent no-op rather than an error, since the user simply changed their mind and
+   * the password form is still right there.
+   */
+  async loginWithPasskey(): Promise<void> {
+    this.passkeyLoginInProgress.set(true);
+    try {
+      const options = await firstValueFrom(this.userService.webauthnLoginOptions$());
+      const credential = await startAuthentication(options.data!.publicKey as PublicKeyCredentialRequestOptionsJSON);
+      const response = await firstValueFrom(this.userService.webauthnLoginVerify$(credential));
+      localStorage.setItem(Key.TOKEN, response.data!.access_token);
+      localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
+      await this.router.navigate(['/']);
+      this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
+    } catch (error) {
+      if (!(error instanceof DOMException)) {
+        this.notification.onError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      this.passkeyLoginInProgress.set(false);
+    }
   }
 
   /**
