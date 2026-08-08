@@ -368,6 +368,13 @@ irrecoverably. Phase 3 is the one that requires a real architectural decision ra
 
 ### 6.8 The HTTPS / domain decision (do this first)
 
+> **Status, August 4, 2026 — Route B was taken. HTTPS is live, no domain was purchased.**
+> CloudFront distribution `E1WWY6FHSKI84P` is `Deployed` in front of the ALB, serving
+> **`https://d3911jyxcju4q4.cloudfront.net`** on the auto-issued `*.cloudfront.net` certificate.
+> Created by [`aws/setup-cloudfront.sh`](../aws/setup-cloudfront.sh). The analysis below is kept
+> because Route A remains the production-shaped answer and the reasoning still applies — but read
+> **[Route B](#route-b)** for what actually happened, including one thing this section got wrong.
+
 **The domain and the HTTPS problem are the same problem.** ACM will not issue a certificate without
 proving you control the domain's DNS, and AWS will not let you request one for the ALB's own
 `*.elb.amazonaws.com` hostname — they own it, not you. So there is no path to a certificate on the
@@ -375,17 +382,24 @@ current URL. Getting a domain *is* the HTTPS fix.
 
 This matters more than "unencrypted transit," which is what it sounds like:
 
-| Blocked today | Why |
+| Blocked *before CloudFront* | Why |
 |---|---|
 | **Google federated login** | Google requires the `https` scheme on every authorized redirect URI. The only exception is `localhost`. The ALB's `http://` callback **cannot be registered at all** |
 | **Microsoft (Entra) federated login** | Same rule — Entra rejects non-`https` redirect URIs outside `http://localhost` |
 | **WebAuthn / passkeys** (§3.1) | The API requires a *secure context*. Worth knowing before that work starts |
 | **HSTS** | Sent, but inert — the header only means something over TLS |
-| GitHub federated login | ✅ Works. GitHub permits `http` callbacks, so it is the one provider demonstrable on the current URL |
+| GitHub federated login | GitHub permits `http` callbacks, so it was the one provider demonstrable on the ALB URL |
 
-So two of the three federated providers — the two enterprises actually care about — are dark in the
+So two of the three federated providers — the two enterprises actually care about — were dark in the
 deployed app while working perfectly on localhost. For a project whose thesis is federated CIAM, that
-is the most consequential open item on this page.
+was the most consequential open item on this page. **The transport half of that is now solved by
+Route B below.** What remains is not architectural:
+
+| Remaining step | State |
+|---|---|
+| Deploy on a task-definition revision that sets `OAUTH2_REDIRECT_BASE_URL` | ✅ **Done — rev 14, verified August 4, 2026.** The live authorize redirect returns an `https://` `redirect_uri`, and the boot log prints `[NET] trusted-proxy-count=2` |
+| Register `https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/{google,github,microsoft}` in each provider console | ⚠ Pending — manual, per provider |
+| Real Google and GitHub credentials in Secrets Manager | ⚠ **Pending — `tessera-app/google-client-secret`, `github-client-id` and `github-client-secret` still hold the literal `CHANGE_ME`, and `google-client-id` is a placeholder too.** Microsoft's are populated. This means GitHub sign-in has *never* worked in the deployed environment, contrary to what the table above implied — it was blocked by a missing credential, not by the callback scheme |
 
 **Route A — get a domain (the real fix).** Steps 2–4 below are automated by
 **[`aws/deploy-https.sh`](../aws/deploy-https.sh)**:
@@ -431,29 +445,62 @@ TLDs — you get *"Additional verification required to request certificates for 
 names"* and wait indefinitely. `deploy-https.sh` surfaces that status with this explanation rather
 than just failing.
 
-**Route B — CloudFront, if you want HTTPS today without waiting on a domain (free).**
+<a id="route-b"></a>
+**Route B — CloudFront, HTTPS today without waiting on a domain (free). ✅ This is the route taken.**
 
 This is the answer to "is a domain the *only* way to get HTTPS?" — it is not. A domain is the only
 way to get HTTPS **on a name you choose**. AWS will happily give you HTTPS on a name *it* chooses,
 because it already owns a certificate for that name.
 
 Put a CloudFront distribution in front of the ALB and use its auto-issued `*.cloudfront.net`
-certificate. `https://d1234abcd5678.cloudfront.net` is a real, publicly trusted origin and **is
-accepted by Google and Entra as a redirect URI**. Three things must be right for this app
+certificate. `https://d3911jyxcju4q4.cloudfront.net` is a real, publicly trusted origin and **is
+accepted by Google and Entra as a redirect URI**. Automated end to end by
+[`aws/setup-cloudfront.sh`](../aws/setup-cloudfront.sh), which is idempotent — re-running it finds
+the existing distribution rather than creating a second one. Four things must be right for this app
 specifically:
 
 - **Forward the `Authorization` header.** CloudFront's default cache policy *strips* it, which would
   make every authenticated request 401. Use the **CachingDisabled** cache policy plus the
   **AllViewer** origin request policy so headers, cookies and query strings pass through untouched.
+- **Allow every HTTP method.** CloudFront defaults to `GET`/`HEAD`, which would break every
+  `POST`/`PATCH`/`DELETE` in the API.
 - **`TRUSTED_PROXY_COUNT` becomes `2`**, not `1` — there are now two proxies appending to
   `X-Forwarded-For`. Leave it at `1` and the anomaly detector and rate limiter both degrade silently
   ([GUIDE §7.8](GUIDE.md#78-deployment-parity)).
-- **`FORWARD_HEADERS_STRATEGY` stays `framework`**, and `APP_DOMAIN`/`UI_APP_URL` move to the
-  CloudFront origin with a task-definition re-register.
+- **`OAUTH2_REDIRECT_BASE_URL` must be set** to the CloudFront origin, alongside moving
+  `APP_DOMAIN`/`UI_APP_URL` there and re-registering the task definition. See the correction below
+  for why this is not optional.
 
-The trade-off is that the hostname is randomly assigned and cannot be customised — fine for a demo,
-not for a product. **If a domain is already in progress, Route A is the better use of the effort**;
-Route B is worth it only if you need working Google/Microsoft sign-in before the domain lands.
+#### ⚠ The correction: `FORWARD_HEADERS_STRATEGY=framework` is **not** sufficient
+
+Earlier revisions of this document (and of `PHASE-2-IMPLEMENTATION.md` and `aws/RUNBOOK.md`) asserted
+that because `FORWARD_HEADERS_STRATEGY` is already `framework`, *"Spring will correctly emit
+`https://` redirect URIs the moment TLS is in front of it."* **That is wrong, and it was verified
+wrong against the live distribution on August 4, 2026.**
+
+Spring builds the redirect URI from `{baseUrl}`, which it reconstructs from the request — and takes
+the scheme from `X-Forwarded-Proto`. In a CloudFront→ALB chain that header is *not* trustworthy:
+CloudFront sets it to `https`, and then **the ALB overwrites it** with its own listener protocol,
+which is `http` because the ALB has no TLS listener (that being the whole reason CloudFront is
+there). `framework` then faithfully honours a header that is itself a lie. The observed result,
+straight off the deployed app:
+
+```
+GET https://d3911jyxcju4q4.cloudfront.net/oauth2/authorization/github
+→ 302 Location: https://github.com/login/oauth/authorize?…
+      &redirect_uri=http://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/github
+                    ^^^^ the host is right; the scheme is not
+```
+
+Google and Entra reject that URI outright, so the single wrong character reinstates exactly the block
+CloudFront was deployed to remove. The fix is to stop deriving the origin from a header the app does
+not control: `OAuth2ClientConfig` now reads **`OAUTH2_REDIRECT_BASE_URL`** and pins the scheme+host
+of the redirect-URI template, applying it to all three provider registrations so they cannot drift.
+Left blank (the local default) the request-derived behaviour is unchanged.
+
+The trade-off of Route B is that the hostname is randomly assigned and cannot be customised — fine
+for a demo, wrong for a product. Route A remains the production-shaped answer, and
+`aws/deploy-https.sh` is still written and ready for the day a domain exists.
 
 ---
 

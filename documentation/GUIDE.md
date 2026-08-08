@@ -352,13 +352,14 @@ emails send for real; only the **SMS** path is stubbed.
 
 **Reverse proxy — required whenever deployed**
 
-Two independent settings, both defaulting to "no proxy", and each fails *silently* rather than
+Three independent settings, all defaulting to "no proxy", and each fails *silently* rather than
 loudly.
 
-| Variable | Governs | Default | Behind one ALB |
-|---|---|---|---|
-| `FORWARD_HEADERS_STRATEGY` | URLs the app **generates** (`server.forward-headers-strategy`) | `none` | `framework` |
-| `TRUSTED_PROXY_COUNT` | The client IP the app **reads** (`app.security.trusted-proxy-count`) | `0` | `1` (`2` with a CDN) |
+| Variable | Governs | Default | Behind one ALB | Behind CloudFront → ALB (live) |
+|---|---|---|---|---|
+| `FORWARD_HEADERS_STRATEGY` | URLs the app **generates** (`server.forward-headers-strategy`) | `none` | `framework` | `framework` — **necessary but not sufficient**, see below |
+| `TRUSTED_PROXY_COUNT` | The client IP the app **reads** (`app.security.trusted-proxy-count`) | `0` | `1` | `2` |
+| `OAUTH2_REDIRECT_BASE_URL` | The origin of the OAuth **redirect URI** | *unset* — derive from the request | *unset* is fine | The public `https://…` origin |
 
 - Left at `none`, `OAuth2ClientConfig`'s `{baseUrl}` resolves to the container's own
   `http://10.0.1.23:8080`, so every federated sign-in fails with `redirect_uri_mismatch` — while
@@ -367,6 +368,13 @@ loudly.
   everyone. **Two security controls degrade quietly:** the rate limiter collapses every user into one
   bucket, and the anomaly detector's `NEW_NETWORK` signal can never fire. Set it *too high* and an
   attacker-supplied header entry becomes trusted — match the real topology, do not pad it.
+- **`framework` is only as trustworthy as `X-Forwarded-Proto`, and a second proxy can invalidate it.**
+  With CloudFront in front of the ALB, CloudFront sets that header to `https` and the ALB then
+  *overwrites* it with its own listener protocol — `http`, since the ALB has no TLS listener. Spring
+  dutifully builds `redirect_uri=http://…`, which Google and Entra reject outright. Verified live on
+  2026-08-04. `OAUTH2_REDIRECT_BASE_URL` fixes it by pinning the redirect origin rather than deriving
+  it from a header the app does not control; it is applied to all three provider registrations so
+  they cannot drift apart. Leave it unset locally, where the request-derived value is correct.
 
 `TrustedProxyConfigurer` prints `[NET] trusted-proxy-count=…` at startup. Check that line; it is the
 cheapest confirmation the setting took effect.
@@ -455,7 +463,10 @@ Compile-time constants in `constants/Constants.java`, not env vars:
 2. **`globally_quoted_identifiers: true`** makes Hibernate create literal camelCase columns. Always
    add `@Column(name = "snake_case")` on entity fields.
 3. **`MYSQL_HOST=mysql` outside Docker** → `No such host is known`. Use `127.0.0.1`.
-4. **Cloud databases need TLS** — set `useSSL=true&requireSSL=true` in `SPRING_DATASOURCE_URL`.
+4. **Cloud databases need TLS** — the `prod`/`qa`/`stage` profiles pin `MYSQL_SSL_MODE: REQUIRED`, so
+   this is automatic. If you override the whole URL with `SPRING_DATASOURCE_URL`, spell
+   `sslMode=REQUIRED` out in it — an explicit URL bypasses `MYSQL_SSL_MODE` entirely. The legacy
+   `useSSL`/`requireSSL` pair is superseded and is ignored once `sslMode` is present.
 5. **`show-sql: false` does not stop SQL logging.** `org.hibernate.SQL` at DEBUG is a separate SLF4J
    path, and `DEBUG_REPORT=true` reopens it.
 
@@ -1088,9 +1099,9 @@ locally while being degraded or absent when deployed.
 
 | Control | Depends on | Local | AWS (`prod`) |
 |---|---|---|---|
-| ⚠️ **Anomaly detection / step-up** | `TRUSTED_PROXY_COUNT` | `0` — correct, no proxy | Must be `1`. At `0` every request appears to come from the load balancer, so `NEW_NETWORK` can never fire and **the control is silently dead** |
+| ⚠️ **Anomaly detection / step-up** | `TRUSTED_PROXY_COUNT` | `0` — correct, no proxy | Must equal the number of proxies in front of the container: **`2`** today (CloudFront → ALB, both append to `X-Forwarded-For`), `1` if CloudFront is removed. At `0` every request appears to come from the load balancer, so `NEW_NETWORK` can never fire and **the control is silently dead** |
 | ⚠️ **Rate limiting** | Same IP resolution | Per-caller buckets | At `0`, every user collapses into **one** bucket — the whole tenant throttles as a single caller |
-| ⚠️ **Federated redirect** | `FORWARD_HEADERS_STRATEGY` | Correct without config | Needs `framework`, else `redirect_uri_mismatch` |
+| ⚠️ **Federated redirect** | `FORWARD_HEADERS_STRATEGY` **and** `OAUTH2_REDIRECT_BASE_URL` | Correct without config | Needs `framework` — but that is **not sufficient behind CloudFront**, because the ALB overwrites `X-Forwarded-Proto` with `http` and Spring derives the redirect URI's scheme from it. Set `OAUTH2_REDIRECT_BASE_URL` to the public origin to pin it, or every federated sign-in fails with a `redirect_uri` the provider rejects |
 | ⚠️ **Which providers appear** | Each `*_CLIENT_ID` | Whatever `.env` has | Whatever the task definition injects |
 | ⚠️ **Email** | `MAIL_*` | `.env` | Secrets Manager. Step-up **withholds tokens until the emailed code is entered**, so unset mail credentials lock out any account the risk engine flags |
 | ⚠️ **Profile images** | `IMAGE_STORAGE_TYPE` | `local` | `s3` — the task role needs `s3:PutObject`/`s3:GetObject` |
@@ -1764,7 +1775,7 @@ Stage 3  eclipse-temurin:21-jre-alpine
 
 - **All config is environment variables.** Never ship a `.env`.
 - **Use the `prod` profile** so a missing variable fails fast.
-- **Use a managed database** with `useSSL=true&requireSSL=true`.
+- **Use a managed database** with `sslMode=REQUIRED` (pinned by the prod/qa/stage profiles via `MYSQL_SSL_MODE`).
 - **Apply `schema.sql` once**, by hand, before first launch — the image never runs it.
 - **Health probe → `GET /actuator/health`** (the only health endpoint exposed; details hidden).
 - **Set `FORWARD_HEADERS_STRATEGY=framework` and `TRUSTED_PROXY_COUNT` correctly** behind any load
@@ -1775,7 +1786,7 @@ Stage 3  eclipse-temurin:21-jre-alpine
 
 - [ ] `SPRING_ACTIVE_PROFILES=prod`
 - [ ] Managed MySQL provisioned; schema created; **`schema.sql` applied**
-- [ ] `useSSL=true&requireSSL=true` in `SPRING_DATASOURCE_URL`
+- [ ] `sslMode=REQUIRED` � automatic on prod/qa/stage; explicit if you set `SPRING_DATASOURCE_URL`
 - [ ] Strong `JWT_SECRET` set via the platform (≥32 chars, not the placeholder)
 - [ ] Mail and any OAuth/Twilio secrets set via the platform
 - [ ] `UI_APP_URL` set to the public origin (drives CORS **and** email links)
@@ -1810,13 +1821,15 @@ with a timeout.
 |---|---|---|
 | `Communications link failure` → `Connection refused` | wrong host/port, or the DB isn't listening | Verify `SPRING_DATASOURCE_URL` |
 | `Communications link failure` + connect timeout | egress blocked | Allowlist the app's outbound IP (Aiven ▸ Allowed IPs, RDS security group, Cloud SQL authorized networks) |
-| `SSL connection … is required` | managed DB with `useSSL=false` | Override the whole URL with the TLS variant |
+| `SSL connection … is required` | `sslMode=DISABLED`, or a stale `SPRING_DATASOURCE_URL` still carrying `useSSL=false` | Set `MYSQL_SSL_MODE=REQUIRED`, or put `sslMode=REQUIRED` in the override URL |
 | `Public Key Retrieval is not allowed` | MySQL 8 `caching_sha2_password` over a non-TLS connection | Enable TLS. Do **not** "fix" it with `allowPublicKeyRetrieval=true` on a managed DB |
 | First request after idle hangs ~30 s | free-tier DB scaled to zero | Raise the platform's startup grace |
 
 > Aiven assigns a **non-standard port** — read host, port, user and password from its dashboard.
-> The Compose service's `useSSL=false&allowPublicKeyRetrieval=true` is for the throwaway local
-> container only; never copy it to a managed database.
+> The Compose service's `sslMode=PREFERRED&allowPublicKeyRetrieval=true` is calibrated for the
+> throwaway local container: `PREFERRED` encrypts when the server offers TLS and falls back
+> silently when it does not. That silent fallback is exactly why a managed database must use
+> `REQUIRED` instead — never copy the Compose value to one.
 
 **A repeatable debug order, cheapest first:** read the container logs → confirm the image actually
 changed (a pinned stale digest looks like "my fix did nothing") → reproduce the prod image locally
@@ -1840,6 +1853,7 @@ real spend is Fargate; see [FUTURE-ENHANCEMENTS §6.6](FUTURE-ENHANCEMENTS.md#66
 
 - [IMPLEMENTATION-HISTORY.md](IMPLEMENTATION-HISTORY.md) — what was built, and the problem log
 - [PHASE-2-IMPLEMENTATION.md](PHASE-2-IMPLEMENTATION.md) — everything delivered since the Phase 1 report (Jul 11 → Aug 3, 2026), with the roadmap scorecard and requirement traceability
+- [PHASE-2-ADDITIONS.md](PHASE-2-ADDITIONS.md) — the exhaustive itemized catalog of Phase 2 additions (43 backend classes, 26 frontend files, 221 tests, infrastructure); the self-contained handoff document for deliverable production
 - [FUTURE-ENHANCEMENTS.md](FUTURE-ENHANCEMENTS.md) — the backlog and the path to a product
 - [flows/](flows/README.md) — click-to-database traces of every major flow
 - [aws/RUNBOOK.md](../aws/RUNBOOK.md) — the linear AWS deploy procedure

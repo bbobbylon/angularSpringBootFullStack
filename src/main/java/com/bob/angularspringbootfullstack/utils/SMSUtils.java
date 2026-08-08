@@ -57,10 +57,44 @@ public class SMSUtils {
         log.info("SMS dispatched via Twilio to {}", toNumber);
     }
 
-    /** True only when all three Twilio settings are present and non-blank. */
-    private static boolean isConfigured() {
-        return FROM_NUMBER != null && !FROM_NUMBER.isBlank()
-                && ACCOUNT_SID != null && !ACCOUNT_SID.isBlank()
-                && AUTH_TOKEN != null && !AUTH_TOKEN.isBlank();
+    /**
+     * True only when all three Twilio settings are present and non-blank.
+     * <p>
+     * This is the switch that decides whether 2FA texts are really sent or merely logged, so it is
+     * the one behaviour in this class worth testing. The environment-reading form below cannot be
+     * exercised directly — the three fields are {@code static final} and initialised from
+     * {@link System#getenv} at class-initialisation time, which no test can rebind — so the decision
+     * itself lives in the pure {@link #isConfigured(String, String, String)} overload and this method
+     * only supplies the ambient values.
+     *
+     * @return whether a real Twilio call should be attempted
+     */
+    static boolean isConfigured() {
+        return isConfigured(FROM_NUMBER, ACCOUNT_SID, AUTH_TOKEN);
+    }
+
+    /**
+     * The configuration rule, expressed over explicit values so it can be tested.
+     * <p>
+     * All three credentials are required together: a partially configured deployment must fall to
+     * the logging path rather than attempt a call that would throw inside the 2FA flow. Blank is
+     * treated as absent because an unset environment variable frequently arrives as an empty string
+     * through a container's env-file plumbing rather than as {@code null}.
+     *
+     * @param fromNumber the Twilio sender number
+     * @param accountSid the Twilio account SID
+     * @param authToken  the Twilio auth token
+     * @return {@code true} only when every value is present and non-blank
+     */
+    static boolean isConfigured(String fromNumber, String accountSid, String authToken) {
+        return isPresent(fromNumber) && isPresent(accountSid) && isPresent(authToken);
+    }
+
+    /**
+     * @param value a credential value straight from the environment
+     * @return whether the value carries anything usable
+     */
+    private static boolean isPresent(String value) {
+        return value != null && !value.isBlank();
     }
 }

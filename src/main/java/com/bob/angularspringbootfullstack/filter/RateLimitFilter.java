@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.filter;
 
 import com.bob.angularspringbootfullstack.model.HttpResponse;
+import com.bob.angularspringbootfullstack.utils.RequestUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
@@ -41,6 +42,16 @@ import java.util.concurrent.TimeUnit;
  * a {@code Retry-After} header containing the number of seconds until the bucket refills, and a
  * JSON body in the application's standard {@link HttpResponse} envelope so the Angular frontend
  * can surface a human-readable message.
+ *
+ * <p><b>Bucket key:</b> the client IP as resolved by
+ * {@link com.bob.angularspringbootfullstack.utils.RequestUtils#getIpAddress}, never by reading
+ * {@code X-Forwarded-For} directly. A token bucket is only as strong as its key: because
+ * {@code X-Forwarded-For} is an ordinary request header that any caller can set, taking its leading
+ * entry would let a client pick its own bucket and rotate to a fresh allowance on every request,
+ * making this limiter decorative. {@code RequestUtils} ignores the header entirely unless a trusted
+ * proxy depth is configured, and otherwise counts from the right-hand end where our own
+ * infrastructure writes. Requests whose address cannot be determined share the single
+ * {@code "Unknown IP"} bucket, which throttles them together rather than exempting them.
  *
  * <p><b>Storage:</b> in-memory {@link ConcurrentHashMap} keyed by client IP. This is correct
  * for single-instance deployments. For a multi-instance / horizontally-scaled deployment, replace
@@ -87,7 +98,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        String clientIp = resolveClientIp(request);
+        String clientIp = RequestUtils.getIpAddress(request);
         String path     = request.getRequestURI();
 
         boolean isAuthEndpoint = AUTH_PATHS.stream().anyMatch(path::startsWith);
@@ -140,22 +151,4 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 .build();
     }
 
-    /**
-     * Extracts the originating client IP from the request.
-     *
-     * <p>When the application is deployed behind a reverse proxy or load balancer
-     * (nginx, AWS ALB), the real client IP arrives in the {@code X-Forwarded-For} header.
-     * The header may contain a comma-separated chain of proxies; the first entry is the
-     * original client. Falls back to {@code request.getRemoteAddr()} for direct connections.
-     *
-     * @param request the incoming HTTP request
-     * @return the client IP address string
-     */
-    private static String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
-    }
 }

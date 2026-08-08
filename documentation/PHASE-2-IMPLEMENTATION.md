@@ -72,7 +72,7 @@ Phase 1 §8 listed seven limitations carried forward. **Five are closed, two rem
 | No frontend specs | ✅ **Closed** | 87 tests; `ng lint` green and gating in CI |
 | Profile-image storage is local filesystem | ✅ **Closed** | S3 behind an interface; local impl retained for dev |
 | No general / distributed rate limiting | ✅ **Closed** | `RateLimitFilter` returns `429` + `Retry-After` |
-| Federated login dormant pending credentials | ✅ **Closed (with one caveat)** | Google / GitHub / Microsoft wired (`47acebb`). **Microsoft returns `AADSTS90023`** — a portal configuration issue (redirect URI must be registered under the *Web* platform, "Allow public client flows" = No), **not a code defect** |
+| Federated login dormant pending credentials | ⚠ **Partially closed — transport solved, deployment pending** | All three providers wired (`47acebb`) and working locally. The deployed environment was blocked because Google and Entra refuse any `http://` redirect URI outside `localhost`; **that is now solved without buying a domain** — a CloudFront distribution supplies `https://d3911jyxcju4q4.cloudfront.net` and `OAUTH2_REDIRECT_BASE_URL` pins the redirect origin (see §6.1). What remains is operational, not architectural: deploy the fix, and populate the Google/GitHub credentials, which are still `CHANGE_ME` |
 | **SMS 2FA is stubbed** | ⚠ **Still open** | `NotificationServiceImpl.sendTwoFactorCode` still logs instead of sending; the `SMSUtils.sendSMS()` call remains commented out to avoid Twilio charges. **TOTP is the fully functional second factor** |
 | **Placeholder JWT secret** | ⚠ **Still open** | `.env.example` still ships a placeholder. Mitigated, not removed: `JwtSecretGuard` fails fast under `prod` if the placeholder is present or the secret is too short |
 
@@ -198,6 +198,72 @@ Most-cited, with the Phase 2 work that realises them:
 ## 6. Honest remaining gaps
 
 State these in the deliverable rather than omitting them; each is small, known, and evidenced.
+
+### 6.1 The domain question — solved without buying a domain
+
+**No domain has been purchased, and none is needed.** This section previously recorded the missing
+domain as the project's most consequential open item, because it blocked HTTPS and therefore Google
+and Microsoft federated login. That block has been removed.
+
+**What was true.** AWS Certificate Manager will not issue a certificate for an `*.amazonaws.com`
+hostname the account does not control, so the ALB could only ever serve `80/HTTP`. Google and Entra
+both refuse to register any `http://` redirect URI that is not `localhost`, so the deployed app's
+callback could not be entered into either console *at all*. The OAuth2 code was complete and worked
+locally against all three providers the whole time — this was never a code defect.
+
+**What changed (August 4, 2026).** A **CloudFront distribution in front of the ALB costs nothing**
+and supplies a publicly trusted origin on a certificate AWS already owns:
+
+**`https://d3911jyxcju4q4.cloudfront.net`** — distribution `E1WWY6FHSKI84P`, status `Deployed`,
+created by the idempotent [`aws/setup-cloudfront.sh`](../aws/setup-cloudfront.sh).
+
+Google and Entra *do* accept a `*.cloudfront.net` redirect URI, so this unblocks TLS, both federated
+providers, WebAuthn (which needs a secure context) and HSTS — for free. The trade-off is a randomly
+assigned hostname that cannot be customised: fine for a demo, wrong for a product. Buying a domain
+and running `aws/deploy-https.sh` remains the production-shaped alternative, and that script is
+written and ready.
+
+#### The non-obvious part, and a correction to this document
+
+Earlier revisions of this section claimed that `FORWARD_HEADERS_STRATEGY=framework` was already set
+"so Spring emits `https://` redirect URIs as soon as TLS is in front of it." **That was wrong**, and
+testing against the live distribution proved it. Spring derives the redirect URI's scheme from
+`X-Forwarded-Proto`. CloudFront sets that header to `https` — and then **the ALB overwrites it** with
+its own listener protocol, `http`, because the ALB has no TLS listener. `framework` honours the
+header faithfully; the header is the thing that is wrong. The deployed app therefore emitted:
+
+```
+redirect_uri=http://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/github
+```
+
+Correct host, wrong scheme — and that one character reinstates the exact rejection CloudFront was
+deployed to eliminate. `OAuth2ClientConfig` now reads **`OAUTH2_REDIRECT_BASE_URL`** and pins the
+scheme and host of the redirect-URI template rather than deriving them from a header the application
+does not control. It is applied to all three provider registrations so they cannot drift apart, and
+left blank locally, where the request-derived default is correct.
+
+This is a worthwhile finding in its own right for the deliverable: a defence-in-depth configuration
+(`framework`) that is *correct in isolation* silently produced a wrong result because a second proxy
+rewrote the signal it depends on. Trusting a forwarded header is only sound when you control every
+hop that can write it.
+
+#### Remaining, and honest about it
+
+| Step | State |
+|---|---|
+| CloudFront distribution live on HTTPS | ✅ Done, verified |
+| `OAUTH2_REDIRECT_BASE_URL` implemented in `OAuth2ClientConfig` | ✅ Done |
+| Deployed on **task-definition rev 14** with the variable set | ✅ **Done — verified August 4, 2026.** `redirect_uri` now comes back `https://…`; `[NET] trusted-proxy-count=2` in the boot log |
+| Callback URLs registered in the Google, GitHub and Entra consoles | ⚠ Pending — manual |
+| Google and GitHub credentials in Secrets Manager | ⚠ **Still the literal `CHANGE_ME`.** Microsoft's are real. This means the previous claim that "GitHub works deployed" was **false** — it was failing on a placeholder `client_id`, not on the callback scheme |
+
+The deployed app confirms the mechanism works end to end. The remaining two rows are credential
+entry and provider-console registration — neither is a code or infrastructure question.
+
+Nothing else ever depended on the domain: deploys, the database, analytics, RBAC and i18n all ran
+normally throughout. Full operational detail: [`aws/RUNBOOK.md`](../aws/RUNBOOK.md) Part F.
+
+### 6.2 Other gaps
 
 1. **SMS 2FA remains a stub** — TOTP is the working second factor.
 2. **Placeholder `JWT_SECRET` in `.env.example`** — mitigated by `JwtSecretGuard` fail-fast under `prod`.

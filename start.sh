@@ -179,7 +179,11 @@ start_local() {
     log "MySQL is ready."
   else
     log "DB=aiven — overriding datasource to Aiven cloud MySQL (skipping local Docker container)."
-    export SPRING_DATASOURCE_URL="jdbc:mysql://${AIVEN_DB_HOST}:${AIVEN_DB_PORT}/${AIVEN_DB_NAME}?useSSL=true&requireSSL=true"
+    # sslMode=REQUIRED, not the legacy useSSL=true&requireSSL=true pair: Connector/J 8.0.13+
+    # replaced those with the single sslMode enum, and the old pair is honoured only while
+    # sslMode is absent. Same value the deployed profiles pin — this leg crosses the public
+    # internet to Aiven exactly like production does, so it gets the same guarantee.
+    export SPRING_DATASOURCE_URL="jdbc:mysql://${AIVEN_DB_HOST}:${AIVEN_DB_PORT}/${AIVEN_DB_NAME}?sslMode=REQUIRED"
     export SPRING_DATASOURCE_USERNAME="${AIVEN_DB_USERNAME}"
     export SPRING_DATASOURCE_PASSWORD="${AIVEN_DB_PASSWORD}"
   fi

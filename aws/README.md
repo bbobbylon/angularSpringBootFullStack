@@ -13,41 +13,62 @@ for the full parity table.
 
 | | Local (`./start.sh`) | AWS (ECS Fargate) |
 |---|---|---|
-| **App URL** | `http://localhost:4200` (Angular dev server) | `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com` |
+| **App URL** | `http://localhost:4200` (Angular dev server) | `https://d3911jyxcju4q4.cloudfront.net` |
 | **API URL** | `http://localhost:8080` (separate origin) | same origin as the app — Angular is compiled into the jar |
-| **`UI_APP_URL`** | `http://localhost:4200` | `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com` |
-| **`APP_DOMAIN`** (setup.sh / GitHub Secret) | n/a | `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com` |
+| **`UI_APP_URL`** | `http://localhost:4200` | `https://d3911jyxcju4q4.cloudfront.net` |
+| **`APP_DOMAIN`** (setup.sh / GitHub Secret) | n/a | `https://d3911jyxcju4q4.cloudfront.net` |
+| **`OAUTH2_REDIRECT_BASE_URL`** | *unset* — request-derived is correct | `https://d3911jyxcju4q4.cloudfront.net` |
 | **Database** | `db2` (local MySQL) | `db3` (Aiven) |
 | **Images** | local filesystem | S3 (`tessera-app-images`) |
 | **Spring profile** | `dev` | `prod` |
-| **OAuth2 callback** | `http://localhost:8080/login/oauth2/code/{provider}` | `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com/login/oauth2/code/{provider}` |
+| **OAuth2 callback** | `http://localhost:8080/login/oauth2/code/{provider}` | `https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/{provider}` |
 
 Set `UI_APP_URL` with **no trailing slash**. `UserRepoImpl#getVerificationURL` trims one defensively,
 but nothing else does.
 
-### ⚠️ The ALB is plain HTTP today, and three things depend on that changing
+### HTTPS: solved by CloudFront, not by a domain
 
-Step 8 (ACM + HTTPS listener) has not been done, so the app is served over `http://`. It works —
-but four capabilities are either degraded or outright blocked until there is TLS, and two of them
-are things this project actively cares about:
+The **ALB itself still serves plain HTTP** — Step 8 (ACM + HTTPS listener) has not been done, because
+it needs a domain you can prove you own. But the ALB is no longer the public entrance. As of
+**August 4, 2026** a CloudFront distribution (`E1WWY6FHSKI84P`, `Deployed`) sits in front of it and
+terminates TLS on AWS's auto-issued `*.cloudfront.net` certificate:
 
-| Affected | Effect over plain HTTP |
+**`https://d3911jyxcju4q4.cloudfront.net`** — created by [`setup-cloudfront.sh`](setup-cloudfront.sh),
+which is idempotent (re-running finds the existing distribution instead of creating a second one).
+
+A domain is the only way to get HTTPS **on a name you choose**; AWS will give you HTTPS on a name
+*it* chooses for free, because it already holds the certificate. The trade-off is a randomly assigned
+hostname that cannot be customised (see Troubleshooting) — fine for a demo, not for a product. Buying
+a cheap domain and running [`deploy-https.sh`](deploy-https.sh) remains the production-shaped route.
+
+| Capability | State now |
 |---|---|
-| **Google federated login** | **Blocked.** Google requires the `https` scheme on every authorized redirect URI, with an exception *only* for `localhost`. You cannot register the ALB's `http://` callback at all. |
-| **Microsoft (Entra) federated login** | **Blocked**, same rule — Entra rejects non-`https` redirect URIs outside `http://localhost`. |
-| **GitHub federated login** | Works. GitHub permits `http` callback URLs, so this is the one provider that can be demonstrated on the current URL. |
-| **WebAuthn / passkeys** (roadmap §3.1) | Would not work. The WebAuthn API requires a *secure context* — HTTPS, or `localhost` as a special case. Worth knowing before that work starts. |
-| **HSTS** | Sent but inert; the header only means anything over TLS. |
+| **Google federated login** | Transport unblocked. Needs the deployed `OAUTH2_REDIRECT_BASE_URL` fix, **real credentials** (currently `CHANGE_ME`), and the callback registered in the Google console |
+| **Microsoft (Entra) federated login** | Transport unblocked; credentials are populated. Needs the deployed fix + the callback registered in Entra |
+| **GitHub federated login** | ⚠️ **Never worked deployed.** Previously documented here as "works" because GitHub tolerates `http` callbacks — but `tessera-app/github-client-id` and `github-client-secret` are the literal `CHANGE_ME`, so the authorize redirect carries `client_id=CHANGE_ME` |
+| **WebAuthn / passkeys** (roadmap §3.1) | Now possible — the CloudFront origin is a secure context |
+| **HSTS** | Now meaningful over the CloudFront origin |
 
-**The cheapest fix that unblocks all of these is CloudFront**, not a domain purchase: put a
-CloudFront distribution in front of the ALB and use its auto-issued `*.cloudfront.net` certificate.
-That gives you a real, publicly trusted HTTPS origin for free, and `https://d1234abcd5678.cloudfront.net`
-*is* accepted by Google and Entra as a redirect URI. The trade-off is that the hostname is randomly
-assigned and cannot be customised (see Troubleshooting) — fine for a demo, not for a product. Buying
-a cheap domain and doing Step 8 properly is the other route.
+⚠️ **CloudFront by itself was not enough — the ALB overwrites `X-Forwarded-Proto`.** CloudFront sets
+it to `https`, the ALB replaces it with its own listener protocol (`http`), and Spring builds the
+OAuth `redirect_uri` from that header — so the app emitted `redirect_uri=http://…` even through the
+HTTPS front door. `FORWARD_HEADERS_STRATEGY=framework` does not help; it honours the header
+faithfully and the header is wrong. `OAUTH2_REDIRECT_BASE_URL` pins the redirect origin instead of
+deriving it. Verify after any front-door change:
 
-Whichever you choose, remember `UI_APP_URL` / `APP_DOMAIN` must be updated to the new
-`https://…` origin **and the task definition re-registered** — it is read once at container start.
+```bash
+curl -si "https://d3911jyxcju4q4.cloudfront.net/oauth2/authorization/github" | grep -i location
+# redirect_uri= MUST start with https://
+```
+
+Whenever the public origin changes, `UI_APP_URL` / `APP_DOMAIN` / `OAUTH2_REDIRECT_BASE_URL` must all
+be updated and **the task definition re-registered** — they are read once at container start — and
+`TRUSTED_PROXY_COUNT` must match the number of proxies in front of the container (`2` with CloudFront
+over the ALB).
+
+> The ALB stays reachable on plain `http://`; CloudFront does not close it. To force all traffic
+> through CloudFront, restrict the ALB security group to the managed prefix list
+> `com.amazonaws.global.cloudfront.origin-facing`.
 
 ---
 
@@ -179,12 +200,21 @@ aws s3api put-bucket-policy --bucket tessera-app-images --policy '{
   }]
 }'
 
-# Both origins the images are actually loaded from — the deployed app and the local dev server.
-# Replace the ALB hostname if yours differs; add the https:// origin too once Step 8 or CloudFront
-# is in place, since a scheme change makes this a different origin as far as the browser is concerned.
+# Every origin the images are actually loaded from. The CloudFront origin is the live one; the ALB
+# entry is kept because the ALB is still directly reachable, and localhost is the dev server.
+# A scheme change makes it a DIFFERENT origin to the browser — which is why adding CloudFront in
+# front of the ALB requires touching this list, not just the task definition.
+#
+# NOTE the live bucket policy is currently WRONG on both counts (checked 2026-08-04): it allows
+#   https://tessera-app-alb-…   <- https, but the ALB only ever listened on :80/HTTP, so this
+#                                  entry has never matched a real request
+# and it does not list the CloudFront origin at all. It is not breaking anything *yet* — the app
+# renders avatars with plain <img [ngSrc]> and no crossorigin attribute, and simple image loads are
+# not subject to CORS — but it will bite the moment anything fetches an object with fetch/XHR
+# (canvas cropping, a download button, presigned-URL uploads). Re-run this command to fix it.
 aws s3api put-bucket-cors --bucket tessera-app-images --cors-configuration '{
   "CORSRules":[{
-    "AllowedOrigins":["http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com", "http://localhost:4200"],
+    "AllowedOrigins":["https://d3911jyxcju4q4.cloudfront.net", "http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com", "http://localhost:4200"],
     "AllowedMethods":["GET"],
     "AllowedHeaders":["*"],
     "MaxAgeSeconds":3600
@@ -429,7 +459,7 @@ prompts for the value rather than taking it as a visible argument):
 | `AIVEN_DB` | **`db3`** — not `defaultdb`, which is Aiven's empty auto-created database |
 | `AIVEN_USER` | e.g. `avnadmin` |
 | `S3_BUCKET` | e.g. `tessera-app-images` |
-| `APP_DOMAIN` | Currently `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com`. Change to `https://your-real-domain` only once Step 8 (real HTTPS) is genuinely done — see the plain-HTTP caveats at the top |
+| `APP_DOMAIN` | Currently `https://d3911jyxcju4q4.cloudfront.net` — the CloudFront distribution, **not** the ALB. It fills both `UI_APP_URL` and `OAUTH2_REDIRECT_BASE_URL` in the task-definition template, so one export covers both. Change it only when the public front door changes, and re-register the task definition when you do |
 
 ---
 
@@ -614,10 +644,36 @@ at save time, with a message about the URI needing to use HTTPS.
 **Cause:** not a bug and not fixable in this repo. Google and Microsoft both require the `https`
 scheme on redirect URIs, with a carve-out **only** for `http://localhost`. That carve-out is exactly
 why federated login works on `start.sh` and cannot be made to work on a plain-HTTP ALB.
-**Fix:** give the deployment a real HTTPS origin — CloudFront in front of the ALB (free, uses its
-auto-issued `*.cloudfront.net` certificate, accepted by both providers) or Step 8 with a domain you
-own. GitHub is the exception: it accepts `http` callbacks, so it is the one provider that can be
-demoed on the current URL. See the caveat table at the top of this file.
+**Fix:** already done — **register the CloudFront callback instead**:
+`https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/{google,github,microsoft}`. Keep the
+localhost entries; Google and Entra both accept a list. (A GitHub *OAuth App* accepts only **one**
+callback URL, so use a second OAuth App for the deployed environment.)
+
+### Federated login still emits `redirect_uri=http://…` even through CloudFront
+**Symptom:** `curl -si https://d3911jyxcju4q4.cloudfront.net/oauth2/authorization/github` returns a
+`Location` whose `redirect_uri=` parameter starts with `http://`, and the provider rejects it — the
+host is right, only the scheme is wrong.
+**Cause:** the ALB **overwrites** `X-Forwarded-Proto`. CloudFront sets it to `https`; the ALB then
+replaces it with its own listener protocol, which is `http` because the ALB has no TLS listener.
+Spring reconstructs `{baseUrl}` — and the redirect URI — from that header, so
+`FORWARD_HEADERS_STRATEGY=framework` faithfully propagates a wrong value. Setting it to `native`
+does not help either; the header is the problem, not the strategy.
+**Fix:** set **`OAUTH2_REDIRECT_BASE_URL`** to the public origin. `OAuth2ClientConfig` then pins the
+scheme and host of the redirect-URI template for all three providers instead of deriving them.
+It is a task-definition value, so it needs a **re-register plus a new deployment** — and the running
+image must be one built after the property was added, or it is simply ignored.
+
+### A provider button is missing, or the authorize URL carries `client_id=CHANGE_ME`
+**Symptom:** the login screen shows fewer provider buttons than expected, or clicking one lands on a
+provider error page; the `Location` header contains `client_id=CHANGE_ME`.
+**Cause:** the credential in Secrets Manager is a placeholder. `OAuth2ClientConfig#federatedProviderCatalog`
+skips a provider whose client id is **blank**, but `CHANGE_ME` is not blank — so the button renders
+and the flow fails at the provider instead of being hidden. As of 2026-08-04
+`tessera-app/google-client-id`, `google-client-secret`, `github-client-id` and `github-client-secret`
+all hold placeholders; only Microsoft's are real.
+**Fix:** `aws secretsmanager put-secret-value --secret-id tessera-app/github-client-id
+--secret-string '<real id>'` (repeat per credential), then force a new deployment — ECS resolves
+secrets at container start, so no new revision is needed but a restart is.
 
 ### Federated login redirects to `http://10.0.x.x:8080/...` instead of the ALB
 **Symptom:** the provider returns `redirect_uri_mismatch`, and the URI in the error is the ECS task's

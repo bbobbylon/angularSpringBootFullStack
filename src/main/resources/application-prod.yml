@@ -15,6 +15,26 @@ SPRING_ACTIVE_PROFILES: prod
 # DB port defaults to the MySQL standard; override with MYSQL_PORT if your server differs.
 MYSQL_PORT: 3306
 
+# ── Database transport security ─────────────────────────────────────────────────────────
+# REQUIRED = refuse to connect at all unless the connection is encrypted. Production reaches a
+# managed MySQL (Aiven) across the public internet, so the base profile's PREFERRED is not good
+# enough here: PREFERRED falls back to plaintext without complaining if TLS is unavailable, and
+# a silent downgrade is precisely the failure you cannot afford on this leg.
+#
+# Verified against the live Aiven instance on 2026-08-04 before enabling: the server negotiates
+# TLSv1.3 / TLS_AES_256_GCM_SHA384. Confirm on any new database BEFORE deploying this, because
+# a server that cannot do TLS will now fail to connect rather than quietly downgrade:
+#   mysql -h <host> -P <port> -u <user> -p --ssl-mode=REQUIRED -e "SHOW STATUS LIKE 'Ssl_version'"
+#
+# Not VERIFY_IDENTITY (which would also authenticate the server) only because Aiven signs with a
+# per-project CA that is not in the JVM's default truststore — that CA has to be shipped into the
+# image first. Until then this encrypts but does not prove who is on the other end.
+MYSQL_SSL_MODE: REQUIRED
+
+# Pointless once TLS is mandatory — the RSA key exchange it guards is only reachable on an
+# unencrypted connection, where it is a MITM foothold. Off in production.
+MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL: false
+
 MAIL_HOST: smtp.gmail.com
 MAIL_PORT: 587
 

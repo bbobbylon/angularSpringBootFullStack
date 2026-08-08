@@ -32,7 +32,11 @@ services:
       # Override local .env values that are wrong inside Docker networking
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
-      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true"
+      # PREFERRED rather than the old useSSL=false: this hop stays inside the compose network,
+      # but PREFERRED encrypts it anyway when the MySQL image offers TLS (it does, via its
+      # auto-generated certs) and falls back silently when it does not — so there is no reason
+      # to opt out explicitly. Deployed profiles pin REQUIRED; see application.yml.
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?sslMode=PREFERRED&allowPublicKeyRetrieval=true"
       CONTAINER_PORT: 8080
       UI_APP_URL: "http://localhost:${APP_PORT:-8090}"
       # Profile images live on a named volume so they survive container restarts.

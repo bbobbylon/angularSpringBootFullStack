@@ -250,7 +250,10 @@ export AIVEN_PORT=<port>
 export AIVEN_DB=db3
 export AIVEN_USER=avnadmin
 export S3_BUCKET=tessera-app-images
-export APP_DOMAIN=http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com
+# The PUBLIC origin — the CloudFront distribution, not the ALB. It fills both UI_APP_URL and
+# OAUTH2_REDIRECT_BASE_URL in the template, so this one export covers both. Do not put the ALB
+# hostname here: OAuth redirect URIs built from it are http:// and Google and Entra reject them.
+export APP_DOMAIN=https://d3911jyxcju4q4.cloudfront.net
 
 # Resolve every secret's COMPLETE ARN — the random suffix is required. A bare name or a
 # hand-built ARN is ambiguous to ECS, which falls back to an SSM Parameter Store lookup
@@ -292,6 +295,50 @@ aws ecs register-task-definition --cli-input-json "$FILLED" --region us-east-1
 aws ecs update-service --cluster tessera-app-cluster --service tessera-app-service \
   --task-definition tessera-app --force-new-deployment --region us-east-1
 ```
+
+#### Shortcut: derive the next revision from the live one
+
+The sequence above rebuilds the revision *from the template*, which means every `export` has to be
+right — including `AIVEN_HOST`, `AIVEN_PORT` and the twelve secret ARNs. When you only want to change
+**one or two values** and the currently deployed revision is otherwise correct, it is safer to start
+from what is already running: nothing can be silently dropped, because you never re-supply it.
+
+```bash
+R="--region us-east-1"
+
+# 1. Pull the live revision (use the revision the SERVICE is on, not necessarily the newest).
+aws ecs describe-task-definition $R --task-definition tessera-app:13 \
+  --query 'taskDefinition' --output json > .temp/live.json
+
+# 2. Strip the server-populated read-only fields — register-task-definition rejects them — and
+#    apply the change. `.temp/` is gitignored.
+jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+        .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)
+    | .containerDefinitions[0].environment = (
+        [ .containerDefinitions[0].environment[]
+          | if   .name == "UI_APP_URL"          then .value = "https://d3911jyxcju4q4.cloudfront.net"
+            elif .name == "TRUSTED_PROXY_COUNT" then .value = "2"
+            else . end ]
+        + [ {"name":"OAUTH2_REDIRECT_BASE_URL","value":"https://d3911jyxcju4q4.cloudfront.net"} ] )' \
+  .temp/live.json > .temp/next.json
+
+# 3. Register and roll.
+aws ecs register-task-definition $R --cli-input-json "$(cat .temp/next.json)"
+aws ecs update-service $R --cluster tessera-app-cluster --service tessera-app-service \
+  --task-definition tessera-app --force-new-deployment
+```
+
+> ⚠️ **On Git Bash, pass the JSON with `"$(cat file)"`, not `file://`.** A native `aws.exe` resolves
+> `file://` URIs unreliably under MSYS — the same path hazard `setup.sh` documents at its top — and
+> the failure is confusing rather than obvious: you get `Error parsing parameter 'cli-input-json':
+> Invalid JSON received` even though the file is perfectly valid JSON, because the CLI never read it.
+> The `"$(cat …)"` form sidesteps path translation entirely. It is well inside Windows' command-length
+> limit; the filled task definition is under 6 KB.
+>
+> **Also beware wrapped line continuations.** If a long `file://…` path gets split across lines
+> without a trailing `\`, bash runs the remainder as separate commands and you will see
+> `No such file or directory` for a path fragment alongside the parsing error above. Two errors, one
+> cause.
 
 **Rotating a secret's value needs no new revision** — the reference is to the secret, not its contents — but it *does* need a task restart, because ECS resolves secrets at container start:
 
@@ -373,17 +420,26 @@ Then, in a browser:
 
 ## Part F — Known limitations right now
 
-**The ALB serves plain HTTP.** Step 8 of [`README.md`](README.md) (ACM certificate + HTTPS listener) has not been done, because it requires a domain you can prove ownership of. Consequences:
+**The ALB still serves plain HTTP — but it is no longer the public entrance.** As of August 4, 2026 a CloudFront distribution (`E1WWY6FHSKI84P`, `Deployed`) fronts the ALB and terminates TLS on its auto-issued certificate, so the app's public origin is **`https://d3911jyxcju4q4.cloudfront.net`**. Created by [`setup-cloudfront.sh`](setup-cloudfront.sh) (idempotent). Step 8 of [`README.md`](README.md) — an ACM certificate and a `:443` listener on the ALB itself — is still undone, because it requires a domain you can prove ownership of; [`deploy-https.sh`](deploy-https.sh) is written and ready for that day.
+
+The ALB remains reachable on plain `http://` — CloudFront does not close it. To force all traffic through CloudFront, restrict the ALB security group to the managed prefix list `com.amazonaws.global.cloudfront.origin-facing`.
+
+⚠️ **CloudFront alone is not enough: the ALB overwrites `X-Forwarded-Proto`.** CloudFront sets it to `https`; the ALB then replaces it with its own listener protocol (`http`). Spring derives `{baseUrl}` — and therefore the OAuth `redirect_uri` — from that header, so it emitted `redirect_uri=http://…` even through the HTTPS front door, which Google and Entra reject. `FORWARD_HEADERS_STRATEGY=framework` does **not** save you; it honours the header faithfully, and the header is wrong. The fix is `OAUTH2_REDIRECT_BASE_URL`, which pins the redirect origin instead of deriving it. **Verify after any change to the front door:**
+
+```bash
+curl -si "https://d3911jyxcju4q4.cloudfront.net/oauth2/authorization/github" | grep -i location
+# the redirect_uri= parameter MUST start with https://
+```
 
 | Affected | Effect |
 |---|---|
-| Google federated login | **Blocked** — Google requires `https` on redirect URIs, excepting only `localhost` |
-| Microsoft federated login | **Blocked** — same rule in Entra |
-| GitHub federated login | Works; GitHub permits `http` callbacks |
-| WebAuthn / passkeys (roadmap §3.1) | Would not work — the API requires a secure context |
-| HSTS | Sent but inert |
+| Google federated login | Transport unblocked. Still needs: the `OAUTH2_REDIRECT_BASE_URL` image deployed, real credentials in Secrets Manager, and the callback registered in the Google console |
+| Microsoft federated login | Transport unblocked; credentials **are** populated. Needs the deployed fix + the callback registered in Entra |
+| GitHub federated login | ⚠️ **Has never worked deployed** — `tessera-app/github-client-id` and `github-client-secret` hold the literal `CHANGE_ME`. Previously documented here as "works"; that was wrong. The live authorize redirect returns `client_id=CHANGE_ME` |
+| WebAuthn / passkeys (roadmap §3.1) | Now possible — the CloudFront origin is a secure context |
+| HSTS | Now meaningful over the CloudFront origin |
 
-**The cheapest fix is CloudFront**, not a domain purchase: a distribution in front of the ALB using its auto-issued `*.cloudfront.net` certificate gives a real, publicly trusted HTTPS origin for free, and `https://d1234abcd5678.cloudfront.net` **is** accepted by Google and Entra. The hostname is randomly assigned and cannot be customised. Afterwards: update `APP_DOMAIN`/`UI_APP_URL` to the new origin, re-register the task definition, add the new callback URLs in all three provider consoles, and set `TRUSTED_PROXY_COUNT=2` (CloudFront adds a hop).
+After a front-door change, always: set `APP_DOMAIN`/`UI_APP_URL` **and** `OAUTH2_REDIRECT_BASE_URL` to the new origin, set `TRUSTED_PROXY_COUNT=2` (CloudFront adds a hop), re-register the task definition, force a new deployment, and add the new callback URLs in every provider console.
 
 **Security state is per-instance.** The brute-force counter, the rate limiter's buckets, and `ProviderLinkTicketService` all live in the task's memory. Harmless at `desiredCount: 1`; a real bypass the moment a second task runs, because an attacker routed to the other instance gets a fresh budget. Tracked in [`documentation/FUTURE-ENHANCEMENTS.md`](../documentation/FUTURE-ENHANCEMENTS.md) §3.1.
 

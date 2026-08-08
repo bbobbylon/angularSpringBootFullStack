@@ -43,7 +43,37 @@ spring:
   profiles:
     active: ${SPRING_ACTIVE_PROFILES:dev}  # Use SPRING_PROFILES_ACTIVE env var if set, otherwise default to "dev"
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true
+    # ── Transport security to the database ──────────────────────────────────────────────
+    # This URL previously hardcoded `useSSL=false`, which sent credentials and every row in
+    # plaintext. That is survivable against a MySQL on localhost and indefensible against a
+    # managed database reached over the public internet — which is exactly what every
+    # deployed profile (and `start.sh DB=aiven`) points at.
+    #
+    # `useSSL` is also the LEGACY switch. Connector/J 8.0.13+ replaced the useSSL/requireSSL
+    # pair with the single `sslMode` enum, and mixing them is a common source of "I set
+    # useSSL=true and nothing changed" confusion. The ladder:
+    #
+    #   DISABLED        no TLS at all — what this file used to pin
+    #   PREFERRED       use TLS when the server offers it, silently fall back if not  ← default
+    #   REQUIRED        refuse to connect without TLS; does NOT validate the certificate
+    #   VERIFY_CA       REQUIRED + validate the server cert against a truststore
+    #   VERIFY_IDENTITY VERIFY_CA + check the hostname matches the cert
+    #
+    # PREFERRED is the default here rather than DISABLED so a developer pointed at the shared
+    # Aiven database gets an encrypted connection without configuring anything, while a bare
+    # local MySQL with no certificate still starts. Deployed profiles pin REQUIRED (see
+    # application-prod.yml / -qa / -stage), so a silent downgrade cannot happen where it counts.
+    #
+    # ⚠️ REQUIRED stops passive eavesdropping, NOT an active machine-in-the-middle — nothing
+    # verifies whose certificate is on the other end. Closing that needs VERIFY_IDENTITY plus
+    # Aiven's project CA in a truststore inside the container; verified 2026-08-04 that
+    # VERIFY_IDENTITY fails with "CA certificate is required" until that CA is supplied.
+    # Tracked in documentation/FUTURE-ENHANCEMENTS.md.
+    #
+    # allowPublicKeyRetrieval only matters for caching_sha2_password over an UNENCRYPTED
+    # connection, where it lets a MITM substitute the server's RSA key. Once TLS is required it
+    # is unnecessary, so the deployed profiles turn it off.
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}?sslMode=${MYSQL_SSL_MODE:PREFERRED}&allowPublicKeyRetrieval=${MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL:true}
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}
   jpa:
