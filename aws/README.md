@@ -405,21 +405,26 @@ aws ecs update-service \
 
 ---
 
-## Checking secret values
+## Checking and updating secret values from the CLI
 
-Two ways to see what's actually stored, without ever needing to guess from behavior. Note that
-whichever secret you check, **updating a value here does not affect the currently running ECS
+Everything below runs against **your own AWS CLI credentials** — there is no separate access
+path. If you've run `aws configure` (or are on a machine with an IAM role attached) with a
+principal that holds `secretsmanager:*` on the `tessera-app/*` secrets, these are exactly the
+commands that read and write them; a session driving the CLI on your behalf is using that same
+local credential, nothing more privileged.
+
+Note that whichever secret you touch, **a change here does not affect the currently running ECS
 task** — it only takes effect on the next task boot (see "Redeploy after a code change" /
-"Rotating secrets" above to force that).
+"Rotating secrets" above, or the one-liner at the end of this section, to force that).
 
 ### AWS Console
 
 1. Sign in to the [Secrets Manager console](https://console.aws.amazon.com/secretsmanager/) in
    the correct region (`us-east-1` for this project).
 2. Click the secret by name, e.g. `tessera-app/google-client-id`.
-3. Under **Secret value**, click **Retrieve secret value**.
+3. Under **Secret value**, click **Retrieve secret value** to view it, or **Edit** to change it.
 
-### AWS CLI
+### AWS CLI — checking
 
 ```bash
 # List every secret's name and when it was last changed (no value exposed):
@@ -439,7 +444,34 @@ Swap `google-client-id` for any of: `jwt-secret`, `db-password`, `mail-username`
 
 > **Never paste the output of `get-secret-value` into a chat, ticket, commit, or log** — treat it
 > exactly like the access keys warning further down this file. If a real value does end up
-> somewhere it shouldn't, rotate it immediately (see "Rotating secrets" above).
+> somewhere it shouldn't, rotate it immediately (see "Rotating secrets" above). If you're driving
+> this through an AI coding assistant with tool-permission controls, expect (and want) a raw
+> `get-secret-value` call to be the one thing it's blocked from running unattended — that's the
+> control working correctly, not a bug to route around. Checking a secret's *shape* (length,
+> prefix, or an exact-match comparison against a known placeholder like `CHANGE_ME`) without ever
+> displaying the real value is a reasonable middle ground if you need to script a check.
+
+### AWS CLI — updating
+
+```bash
+aws secretsmanager update-secret --region us-east-1 \
+  --secret-id tessera-app/twilio-sid --secret-string '<the real value>' \
+  --query '{Name:Name,VersionId:VersionId}' --output table
+```
+
+`update-secret` only ever needs `--secret-id` and `--secret-string`; the `--query`/`--output`
+above just trims the response to a version ID so you get a confirmation without the CLI echoing
+the value back. **The secret must already exist** — every `tessera-app/*` secret was created once
+by `setup.sh`, so day-to-day work is always `update-secret`, never `create-secret` (that's only
+for a genuinely new secret name, shown further down for the QA/stage secret sets).
+
+The change is inert until a task actually boots with it — finish with a force-new-deployment
+(same command as "Redeploy after a code change" above) so the running container picks it up:
+
+```bash
+aws ecs update-service --region us-east-1 \
+  --cluster tessera-app-cluster --service tessera-app-service --force-new-deployment
+```
 
 ---
 

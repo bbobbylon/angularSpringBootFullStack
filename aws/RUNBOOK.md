@@ -304,6 +304,19 @@ aws secretsmanager update-secret $R --secret-id tessera-app/github-client-secret
 aws secretsmanager update-secret $R --secret-id tessera-app/microsoft-client-id     --secret-string '<from B2>'
 aws secretsmanager update-secret $R --secret-id tessera-app/microsoft-client-secret --secret-string '<from B2>'
 
+# SMS 2FA — all three below come from console.twilio.com, not from B2 above:
+#   Account SID + Auth Token: console.twilio.com → Develop (left sidebar) → API keys & tokens →
+#     "API keys and auth tokens" → Auth Tokens. Both the Account SID and the Primary Auth Token
+#     are shown there together; the token is masked behind a "View"/eye icon you click to reveal.
+#     (Account Settings → Security also surfaces the Account SID, but Auth Tokens live under
+#     Develop, not Security — confirmed 2026-08-08 against the live console.)
+#   From-number: Phone Numbers → Manage → Active Numbers → click the number you bought — copy it
+#     exactly as shown (already E.164-formatted, e.g. +18084315852). Must be A2P 10DLC (or
+#     toll-free) verified for SMS or Twilio will reject sends even with correct credentials.
+aws secretsmanager update-secret $R --secret-id tessera-app/twilio-sid          --secret-string '<Account SID, starts with AC>'
+aws secretsmanager update-secret $R --secret-id tessera-app/twilio-token        --secret-string '<Auth Token>'
+aws secretsmanager update-secret $R --secret-id tessera-app/twilio-from-number  --secret-string '<+1XXXXXXXXXX>'
+
 # ECS only resolves secrets at container START — a value change here does nothing to the
 # currently running task until you restart it:
 aws ecs update-service $R --cluster tessera-app-cluster --service tessera-app-service --force-new-deployment
@@ -321,9 +334,11 @@ aws secretsmanager create-secret --region us-east-1 \
 
 **Why a provider's secrets decide whether it exists:** `OAuth2ClientConfig#federatedProviderCatalog` skips any provider with a blank client id, and the login screen renders exactly what `GET /oauth2/providers` returns. A provider configured in `.env` but not in Secrets Manager appears locally and is silently absent when deployed.
 
+**A placeholder like `CHANGE_ME_ACxxxxxxx` passes `SMSUtils.isConfigured()` silently** (2026-08-08 — confirmed live: `tessera-app/twilio-sid` held exactly this after the local `.env` had a real SID for weeks). `isConfigured()` only checks that the value is non-blank, not that it's real, so a half-edited placeholder degrades to the same "log the code instead of sending" fallback as a wholly-blank value, with no error anywhere pointing at Secrets Manager specifically. If SMS 2FA silently reverts to console-logging in production, check the *shape* of all three Twilio secrets, not just whether they're set — see [README.md → Checking secret values](README.md#checking-and-updating-secret-values-from-the-cli).
+
 **A UUID is never a valid value here.** Google, GitHub, and Microsoft each assign their own client ID format (`NNN-xxx.apps.googleusercontent.com`, `Ov23li…`/40-hex, and a GUID respectively) — a randomly generated UUID pasted in by mistake will pass validation (it's a non-blank string, so the provider button renders) but fails at the provider with `invalid_client`, because no such app was ever registered. Every value here must come from actually completing B2 for that provider — there is no shortcut.
 
-**To check what's currently stored without exposing it in a chat, ticket, or log**, see [`README.md` → Checking secret values](README.md#checking-secret-values).
+**To check what's currently stored without exposing it in a chat, ticket, or log**, see [`README.md` → Checking secret values](README.md#checking-and-updating-secret-values-from-the-cli).
 
 ---
 
