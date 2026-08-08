@@ -960,7 +960,7 @@ A user has exactly one role; its comma-separated `permission` string becomes
 | 4 | `PATCH /admin/user/*/role/**` | `UPDATE:ROLE` |
 | 5 | `PATCH /admin/user/*/settings` | `UPDATE:USER` |
 | 6 | `/admin/**` | `UPDATE:USER` **or** `UPDATE:ROLE` |
-| 7 | `/user/totp/**`, `/user/sessions/**` | `authenticated` (self-service) |
+| 7 | `/user/totp/**`, `/user/webauthn/**`, `/user/sessions/**` | `authenticated` (self-service) |
 | 8 | `GET /**` | `READ:USER` **or** `READ:CUSTOMER` |
 | 9 | `POST /**` | `UPDATE:USER` **or** `UPDATE:CUSTOMER` |
 | 10 | `PUT /**` | `UPDATE:USER`, `UPDATE:CUSTOMER`, **or** `UPDATE:ROLE` |
@@ -968,7 +968,8 @@ A user has exactly one role; its comma-separated `permission` string becomes
 
 Two ordering subtleties: admin rules (4–6) precede the verb catch-alls so role reassignment truly
 demands `UPDATE:ROLE`; self-service rules (7) precede them so a `ROLE_GUEST` can still manage their
-own TOTP and sessions. `@EnableMethodSecurity` + `@PreAuthorize` repeat the checks at method level.
+own TOTP, passkeys, and sessions. `@EnableMethodSecurity` + `@PreAuthorize` repeat the checks at
+method level.
 
 ### 7.5 Roles and capabilities
 
@@ -988,7 +989,7 @@ New accounts — password or first federated sign-in — get `ROLE_USER`.
 
 | Capability | Guest | User | Mod | Help Desk | Org Admin | Admin | App Admin |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| Own profile, password, TOTP, sessions, providers | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Own profile, password, TOTP, passkeys, sessions, providers | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Browse customers / invoices / catalog | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Create / edit customers and invoices | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Delete a customer | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -1164,6 +1165,32 @@ so two concurrent attempts can never double-spend. Plaintext is shown exactly on
 > ⚠ **There is no "regenerate codes" endpoint.** A fresh batch is minted only by a (re)enrollment
 > confirmation, so replacing a depleted set today means disable-and-re-enroll.
 
+**Passkeys (WebAuthn, fully implemented).** Self-service enrollment under `/user/webauthn/**`
+(`PasskeyController`); login is `/user/verify/webauthn/**` (public — the caller holds no token
+mid-login). Built directly on `webauthn4j-core`, not Spring Security's session-based
+`spring-security-webauthn` module, since this app is stateless JWT and the ceremony's transient
+state (the random challenge) needs to live somewhere that isn't an `HttpSession`. That somewhere is
+`WebAuthnChallengeStore` — an in-memory, single-use, five-minute-TTL store structurally identical to
+`ProviderLinkTicketService` (§ below), carrying the same per-instance-store caveat.
+
+Login is **usernameless / discoverable**: no email field, `navigator.credentials.get()` offers
+whatever passkey the browser holds for this origin, and the server resolves the account from the
+assertion's credential id — nothing is known about who is signing in until that id is looked up. A
+successful passkey login **skips `LoginRiskService` entirely** and mints tokens directly, the exact
+treatment `OAuth2LoginSuccessHandler` already gives federated login: a passkey is phishing-resistant
+and bound to one authenticator, so stacking a TOTP or emailed step-up challenge on top adds friction
+without adding security.
+
+Persistence avoids the well-known pain of round-tripping a bare COSE public key in isolation:
+`PasskeyServiceImpl` re-serializes the already-verified `AttestationObject` via webauthn4j's own
+`ObjectConverter` and stores those bytes; login re-parses the same blob to rebuild a `CredentialRecord`
+for verification, so the only serialization path exercised is the library's own most-tested one.
+
+> ⚠ **There is no "reset a passkey".** A passkey's private key never leaves its authenticator — not
+> even an application administrator can regenerate one. The admin lever
+> (`DELETE /admin/user/{id}/passkeys[/{credentialId}]`) is **revocation only**: it forces the user to
+> enroll a fresh passkey (or fall back to password/TOTP) on their next sign-in.
+
 **SMS 2FA** is wired but **stubbed** — the Twilio send is commented out and the code is logged to the
 server console. TOTP takes precedence: a confirmed authenticator skips the SMS path entirely.
 
@@ -1214,9 +1241,9 @@ Two lists in `Constants.java` must stay in lockstep:
 > `Authorization: Bearer` header from the client makes the filter try — and fail — to parse a token
 > before the request reaches the public controller.
 
-Public surface: registration, login, SMS/TOTP login completion, account/password verification,
-password reset, token refresh, profile images, OAuth2 routes, and Actuator (`health` and `info` only,
-with `show-details: never`).
+Public surface: registration, login, SMS/TOTP/passkey login completion, account/password
+verification, password reset, token refresh, profile images, OAuth2 routes, and Actuator (`health`
+and `info` only, with `show-details: never`).
 
 ---
 
@@ -1271,7 +1298,7 @@ from a size the query never used and offer pages that do not exist.
 > The old `PATCH /user/update/role/{roleName}` is **gone** — it once let any authenticated user
 > reassign their own role. Role changes are admin-only.
 
-### 8.3 MFA — `/user/totp`
+### 8.3 MFA & passkeys — `/user/totp`, `/user/webauthn`
 
 | Method | Path | Auth | Body | Returns |
 |---|---|---|---|---|
@@ -1284,6 +1311,28 @@ from a size the query never used and offer pages that do not exist.
 `/user/totp/**` is explicitly `authenticated()` with no staff authority so any user can secure their
 own account. `verify/totp` is public because the caller is mid-login — the server-side `challenge` is
 its boundary.
+
+| Method | Path | Auth | Body | Returns |
+|---|---|---|---|---|
+| POST | `/user/webauthn/enroll/options` | Authenticated | — | `{ publicKey }` (WebAuthn creation options) |
+| POST | `/user/webauthn/enroll/complete` | Authenticated | `{ deviceName, credential }` | `{ user, passkeys }` |
+| GET | `/user/webauthn/list` | Authenticated | — | `{ passkeys }` |
+| DELETE | `/user/webauthn/{id}` | Authenticated | — | `{ passkeys }` |
+| POST | `/user/verify/webauthn/options` | Public | — | `{ publicKey }` (WebAuthn request options, usernameless) |
+| POST | `/user/verify/webauthn` | Public | `{ credential }` | `{ user, access_token, refresh_token }` |
+
+> **Why "enroll", not "register".** The frontend's `tokenInterceptor` deliberately withholds the
+> Authorization header from any URL with `login`/`register`/`verify`/`resetpassword`/`refresh` as an
+> exact path *segment*, so `/user/register` and `/user/verify/totp` correctly go out with no token.
+> The two authenticated enrollment endpoints need that header attached, so their path avoids every
+> one of those words — the first cut of this feature was literally `/webauthn/register/options` and
+> silently 401'd for exactly this reason.
+>
+> `credential` in both the enrollment-complete and login-verify bodies is the browser's
+> `PublicKeyCredential.toJSON()` output, forwarded to `webauthn4j` verbatim — bound as
+> `tools.jackson.databind.JsonNode` (Jackson 3, the databind package Spring 7's `@RequestBody`
+> pipeline actually runs on), not the classic `com.fasterxml.jackson.databind.JsonNode`, which
+> compiles but fails at request time with an `InvalidDefinitionException`.
 
 ### 8.4 Sessions & connected accounts — `/user/sessions`
 
@@ -1327,9 +1376,12 @@ All routes require `UPDATE:USER` **or** `UPDATE:ROLE`; the `PATCH`es are stricte
 | PATCH | `/admin/user/{id}/role/{roleName}` | **`UPDATE:ROLE`** | Forbids self-targeting |
 | PATCH | `/admin/user/{id}/settings` | **`UPDATE:USER`** | Forbids self-targeting |
 | PATCH | `/admin/user/{id}/update` | **`UPDATE:USER`** | The `{id}` path variable **overwrites any body id** |
+| DELETE | `/admin/user/{id}/passkeys/{credentialId}` | **`UPDATE:USER`** | Revoke one passkey — no "reset" exists, see [§7.10](#710-mfa-federation-and-account-security) |
+| DELETE | `/admin/user/{id}/passkeys` | **`UPDATE:USER`** | Revoke ALL of the user's passkeys |
 
 > `user` = the calling admin (for the navbar); `selectedUser` = the managed user. Mutations are
-> audited against the **target**.
+> audited against the **target**. `GET /admin/user/{id}` also bundles `passkeys` (metadata only —
+> nickname, transports, timestamps; never the WebAuthn credential id or attestation object).
 
 ### 8.7 Security dashboard — `/admin/security`
 
@@ -1439,7 +1491,7 @@ curl -X PATCH http://localhost:8080/admin/user/23/role/ROLE_MODERATOR \
 
 | Domain | Access | Schema owner | Tables |
 |---|---|---|---|
-| **Identity / auth** | `JdbcTemplate` + hand-written SQL | **`schema.sql`** | `users`, `roles`, `userroles`, `events`, `userevents`, `accountverifications`, `resetpasswordverifications`, `twofactorverifications`, `oauthproviderlinks`, `organizations`, `userorganizations`, `totpcredentials`, `totprecoverycodes`, `mfachallenges`, `refreshsessions` |
+| **Identity / auth** | `JdbcTemplate` + hand-written SQL | **`schema.sql`** | `users`, `roles`, `userroles`, `events`, `userevents`, `accountverifications`, `resetpasswordverifications`, `twofactorverifications`, `oauthproviderlinks`, `organizations`, `userorganizations`, `totpcredentials`, `totprecoverycodes`, `mfachallenges`, `refreshsessions`, `passkeycredentials` |
 | **Business** | JPA / Hibernate | **Hibernate** `ddl-auto` | `Customer`, `Invoice`, `Services`, `invoiceserviceitems` |
 
 The identity layer wants precise, auditable SQL and predictable column names; the CRUD-heavy business
@@ -1472,7 +1524,8 @@ an entity.
 
 - A user has **exactly one** role (`userroles` has `UNIQUE(user_id)`).
 - At most one row per user in each verification table, `totpcredentials` and `mfachallenges`; **many**
-  recovery codes, audit events, OAuth links, memberships and refresh sessions.
+  recovery codes, audit events, OAuth links, memberships, refresh sessions, and **passkeys** — one
+  `passkeycredentials` row per registered device/authenticator, unlike TOTP's one-secret-per-user.
 
 ### 9.3 Key tables
 
@@ -1486,10 +1539,11 @@ and the only symptom is a broken image.
 **Ids are pinned 1–7** — see [IMPLEMENTATION-HISTORY §4.7](IMPLEMENTATION-HISTORY.md#47-seeded-role-ids-drifted-between-databases) for why.
 
 **`userevents` / `events`** — the audit log and its type catalogue, the latter guarded by a `CHECK`
-constraint (`CK_Events_Type`) over 16 values: `LOGIN_ATTEMPT`, `LOGIN_ATTEMPT_SUCCESS`,
+constraint (`CK_Events_Type`) over 21 values: `LOGIN_ATTEMPT`, `LOGIN_ATTEMPT_SUCCESS`,
 `LOGIN_ATTEMPT_FAILURE`, `PROFILE_UPDATE`, `PROFILE_PICTURE_UPDATE`, `ROLE_UPDATE`,
 `ACCOUNT_SETTINGS_UPDATE`, `PASSWORD_UPDATE`, `MFA_UPDATE`, `FEDERATED_LOGIN`, `TOTP_ENROLLED`,
-`TOTP_DISABLED`, `RECOVERY_CODE_USED`, `SESSION_REVOKED`, `TOKEN_REUSE_DETECTED`, `SUSPICIOUS_LOGIN`.
+`TOTP_DISABLED`, `RECOVERY_CODE_USED`, `SESSION_REVOKED`, `TOKEN_REUSE_DETECTED`, `SUSPICIOUS_LOGIN`,
+`PROVIDER_LINKED`, `PROVIDER_UNLINKED`, `PASSKEY_REGISTERED`, `PASSKEY_REMOVED`, `PASSKEY_LOGIN`.
 
 **`refreshsessions`** — the stateful half of the token model. `family` is one logical session (one
 device login), stable across rotations and the unit the Security Center lists and revokes; `jti` is
@@ -1506,6 +1560,15 @@ an org admin's reach without destroying history.
 **`totpcredentials` / `totprecoverycodes` / `mfachallenges`** — `confirmed` flips true only after the
 user proves possession, so an unconfirmed secret can never satisfy a login. `mfachallenges` is the
 security linchpin ([§7.10](#710-mfa-federation-and-account-security)).
+
+**`passkeycredentials`** — one row **per registered device**, not per user (`totpcredentials`' one
+row per user does not apply here). `credential_id` is `UNIQUE` and is how a usernameless login
+resolves an account. `attestation_object` is base64-encoded CBOR — the whole verified attestation
+object re-serialized via webauthn4j's `ObjectConverter`, not a hand-decomposed public key — re-parsed
+at login time to rebuild the credential for signature verification. `sign_count` backs WebAuthn's
+clone-detection check. There is no `mfachallenges`-style table for the ceremony's transient
+challenge; that lives in the in-memory `WebAuthnChallengeStore` instead (§7.10), the same tradeoff
+`oauthproviderlinks`' link tickets already carry.
 
 **`Services`** — named with a capital because `Service` collides with a Spring stereotype. `active`
 is how a service is retired; the seed deliberately **does not overwrite `active`**, so a retired
@@ -1619,8 +1682,11 @@ nothing exercises a real browser.**
 
 ### 10.1 Inventory
 
-**126 backend tests across 23 suites** and **87 frontend specs across 8 files** (verified 2026-08-02).
-Only one backend class needs a database.
+**181 backend tests across 31 suites** and **87 frontend specs across 8 files** (backend re-verified
+2026-08-07 via a full `mvn test` run; only one backend class needs a database). The passkey feature
+added 4 backend suites and 0 frontend specs — the frontend passkey UI (Security Center card, login
+button, admin revoke panel) currently has **no dedicated spec coverage**, a real gap alongside the
+backend one noted below.
 
 | Suite | Tests | What it locks in |
 |---|---:|---|
@@ -1639,6 +1705,10 @@ Only one backend class needs a database.
 | `UserControllerLoginEnumerationTest` | 2 | Unknown-email and wrong-password failures are byte-identical bar the timestamp |
 | `UserControllerBruteForceLockTest` | 2 | Per-account lockout |
 | `AdminUserControllerTest` | 3 | Path id is authoritative; self-targeting refused |
+| `PasskeyServiceImplTest` | 6 | Passkey CRUD + `using_passkey` flag sync; malformed-JSON rejection (caught a real webauthn4j bug — see below) |
+| `WebAuthnChallengeStoreTest` | 6 | Ceremony challenges are single-use, purpose-bound (REGISTER ≠ AUTHENTICATE), and expire |
+| `AdminUserControllerPasskeyTest` | 7 | Admin passkey revoke: authority gate, self-target refusal, org scoping — same three properties as session revocation |
+| `OAuth2ClientConfigPlaceholderWarningTest` | 7 | The `CHANGE_ME`-placeholder boot warning fires per-provider, never for a real-looking credential |
 | `CustomerServiceImplTest` | 5 | `createdAt` stamping, invoice numbering, not-found → `ApiException` |
 | `EventServiceImplTest` / `NewUserEventListenerTest` | 2 / 2 | Audit recording; **a failing audit write must not break login** |
 | `GlobalExceptionHandlerTest` | 4 | The envelope; a 500 never leaks its cause |

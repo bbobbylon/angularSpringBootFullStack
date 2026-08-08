@@ -182,7 +182,7 @@ mysql --host=<your-service>.aivencloud.com --port=<port> --user=avnadmin --passw
       db3 < src/main/resources/schema.sql
 ```
 
-It is idempotent — `CREATE TABLE IF NOT EXISTS`, no `DROP`s — so re-running is safe and is the correct fix when a column is missing.
+It is idempotent — `CREATE TABLE IF NOT EXISTS`, no `DROP`s — so re-running is safe and is the correct fix when a column is missing. As of 2026-08-07 this includes the new `passkeycredentials` table and `users.using_passkey` column (passkey / WebAuthn support) — no separate migration step, just re-run the same file.
 
 > **Run the whole file, not the parts you think you need.** `schema.sql` carries seed data as well as DDL: the roles and their authority strings, the events catalogue, and the services catalogue. A database with the tables but not the seeds boots fine and then behaves strangely — most visibly, the services catalogue is empty and the page tells you to add entries via an admin panel.
 
@@ -784,7 +784,7 @@ Set in `aws/task-definition.json`. Plain values are in `environment`; the rest a
 | `MYSQL_DATABASE` | env | **`db3`** |
 | `MYSQL_USERNAME` | env | `avnadmin` |
 | `MAIL_HOST` / `MAIL_PORT` | env | `smtp.gmail.com` / `587` |
-| `UI_APP_URL` | env | the app's public origin, **no trailing slash** — drives email links and the prod CORS default |
+| `UI_APP_URL` | env | the app's public origin, **no trailing slash** — drives email links, the prod CORS default, **and** the WebAuthn relying-party id/origin for passkeys (host and full URL respectively). No separate config needed for passkeys to work in prod; `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN` exist as overrides only, for a future split-origin deployment |
 | `IMAGE_STORAGE_TYPE` | env | `s3` |
 | `AWS_S3_BUCKET` / `AWS_REGION` | env | `tessera-app-images` / `us-east-1` |
 | `FORWARD_HEADERS_STRATEGY` | env | `framework` — see C3 |

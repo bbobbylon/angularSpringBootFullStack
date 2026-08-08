@@ -218,8 +218,14 @@ and supplies a publicly trusted origin on a certificate AWS already owns:
 created by the idempotent [`aws/setup-cloudfront.sh`](../aws/setup-cloudfront.sh).
 
 Google and Entra *do* accept a `*.cloudfront.net` redirect URI, so this unblocks TLS, both federated
-providers, WebAuthn (which needs a secure context) and HSTS — for free. The trade-off is a randomly
-assigned hostname that cannot be customised: fine for a demo, wrong for a product. Buying a domain
+providers, WebAuthn (which needs a secure context) and HSTS — for free.
+
+> **Postscript, added 2026-08-07.** WebAuthn has since been built, not just unblocked — see
+> `documentation/GUIDE.md` §7.10/§8.3/§9.3 for the passkey registration/login/admin-revoke
+> implementation.
+
+The trade-off is a randomly assigned hostname that cannot be customised: fine for a demo, wrong
+for a product. Buying a domain
 and running `aws/deploy-https.sh` remains the production-shaped alternative, and that script is
 written and ready.
 

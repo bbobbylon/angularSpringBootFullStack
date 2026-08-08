@@ -355,6 +355,13 @@ and this section previously recorded it as the project's headline limitation. **
 Two further capabilities had the same root cause: **WebAuthn / passkeys** (needs a secure context)
 and **HSTS** (sent but inert without TLS).
 
+> **Postscript, added 2026-08-07 — after this document's original snapshot date.** WebAuthn is no
+> longer just unblocked; it is **built**: passkey registration, usernameless login, and
+> admin-assisted revocation are implemented end-to-end (`PasskeyController`, `PasskeyServiceImpl`,
+> `webauthn4j-core`, new `passkeycredentials` table). Full technical detail lives in
+> `documentation/GUIDE.md` §7.10/§8.3/§9.3, not restated here to keep this snapshot's original
+> content intact.
+
 #### How it was solved — CloudFront, free
 
 **`https://d3911jyxcju4q4.cloudfront.net`** — CloudFront distribution `E1WWY6FHSKI84P`, status

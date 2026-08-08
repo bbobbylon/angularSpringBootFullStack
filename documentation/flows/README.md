@@ -87,6 +87,7 @@ Legend: ✅ documented · ⏳ planned
 | 10 | Profile: view, audit events, update, password, settings, image, toggle SMS-MFA | [10-profile-and-account.md](./10-profile-and-account.md) | ✅ |
 | 11 | Authenticator (TOTP) enrollment: setup → enable → disable → status | [11-totp-enrollment.md](./11-totp-enrollment.md) | ✅ |
 | 12 | Sessions & devices: list, revoke one, revoke all others | [12-sessions-and-devices.md](./12-sessions-and-devices.md) | ✅ |
+| 13 | Passkeys (WebAuthn): enrollment, usernameless login, admin revoke | [13-passkeys.md](./13-passkeys.md) | ✅ |
 
 ### 3 · Administration & RBAC
 

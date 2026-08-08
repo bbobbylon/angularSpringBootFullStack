@@ -396,6 +396,47 @@ both. The architecture content was rewritten into GUIDE §1 rather than restored
 **The standing rule this produced:** when a claim in a doc and the code disagree, **the code wins**,
 and the doc gets fixed in the same change.
 
+### 4.21 A passkey enrollment endpoint 401'd — the frontend's own naming convention was the trap
+
+**Symptom** (found 2026-08-07, while building passkeys). `POST /user/webauthn/register/options`
+came back `401 Unauthorized` even though the caller was signed in.
+
+**Cause.** `token.interceptor.ts` deliberately withholds the Authorization header from any request
+whose URL has `login`/`register`/`verify`/`resetpassword`/`refresh` as an exact path *segment* — the
+mechanism that correctly makes `/user/register` and `/user/verify/totp` go out token-free. The new,
+**authenticated** enrollment endpoint's path contained `register` as a segment, so the interceptor
+applied the same treatment to a route that needed the opposite.
+
+**Fix.** Renamed the two authenticated enrollment endpoints from `register/options` /
+`register/verify` to `enroll/options` / `enroll/complete` (`PasskeyController` +
+`user.service.ts`). The public login endpoints (`/user/verify/webauthn/**`) correctly keep `verify`.
+
+**The standing rule this produced:** any new authenticated endpoint's path must avoid
+`login`/`register`/`verify`/`resetpassword`/`refresh` as an exact segment, or the frontend silently
+strips its own auth token and the failure looks like a backend authorization bug.
+
+### 4.22 `JsonNode` compiled fine, failed at request time — Jackson 3's package rename
+
+**Symptom.** `POST /user/webauthn/enroll/complete` 500'd with
+`InvalidDefinitionException: Cannot construct instance of JsonNode (no Creators...)`.
+
+**Cause.** Spring Boot 4 / Spring Framework 7 run on **Jackson 3**, whose databind classes moved to
+the `tools.jackson.databind` package — `jackson-annotations` is the one module that **kept** the
+classic `com.fasterxml.jackson.annotation` namespace (every `@JsonInclude`/`@JsonIgnore` in
+`model/*.java` is unaffected). `PasskeyRegisterVerifyForm`/`PasskeyLoginVerifyForm` had bound
+`credential` as `com.fasterxml.jackson.databind.JsonNode` — both classes exist on the classpath, so
+it compiles, but Spring's Jackson-3-backed `@RequestBody` converter treats the Jackson-2 type as an
+unrelated, unconstructable abstract class.
+
+**Fix.** Import `tools.jackson.databind.JsonNode` instead. `ExceptionUtils.java` already had this
+right and was the tell.
+
+**The standing rule this produced:** any *new* `@RequestBody`/`@ResponseBody`-bound type must use
+`tools.jackson.databind.*`, never `com.fasterxml.jackson.databind.*`. A few existing classes
+(`RateLimitFilter`, `JacksonConfig`, the 401/403 handlers) still construct their own standalone
+Jackson 2 `ObjectMapper` and are fine doing so — they never go through Spring MVC's message-converter
+pipeline, so the mismatch never surfaces for them. It only bites types Spring itself deserializes.
+
 ---
 
 ## 5. Retired documents (registry)

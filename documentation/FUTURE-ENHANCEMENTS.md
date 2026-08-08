@@ -117,7 +117,6 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | Enhancement | Why it is worth doing | Sketch |
 |---|---|---|
 | ⬜ **Distributed brute-force + rate-limit + link-ticket state** | See §2.4 — the scale-out blocker | Move counters to the database or Redis; the service interfaces do not change (`bucket4j-redis` exists for exactly this) |
-| ⬜ **WebAuthn / passkeys** | The natural next factor after TOTP, and the one that is actually phishing-resistant — TOTP codes can be relayed to an attacker in real time, a passkey signature cannot be. Fits the existing challenge model exactly: `TotpService` already proves identity from a server-side challenge rather than from the request | `webauthn4j`; new `credentials` table; a third branch in the login step-up switch |
 | ⬜ **Session revocation from the security dashboard** | Admins can *see* live sessions but not end them. Seeing a compromised session and being unable to kill it is the wrong half of the feature | Reuse `SessionService`'s revoke-family path; org-scope the target |
 | ⬜ **Admin-initiated MFA reset** | An account that loses both its authenticator and its recovery codes is currently unrecoverable without direct DB access | Admin action + an `MFA_RESET` audit event; gate on staff authority and audit loudly |
 | ⬜ **Regenerate recovery codes** | There is no standalone endpoint — replacing a depleted set today means disable-and-re-enroll TOTP | `issueRecoveryCodes()` already does the delete-then-insert this needs; it just has no route |
@@ -361,7 +360,7 @@ If this were to be taken seriously as a product, the order would be:
 | **1 — Safe to run** | Nothing can be lost or silently broken | Backup + rehearsed restore (§6.3), alerting + billing alarm (§2.5, §6.4), HTTPS on the ALB (§3.4), the real prod-profile boot (§2.3) |
 | **2 — Safe to sell** | Legally and contractually shippable | Data export/deletion (§6.5), retention policy, ToS/privacy, an external security review |
 | **3 — Able to grow** | More than one customer, more than one instance | The tenancy decision (§6.1), distributed security state (§2.4), S3 images + backend caching (§6.2), org self-management (§3.2) |
-| **4 — Competitive** | Reasons to choose it | Batch upload (§3.3), sorting/filtering, WebAuthn (§3.1), session revocation from the dashboard, backend i18n |
+| **4 — Competitive** | Reasons to choose it | Batch upload (§3.3), sorting/filtering, session revocation from the dashboard, backend i18n |
 
 Phase 1 is roughly a week of focused work and removes every risk that could destroy trust
 irrecoverably. Phase 3 is the one that requires a real architectural decision rather than execution.
@@ -386,7 +385,7 @@ This matters more than "unencrypted transit," which is what it sounds like:
 |---|---|
 | **Google federated login** | Google requires the `https` scheme on every authorized redirect URI. The only exception is `localhost`. The ALB's `http://` callback **cannot be registered at all** |
 | **Microsoft (Entra) federated login** | Same rule — Entra rejects non-`https` redirect URIs outside `http://localhost` |
-| **WebAuthn / passkeys** (§3.1) | The API requires a *secure context*. Worth knowing before that work starts |
+| ~~**WebAuthn / passkeys**~~ | ✅ **Done** (2026-08-07). The secure-context requirement this row warned about was resolved by the CloudFront HTTPS fix (§3.4/§6.8); the feature itself is now built end-to-end — see `documentation/GUIDE.md` §7.10/§8.3/§9.3 |
 | **HSTS** | Sent, but inert — the header only means something over TLS |
 | GitHub federated login | GitHub permits `http` callbacks, so it was the one provider demonstrable on the ALB URL |
 

@@ -46,7 +46,7 @@ a cheap domain and running [`deploy-https.sh`](deploy-https.sh) remains the prod
 | **Google federated login** | Transport unblocked. Needs the deployed `OAUTH2_REDIRECT_BASE_URL` fix, **real credentials** (currently `CHANGE_ME`), and the callback registered in the Google console |
 | **Microsoft (Entra) federated login** | Transport unblocked; credentials are populated. Needs the deployed fix + the callback registered in Entra |
 | **GitHub federated login** | ⚠️ **Never worked deployed.** Previously documented here as "works" because GitHub tolerates `http` callbacks — but `tessera-app/github-client-id` and `github-client-secret` are the literal `CHANGE_ME`, so the authorize redirect carries `client_id=CHANGE_ME` |
-| **WebAuthn / passkeys** (roadmap §3.1) | Now possible — the CloudFront origin is a secure context |
+| **WebAuthn / passkeys** | ✅ **Built** (2026-08-07) — registration, usernameless login, and admin revoke are implemented; the CloudFront origin supplies the secure context they need. See `documentation/GUIDE.md` §7.10/§8.3/§9.3 |
 | **HSTS** | Now meaningful over the CloudFront origin |
 
 ⚠️ **CloudFront by itself was not enough — the ALB overwrites `X-Forwarded-Proto`.** CloudFront sets

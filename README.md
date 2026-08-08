@@ -1,10 +1,10 @@
 # TesseraApp
 
 A full-stack **zero-trust CIAM platform** built on **Angular 21** and **Spring Boot 4**: JWT
-authentication with rotating refresh sessions and replay detection, authenticator-app MFA, federated
-sign-in, login-anomaly detection with step-up verification, permission-based RBAC with organization
-scoping, an administrative security dashboard, and a customer / invoicing / services domain on top —
-in six languages.
+authentication with rotating refresh sessions and replay detection, authenticator-app MFA, passkeys
+(WebAuthn), federated sign-in, login-anomaly detection with step-up verification, permission-based
+RBAC with organization scoping, an administrative security dashboard, and a customer / invoicing /
+services domain on top — in six languages.
 
 ---
 
@@ -21,6 +21,9 @@ in six languages.
   a retired token revokes the whole session family (theft detection)
 - **Authenticator-app MFA (TOTP)** with single-use recovery codes, bound to a server-side challenge
   so a code alone can never skip the password step
+- **Passkeys (WebAuthn)** — usernameless sign-in via `navigator.credentials`, phishing-resistant by
+  construction; admins can view and revoke a user's registered devices (never "reset" one — the
+  private key never leaves the authenticator)
 - **Federated sign-in** via Google / GitHub / Microsoft, converging on one local identity; connected
   accounts are manageable from the Security Center
 - **Login-anomaly detection** — an unrecognised device or network escalates to step-up verification
@@ -51,7 +54,7 @@ in six languages.
 | Frontend | Angular 21 (standalone, zoneless, signals), Bootstrap 5, ngx-toastr, Transloco |
 | Backend | Spring Boot 4, Spring Security 7, Hibernate 7 |
 | Database | MySQL 8.4 |
-| Auth | JWT access + rotating refresh sessions (replay detection), authenticator-app TOTP, OAuth2/OIDC federation, SMS 2FA (Twilio — stubbed) |
+| Auth | JWT access + rotating refresh sessions (replay detection), authenticator-app TOTP, passkeys (webauthn4j), OAuth2/OIDC federation, SMS 2FA (Twilio — stubbed) |
 | i18n | Transloco — runtime switching, 6 locales (en · es · fr · de · pt · zh) |
 | Runtime | Java 21, Node 22 |
 | Container | Docker (multi-stage build) |
