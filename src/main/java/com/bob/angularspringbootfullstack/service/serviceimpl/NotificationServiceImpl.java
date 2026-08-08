@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 import com.bob.angularspringbootfullstack.enumeration.VerificationType;
 import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.NotificationService;
+import com.bob.angularspringbootfullstack.utils.SMSUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,9 +16,9 @@ import static com.bob.angularspringbootfullstack.enumeration.VerificationType.PA
 /**
  * Default {@link NotificationService} that fans dispatch out to channel-specific
  * collaborators. Email goes through {@link EmailService} (Spring's
- * {@code JavaMailSender}); SMS would go through
- * {@link com.bob.angularspringbootfullstack.utils.SMSUtils} but is currently
- * stubbed with a log line to avoid Twilio charges during development.
+ * {@code JavaMailSender}); SMS goes through {@link SMSUtils}, which sends for
+ * real once Twilio credentials are configured and otherwise degrades to a log
+ * line so the flow stays completable in dev/CI without a Twilio account.
  * <p>
  * All sends run on {@link CompletableFuture#runAsync(Runnable)}'s common
  * {@code ForkJoinPool} so the HTTP thread that triggered the operation
@@ -50,17 +51,14 @@ public class NotificationServiceImpl implements NotificationService {
     /** {@inheritDoc} */
     @Override
     public void sendTwoFactorCode(String firstName, String phoneNumber, String code) {
-        CompletableFuture.runAsync(() -> {
-            // TODO: enable SMS sending when ready (Twilio messages incur cost).
-            // SMSUtils.sendSMS(phoneNumber,
-            //     "Hi " + firstName + ", your 2FA code is: " + code + ". It expires in 24 hours.");
-            log.info("2FA code dispatch requested for phone {} (SMS send disabled to avoid Twilio charges). Code: {}",
-                    phoneNumber, code);
-        }).exceptionally(throwable -> {
-            log.error("Failed to dispatch 2FA code to phone {}: {}",
-                    phoneNumber, throwable.getMessage(), throwable);
-            return null;
-        });
+        CompletableFuture.runAsync(() -> SMSUtils.sendSMS(phoneNumber,
+                        "TesseraApp: Hi " + firstName + ", your 2FA code is " + code
+                                + ". It expires in 24 hours. Reply STOP to opt out."))
+                .exceptionally(throwable -> {
+                    log.error("Failed to dispatch 2FA code to phone {}: {}",
+                            phoneNumber, throwable.getMessage(), throwable);
+                    return null;
+                });
     }
 
     /**

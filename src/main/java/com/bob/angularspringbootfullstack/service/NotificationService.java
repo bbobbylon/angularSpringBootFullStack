@@ -42,9 +42,9 @@ public interface NotificationService {
      * Invoked from the login flow when the authenticated user has MFA enabled
      * and has just had a fresh code persisted.
      * <p>
-     * The actual Twilio send is currently disabled to avoid charges during
-     * development; the implementation logs the code instead. See
-     * {@link com.bob.angularspringbootfullstack.utils.SMSUtils#sendSMS}.
+     * Delivery goes through {@link com.bob.angularspringbootfullstack.utils.SMSUtils#sendSMS},
+     * which sends a real Twilio text when credentials are configured and logs the code instead
+     * when they are not, so the flow stays completable in dev/CI without a Twilio account.
      *
      * @param firstName   recipient's first name, used in the SMS body
      * @param phoneNumber recipient's phone number (no country-code prefix;

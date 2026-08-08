@@ -13,41 +13,51 @@ for the full parity table.
 
 | | Local (`./start.sh`) | AWS (ECS Fargate) |
 |---|---|---|
-| **App URL** | `http://localhost:4200` (Angular dev server) | `https://d3911jyxcju4q4.cloudfront.net` |
+| **App URL** | `http://localhost:4200` (Angular dev server) | **`https://tesseraapp.dev`** (also reachable at `https://d3911jyxcju4q4.cloudfront.net` — same distribution, same backend; see below for the one thing that differs between them) |
 | **API URL** | `http://localhost:8080` (separate origin) | same origin as the app — Angular is compiled into the jar |
-| **`UI_APP_URL`** | `http://localhost:4200` | `https://d3911jyxcju4q4.cloudfront.net` |
-| **`APP_DOMAIN`** (setup.sh / GitHub Secret) | n/a | `https://d3911jyxcju4q4.cloudfront.net` |
-| **`OAUTH2_REDIRECT_BASE_URL`** | *unset* — request-derived is correct | `https://d3911jyxcju4q4.cloudfront.net` |
+| **`UI_APP_URL`** | `http://localhost:4200` | `https://tesseraapp.dev` |
+| **`APP_DOMAIN`** (setup.sh / GitHub Secret) | n/a | `https://tesseraapp.dev` |
+| **`OAUTH2_REDIRECT_BASE_URL`** | *unset* — request-derived is correct | `https://tesseraapp.dev` |
 | **Database** | `db2` (local MySQL) | `db3` (Aiven) |
 | **Images** | local filesystem | S3 (`tessera-app-images`) |
 | **Spring profile** | `dev` | `prod` |
-| **OAuth2 callback** | `http://localhost:8080/login/oauth2/code/{provider}` | `https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/{provider}` |
+| **OAuth2 callback** | `http://localhost:8080/login/oauth2/code/{provider}` | `https://tesseraapp.dev/login/oauth2/code/{provider}` |
 
 Set `UI_APP_URL` with **no trailing slash**. `UserRepoImpl#getVerificationURL` trims one defensively,
 but nothing else does.
 
-### HTTPS: solved by CloudFront, not by a domain
+### HTTPS: CloudFront in front of the ALB, with a real domain on top
 
-The **ALB itself still serves plain HTTP** — Step 8 (ACM + HTTPS listener) has not been done, because
-it needs a domain you can prove you own. But the ALB is no longer the public entrance. As of
+The **ALB itself still serves plain HTTP** — nothing changed there, and nothing needs to. As of
 **August 4, 2026** a CloudFront distribution (`E1WWY6FHSKI84P`, `Deployed`) sits in front of it and
-terminates TLS on AWS's auto-issued `*.cloudfront.net` certificate:
+terminates TLS; as of **August 8, 2026** that distribution also has a real custom domain attached —
+**`tesseraapp.dev`**, registered on Porkbun for $8.75/yr — with its own ACM certificate (`us-east-1`,
+required by CloudFront regardless of where anything else lives), rather than relying solely on
+AWS's auto-issued `*.cloudfront.net` name.
 
-**`https://d3911jyxcju4q4.cloudfront.net`** — created by [`setup-cloudfront.sh`](setup-cloudfront.sh),
-which is idempotent (re-running finds the existing distribution instead of creating a second one).
+**Both URLs work and hit the identical backend** — CloudFront serves the SAME ECS service either
+way, there is no separate deployment target. The one asymmetry is federated login, because of
+GitHub's one-callback-per-OAuth-App limit (see [Troubleshooting](#a-provider-button-is-missing-or-the-authorize-url-carries-client_idchange_me)
+below): the *production* GitHub OAuth App's callback was swapped to `tesseraapp.dev` once the
+domain went live, so **GitHub login only works on `tesseraapp.dev` now, not on the bare CloudFront
+URL**. Google and Microsoft both accept a list of redirect URIs, so they still work on either.
 
-A domain is the only way to get HTTPS **on a name you choose**; AWS will give you HTTPS on a name
-*it* chooses for free, because it already holds the certificate. The trade-off is a randomly assigned
-hostname that cannot be customised (see Troubleshooting) — fine for a demo, not for a product. Buying
-a cheap domain and running [`deploy-https.sh`](deploy-https.sh) remains the production-shaped route.
+Getting a domain wired up isn't scripted end-to-end by one file — [`setup-cloudfront.sh`](setup-cloudfront.sh)
+stands up CloudFront itself with *no* domain (the `*.cloudfront.net` name only), and
+[`RUNBOOK.md` §B1.6](RUNBOOK.md#b16-point-a-real-domain-at-cloudfront-optional--once-you-own-one)
+is the step-by-step for adding a real domain on top once you own one — ACM cert, DNS validation,
+CloudFront alternate domain name, DNS pointing, app re-config. **`deploy-https.sh` is a different,
+unrelated procedure** — it puts TLS directly on the **ALB**, bypassing CloudFront entirely. Don't
+run it as part of this flow; it would stand up a second, parallel HTTPS surface for no benefit,
+since CloudFront is this project's actual front door.
 
 | Capability | State now |
 |---|---|
-| **Google federated login** | Transport unblocked. Needs the deployed `OAUTH2_REDIRECT_BASE_URL` fix, **real credentials** (currently `CHANGE_ME`), and the callback registered in the Google console |
-| **Microsoft (Entra) federated login** | Transport unblocked; credentials are populated. Needs the deployed fix + the callback registered in Entra |
-| **GitHub federated login** | ⚠️ **Never worked deployed.** Previously documented here as "works" because GitHub tolerates `http` callbacks — but `tessera-app/github-client-id` and `github-client-secret` are the literal `CHANGE_ME`, so the authorize redirect carries `client_id=CHANGE_ME` |
-| **WebAuthn / passkeys** | ✅ **Built** (2026-08-07) — registration, usernameless login, and admin revoke are implemented; the CloudFront origin supplies the secure context they need. See `documentation/GUIDE.md` §7.10/§8.3/§9.3 |
-| **HSTS** | Now meaningful over the CloudFront origin |
+| **Google federated login** | ✅ **Live** (2026-08-08) — real credentials from a Web application OAuth client, registered for both the CloudFront URL and `tesseraapp.dev` |
+| **Microsoft (Entra) federated login** | ✅ **Live** (2026-08-08) — credentials were already real; the blocker was the redirect URI missing from the Entra app's Web platform, now added for both URLs |
+| **GitHub federated login** | ✅ **Live on `tesseraapp.dev`** (2026-08-08) — three separate GitHub OAuth Apps exist in total: one for `localhost` (local dev), one originally registered for the bare CloudFront URL (now orphaned — its credentials are no longer in Secrets Manager), and the current production one registered for `tesseraapp.dev`, whose credentials are what's live |
+| **WebAuthn / passkeys** | ✅ **Live and confirmed working** — registration, usernameless login, and admin revoke; any HTTPS origin supplies the secure context they need |
+| **HSTS** | Meaningful on both the CloudFront URL and `tesseraapp.dev` |
 
 ⚠️ **CloudFront by itself was not enough — the ALB overwrites `X-Forwarded-Proto`.** CloudFront sets
 it to `https`, the ALB replaces it with its own listener protocol (`http`), and Spring builds the
@@ -392,6 +402,44 @@ aws ecs update-service \
   --force-new-deployment \
   --region us-east-1
 ```
+
+---
+
+## Checking secret values
+
+Two ways to see what's actually stored, without ever needing to guess from behavior. Note that
+whichever secret you check, **updating a value here does not affect the currently running ECS
+task** — it only takes effect on the next task boot (see "Redeploy after a code change" /
+"Rotating secrets" above to force that).
+
+### AWS Console
+
+1. Sign in to the [Secrets Manager console](https://console.aws.amazon.com/secretsmanager/) in
+   the correct region (`us-east-1` for this project).
+2. Click the secret by name, e.g. `tessera-app/google-client-id`.
+3. Under **Secret value**, click **Retrieve secret value**.
+
+### AWS CLI
+
+```bash
+# List every secret's name and when it was last changed (no value exposed):
+aws secretsmanager list-secrets --region us-east-1 \
+  --query 'SecretList[?starts_with(Name, `tessera-app/`)].{Name:Name,LastChanged:LastChangedDate}' \
+  --output table
+
+# Reveal one specific secret's current value:
+aws secretsmanager get-secret-value --region us-east-1 \
+  --secret-id tessera-app/google-client-id --query SecretString --output text
+```
+
+Swap `google-client-id` for any of: `jwt-secret`, `db-password`, `mail-username`, `mail-password`,
+`twilio-sid`, `twilio-token`, `twilio-from-number`, `google-client-id`, `google-client-secret`,
+`github-client-id`, `github-client-secret`, `microsoft-client-id`, `microsoft-client-secret`,
+`aiven-host`, `aiven-port`, `aiven-db`, `aiven-user`.
+
+> **Never paste the output of `get-secret-value` into a chat, ticket, commit, or log** — treat it
+> exactly like the access keys warning further down this file. If a real value does end up
+> somewhere it shouldn't, rotate it immediately (see "Rotating secrets" above).
 
 ---
 

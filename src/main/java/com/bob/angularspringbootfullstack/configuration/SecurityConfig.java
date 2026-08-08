@@ -272,7 +272,8 @@ class SecurityConfig {
                                     "/register", "/customers", "/customers/**", "/customer/new",
                                     "/invoice/new", "/invoices", "/invoice/**", "/profile", "/security",
                                     "/users", "/users/**", "/roles", "/billing", "/services",
-                                    "/services/manage", "/analytics", "/security-overview").permitAll()
+                                    "/services/manage", "/analytics", "/security-overview",
+                                    "/privacy", "/terms").permitAll()
                             .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
                             .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
                             .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")

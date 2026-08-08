@@ -246,6 +246,23 @@
                            class="form-control form-control-sm" />
                     <small class="text-muted">{{ t('securityCenter.phoneHint') }}</small>
                   </div>
+                </div>
+
+                <!-- Explicit SMS consent — required so enabling SMS 2FA is an affirmative
+                     opt-in, not implied by entering a phone number. See /terms#sms. -->
+                <div class="form-check mt-2">
+                  <input id="smsConsent" name="smsConsent" ngModel required type="checkbox"
+                         [disabled]="isLoading()" class="form-check-input" />
+                  <label class="form-check-label small" for="smsConsent">
+                    I agree to receive text messages from TesseraApp containing my two-factor
+                    authentication codes. Message frequency varies with sign-in activity; message
+                    and data rates may apply. Reply STOP to opt out. See our
+                    <a href="/terms#sms" target="_blank" rel="noopener">Messaging Terms</a> and
+                    <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+                  </label>
+                </div>
+
+                <div class="row g-2 align-items-start mt-1">
                   <div class="col-auto">
                     <button [disabled]="isLoading() || phoneForm.invalid" class="btn btn-primary btn-sm" type="submit">
                       {{ isLoading() ? t('common.saving') : t('securityCenter.saveEnable') }}

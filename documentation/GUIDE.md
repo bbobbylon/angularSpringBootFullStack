@@ -336,7 +336,8 @@ Defaults shown are the **`dev`-profile fallbacks**. Under `prod` there are **no 
 | `VERIFY_EMAIL_HOST` | **Reserved, currently unused** — links are built from `UI_APP_URL` | `http://localhost:8080` |
 
 Generate a Gmail App Password at <https://myaccount.google.com/apppasswords>. Verification and reset
-emails send for real; only the **SMS** path is stubbed.
+emails send for real. The **SMS** path sends for real too once Twilio credentials are configured
+(see below) — with placeholders left in, it degrades to logging the code instead.
 
 **Frontend / images**
 
@@ -391,9 +392,10 @@ cheapest confirmation the setting took effect.
 A provider's button appears only when its `CLIENT_ID` is set — the SPA discovers configured providers
 via `GET /oauth2/providers`. See [§3.4](#34-setting-up-a-federated-provider).
 
-**SMS 2FA (optional, stubbed):** `TWILIO_FROM_NUMBER`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`.
-The send is commented out in `NotificationServiceImpl.sendTwoFactorCode` to avoid charges; the code
-is logged to the server console.
+**SMS 2FA (optional):** `TWILIO_FROM_NUMBER`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`. Leave them
+as placeholders and `SMSUtils` logs the code to the server console instead of sending — safe for
+dev/CI with no Twilio account. Fill in real values and `NotificationServiceImpl.sendTwoFactorCode`
+sends a real text; every send then incurs a Twilio cost.
 
 **Aiven (only when `DB=aiven`):** `AIVEN_DB_HOST`, `_PORT`, `_NAME`, `_USERNAME`, `_PASSWORD`.
 The current cloud database is `db3`.
@@ -897,7 +899,7 @@ audit apply identically to a federated user and a password user.
 
 | Built in-house | Delegated |
 |---|---|
-| Credential auth (`AuthenticationManager` + BCrypt), JWT mint/verify (`TokenProvider`, HMAC-SHA512), refresh rotation + reuse detection, permission RBAC, TOTP (RFC 6238), brute-force gate, audit, account lifecycle | Federated login via `spring-security-oauth2-client`; transactional email via Gmail SMTP; SMS via the Twilio SDK (**stubbed**) |
+| Credential auth (`AuthenticationManager` + BCrypt), JWT mint/verify (`TokenProvider`, HMAC-SHA512), refresh rotation + reuse detection, permission RBAC, TOTP (RFC 6238), brute-force gate, audit, account lifecycle | Federated login via `spring-security-oauth2-client`; transactional email via Gmail SMTP; SMS via the Twilio SDK |
 
 > **If you add a new way to log a user in, issue tokens through `SessionService`, never
 > `TokenProvider` directly.** That is the only reason every login appears in the Security Center and
@@ -1191,8 +1193,9 @@ for verification, so the only serialization path exercised is the library's own 
 > (`DELETE /admin/user/{id}/passkeys[/{credentialId}]`) is **revocation only**: it forces the user to
 > enroll a fresh passkey (or fall back to password/TOTP) on their next sign-in.
 
-**SMS 2FA** is wired but **stubbed** — the Twilio send is commented out and the code is logged to the
-server console. TOTP takes precedence: a confirmed authenticator skips the SMS path entirely.
+**SMS 2FA** sends for real once Twilio credentials are configured (`SMSUtils` logs the code instead
+when they're left as placeholders). TOTP takes precedence: a confirmed authenticator skips the SMS
+path entirely.
 
 **Federated login** is a standard Authorization Code flow, active only when provider credentials are
 set. `OAuth2LoginSuccessHandler` performs find-or-create on `(provider, subject)` and issues **our**

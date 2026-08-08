@@ -49,6 +49,16 @@ export const routes: Routes = [
     path: 'register',
     loadComponent: () => import('./features/auth/register/register.component').then((m) => m.RegisterComponent),
   },
+  // Public legal pages — no auth guard. Exist mainly to give third parties (e.g. Twilio's
+  // A2P 10DLC campaign registration for SMS 2FA) a stable, publicly reachable URL to review.
+  {
+    path: 'privacy',
+    loadComponent: () => import('./features/legal/privacy-policy/privacy-policy.component').then((m) => m.PrivacyPolicyComponent),
+  },
+  {
+    path: 'terms',
+    loadComponent: () => import('./features/legal/terms/terms.component').then((m) => m.TermsComponent),
+  },
   // Federated login landing (SRS FR-FED-4): the backend's OAuth2 success handler
   // redirects here with tokens (or an MFA handoff) in the URL fragment. Public by
   // design — the user is mid-authentication when they arrive.

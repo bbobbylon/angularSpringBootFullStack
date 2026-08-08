@@ -1,0 +1,70 @@
+<div class="container py-5" style="max-width: 840px;">
+  <a class="d-inline-flex align-items-center gap-2 text-decoration-none mb-4" routerLink="/login">
+    <i class="bi bi-shield-lock-fill"></i>
+    <span class="fw-semibold">Tessera<span class="text-primary">App</span></span>
+  </a>
+
+  <h1 class="h3 mb-1">Privacy Policy</h1>
+  <p class="text-muted mb-4">Last updated: August 8, 2026</p>
+
+  <div class="card">
+    <div class="card-body">
+
+      <h2 class="h5">1. What we collect</h2>
+      <p>
+        When you create a TesseraApp account, we collect your name, email address, and password
+        (stored only as a salted BCrypt hash — we never store or can recover your plaintext
+        password). If you enable SMS-based two-factor authentication, we collect the mobile phone
+        number you provide for that purpose. If you sign in with Google, GitHub, or Microsoft, we
+        receive your name and email address from that provider. If you register a passkey
+        (WebAuthn), we store the public key and metadata your device's authenticator generates —
+        never anything that could be used to recreate it. For account security we also log
+        device and network information (browser, approximate network, timestamps) associated with
+        sign-in events.
+      </p>
+
+      <h2 class="h5">2. How we use it</h2>
+      <ul>
+        <li>To create and operate your account, and to show you your own data within the app.</li>
+        <li>
+          To secure your account: detecting unusual sign-ins, enforcing multi-factor
+          authentication, and maintaining an audit trail of security-relevant events on your
+          account.
+        </li>
+        <li>
+          To deliver one-time verification and authentication codes — by email always, and by SMS
+          only if you have opted in to SMS-based two-factor authentication (see §3).
+        </li>
+      </ul>
+      <p>We do not sell your personal information, and we do not use it for advertising.</p>
+
+      <h2 class="h5">3. Text messaging (SMS) data</h2>
+      <p>
+        If you opt in to SMS-based two-factor authentication, your phone number is used solely to
+        deliver one-time login codes to you. <strong>No mobile information will be shared with
+        third parties or affiliates for marketing or promotional purposes.</strong> All other
+        categories of information sharing described in this policy exclude text messaging
+        originator opt-in data and consent; this information is not shared with any third
+        parties, other than the messaging platform (Twilio) we use to transmit the message itself.
+      </p>
+      <p>
+        You may withdraw SMS consent at any time from your account's Security Center by disabling
+        SMS-based two-factor authentication. See our <a routerLink="/terms">Terms &amp;
+        Messaging&nbsp;Terms</a> for opt-in, opt-out, and message-frequency details.
+      </p>
+
+      <h2 class="h5">4. Data retention</h2>
+      <p>
+        We retain account data for as long as your account is active. Security audit events are
+        retained to preserve the integrity of the audit trail. You may request account deletion by
+        contacting us at the address below.
+      </p>
+
+      <h2 class="h5">5. Contact</h2>
+      <p class="mb-0">
+        Questions about this policy can be sent to the account holder via the contact details on
+        the TesseraApp GitHub repository.
+      </p>
+    </div>
+  </div>
+</div>
