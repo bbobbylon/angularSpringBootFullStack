@@ -33,7 +33,7 @@ operability**, not features.
 | Dimension | State |
 |---|---|
 | Functional scope | ✅ Complete — auth, MFA, passkeys, federation (login **and** link/unlink), real SMS 2FA, sessions (self-service **and** granular admin revoke), RBAC, org scoping, user-type classification, anomaly detection + step-up, security dashboard, business CRUD, i18n |
-| Tests | ✅ **199 backend / 87 frontend**, all green (re-verified 2026-08-08 via actual Surefire execution counts) |
+| Tests | ✅ **230 backend / 87 frontend**, all green (re-verified 2026-08-08 via actual Surefire execution counts) |
 | Lint | ✅ `ng lint` clean and gating in CI |
 | Dependency audit | ✅ `npm audit --audit-level=high` exit 0; OWASP `dependency-check` wired at `failBuildOnCVSS=7` |
 | CI | ✅ Gating on lint + audit + both test suites against a MySQL service container |
@@ -131,7 +131,7 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 |---|---|---|
 | ⬜ **Role CRUD** | Roles are seed-only; `RoleRepoImpl.create/update/delete` throw `UnsupportedOperationException`. Fine while the seven roles are fixed, blocking the moment anyone wants an eighth | Implement the stubs + an admin screen; the permissions matrix UI already exists to edit against |
 | ⬜ **Self-service organization management** | Orgs are seeded/DB-managed; there is no UI to create one or move a user between them. This is the single biggest gap between "demo" and "a business could run this" | Admin CRUD over `organizations` + `userorganizations`; must respect the same org scope it edits |
-| ⬜ **Org scope for business data** | Scope covers **user administration only**. `/customer/**` is system-wide, so an org admin sees every customer — the Billing/Analytics "Your Organization" badge is cosmetic for the customer tables | Push `organization_id` into the customer/invoice queries the same way the analytics aggregates already do |
+| ✅ **Org scope for business data** | Done (2026-08-08) — every `/customer/**` read (`stats`, list, single get, search, invoice list/get, the new-invoice picker, both XLSX exports) is now restricted for `ROLE_ORGANIZATION_ADMIN` to customers/invoices owned by their active organizations, reusing the exact `*ForOrganizations` service methods `AnalyticsController` already had. Every other role (including plain `ROLE_USER`) keeps today's system-wide view — this closes the specific "org admin sees every customer" gap, not a broader per-user multi-tenancy wall. Found and fixed two pre-existing bugs along the way: `List.of(...).contains(null)` throws instead of returning `false` (would have crashed the scope check on any unowned row), and `GET /customer/invoice/get/{id}` 500'd unconditionally on a draft invoice (`Map.of` rejects a null value) — both predate this change. New suite: `CustomerControllerOrgScopeTest` (14 tests) | |
 | ⬜ **Scope every `UPDATE:USER` holder, not just one role name** | `isOrganizationScoped` matches the literal `ROLE_ORGANIZATION_ADMIN`. `ROLE_HELP_DESK_ADMIN` also carries `UPDATE:USER` and reaches `/admin/**` unscoped | Key scoping off a capability rather than a role name |
 | ⬜ **Per-organization role definitions** | `RoleRepoImpl.java` `TODO(org-roles)`. FR-ORG scopes *administration*, not role *definitions* — every org shares one role catalogue | Only worth it for genuine multi-tenancy; it changes the authority-string model, so not a small change |
 | ✅ **P2-1 — User type classification** | Done (2026-08-08) — badge shows `INTERNAL` / `EXTERNAL` / `FEDERATED` on the admin Users list and detail pages. `users.origin` is an immutable fact stamped once, at account creation, by `FederatedIdentityServiceImpl#insertFederatedUser` (`"FEDERATED_" + provider`) — never touched again, including when an existing password account later links a federated identity. `UserTypeResolver` derives `INTERNAL`/`EXTERNAL` fresh on every read from the email domain against the env-driven `INTERNAL_DOMAINS` allowlist (`AdminUserController`). `AZURE_B2B` was dropped from scope — this app has no actual Azure B2B guest integration, only consumer OAuth via Google/GitHub/Microsoft, and fabricating a category for a provider that isn't built would misrepresent capability | |
@@ -146,7 +146,7 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | ⬜ **Favorites / pinned destinations bar** | Navigation has outgrown the navbar: the Admin dropdown alone holds six destinations, so common pages are two clicks deep behind a menu that must be opened to be read | **Build it on `command-palette.service.ts`, not a new route list** — see the design note below |
 | ⬜ **Backend-driven i18n** | Server-generated messages (validation, email bodies, capability-denied text) stay English while the UI switches language | Spring `MessageSource` + `Accept-Language`; the `CapabilityCatalog` phrases are the natural first target since they already have a message template |
 | ⬜ **Resolve `VERIFY_EMAIL_HOST`** | Reserved and unused (`UI_APP_URL` drives links today). Keep or remove deliberately — do not let it rot as ambiguous config | |
-| ⬜ **DB connection: `VERIFY_IDENTITY` instead of `REQUIRED`** | `application-prod.yml` sets `MYSQL_SSL_MODE: REQUIRED`, which encrypts the ECS↔Aiven link but does not authenticate the server — it completes a TLS handshake with *any* certificate, so it stops passive eavesdropping but not an active MITM presenting a different (validly-signed-by-someone) cert. Not done because Aiven signs with a per-project CA that isn't in the JVM's default truststore | Download Aiven's CA bundle for this project and `keytool -importcert` it into the image's truststore during the Docker build, then flip `MYSQL_SSL_MODE` to `VERIFY_IDENTITY` |
+| ✅ **DB connection: `VERIFY_IDENTITY` instead of `REQUIRED`** | Done (2026-08-08) — Aiven's per-project CA (`certs/aiven-mysql-ca.pem`, a public certificate, safe to commit) is imported into the JRE's default truststore at Docker build time (`keytool -importcert`), and `MYSQL_SSL_MODE` is now `VERIFY_IDENTITY`. Verified three ways before touching production: the cert is well-formed (`openssl x509`), the import actually lands in the built image's truststore (`keytool -list` inside the container), and — the real test — a live `mysql.exe --ssl-mode=VERIFY_IDENTITY --ssl-ca=...` connection against the actual Aiven instance succeeded (TLSv1.3). Not yet redeployed to production as of this writing — see the RUNBOOK for the redeploy step | |
 | ⬜ **Email invoices/documents as PDF attachments** | The app can already export an invoice (and other records) to PDF client-side for printing/download, but there's no way to have that PDF emailed to the customer or to yourself | Reuse `EmailServiceImpl`'s existing `multipart/alternative` + `EmailTemplate` branded-HTML pattern (2026-08-08 session confirmed this is already solid, not a placeholder) and attach the PDF via `MimeMessageHelper#addAttachment`. The PDF generation itself likely needs to move server-side (or accept a client-generated blob upload) since the current export path is frontend-only — investigate `jspdf` usage in `tesseraapp/` before assuming which side should own rendering |
 | ⬜ **Scheduled/on-demand report & metrics emails** | Admins can see stats/analytics live in the Security Center and dashboards, but there's no way to get a periodic digest (login counts, MFA enrollment %, audit summary) or a one-off "email me this view" without staying logged in | A digest email reusing `EmailTemplate`; scheduling likely wants a lightweight cron (Spring `@Scheduled`) rather than a new job-queue dependency, given this project's small-team scale. Natural pairing with `SecurityDashboardServiceImpl`'s existing tile data — render the same numbers into an email instead of a new query path |
 
@@ -259,10 +259,15 @@ it a product rather than an installation, and §6.6 is what it costs.
 
 ### 6.1 Tenancy — the foundational decision
 
-Organizations exist, but they scope **user administration only**. Every customer, invoice and service
-row is visible to every authenticated user with `READ:CUSTOMER`. For a single business running its
-own instance that is fine. For a product serving several businesses it is disqualifying, and it is
-the decision everything else hangs off:
+**Updated 2026-08-08**: `ROLE_ORGANIZATION_ADMIN`'s reads of customer/invoice data are now scoped
+to their own organizations (§3.2 below is done). That closes the specific "an org admin sees
+everyone's data" gap, but it is a narrower fix than full multi-tenancy: every *other* role,
+including a plain `ROLE_USER` with `READ:CUSTOMER`, still sees every customer, invoice, and service
+row system-wide — that was a deliberate scope decision (mirroring how `AnalyticsController`'s
+scoping already worked), not an oversight, but it means the table below is still live. For a single
+business running its own instance the current state is fine. For a product serving several
+businesses as genuinely separate tenants, it is still disqualifying, and it is the decision
+everything else hangs off:
 
 | Model | What it means here | Effort |
 |---|---|---|

@@ -237,4 +237,34 @@ public interface CustomerService {
      * @return an ordered map of status → customer count within those organizations
      */
     Map<String, Integer> getCustomerStatusBreakdownForOrganizations(Collection<Long> organizationIds);
+
+    /**
+     * Every customer owned by the given organizations, unpaginated — the scoped form of
+     * {@link #getCustomers()}, for the new-invoice customer picker and the XLSX export.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @return every customer belonging to those organizations
+     */
+    Iterable<Customer> getCustomersForOrganizations(Collection<Long> organizationIds);
+
+    /**
+     * Every invoice billed to customers owned by the given organizations, unpaginated — the
+     * scoped form of {@link #getInvoices()}, for the XLSX export.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @return every invoice belonging to those organizations
+     */
+    Iterable<Invoice> getInvoicesForOrganizations(Collection<Long> organizationIds);
+
+    /**
+     * Paginated, name-filtered customers restricted to the given organizations — the scoped form
+     * of {@link #searchCustomers(String, int, int)}.
+     *
+     * @param name            the substring to search for within customer names
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @param page            zero-based page index
+     * @param size            records per page
+     * @return a page of matching customers restricted to those organizations
+     */
+    Page<Customer> searchCustomersForOrganizations(String name, Collection<Long> organizationIds, int page, int size);
 }

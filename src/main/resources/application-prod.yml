@@ -26,10 +26,15 @@ MYSQL_PORT: 3306
 # a server that cannot do TLS will now fail to connect rather than quietly downgrade:
 #   mysql -h <host> -P <port> -u <user> -p --ssl-mode=REQUIRED -e "SHOW STATUS LIKE 'Ssl_version'"
 #
-# Not VERIFY_IDENTITY (which would also authenticate the server) only because Aiven signs with a
-# per-project CA that is not in the JVM's default truststore — that CA has to be shipped into the
-# image first. Until then this encrypts but does not prove who is on the other end.
-MYSQL_SSL_MODE: REQUIRED
+# VERIFY_IDENTITY (2026-08-08): also authenticates the server, not just encrypts to it. Needs
+# Aiven's per-project CA in the JVM's truststore — the Dockerfile now imports certs/aiven-mysql-ca.pem
+# (a public certificate, safe to commit — it verifies identity, it holds no private key) into
+# $JAVA_HOME/lib/security/cacerts at build time via keytool. If this database is ever moved to a
+# different Aiven project (a new project CA), certs/aiven-mysql-ca.pem must be replaced with the
+# new project's CA and the image rebuilt, or connections will fail closed with a trust error —
+# which is the correct failure mode, not a bug, since a rebuild step existing for exactly that
+# reason IS the identity check working.
+MYSQL_SSL_MODE: VERIFY_IDENTITY
 
 # Pointless once TLS is mandatory — the RSA key exchange it guards is only reachable on an
 # unencrypted connection, where it is a MITM foothold. Off in production.

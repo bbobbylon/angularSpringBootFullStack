@@ -9,6 +9,7 @@ import org.springframework.data.repository.PagingAndSortingRepository;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.List;
 
 /**
  * InvoiceRepo is the Spring Data JPA repository for {@link Invoice} entities.
@@ -47,4 +48,15 @@ public interface InvoiceRepo extends PagingAndSortingRepository<Invoice, Long>, 
     @Query("SELECT i FROM Invoice i WHERE i.customer.organizationId IN :organizationIds")
     Page<Invoice> findByOrganizationIdIn(@Param("organizationIds") Collection<Long> organizationIds,
                                          Pageable pageable);
+
+    /**
+     * Unpaginated form of {@link #findByOrganizationIdIn(Collection, Pageable)}, for the XLSX
+     * export call site that already uses the unscoped no-arg {@code findAll()} today. Same
+     * customer-join and draft-invoice (no customer) exclusion applies.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @return every invoice billed to customers owned by those organizations, unpaginated
+     */
+    @Query("SELECT i FROM Invoice i WHERE i.customer.organizationId IN :organizationIds")
+    List<Invoice> findByOrganizationIdIn(@Param("organizationIds") Collection<Long> organizationIds);
 }

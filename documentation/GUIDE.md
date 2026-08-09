@@ -474,10 +474,16 @@ Compile-time constants in `constants/Constants.java`, not env vars:
 2. **`globally_quoted_identifiers: true`** makes Hibernate create literal camelCase columns. Always
    add `@Column(name = "snake_case")` on entity fields.
 3. **`MYSQL_HOST=mysql` outside Docker** → `No such host is known`. Use `127.0.0.1`.
-4. **Cloud databases need TLS** — the `prod`/`qa`/`stage` profiles pin `MYSQL_SSL_MODE: REQUIRED`, so
-   this is automatic. If you override the whole URL with `SPRING_DATASOURCE_URL`, spell
-   `sslMode=REQUIRED` out in it — an explicit URL bypasses `MYSQL_SSL_MODE` entirely. The legacy
-   `useSSL`/`requireSSL` pair is superseded and is ignored once `sslMode` is present.
+4. **Cloud databases need TLS** — `qa`/`stage` pin `MYSQL_SSL_MODE: REQUIRED` (encrypts, does not
+   authenticate the server); `prod` went further (2026-08-08) to `VERIFY_IDENTITY` (also
+   authenticates it), because Aiven's per-project CA (`certs/aiven-mysql-ca.pem`) is now imported
+   into the JRE's default truststore at Docker build time. `qa`/`stage` deliberately stay at
+   `REQUIRED` — `qa` runs against a local Docker MySQL that was never issued a cert from Aiven's
+   CA at all, and `stage` may point at an entirely separate Aiven project with its **own** distinct
+   CA, so `VERIFY_IDENTITY` there would need that project's CA baked in too, not prod's. If you
+   override the whole URL with `SPRING_DATASOURCE_URL`, spell the mode out in it explicitly — an
+   explicit URL bypasses `MYSQL_SSL_MODE` entirely. The legacy `useSSL`/`requireSSL` pair is
+   superseded and is ignored once `sslMode` is present.
 5. **`show-sql: false` does not stop SQL logging.** `org.hibernate.SQL` at DEBUG is a separate SLF4J
    path, and `DEBUG_REPORT=true` reopens it.
 
@@ -1741,7 +1747,7 @@ nothing exercises a real browser.**
 
 ### 10.1 Inventory
 
-**199 backend tests across 32 suites** and **87 frontend specs across 8 files** (backend
+**230 backend tests across 34 suites** and **87 frontend specs across 8 files** (backend
 re-verified 2026-08-08 via a full `mvn test` run — actual Surefire execution counts, not annotated
 method counts, since those diverge once parameterized tests are involved; only one backend class
 needs a database). The passkey feature added 4 backend suites and 0 frontend specs — the frontend
@@ -1756,6 +1762,7 @@ spec coverage**, a real gap alongside the backend one noted below.
 | `SecurityDashboardServiceImplTest` | 14 | Window clamping, pagination clamping, zero-filled counters, gap-filled trend, empty scope failing closed *before* any query |
 | `AdminUserControllerOrgScopeTest` | 5 | Org scoping on **reads as well as writes**; platform admins never scope-checked; non-enumerating 403 |
 | `AnalyticsControllerOrgScopeTest` | 8 | Scoped analytics — assertions in pairs, because calling the *unscoped* variant is the bug |
+| `CustomerControllerOrgScopeTest` | 14 | Same scoping extended to the shared `/customer/**` surface (2026-08-08); single-record gets checked post-fetch; caught two pre-existing bugs (`List.of(...).contains(null)` throws instead of returning false; a draft invoice 500'd via `Map.of` rejecting a null value) |
 | `AnalyticsControllerSecurityTest` | 3 | The `/admin/analytics/**` authority gate |
 | `RequestUtilsIpAddressTest` | 10 | `X-Forwarded-For` trust, forgery cases included |
 | `AuthDiagnosticsLoggerTest` | 9 | Console-only RBAC diagnostics stay off the client response |

@@ -4,6 +4,7 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.Invoice;
+import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.report.CustomerReport;
 import com.bob.angularspringbootfullstack.report.InvoiceReport;
 import com.bob.angularspringbootfullstack.service.CustomerService;
@@ -12,17 +13,24 @@ import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
+import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpStatus.CREATED;
@@ -38,6 +46,17 @@ import static org.springframework.http.MediaType.parseMediaType;
  * <p>
  * All endpoints require a valid JWT — unauthenticated requests are rejected
  * by the security filter chain before reaching this controller.
+ *
+ * <p><b>Organization scoping (FR-ORG-2, 2026-08-08).</b> Every read here is restricted for
+ * {@code ROLE_ORGANIZATION_ADMIN} to customers/invoices owned by their active organizations —
+ * the same restriction {@link AnalyticsController} already applied to the admin-only rollups,
+ * extended to this shared surface because an org admin browses customers and invoices here too,
+ * not just through the analytics dashboards. Every other role (including plain
+ * {@code ROLE_USER}) keeps today's system-wide view; see {@link #resolveScope} for why the line
+ * is drawn there. Single-record gets ({@code /get/{id}}, {@code /invoice/get/{id}}) are checked
+ * post-fetch via {@link #requireInScope}; every list/search/export goes through the
+ * organization-scoped repository methods so the restriction lives in SQL, never in a post-filter
+ * that would corrupt pagination totals.
  */
 @RestController
 @RequestMapping(path = "/customer")
@@ -69,12 +88,25 @@ public class CustomerController {
      */
     @GetMapping("/stats")
     public ResponseEntity<HttpResponse> getStats(@AuthenticationPrincipal UserDTO user) {
+        Collection<Long> scope = resolveScope(user);
+        Stats stats;
+        Map<String, Integer> statusBreakdown;
+        if (scope == null) {
+            stats = customerService.getStats();
+            statusBreakdown = customerService.getCustomerStatusBreakdown();
+        } else if (scope.isEmpty()) {
+            stats = new Stats();
+            statusBreakdown = Map.of();
+        } else {
+            stats = customerService.getStatsForOrganizations(scope);
+            statusBreakdown = customerService.getCustomerStatusBreakdownForOrganizations(scope);
+        }
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "stats", customerService.getStats(),
-                                "statusBreakdown", customerService.getCustomerStatusBreakdown()))
+                                "stats", stats,
+                                "statusBreakdown", statusBreakdown))
                         .message("Stats retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -91,13 +123,32 @@ public class CustomerController {
      */
     @GetMapping("/list")
     public ResponseEntity<HttpResponse> getCustomers(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) {
+        Collection<Long> scope = resolveScope(user);
+        int pageIndex = page.orElse(0);
+        int pageSize = size.orElse(20);
+        Page<Customer> customers;
+        Stats stats;
+        Map<String, Integer> statusBreakdown;
+        if (scope == null) {
+            customers = customerService.getCustomers(pageIndex, pageSize);
+            stats = customerService.getStats();
+            statusBreakdown = customerService.getCustomerStatusBreakdown();
+        } else if (scope.isEmpty()) {
+            customers = Page.empty(PageRequest.of(pageIndex, pageSize));
+            stats = new Stats();
+            statusBreakdown = Map.of();
+        } else {
+            customers = customerService.getCustomersForOrganizations(scope, pageIndex, pageSize);
+            stats = customerService.getStatsForOrganizations(scope);
+            statusBreakdown = customerService.getCustomerStatusBreakdownForOrganizations(scope);
+        }
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "page", customerService.getCustomers(page.orElse(0), size.orElse(20)),
-                                "stats", customerService.getStats(),
-                                "statusBreakdown", customerService.getCustomerStatusBreakdown()))
+                                "page", customers,
+                                "stats", stats,
+                                "statusBreakdown", statusBreakdown))
                         .message("Customers retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -113,11 +164,13 @@ public class CustomerController {
      */
     @GetMapping("/get/{customerId}")
     public ResponseEntity<HttpResponse> getCustomer(@AuthenticationPrincipal UserDTO user, @PathVariable Long customerId) {
+        Customer customer = customerService.getCustomer(customerId);
+        requireInScope(resolveScope(user), customer);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "customers", customerService.getCustomer(customerId)))
+                                "customers", customer))
                         .message("Customer retrieved!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -137,11 +190,23 @@ public class CustomerController {
     @GetMapping("/search")
     public ResponseEntity<HttpResponse> searchCustomer(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> name, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) { //throws InterruptedException {
         //TimeUnit.SECONDS.sleep(2); // Artificial delay to simulate real-world search latency
+        Collection<Long> scope = resolveScope(user);
+        int pageIndex = page.orElse(0);
+        int pageSize = size.orElse(20);
+        String term = name.orElse("");
+        Page<Customer> results;
+        if (scope == null) {
+            results = customerService.searchCustomers(term, pageIndex, pageSize);
+        } else if (scope.isEmpty()) {
+            results = Page.empty(PageRequest.of(pageIndex, pageSize));
+        } else {
+            results = customerService.searchCustomersForOrganizations(term, scope, pageIndex, pageSize);
+        }
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "page", customerService.searchCustomers(name.orElse(""), page.orElse(0), size.orElse(20))))
+                                "page", results))
                         .message("Customers found!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -308,11 +373,22 @@ public class CustomerController {
      */
     @GetMapping("/invoice/list")
     public ResponseEntity<HttpResponse> getInvoices(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) {
+        Collection<Long> scope = resolveScope(user);
+        int pageIndex = page.orElse(0);
+        int pageSize = size.orElse(20);
+        Page<Invoice> invoices;
+        if (scope == null) {
+            invoices = customerService.getInvoices(pageIndex, pageSize);
+        } else if (scope.isEmpty()) {
+            invoices = Page.empty(PageRequest.of(pageIndex, pageSize));
+        } else {
+            invoices = customerService.getInvoicesForOrganizations(scope, pageIndex, pageSize);
+        }
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "invoices", customerService.getInvoices(page.orElse(0), size.orElse(20))))
+                                "invoices", invoices))
                         .message("All Invoices retrieved successfully!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -331,11 +407,15 @@ public class CustomerController {
      */
     @GetMapping("/invoice/new")
     public ResponseEntity<HttpResponse> newInvoice(@AuthenticationPrincipal UserDTO user) {
+        Collection<Long> scope = resolveScope(user);
+        Iterable<Customer> customers = scope == null ? customerService.getCustomers()
+                : scope.isEmpty() ? List.of()
+                : customerService.getCustomersForOrganizations(scope);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "customers", customerService.getCustomers(),
+                                "customers", customers,
                                 "availableServices", customerService.getServices()))
                         .message("New invoice page reached and Customers have been retrieved!")
                         .status(OK)
@@ -359,12 +439,20 @@ public class CustomerController {
     @GetMapping("/invoice/get/{invoiceId}")
     public ResponseEntity<HttpResponse> getInvoice(@AuthenticationPrincipal UserDTO user, @PathVariable Long invoiceId) {
         Invoice invoice = customerService.getInvoice(invoiceId);
+        requireInScope(resolveScope(user), invoice);
+        // A draft invoice (ROADMAP: nullable customer) has no customer to embed. Map.of(...)
+        // throws NullPointerException on a null VALUE — not just a null key — so a draft fetched
+        // through this endpoint 500'd unconditionally before this fix, independent of scoping.
+        // A mutable map is used here specifically because this is the one response in the
+        // controller where a value can legitimately be null.
+        Map<String, Object> data = new HashMap<>();
+        data.put("user", userService.getUserByEmail(user.getEmail()));
+        data.put("invoice", invoice);
+        data.put("customer", invoice.getCustomer());
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userService.getUserByEmail(user.getEmail()),
-                                "invoice", invoice,
-                                "customer", invoice.getCustomer()))
+                        .data(data)
                         .message("Invoice retrieved!")
                         .status(OK)
                         .statusCode(OK.value())
@@ -404,10 +492,14 @@ public class CustomerController {
      * @return 200 OK with an XLSX body and {@code Content-Disposition: attachment}
      */
     @GetMapping("/download/report")
-    public ResponseEntity<Resource> exportReport() { //throws InterruptedException {
+    public ResponseEntity<Resource> exportReport(@AuthenticationPrincipal UserDTO user) { //throws InterruptedException {
         //TimeUnit.SECONDS.sleep(2); // Simulate report generation time
+        Collection<Long> scope = resolveScope(user);
+        Iterable<Customer> source = scope == null ? customerService.getCustomers()
+                : scope.isEmpty() ? List.of()
+                : customerService.getCustomersForOrganizations(scope);
         List<Customer> customers = new ArrayList<>();
-        customerService.getCustomers().iterator().forEachRemaining(customers::add);
+        source.iterator().forEachRemaining(customers::add);
         CustomerReport customerReport = new CustomerReport(customers);
         HttpHeaders headers = new HttpHeaders();
         headers.add("File-Name", "customer_report.xlsx");
@@ -429,9 +521,13 @@ public class CustomerController {
      * @return 200 OK with an XLSX body and {@code Content-Disposition: attachment}
      */
     @GetMapping("/invoice/download/report")
-    public ResponseEntity<Resource> exportInvoiceReport() {
+    public ResponseEntity<Resource> exportInvoiceReport(@AuthenticationPrincipal UserDTO user) {
+        Collection<Long> scope = resolveScope(user);
+        Iterable<Invoice> source = scope == null ? customerService.getInvoices()
+                : scope.isEmpty() ? List.of()
+                : customerService.getInvoicesForOrganizations(scope);
         List<Invoice> invoices = new ArrayList<>();
-        customerService.getInvoices().iterator().forEachRemaining(invoices::add);
+        source.iterator().forEachRemaining(invoices::add);
         InvoiceReport invoiceReport = new InvoiceReport(invoices);
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"invoice_report.xlsx\"");
@@ -439,6 +535,66 @@ public class CustomerController {
                 .contentType(parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .headers(headers)
                 .body(invoiceReport.exportReport());
+    }
+
+    /**
+     * Resolves the organization restriction that applies to this caller's view of customers and
+     * invoices (FR-ORG-2, 2026-08-08), mirroring {@code AnalyticsController#resolveScope} exactly
+     * so "who is scoped?" has one answer across the admin AND shared surfaces.
+     *
+     * <p>Returns {@code null} for every role except {@code ROLE_ORGANIZATION_ADMIN} — including
+     * plain {@code ROLE_USER}/{@code ROLE_MODERATOR}, which keep today's system-wide view. This
+     * closes the specific gap FUTURE-ENHANCEMENTS.md named ("an org admin sees every customer"),
+     * not a broader per-user multi-tenancy wall nobody asked for.
+     *
+     * @param caller the authenticated principal from the JWT
+     * @return {@code null} when unscoped, otherwise the caller's active organization ids (possibly empty)
+     */
+    private Collection<Long> resolveScope(UserDTO caller) {
+        if (!ROLE_ORGANIZATION_ADMIN.name().equals(caller.getRoleName())) {
+            return null;
+        }
+        return organizationService.findActiveOrganizationIds(caller.getId());
+    }
+
+    /**
+     * Enforces the resolved scope on a single customer already fetched by id. A {@code null} scope
+     * (unscoped caller) always passes; a scoped caller is refused with a generic 403 — naming
+     * nothing about the customer — when its {@code organizationId} is not in their active set,
+     * including when it is {@code null} (an unowned customer is not evidence of shared ownership).
+     *
+     * @param scope    the caller's resolved scope from {@link #resolveScope}, or {@code null}
+     * @param customer the customer to check
+     */
+    private static void requireInScope(Collection<Long> scope, Customer customer) {
+        if (scope == null) return;
+        // Checked separately from the contains() call below: List.of(...)'s immutable-list
+        // implementation THROWS NullPointerException from contains(null) rather than returning
+        // false, so an unowned customer (organizationId == null) would crash this check instead
+        // of being correctly refused.
+        Long organizationId = customer.getOrganizationId();
+        if (organizationId == null || !scope.contains(organizationId)) {
+            throw new AccessDeniedException("This customer is outside your organization scope.");
+        }
+    }
+
+    /**
+     * Enforces the resolved scope on a single invoice already fetched by id. Invoices carry no
+     * tenant column of their own — the check reads {@code invoice.getCustomer()}'s organization,
+     * and a draft invoice (no customer yet) is treated as out of scope for a scoped caller, the
+     * same fail-closed direction {@code InvoiceRepo#findByOrganizationIdIn} already takes.
+     *
+     * @param scope   the caller's resolved scope from {@link #resolveScope}, or {@code null}
+     * @param invoice the invoice to check
+     */
+    private static void requireInScope(Collection<Long> scope, Invoice invoice) {
+        if (scope == null) return;
+        Long organizationId = invoice.getCustomer() != null ? invoice.getCustomer().getOrganizationId() : null;
+        // See the Customer overload above: contains(null) throws on an immutable List.of(...)
+        // rather than returning false, so the null case must short-circuit before it.
+        if (organizationId == null || !scope.contains(organizationId)) {
+            throw new AccessDeniedException("This invoice is outside your organization scope.");
+        }
     }
 
 }

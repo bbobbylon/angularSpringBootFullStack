@@ -61,7 +61,7 @@ Pipelines exist for AWS (ECS Fargate — the live one), GCP (Cloud Run) and Azur
 **Where it ended up.** Live on AWS ECS Fargate at **`tesseraapp.dev`** (CloudFront in front, a real
 domain bought 2026-08-08), with **usernameless WebAuthn passkeys** and real, unstubbed **SMS 2FA**
 (Twilio, gated by an A2P 10DLC campaign — see §4.23) alongside the existing password/TOTP/federated
-paths. 199 backend and 87 frontend tests green, CI gating on lint + dependency audit + both suites,
+paths. 230 backend and 87 frontend tests green, CI gating on lint + dependency audit + both suites,
 and six-language i18n across 26 of 28 templates.
 
 ---
@@ -99,7 +99,7 @@ What landed on `MastersProjectSRSImpl`, in order.
 | **J** — Single-origin parity | 2026-07-29 | Four defects that exist *only* once the SPA and API share an origin (§4.10) |
 | **K** — Observability & performance | 2026-08-02 | CloudWatch logging config, the N+1 fix, JWT 401 correctness, prod error scrubbing, pagination across every list surface |
 | **L** — WebAuthn passkeys | 2026-08-07 | Usernameless passkey registration/login built from `webauthn4j-core` directly, admin revoke-only controls, one-time post-login welcome flow |
-| **M** — Domain, SMS, and admin polish | 2026-08-08 | `tesseraapp.dev` bought and put in front of CloudFront (all three federated providers + passkeys confirmed live on it); SMS 2FA unstubbed (real Twilio call, E.164 phone-normalization fix); public `/privacy` + `/terms` pages (Twilio A2P 10DLC campaign requirement); per-session admin revoke (`DELETE /admin/user/{id}/sessions/{family}`); user-type badge (P2-1: `INTERNAL`/`EXTERNAL`/`FEDERATED`, `users.origin` + `UserTypeResolver`) |
+| **M** — Domain, SMS, and admin polish | 2026-08-08 | `tesseraapp.dev` bought and put in front of CloudFront (all three federated providers + passkeys confirmed live on it); SMS 2FA unstubbed (real Twilio call, E.164 phone-normalization fix); public `/privacy` + `/terms` pages (Twilio A2P 10DLC campaign requirement); per-session admin revoke (`DELETE /admin/user/{id}/sessions/{family}`); user-type badge (P2-1: `INTERNAL`/`EXTERNAL`/`FEDERATED`, `users.origin` + `UserTypeResolver`); password complexity + phone-number validation closed the frontend/backend mismatch; org scoping extended from admin/analytics to the shared `/customer/**` surface |
 
 ### Notable deliveries in detail
 
@@ -511,6 +511,39 @@ changing. Re-pushed and redeployed; the pages came up `200` immediately.
 one of the copied files is a real signal something is wrong with the build context or cache key, not
 routine build-system chatter — verify with `--no-cache` before spending time debugging the deployed
 application code instead.
+
+### 4.26 A brand-new org-scope test caught two pre-existing NullPointerExceptions
+
+**Symptom.** Writing `CustomerControllerOrgScopeTest` (mirroring the proven
+`AnalyticsControllerOrgScopeTest` pattern) to cover the new customer/invoice org-scoping, three
+tests failed immediately — not because the new scoping logic was wrong, but because two bugs that
+predated this session were sitting undiscovered in code the new tests happened to be the first
+thing to actually exercise.
+
+**Bug 1 — `List.of(...).contains(null)` throws instead of returning `false`.** The single-record
+scope check (`requireInScope(scope, customer)`) did `scope.contains(customer.getOrganizationId())`.
+For an unowned customer (`organizationId == null`), that's exactly the case the check exists to
+refuse — but `Collection#contains` on the JDK's immutable `List.of(...)` implementation throws
+`NullPointerException` on a `null` argument rather than returning `false` the way `ArrayList` or
+`HashSet` would. The refusal path itself crashed instead of firing.
+
+**Bug 2 — a draft invoice 500'd unconditionally, unrelated to scoping.**
+`GET /customer/invoice/get/{id}` built its response with `Map.of("customer", invoice.getCustomer())`
+— and `Map.of` rejects a `null` *value*, not just a null key. A draft invoice (nullable `customer`,
+supported since the "standalone invoice" feature) has always thrown `NullPointerException` through
+this exact endpoint, independent of anything to do with organizations. It had simply never been
+exercised by a test before.
+
+**Fix.** Both null cases are now checked explicitly before anything that would choke on them: the
+scope check short-circuits on a `null` organization id before calling `contains`, and the invoice
+response switches from `Map.of(...)` to a mutable `HashMap` — the one response in the controller
+where a value can legitimately be absent.
+
+**The standing lesson:** a brand-new test suite finding bugs unrelated to what it was written to
+test is not noise to route around — it means that code path had never actually been exercised
+before. `Map.of`/`List.of`'s null-hostility in particular is a recurring trap in this codebase
+specifically because the "everything real" convention (no defensive null-checks for internal
+invariants) reads, at a glance, the same as "this can't be null" when it sometimes can.
 
 ---
 
