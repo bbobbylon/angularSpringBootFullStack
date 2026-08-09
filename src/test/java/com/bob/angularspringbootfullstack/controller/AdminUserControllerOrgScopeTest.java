@@ -62,7 +62,12 @@ class AdminUserControllerOrgScopeTest {
 
     private static final long ORG_ADMIN_ID = 5L;
     private static final long IN_SCOPE_TARGET = 20L;
-    private static final long OUT_OF_SCOPE_TARGET = 77L;
+    // Deliberately long and non-sequential: denialIsNonEnumerating scans the raw JSON body — including
+    // the response's nanosecond-precision timestamp field — for this id as a substring. A short id like
+    // 77 has real odds of appearing by coincidence inside an unrelated ~9-digit timestamp fraction and
+    // failing the test on a leak that never happened; a 9-digit id makes that collision astronomically
+    // unlikely while still exercising the exact same org-scope-denial code path.
+    private static final long OUT_OF_SCOPE_TARGET = 918273645L;
 
     private UserService userService;
     private EventService eventService;
