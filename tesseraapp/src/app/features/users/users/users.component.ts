@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
-import { NgClass, NgOptimizedImage } from '@angular/common';
+import { NgClass, NgOptimizedImage, SlicePipe } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { debounceTime, map, of, startWith, Subject, switchMap } from 'rxjs';
 import { catchError, filter } from 'rxjs/operators';
@@ -31,7 +31,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-users',
-  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, TranslocoDirective, PageSizeSelectComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, SlicePipe, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './users.component.html',
   styleUrl: './users.component.css',
   standalone: true,

@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.0
-**Last Updated:** 2026-08-02
+**Version:** 3.1
+**Last Updated:** 2026-08-08
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -32,8 +32,8 @@ operability**, not features.
 
 | Dimension | State |
 |---|---|
-| Functional scope | ✅ Complete — auth, MFA, federation (login **and** link/unlink), sessions, RBAC, org scoping, anomaly detection + step-up, security dashboard, business CRUD, i18n |
-| Tests | ✅ **126 backend / 87 frontend**, all green (verified 2026-08-02) |
+| Functional scope | ✅ Complete — auth, MFA, passkeys, federation (login **and** link/unlink), real SMS 2FA, sessions (self-service **and** granular admin revoke), RBAC, org scoping, user-type classification, anomaly detection + step-up, security dashboard, business CRUD, i18n |
+| Tests | ✅ **199 backend / 87 frontend**, all green (re-verified 2026-08-08 via actual Surefire execution counts) |
 | Lint | ✅ `ng lint` clean and gating in CI |
 | Dependency audit | ✅ `npm audit --audit-level=high` exit 0; OWASP `dependency-check` wired at `failBuildOnCVSS=7` |
 | CI | ✅ Gating on lint + audit + both test suites against a MySQL service container |
@@ -117,10 +117,10 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | Enhancement | Why it is worth doing | Sketch |
 |---|---|---|
 | ⬜ **Distributed brute-force + rate-limit + link-ticket state** | See §2.4 — the scale-out blocker | Move counters to the database or Redis; the service interfaces do not change (`bucket4j-redis` exists for exactly this) |
-| ⬜ **Session revocation from the security dashboard** | Admins can *see* live sessions but not end them. Seeing a compromised session and being unable to kill it is the wrong half of the feature | Reuse `SessionService`'s revoke-family path; org-scope the target |
+| ✅ **Session revocation from the security dashboard** | Done (2026-08-08) — `GET /admin/user/{id}` now returns the target's live sessions (same `RefreshSession` shape as the Security Center, already `@JsonIgnore`-safe); `DELETE /admin/user/{id}/sessions/{family}` revokes one device, alongside the existing bulk `DELETE /admin/user/{id}/sessions`. Org-scoped, self-target-refused, audited against the target — same convention as every other admin action. Frontend: a Sessions panel on the user-detail page (`user-details.component`), per-row revoke + a bulk "sign out everywhere" button | |
 | ⬜ **Admin-initiated MFA reset** | An account that loses both its authenticator and its recovery codes is currently unrecoverable without direct DB access | Admin action + an `MFA_RESET` audit event; gate on staff authority and audit loudly |
 | ⬜ **Regenerate recovery codes** | There is no standalone endpoint — replacing a depleted set today means disable-and-re-enroll TOTP | `issueRecoveryCodes()` already does the delete-then-insert this needs; it just has no route |
-| ⬜ **Role-tier ceiling on reassignment** | An org admin holds `UPDATE:ROLE`, so they can promote an **in-scope** user to `ROLE_ADMIN`. Scope bounds *who*, not *which role* — privilege-elevation-by-proxy | Reject target roles above the caller's own tier in `updateUserRole` |
+| ✅ **Role-tier ceiling on reassignment** | Done (2026-08-07, `ec26adc`) — `RoleType.canAssign` + `AdminUserController#requireAssignableTier` reject assigning any role above the caller's own tier, fails closed on an unrecognised role name | |
 | ⬜ **Single CORS source of truth** | Two CORS configurations disagree (`SecurityConfig`'s hardcoded list vs the config-driven `corsFilter`), and the hardcoded one wins. Inert in a single-origin deploy; a real bug the moment a second client exists | Delete the hardcoded list; have `SecurityConfig` read `app.cors.allowed-origin-patterns` like the filter does |
 | ⬜ **Anomaly signal tuning UI** | `ANOMALY_HISTORY_LIMIT` and the enable flag are env-only, so tuning needs a redeploy | Persisted settings + an admin panel; keep env as the fallback default |
 | ⬜ **P2-3 — Machine-to-machine API access** | Lets scripts and CI authenticate without a browser. Deferred deliberately: it adds a second authentication front door, the highest-risk change on this list | **Option A — API keys:** an `X-API-Key` filter ahead of `CustomAuthFilter` resolving a **hashed** key to an `Authentication` carrying authority strings, so every existing `hasAnyAuthority`/`@PreAuthorize` rule applies unchanged. **Option B — OAuth2 client-credentials:** `POST /oauth/token`. Both converge on "a request arrives already carrying authorities". Needs `service_accounts` + hashed `api_keys` tables, new audit event types, and `PUBLIC_URLS` ↔ `PUBLIC_ROUTES` lockstep. **Large, higher risk — do last, with dedicated review** |
@@ -134,7 +134,7 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | ⬜ **Org scope for business data** | Scope covers **user administration only**. `/customer/**` is system-wide, so an org admin sees every customer — the Billing/Analytics "Your Organization" badge is cosmetic for the customer tables | Push `organization_id` into the customer/invoice queries the same way the analytics aggregates already do |
 | ⬜ **Scope every `UPDATE:USER` holder, not just one role name** | `isOrganizationScoped` matches the literal `ROLE_ORGANIZATION_ADMIN`. `ROLE_HELP_DESK_ADMIN` also carries `UPDATE:USER` and reaches `/admin/**` unscoped | Key scoping off a capability rather than a role name |
 | ⬜ **Per-organization role definitions** | `RoleRepoImpl.java` `TODO(org-roles)`. FR-ORG scopes *administration*, not role *definitions* — every org shares one role catalogue | Only worth it for genuine multi-tenancy; it changes the authority-string model, so not a small change |
-| ⬜ **P2-1 — User type classification** | Show admins where an identity came from: `INTERNAL` / `EXTERNAL` / `FEDERATED` / `AZURE_B2B` | Derive `INTERNAL`/`EXTERNAL` **on read** from an env-driven domain allowlist (`INTERNAL_DOMAINS`) — it must be reconfigurable, not baked in — and store an immutable `origin` fact for `FEDERATED`/`AZURE_B2B` stamped by `OAuth2LoginSuccessHandler`. **Small–medium, low risk** |
+| ✅ **P2-1 — User type classification** | Done (2026-08-08) — badge shows `INTERNAL` / `EXTERNAL` / `FEDERATED` on the admin Users list and detail pages. `users.origin` is an immutable fact stamped once, at account creation, by `FederatedIdentityServiceImpl#insertFederatedUser` (`"FEDERATED_" + provider`) — never touched again, including when an existing password account later links a federated identity. `UserTypeResolver` derives `INTERNAL`/`EXTERNAL` fresh on every read from the email domain against the env-driven `INTERNAL_DOMAINS` allowlist (`AdminUserController`). `AZURE_B2B` was dropped from scope — this app has no actual Azure B2B guest integration, only consumer OAuth via Google/GitHub/Microsoft, and fabricating a category for a provider that isn't built would misrepresent capability | |
 
 ### 3.3 Product & data
 
@@ -369,12 +369,16 @@ irrecoverably. Phase 3 is the one that requires a real architectural decision ra
 
 ### 6.8 The HTTPS / domain decision (do this first)
 
-> **Status, August 4, 2026 — Route B was taken. HTTPS is live, no domain was purchased.**
-> CloudFront distribution `E1WWY6FHSKI84P` is `Deployed` in front of the ALB, serving
-> **`https://d3911jyxcju4q4.cloudfront.net`** on the auto-issued `*.cloudfront.net` certificate.
-> Created by [`aws/setup-cloudfront.sh`](../aws/setup-cloudfront.sh). The analysis below is kept
-> because Route A remains the production-shaped answer and the reasoning still applies — but read
-> **[Route B](#route-b)** for what actually happened, including one thing this section got wrong.
+> **Status, August 8, 2026 — superseded. A real domain was bought after all.** Route B (below) was
+> the answer from August 4 through August 7 — CloudFront on the auto-issued `*.cloudfront.net`
+> name, no domain. On August 8 a real domain was purchased anyway (**`tesseraapp.dev`**, Porkbun,
+> $8.75/yr) and attached to the same CloudFront distribution as an alternate domain name, following
+> the Route A procedure below but against CloudFront's origin rather than the ALB directly — see
+> `aws/RUNBOOK.md` §B1.6 for the exact steps actually run. **Both URLs still work** and hit the
+> identical backend; the one asymmetry is GitHub, whose one-callback-per-app limit means GitHub
+> login only works on `tesseraapp.dev` now. The analysis below (Route A and Route B both) is kept
+> because the reasoning still applies and Route B is still the free fallback if a domain is ever
+> not an option.
 
 **The domain and the HTTPS problem are the same problem.** ACM will not issue a certificate without
 proving you control the domain's DNS, and AWS will not let you request one for the ALB's own
@@ -508,5 +512,6 @@ for a demo, wrong for a product. Route A remains the production-shaped answer, a
 ## Related documents
 
 - [GUIDE.md](GUIDE.md) — how everything currently works
+- [FEATURE-INVENTORY.md](FEATURE-INVENTORY.md) — the exhaustive, verifiable "everything that's built" checklist (explicitly excludes everything in this file)
 - [IMPLEMENTATION-HISTORY.md](IMPLEMENTATION-HISTORY.md) — what was built, and what went wrong
 - [flows/](flows/README.md) — click-to-database traces

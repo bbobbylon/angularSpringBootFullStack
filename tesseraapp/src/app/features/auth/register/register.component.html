@@ -117,9 +117,11 @@
             <div class="sc-field">
               <label class="form-label" for="password">{{ t('auth.password') }}</label>
               <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
-              <input id="password" name="password" ngModel required minlength="4" type="password"
+              <input id="password" name="password" ngModel required [minlength]="PASSWORD_MIN_LENGTH"
+                     [pattern]="PASSWORD_PATTERN" type="password"
                      autocomplete="new-password" [placeholder]="t('register.passwordPlaceholder')"
                      [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+              <small class="text-muted">{{ PASSWORD_HINT }}</small>
             </div>
 
             <button

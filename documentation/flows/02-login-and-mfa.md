@@ -111,8 +111,10 @@ brand-new login immediately shows up in the Security Center device list
 ## B · SMS-MFA branch (`user.using2FA`)
 
 When the authenticated user has SMS 2FA on, `UserController.login` calls `sendVerificationCode`
-(`:628, 713`) which sends the code (Twilio — stubbed in dev) and returns the user **without
-tokens**. The component reacts (`login.component.ts:206-215`):
+(`:628, 713`) which sends the code via Twilio (`SMSUtils`) and returns the user **without
+tokens**. Real send when Twilio credentials are configured; degrades to logging the code to the
+server console when they're placeholders/unset, which is what makes dev/CI work without a Twilio
+account. The component reacts (`login.component.ts:206-215`):
 
 ```mermaid
 sequenceDiagram

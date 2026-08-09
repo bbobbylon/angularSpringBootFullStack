@@ -50,9 +50,11 @@ src/app/
 | `/login`, `/register`, `/resetpassword`, `/verify` | auth flows | public |
 | `/verify/account/:key`, `/verify/password/:key` | email-link landings | public |
 | `/oauth2/callback` | federated-login landing | public |
+| `/privacy`, `/terms` | legal pages (Twilio A2P 10DLC campaign requirement) | public |
+| `/welcome-passkey` | One-time post-login passkey nudge (skippable) | authenticated |
 | `/` | Home (dashboard) | authenticated |
 | `/profile` | Profile | authenticated |
-| `/security` | Account Security Center (TOTP + sessions) | authenticated |
+| `/security` | Account Security Center (TOTP + passkeys + sessions) | authenticated |
 | `/customers`, `/customers/:id`, `/customer/new` | Customers | authenticated |
 | `/invoices`, `/invoice/new`, `/invoice/:id/:invoiceNumber` | Invoices | authenticated |
 | `/users`, `/users/:id`, `/roles` | Admin (users & roles) | authenticated + `adminGuard` |
@@ -94,7 +96,7 @@ npm start        # dev server → http://localhost:4200 (API calls go to http://
 Other scripts:
 
 ```bash
-npm run build        # production build → dist/securecapitaapp/browser/
+npm run build        # production build → dist/tesseraapp/browser/
 npm test             # Vitest unit tests
 npm run lint         # ESLint
 npm run format       # Prettier (write)

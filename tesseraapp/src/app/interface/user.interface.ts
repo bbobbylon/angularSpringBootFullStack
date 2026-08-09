@@ -37,4 +37,16 @@ export interface UserInterface {
   createdAt: Date;
   roleName: string;
   permissions: string;
+  /**
+   * Raw stamped value: {@code null} for a password-registered account, or
+   * {@code "FEDERATED_<PROVIDER>"} for one created via federated sign-in. Prefer
+   * {@link userType} for display — this is the underlying fact it derives from.
+   */
+  origin?: string;
+  /**
+   * Admin-facing user-type badge (P2-1): {@code 'INTERNAL' | 'EXTERNAL' | 'FEDERATED'}. Only
+   * populated by the admin endpoints (`/admin/user/**`) — absent elsewhere, so callers outside
+   * the admin surface should not assume it is set.
+   */
+  userType?: string;
 }

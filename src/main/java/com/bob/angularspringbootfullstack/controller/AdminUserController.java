@@ -13,9 +13,11 @@ import com.bob.angularspringbootfullstack.service.PasskeyService;
 import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import com.bob.angularspringbootfullstack.utils.UserTypeResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -91,6 +93,17 @@ public class AdminUserController {
     private final ApplicationEventPublisher eventPublisher;
 
     /**
+     * Comma-separated email-domain allowlist for the INTERNAL/EXTERNAL half of the user-type
+     * badge (P2-1) — env {@code INTERNAL_DOMAINS}, e.g. {@code "lewisu.edu,tesseraapp.dev"}.
+     * Deliberately reconfigurable at deploy time rather than baked into code: which domains count
+     * as "internal" is an operational fact about a given deployment, not a compile-time constant.
+     * Blank/unset means nothing qualifies as INTERNAL — every non-federated account reads EXTERNAL,
+     * the safe default when nobody has configured this yet.
+     */
+    @Value("${app.security.internal-domains:}")
+    private String internalDomains;
+
+    /**
      * Returns one page of the user directory, optionally filtered by a free-text term
      * matched against first name, last name, and email (FR-ADMIN-1).
      *
@@ -125,6 +138,7 @@ public class AdminUserController {
             users = userService.searchUsers(searchTerm, page, size);
         }
         int totalPages = (int) Math.ceil((double) totalElements / Math.max(size, 1));
+        users.forEach(this::stampUserType);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -156,6 +170,7 @@ public class AdminUserController {
     public ResponseEntity<HttpResponse> getUser(Authentication authentication, @PathVariable Long id) {
         requireOrganizationScope(authentication, id);
         UserDTO selectedUser = userService.getUserById(id);
+        stampUserType(selectedUser);
         long eventsTotalElements = eventService.countEventsByUserId(id);
         int eventsTotalPages = (int) Math.ceil((double) eventsTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
@@ -171,7 +186,11 @@ public class AdminUserController {
                                 // WebAuthn credential id or the stored attestation object; an
                                 // administrator has no legitimate need to see either, and exposing
                                 // them would widen this endpoint's blast radius for no UI benefit.
-                                "passkeys", passkeyService.listCredentials(id)))
+                                "passkeys", passkeyService.listCredentials(id),
+                                // Same shape as the Security Center's own device list; RefreshSession
+                                // already @JsonIgnores jti/userId/revoked/superseded, so this is the
+                                // identical, already-safe-to-serialize view used for self-service.
+                                "sessions", sessionService.listSessions(id)))
                         .message("User retrieved successfully.")
                         .status(OK)
                         .statusCode(OK.value())
@@ -238,7 +257,7 @@ public class AdminUserController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", getAuthenticatedUser(authentication),
-                                "selectedUser", userService.getUserById(id),
+                                "selectedUser", refreshedTarget(id),
                                 "roles", roleService.getAllRoles()))
                         .message("User role updated successfully.")
                         .status(OK)
@@ -273,7 +292,7 @@ public class AdminUserController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", getAuthenticatedUser(authentication),
-                                "selectedUser", userService.getUserById(id),
+                                "selectedUser", refreshedTarget(id),
                                 "roles", roleService.getAllRoles()))
                         .message("User account settings updated successfully.")
                         .status(OK)
@@ -371,9 +390,51 @@ public class AdminUserController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", getAuthenticatedUser(authentication),
-                                "selectedUser", userService.getUserById(id),
-                                "roles", roleService.getAllRoles()))
+                                "selectedUser", refreshedTarget(id),
+                                "roles", roleService.getAllRoles(),
+                                "sessions", sessionService.listSessions(id)))
                         .message("All sessions for this user have been revoked.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Revokes one specific session (device) of a managed user, leaving their other sessions
+     * untouched — the granular sibling of {@link #revokeUserSessions}, which ends all of them at
+     * once. Reuses {@link SessionService#revokeSession}, the same family-scoped revoke the
+     * Security Center calls on a user's own sessions; ownership of the family is enforced in the
+     * SQL predicate there, so a family id belonging to a different user updates nothing.
+     *
+     * <p>Same authority, self-target refusal, organization scope, and audit convention as
+     * {@link #revokeUserSessions} — this is a narrower version of the same containment action, not
+     * a different one.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the target user's primary key
+     * @param family         the session (family) to revoke
+     * @return 200 OK with the refreshed target user and their remaining sessions
+     */
+    @PreAuthorize("hasAuthority('UPDATE:USER')")
+    @DeleteMapping("/{id}/sessions/{family}")
+    public ResponseEntity<HttpResponse> revokeUserSession(Authentication authentication,
+                                                           @PathVariable Long id,
+                                                           @PathVariable String family) {
+        requireNotSelf(authentication, id, "Use your Security Center to manage your own sessions.");
+        requireOrganizationScope(authentication, id);
+        UserDTO target = userService.getUserById(id);
+        sessionService.revokeSession(id, family);
+        eventPublisher.publishEvent(new NewUserEvent(target.getEmail(), SESSION_REVOKED));
+        log.warn("Admin '{}' revoked session '{}' for user id {} (email={})",
+                getAuthenticatedUser(authentication).getEmail(), family, id, target.getEmail());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", getAuthenticatedUser(authentication),
+                                "selectedUser", refreshedTarget(id),
+                                "roles", roleService.getAllRoles(),
+                                "sessions", sessionService.listSessions(id)))
+                        .message("Session revoked.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
@@ -408,7 +469,7 @@ public class AdminUserController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", getAuthenticatedUser(authentication),
-                                "selectedUser", userService.getUserById(id),
+                                "selectedUser", refreshedTarget(id),
                                 "passkeys", passkeyService.listCredentials(id)))
                         .message("Passkey revoked.")
                         .status(OK)
@@ -439,12 +500,41 @@ public class AdminUserController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", getAuthenticatedUser(authentication),
-                                "selectedUser", userService.getUserById(id),
+                                "selectedUser", refreshedTarget(id),
                                 "passkeys", passkeyService.listCredentials(id)))
                         .message("All passkeys for this user have been revoked.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
+    }
+
+    /**
+     * Re-fetches a managed user and stamps its user-type badge, for the mutating endpoints that
+     * return a refreshed {@code selectedUser} after acting on the target. Without this, the badge
+     * would go blank on the frontend after any role/settings/session/passkey mutation until the
+     * next full page load, since {@code UserDTO#userType} is never copied by {@code BeanUtils} —
+     * only {@link #getUser} and {@link #listUsers} stamped it otherwise.
+     *
+     * @param id the target user's primary key
+     * @return the target user, with {@code userType} populated
+     */
+    private UserDTO refreshedTarget(Long id) {
+        UserDTO user = userService.getUserById(id);
+        stampUserType(user);
+        return user;
+    }
+
+    /**
+     * Sets {@link UserDTO#getUserType()} from the account's stamped {@link UserDTO#getOrigin()}
+     * and, for non-federated accounts, its email domain against {@link #internalDomains}
+     * (P2-1). Mutates in place rather than returning a new instance since every caller already
+     * holds a reference to the DTO it wants stamped.
+     *
+     * @param user the DTO to stamp; a no-op if {@code null}
+     */
+    private void stampUserType(UserDTO user) {
+        if (user == null) return;
+        user.setUserType(UserTypeResolver.resolve(user.getEmail(), user.getOrigin(), internalDomains));
     }
 
     /**

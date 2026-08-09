@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
-import { DatePipe, NgClass } from '@angular/common';
+import { DatePipe, NgClass, SlicePipe } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { map, of, startWith, switchMap } from 'rxjs';
@@ -35,7 +35,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 @Component({
   selector: 'app-user-details',
   standalone: true,
-  imports: [FormsModule, RouterLink, DatePipe, NgClass, NavbarComponent, TranslocoDirective],
+  imports: [FormsModule, RouterLink, DatePipe, NgClass, SlicePipe, NavbarComponent, TranslocoDirective],
   templateUrl: './user-details.component.html',
   styleUrl: './user-details.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -189,6 +189,25 @@ export class UserDetailsComponent implements OnInit {
   }
 
   /**
+   * Revokes ONE of the managed user's sessions, leaving their other devices signed in — the
+   * granular sibling of {@link revokeSessions}, which ends all of them at once.
+   *
+   * @param family - the session (family) to revoke
+   */
+  protected revokeSession(family: string): void {
+    const id = this.data()?.data?.selectedUser?.id;
+    if (!id) return;
+    this.isLoading.set(true);
+    this.adminUserService
+      .revokeSession$(id, family)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.applyMutation(response, 'Session revoked'),
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
    * Revokes one of the managed user's passkeys — the admin "help reset" action for a lost or
    * compromised device. There is no "regenerate": a passkey's private key never leaves its
    * authenticator, so this forces the user to enroll a fresh one (or fall back to password/TOTP)
@@ -277,9 +296,12 @@ export class UserDetailsComponent implements OnInit {
   /**
    * Merges a mutation response into the cached detail state. The PATCH endpoints
    * return {@code selectedUser} and {@code roles} but not {@code events}, so the
-   * previously loaded event history is preserved rather than blanked.
+   * previously loaded event history is preserved rather than blanked. The two session-revoke
+   * endpoints DO return a refreshed {@code sessions} slice; the role/settings/profile PATCHes
+   * don't touch sessions at all, so falling back to the previous value leaves that panel intact
+   * for them too — same convention as {@code roles}.
    *
-   * @param response - the PATCH response envelope
+   * @param response - the PATCH/DELETE response envelope
    * @param message  - the success toast to show
    */
   private applyMutation(response: CustomHttpResponseInterface<AdminUserDetailInterface>, message: string): void {
@@ -290,6 +312,7 @@ export class UserDetailsComponent implements OnInit {
         ...current!.data!,
         selectedUser: response.data?.selectedUser ?? current!.data!.selectedUser,
         roles: response.data?.roles ?? current!.data!.roles,
+        sessions: response.data?.sessions ?? current!.data!.sessions,
       },
     });
     this.isLoading.set(false);

@@ -6,7 +6,16 @@
 
 **Routes (all `[authenticationGuard, adminGuard]`):** `/users` · `/users/:id` · `/roles`
 **Endpoints (`/admin/user/**`):** `GET /list` · `GET /{id}` · `GET /{id}/events` ·
-`PATCH /{id}/role/{roleName}` (UPDATE:ROLE) · `PATCH /{id}/settings` (UPDATE:USER) → `AdminUserController`
+`PATCH /{id}/role/{roleName}` (UPDATE:ROLE) · `PATCH /{id}/settings` (UPDATE:USER) ·
+`PATCH /{id}/update` (UPDATE:USER) · `DELETE /{id}/sessions[/{family}]` (UPDATE:USER) ·
+`DELETE /{id}/passkeys[/{credentialId}]` (UPDATE:USER) → `AdminUserController`
+>
+> **2026-08-08 additions**, not yet reflected in the diagrams below: `GET /{id}` (and `/list`) now
+> also return `sessions` (the target's live devices — same shape as flow-12's own list) and a
+> `userType` field on every user (`INTERNAL`/`EXTERNAL`/`FEDERATED`, derived by `UserTypeResolver`
+> — see `GUIDE.md` §8.6). `DELETE /{id}/sessions/{family}` revokes ONE device; the pre-existing
+> `DELETE /{id}/sessions` (no family) still revokes all of them. All three follow the exact same
+> self-target-refused + org-scoped + audited-against-target shape as the passkey revokes below.
 
 ---
 

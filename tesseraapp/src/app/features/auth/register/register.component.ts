@@ -7,6 +7,7 @@ import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../../constants/password-policy';
 
 /**
  * Registration view for creating new user accounts.
@@ -29,6 +30,10 @@ export class RegisterComponent {
   registerState = signal<RegisterStateInterface>({ dataState: DataState.LOADED });
   /** Exposes {@link DataState} to the template for switch-case rendering. */
   readonly DataState = DataState;
+  /** Password requirements — mirrors the backend's `PasswordPolicy` exactly; see that constant's doc. */
+  protected readonly PASSWORD_MIN_LENGTH = PASSWORD_MIN_LENGTH;
+  protected readonly PASSWORD_PATTERN = PASSWORD_PATTERN;
+  protected readonly PASSWORD_HINT = PASSWORD_HINT;
   protected readonly userService = inject(UserService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);

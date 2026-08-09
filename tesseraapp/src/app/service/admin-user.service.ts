@@ -126,6 +126,20 @@ export class AdminUserService {
       .pipe(catchError(this.handleError));
 
   /**
+   * Revokes ONE of a managed user's sessions, leaving their other devices signed in
+   * ({@code DELETE /admin/user/:id/sessions/:family}, requires UPDATE:USER) — the granular
+   * sibling of {@link revokeSessions$}, which ends all of them at once.
+   *
+   * @param id     - the managed user's primary key
+   * @param family - the session (family) to revoke
+   * @returns Observable of the API envelope carrying the refreshed selectedUser and remaining sessions
+   */
+  revokeSession$ = (id: number, family: string): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/sessions/${family}`)
+      .pipe(catchError(this.handleError));
+
+  /**
    * Revokes one of a managed user's passkeys — the admin "help reset" action for a lost or
    * compromised device ({@code DELETE /admin/user/:id/passkeys/:credentialId}, requires
    * UPDATE:USER). There is no "regenerate": a passkey's private key never leaves its

@@ -10,6 +10,7 @@ import { CustomerService } from '../../../service/customer.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../../constants/password-policy';
 
 /**
  * Verification landing view for account and password reset links.
@@ -30,6 +31,10 @@ import { TranslocoDirective } from '@jsverse/transloco';
 export class VerifyComponent implements OnInit {
   /** Exposes the `DataState` enum to the template for asynchronous data handling. */
   readonly DataState = DataState;
+  /** Password requirements — mirrors the backend's `PasswordPolicy` exactly; see that constant's doc. */
+  protected readonly PASSWORD_MIN_LENGTH = PASSWORD_MIN_LENGTH;
+  protected readonly PASSWORD_PATTERN = PASSWORD_PATTERN;
+  protected readonly PASSWORD_HINT = PASSWORD_HINT;
   /**
    * Drives the template's loading/success/error rendering. Single writable signal,
    * mutated from both the route-param subscription (initial verification) and the

@@ -17,6 +17,7 @@ import { getEventDisplay } from '../../../utils/event-display.utils';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
 import { isWebAuthnSupported, startRegistration } from '../../../utils/webauthn.utils';
+import { PHONE_PATTERN } from '../../../constants/phone-policy';
 
 /**
  * Account Security Center (plan.md M4 creates this surface; M5 populates it).
@@ -43,6 +44,8 @@ import { isWebAuthnSupported, startRegistration } from '../../../utils/webauthn.
 export class SecurityCenterComponent implements OnInit {
   /** Template access to the DataState enum for asynchronous rendering. */
   readonly DataState = DataState;
+  /** Phone number shape — mirrors the backend's `PhonePolicy` exactly; see that constant's doc. */
+  protected readonly PHONE_PATTERN = PHONE_PATTERN;
   /** Page-level load state (driven by the initial profile fetch). */
   protected readonly dataState = signal<DataState>(DataState.LOADING);
   /** The signed-in user — drives the navbar and the MFA badges. */

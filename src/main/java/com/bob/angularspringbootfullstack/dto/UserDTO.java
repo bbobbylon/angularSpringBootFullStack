@@ -140,4 +140,20 @@ public class UserDTO {
      * in which case no token invalidation check is performed.
      */
     private LocalDateTime passwordChangedAt;
+    /**
+     * Mirrors {@link com.bob.angularspringbootfullstack.model.User#getOrigin()} — copied through
+     * automatically by {@code BeanUtils.copyProperties} since the property names match. Raw
+     * storage value only ({@code null} or {@code "FEDERATED_<PROVIDER>"}); see {@link #userType}
+     * for the collapsed admin-facing category.
+     */
+    private String origin;
+    /**
+     * The admin-facing user-type badge — {@code INTERNAL}, {@code EXTERNAL}, or {@code FEDERATED}
+     * (P2-1). NOT copied by {@code BeanUtils}; {@link com.bob.angularspringbootfullstack.model.User}
+     * has no matching property. Set explicitly by
+     * {@link com.bob.angularspringbootfullstack.utils.UserTypeResolver#resolve} wherever this DTO
+     * is built for an admin-facing response, so it stays {@code null} (and simply doesn't render a
+     * badge) on any path that doesn't need it.
+     */
+    private String userType;
 }

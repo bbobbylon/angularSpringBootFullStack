@@ -78,4 +78,14 @@ public class User {
      * Null for users who have never changed their password.
      */
     private LocalDateTime passwordChangedAt;
+    /**
+     * How this account was created — an immutable fact stamped once, never updated. {@code null}
+     * for ordinary password registration; {@code "FEDERATED_" + provider} (e.g.
+     * {@code "FEDERATED_GOOGLE"}) for an account {@code FederatedIdentityServiceImpl} created on
+     * first contact from that provider. Deliberately untouched when an existing password account
+     * later links a federated identity via the Security Center — that changes what the account can
+     * sign in with, not how it was born. See {@code utils.UserTypeResolver} for how this becomes
+     * the admin-facing INTERNAL/EXTERNAL/FEDERATED badge.
+     */
+    private String origin;
 }

@@ -395,7 +395,16 @@ via `GET /oauth2/providers`. See [§3.4](#34-setting-up-a-federated-provider).
 **SMS 2FA (optional):** `TWILIO_FROM_NUMBER`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`. Leave them
 as placeholders and `SMSUtils` logs the code to the server console instead of sending — safe for
 dev/CI with no Twilio account. Fill in real values and `NotificationServiceImpl.sendTwoFactorCode`
-sends a real text; every send then incurs a Twilio cost.
+sends a real text; every send then incurs a Twilio cost. A placeholder like `CHANGE_ME_ACxxxxxxx`
+passes `SMSUtils.isConfigured()` silently (it only checks non-blank, not real) and degrades to the
+same console-log fallback as leaving the value unset entirely — see `aws/RUNBOOK.md` for the
+2026-08-08 incident this caused in production. Delivery also depends on the sending number's A2P
+10DLC campaign being carrier-approved, which is outside the app entirely — Twilio's send API can
+return success (message queued) while the carrier still silently drops it as `Undelivered`.
+
+**User-type badge (optional, admin-only, P2-1):** `INTERNAL_DOMAINS` — comma-separated email
+domains (e.g. `lewisu.edu,tesseraapp.dev`) that read `INTERNAL` on the admin Users pages. Blank/unset
+(the default) means every non-federated account reads `EXTERNAL`. See §8.6.
 
 **Aiven (only when `DB=aiven`):** `AIVEN_DB_HOST`, `_PORT`, `_NAME`, `_USERNAME`, `_PASSWORD`.
 The current cloud database is `db3`.
@@ -1248,6 +1257,36 @@ Public surface: registration, login, SMS/TOTP/passkey login completion, account/
 verification, password reset, token refresh, profile images, OAuth2 routes, and Actuator (`health`
 and `info` only, with `show-details: never`).
 
+### 7.12 Input validation policies
+
+Two rules get their own dedicated constants class rather than an inline `@Pattern` on each form,
+following the same shape for the same reason: a rule expressed in more than one place drifts, and
+by the time it's noticed the weaker copy has usually been live for a while.
+
+**Password (`constants/PasswordPolicy.java`).** At least 8 characters, with an uppercase letter, a
+lowercase letter, and a digit, and no whitespace — enforced identically on all **three** doors a
+password can enter through: `User` (registration), `UpdatePasswordForm` (change), and
+`NewPasswordForm` (reset). Before this existed, registration enforced `@Size(min = 8)` and the
+reset path enforced only `@NotEmpty` — a password could register at eight characters and then be
+reset to `"1"`. Deliberately NOT enforced: a maximum length (BCrypt truncates beyond 72 bytes, but
+rejecting long passphrases pushes users toward shorter ones) or forced rotation (NIST 800-63B
+advises against it). The stronger version of this control — a breach-corpus check via Have I Been
+Pwned's k-anonymity API — is tracked as follow-on work, not done here, because it adds an outbound
+network dependency to the registration path.
+
+**Phone number (`constants/PhonePolicy.java`).** A real US 10-digit shape (optional `1`/`+1`
+country code, common formatting characters allowed), enforced on `UpdateForm.phoneNumber` — the
+field the Security Center's SMS 2FA opt-in writes through. Replaced a near-unrestricted
+`^\+?[0-9. ()-]{7,25}$` pattern (2026-08-08) that accepted `"1234567"` outright; `SMSUtils`'s own
+`toE164US` normalization was the only thing that ever caught a malformed number, and by then it was
+already saved on the account and the failure surfaced as a text that silently never arrived rather
+than an immediate, actionable validation error.
+
+Both are backend-enforced (the actual boundary) and mirrored on the frontend for UX only —
+`constants/password-policy.ts` / `constants/phone-policy.ts` — so a rejection shows up as a
+disabled submit button and an inline hint instead of a confusing 400 after the fact. The frontend
+copy exists to give a good experience, never to be trusted as the check.
+
 ---
 
 ## 8. API reference
@@ -1381,10 +1420,27 @@ All routes require `UPDATE:USER` **or** `UPDATE:ROLE`; the `PATCH`es are stricte
 | PATCH | `/admin/user/{id}/update` | **`UPDATE:USER`** | The `{id}` path variable **overwrites any body id** |
 | DELETE | `/admin/user/{id}/passkeys/{credentialId}` | **`UPDATE:USER`** | Revoke one passkey — no "reset" exists, see [§7.10](#710-mfa-federation-and-account-security) |
 | DELETE | `/admin/user/{id}/passkeys` | **`UPDATE:USER`** | Revoke ALL of the user's passkeys |
+| DELETE | `/admin/user/{id}/sessions/{family}` | **`UPDATE:USER`** | Revoke ONE of the user's sessions (2026-08-08) — the granular sibling of the bulk revoke below |
+| DELETE | `/admin/user/{id}/sessions` | **`UPDATE:USER`** | Revoke ALL of the user's sessions — "sign out everywhere," the containment action for a suspected compromise |
 
 > `user` = the calling admin (for the navbar); `selectedUser` = the managed user. Mutations are
 > audited against the **target**. `GET /admin/user/{id}` also bundles `passkeys` (metadata only —
-> nickname, transports, timestamps; never the WebAuthn credential id or attestation object).
+> nickname, transports, timestamps; never the WebAuthn credential id or attestation object) and,
+> since 2026-08-08, `sessions` — the same `RefreshSession` shape (device, IP, created/last-used/
+> expires) the Security Center shows for a user's own devices, here surfaced to administrators.
+> Both self-targeting refusal and organization scope apply to every mutating endpoint above,
+> including the two session-revoke routes.
+>
+> Every `selectedUser`/`users` row also carries **`userType`** (2026-08-08, P2-1): `INTERNAL`,
+> `EXTERNAL`, or `FEDERATED`. `FEDERATED` comes straight from the immutable `origin` column,
+> stamped once at account creation by `FederatedIdentityServiceImpl#insertFederatedUser` — never
+> touched again, including when a password account later links a federated identity via the
+> Security Center. For everyone else, `INTERNAL`/`EXTERNAL` is derived **fresh on every read**
+> from the account's email domain against the env-driven `INTERNAL_DOMAINS` allowlist
+> (`AdminUserController`, `UserTypeResolver`) — blank/unset means nothing qualifies as INTERNAL, so
+> every non-federated account reads EXTERNAL until that's configured. Accounts created before this
+> column existed were backfilled once from `oauthproviderlinks` (`schema.sql`) — password-less
+> accounts with a linked identity are assumed to have been created by federation.
 
 ### 8.7 Security dashboard — `/admin/security`
 
@@ -1685,11 +1741,12 @@ nothing exercises a real browser.**
 
 ### 10.1 Inventory
 
-**181 backend tests across 31 suites** and **87 frontend specs across 8 files** (backend re-verified
-2026-08-07 via a full `mvn test` run; only one backend class needs a database). The passkey feature
-added 4 backend suites and 0 frontend specs — the frontend passkey UI (Security Center card, login
-button, admin revoke panel) currently has **no dedicated spec coverage**, a real gap alongside the
-backend one noted below.
+**199 backend tests across 32 suites** and **87 frontend specs across 8 files** (backend
+re-verified 2026-08-08 via a full `mvn test` run — actual Surefire execution counts, not annotated
+method counts, since those diverge once parameterized tests are involved; only one backend class
+needs a database). The passkey feature added 4 backend suites and 0 frontend specs — the frontend
+passkey UI (Security Center card, login button, admin revoke panel) currently has **no dedicated
+spec coverage**, a real gap alongside the backend one noted below.
 
 | Suite | Tests | What it locks in |
 |---|---:|---|
@@ -1707,8 +1764,10 @@ backend one noted below.
 | `FederatedIdentityLinkTest` / `UnlinkTest` | 5 / 5 | Link refusal for an already-owned identity; both halves of the last-sign-in-method guard |
 | `UserControllerLoginEnumerationTest` | 2 | Unknown-email and wrong-password failures are byte-identical bar the timestamp |
 | `UserControllerBruteForceLockTest` | 2 | Per-account lockout |
-| `AdminUserControllerTest` | 3 | Path id is authoritative; self-targeting refused |
+| `AdminUserControllerTest` | 14 | Path id is authoritative; self-targeting refused; role-tier ceiling (an org admin can't promote above their own tier); bulk **and** per-session revoke (works / org-scoped / self-refused, 2026-08-08) |
 | `PasskeyServiceImplTest` | 6 | Passkey CRUD + `using_passkey` flag sync; malformed-JSON rejection (caught a real webauthn4j bug — see below) |
+| `UserTypeResolverTest` | 10 | User-type badge (P2-1, 2026-08-08): `FEDERATED` wins outright over a domain match; blank allowlist means nothing is `INTERNAL`; domain match is case-insensitive; malformed/empty email and substring-domain edge cases |
+| `SMSUtilsTest` | 15 | Twilio config gate (all-or-nothing across three credentials, blank counts as absent) and E.164 phone normalization (2026-08-08 regression: a number already carrying the leading `1` no longer gets a second one prepended) |
 | `WebAuthnChallengeStoreTest` | 6 | Ceremony challenges are single-use, purpose-bound (REGISTER ≠ AUTHENTICATE), and expire |
 | `AdminUserControllerPasskeyTest` | 7 | Admin passkey revoke: authority gate, self-target refusal, org scoping — same three properties as session revocation |
 | `OAuth2ClientConfigPlaceholderWarningTest` | 7 | The `CHANGE_ME`-placeholder boot warning fires per-provider, never for a real-looking credential |
@@ -1924,6 +1983,7 @@ real spend is Fargate; see [FUTURE-ENHANCEMENTS §6.6](FUTURE-ENHANCEMENTS.md#66
 
 ## Related documents
 
+- [FEATURE-INVENTORY.md](FEATURE-INVENTORY.md) — the exhaustive, verifiable "everything that's built" checklist
 - [IMPLEMENTATION-HISTORY.md](IMPLEMENTATION-HISTORY.md) — what was built, and the problem log
 - [PHASE-2-IMPLEMENTATION.md](PHASE-2-IMPLEMENTATION.md) — everything delivered since the Phase 1 report (Jul 11 → Aug 3, 2026), with the roadmap scorecard and requirement traceability
 - [PHASE-2-ADDITIONS.md](PHASE-2-ADDITIONS.md) — the exhaustive itemized catalog of Phase 2 additions (43 backend classes, 26 frontend files, 221 tests, infrastructure); the self-contained handoff document for deliverable production

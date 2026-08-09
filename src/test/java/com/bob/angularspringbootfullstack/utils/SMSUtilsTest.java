@@ -80,4 +80,23 @@ class SMSUtilsTest {
 
         assertDoesNotThrow(() -> SMSUtils.sendSMS(NUMBER, "Your verification code is 123456"));
     }
+
+    /**
+     * Regression coverage for the 2026-08-08 delivery bug: a number already carrying the leading
+     * {@code 1} (e.g. from a user who typed it that way) blindly got a second {@code "+1"}
+     * prepended, producing an invalid 13-character string Twilio could never deliver. The Security
+     * Center's phone field (pattern {@code ^\+?[0-9. ()-]{7,25}$}) accepts every shape below, so
+     * {@link SMSUtils#toE164US} has to collapse them all to the same valid E.164 result.
+     */
+    @ParameterizedTest(name = "[{index}] \"{0}\" normalises to +18084824518")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "8084824518",         // bare 10 digits — the common case
+            "18084824518",        // 10 digits already carrying the leading 1 (the bug's trigger)
+            "+18084824518",       // already E.164
+            "(808) 482-4518",     // formatted with separators, no country code
+            "1 (808) 482-4518",   // formatted with separators, with country code
+    })
+    void toE164USNormalisesEveryAcceptedInputShape(String input) {
+        org.junit.jupiter.api.Assertions.assertEquals("+18084824518", SMSUtils.toE164US(input));
+    }
 }

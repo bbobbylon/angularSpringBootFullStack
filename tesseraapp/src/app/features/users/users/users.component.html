@@ -39,6 +39,7 @@
                     <th scope="col">{{ t('common.name') }}</th>
                     <th scope="col">{{ t('common.email') }}</th>
                     <th scope="col">{{ t('users.role') }}</th>
+                    <th scope="col">Type</th>
                     <th scope="col">MFA</th>
                     <th scope="col">{{ t('common.status') }}</th>
                     <th class="text-end" scope="col">{{ t('common.action') }}</th>
@@ -74,6 +75,22 @@
                             class="badge">
                             {{ user.roleName }}
                           </span>
+                        </td>
+                        <td>
+                          @if (user.userType; as userType) {
+                            <!-- P2-1: how the account was created (FEDERATED) or, for a password
+                                 account, whether its email domain is on the deployment's internal
+                                 allowlist (INTERNAL/EXTERNAL). See UserTypeResolver. -->
+                            <span [ngClass]="[
+                                    userType === 'INTERNAL' ? ' bg-success' : '',
+                                    userType === 'FEDERATED' ? ' bg-info' : '',
+                                    userType === 'EXTERNAL' ? ' bg-secondary' : '',
+                                  ]"
+                                  [title]="userType === 'FEDERATED' && user.origin ? ('via ' + (user.origin | slice: 10)) : ''"
+                                  class="badge">
+                              {{ userType }}
+                            </span>
+                          }
                         </td>
                         <td>
                           <span [ngClass]="user.using2FA ? 'bg-success' : 'bg-secondary'" class="badge">

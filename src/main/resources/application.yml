@@ -291,6 +291,13 @@ app:
     # rate limiter then throttles all users as one), too high trusts an attacker-supplied entry.
     trusted-proxy-count: ${TRUSTED_PROXY_COUNT:0}
 
+    # Comma-separated email-domain allowlist for the admin user-type badge's INTERNAL/EXTERNAL
+    # split (P2-1), read by AdminUserController. E.g. "lewisu.edu,tesseraapp.dev". Blank (the
+    # default) means nothing qualifies as INTERNAL, so every non-federated account reads EXTERNAL
+    # — the safe default until someone configures this deliberately. FEDERATED accounts (created
+    # via Google/GitHub/Microsoft) always read FEDERATED regardless of this list.
+    internal-domains: ${INTERNAL_DOMAINS:}
+
     anomaly:
       # Login-anomaly detection + step-up re-verification (SRS FR-TPF-1), read by
       # LoginRiskServiceImpl. Set ANOMALY_DETECTION_ENABLED=false to revert login to its

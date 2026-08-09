@@ -83,7 +83,7 @@ public class FederatedIdentityServiceImpl implements FederatedIdentityService {
             }
 
             // Step 3: first contact — create an enabled, passwordless account with ROLE_USER.
-            Long newUserId = insertFederatedUser(email, firstName, lastName, imageUrl);
+            Long newUserId = insertFederatedUser(email, firstName, lastName, imageUrl, provider);
             roleRepo.addRoleToUser(newUserId, ROLE_USER.name());
             insertProviderLink(newUserId, provider, subject);
             log.info("Created new federated user id {} via {}", newUserId, provider);
@@ -100,15 +100,22 @@ public class FederatedIdentityServiceImpl implements FederatedIdentityService {
      * Inserts the local account row for a first-time federated user and returns the
      * generated primary key. Enabled at birth and passwordless by design — see
      * {@link com.bob.angularspringbootfullstack.query.OAuthQuery#INSERT_FEDERATED_USER_QUERY}.
+     *
+     * <p>Also stamps {@code origin} as {@code "FEDERATED_" + provider.toUpperCase()} — an
+     * immutable, write-once fact about how the account was created (P2-1, user type
+     * classification). Only this creation path writes it; step 2 above (linking a federated
+     * identity to an already-existing password account) never touches it, since that account's
+     * origin was already whatever it was before the link.
      */
-    private Long insertFederatedUser(String email, String firstName, String lastName, String imageUrl) {
+    private Long insertFederatedUser(String email, String firstName, String lastName, String imageUrl, String provider) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(INSERT_FEDERATED_USER_QUERY,
                 new MapSqlParameterSource()
                         .addValue("firstName", firstName)
                         .addValue("lastName", lastName)
                         .addValue("email", email)
-                        .addValue("imageUrl", imageUrl),
+                        .addValue("imageUrl", imageUrl)
+                        .addValue("origin", "FEDERATED_" + provider.toUpperCase()),
                 keyHolder);
         return requireNonNull(keyHolder.getKey()).longValue();
     }

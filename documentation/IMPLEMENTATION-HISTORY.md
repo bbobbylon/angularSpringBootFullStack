@@ -1,7 +1,7 @@
 # Implementation History
 
-**Version:** 2.0
-**Last Updated:** 2026-08-02
+**Version:** 2.1
+**Last Updated:** 2026-08-08
 **Status:** Living archive — what was built over time, and what went wrong along the way.
 
 ## Overview
@@ -58,8 +58,11 @@ startup — and the schema became a single idempotent `src/main/resources/schema
 ECR/ECS deploy), an **S3 image storage** abstraction, and an **Aiven** managed-MySQL option landed.
 Pipelines exist for AWS (ECS Fargate — the live one), GCP (Cloud Run) and Azure (App Service).
 
-**Where it ended up.** Live on AWS ECS Fargate, 126 backend and 87 frontend tests green, CI gating on
-lint + dependency audit + both suites, and six-language i18n across 26 of 28 templates.
+**Where it ended up.** Live on AWS ECS Fargate at **`tesseraapp.dev`** (CloudFront in front, a real
+domain bought 2026-08-08), with **usernameless WebAuthn passkeys** and real, unstubbed **SMS 2FA**
+(Twilio, gated by an A2P 10DLC campaign — see §4.23) alongside the existing password/TOTP/federated
+paths. 199 backend and 87 frontend tests green, CI gating on lint + dependency audit + both suites,
+and six-language i18n across 26 of 28 templates.
 
 ---
 
@@ -95,6 +98,8 @@ What landed on `MastersProjectSRSImpl`, in order.
 | **I** — Feature completion | 2026-07-26 | Security dashboard (FR-TPF-2), business CRUD, capability-level RBAC gating, six-language i18n, CI gating on lint + audit, security-path tests, federated link/unlink |
 | **J** — Single-origin parity | 2026-07-29 | Four defects that exist *only* once the SPA and API share an origin (§4.10) |
 | **K** — Observability & performance | 2026-08-02 | CloudWatch logging config, the N+1 fix, JWT 401 correctness, prod error scrubbing, pagination across every list surface |
+| **L** — WebAuthn passkeys | 2026-08-07 | Usernameless passkey registration/login built from `webauthn4j-core` directly, admin revoke-only controls, one-time post-login welcome flow |
+| **M** — Domain, SMS, and admin polish | 2026-08-08 | `tesseraapp.dev` bought and put in front of CloudFront (all three federated providers + passkeys confirmed live on it); SMS 2FA unstubbed (real Twilio call, E.164 phone-normalization fix); public `/privacy` + `/terms` pages (Twilio A2P 10DLC campaign requirement); per-session admin revoke (`DELETE /admin/user/{id}/sessions/{family}`); user-type badge (P2-1: `INTERNAL`/`EXTERNAL`/`FEDERATED`, `users.origin` + `UserTypeResolver`) |
 
 ### Notable deliveries in detail
 
@@ -437,6 +442,76 @@ right and was the tell.
 Jackson 2 `ObjectMapper` and are fine doing so — they never go through Spring MVC's message-converter
 pipeline, so the mismatch never surfaces for them. It only bites types Spring itself deserializes.
 
+### 4.23 SMS 2FA looked fixed, sent nothing, and the reason changed twice
+
+**Symptom.** After unstubbing `NotificationServiceImpl.sendTwoFactorCode` (it had called
+`SMSUtils.sendSMS` correctly for weeks — the code path was never the problem), a login still never
+produced a text message. Twice.
+
+**First cause.** `tessera-app/twilio-sid` in AWS Secrets Manager held the literal
+`CHANGE_ME_ACxxxxxxx` — a leftover placeholder — while the *local* `.env` had held the real SID for
+weeks. `SMSUtils.isConfigured()` only checks that a value is non-blank, not that it's real, so the
+placeholder passed silently and the app degraded to console-logging exactly as if nothing were
+configured at all, with no error pointing at Secrets Manager specifically.
+
+**Second cause, after fixing the first.** CloudWatch showed the app *had* successfully called
+Twilio (`SMS dispatched via Twilio to …`, no exception) — real progress — but the phone still never
+buzzed. Twilio's own Message Logs told the real story: every send showed `Undelivered`. The
+sending number's **A2P 10DLC campaign was still pending carrier review**. Twilio's synchronous API
+response only confirms the message was *queued*, not delivered — a carrier can silently drop
+unregistered 10DLC traffic downstream with no error the app ever sees.
+
+**Third, smaller thing found along the way.** One test number was typed as `18084824518` (already
+carrying the leading `1`); `SMSUtils` did `"+1" + toNumber` unconditionally, producing the invalid
+13-character `+118084824518`. Fixed by normalizing through `SMSUtils.toE164US`, which strips
+non-digits first and only adds the country code if it isn't already there.
+
+**The standing lesson:** "the send call was commented out" and "the code is right but nothing is
+configured" and "everything is configured and correct but a third party hasn't approved it yet" are
+three different failure classes that look identical from the outside (no text arrives) and require
+three different fixes. Diagnosing which one you're in needs the actual send-attempt logs (or, for
+the third, the *provider's* delivery logs — the app's own success log isn't the end of the story).
+
+### 4.24 Windows console encoding hid the actual log line during a live debugging session
+
+**Symptom.** `aws logs tail` kept appearing to show only 3-4 log lines around a login attempt, with
+no sign of the SMS dispatch at all — looking exactly like the notification service was never being
+called.
+
+**Cause.** The AWS CLI crashed mid-print — `'charmap' codec can't encode character '→'` — the
+instant it hit a log line containing a `→` character (used in a `LoginRiskServiceImpl` log
+message), because Windows' console codepage can't render it. The CLI doesn't skip the bad line and
+continue; it dies, silently truncating everything after. Two separate debugging rounds were spent
+concluding "the SMS code path isn't running" before this was caught.
+
+**Fix.** `PYTHONUTF8=1 aws logs filter-log-events ... --output json` sidesteps the console's legacy
+codepage entirely. The moment it was used, the full picture (a `[LOGIN-RISK]` line, then a real
+`SMS dispatched via Twilio` line) appeared immediately — the code had been working the whole time
+that round; the CLI had just been hiding the evidence.
+
+**The standing lesson:** on Windows, an AWS CLI command that returns fewer log lines than expected
+with no error — or a bare `[ERROR]` about a codec — is not proof the underlying system did less
+than expected. Check for a truncated CLI output before trusting an absence of log lines as an
+absence of the event.
+
+### 4.25 A Docker layer cache silently deployed stale code
+
+**Symptom.** After editing `SecurityConfig.java` to add `/privacy` and `/terms` to the public route
+allow-list, building and deploying, and invalidating CloudFront's cache, the two pages still 401'd.
+
+**Cause.** The build log showed `[backend-build 5/7] COPY src/ ./src/ CACHED` — Docker BuildKit
+reused a layer from *before* the edit. The pushed image still ran the old jar; nothing about the
+deploy pipeline itself was broken.
+
+**Fix.** `docker build --no-cache` forced a genuine recompile — confirmed by the compiler emitting a
+fresh warning at `SecurityConfig.java:193` this time, and by the resulting image's digest actually
+changing. Re-pushed and redeployed; the pages came up `200` immediately.
+
+**The standing lesson:** a Docker build log claiming `CACHED` on a `COPY` step right after editing
+one of the copied files is a real signal something is wrong with the build context or cache key, not
+routine build-system chatter — verify with `--no-cache` before spending time debugging the deployed
+application code instead.
+
 ---
 
 ## 5. Retired documents (registry)
@@ -500,6 +575,7 @@ plus `SPRING_DATASOURCE_USERNAME` and `SPRING_DATASOURCE_PASSWORD`.
 ## Related documents
 
 - [GUIDE.md](GUIDE.md) — how everything currently works
+- [FEATURE-INVENTORY.md](FEATURE-INVENTORY.md) — the exhaustive, verifiable "everything that's built" checklist
 - [FUTURE-ENHANCEMENTS.md](FUTURE-ENHANCEMENTS.md) — what is planned
 - [flows/](flows/README.md) — click-to-database traces
 - [aws/RUNBOOK.md](../aws/RUNBOOK.md) — the live deploy procedure

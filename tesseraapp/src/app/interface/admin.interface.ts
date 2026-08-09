@@ -1,7 +1,7 @@
 import { UserInterface } from './user.interface';
 import { UserEventsInterface } from './user-events.interface';
 import { RolesInterface } from './roles.interface';
-import { PasskeyInterface } from './security.interface';
+import { PasskeyInterface, SessionInterface } from './security.interface';
 
 /**
  * The data payload returned by {@code GET /admin/user/list} (SRS FR-ADMIN-1).
@@ -32,7 +32,9 @@ export interface AdminUserListInterface {
  * audit history — the same {@link UserEventsInterface} rows the profile page shows
  * for one's own account, here surfaced to administrators per FR-ADMIN-2. {@code passkeys}
  * is metadata only (nickname, transports, timestamps) — never the WebAuthn credential id
- * or attestation object, which the backend never returns to any client.
+ * or attestation object, which the backend never returns to any client. {@code sessions}
+ * is the same {@link SessionInterface} shape the Security Center shows for a user's own
+ * devices, here surfaced read-only (plus revoke) to administrators.
  */
 export interface AdminUserDetailInterface {
   user?: UserInterface;
@@ -42,4 +44,5 @@ export interface AdminUserDetailInterface {
   eventsTotalPages?: number;
   roles?: RolesInterface[];
   passkeys?: PasskeyInterface[];
+  sessions?: SessionInterface[];
 }

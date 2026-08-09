@@ -214,6 +214,23 @@ PREPARE add_users_using_passkey_stmt FROM @add_users_using_passkey;
 EXECUTE add_users_using_passkey_stmt;
 DEALLOCATE PREPARE add_users_using_passkey_stmt;
 
+-- Idempotent add of users.origin (P2-1, user type classification): an immutable fact stamped ONLY
+-- at account creation, never touched again — how the account was BORN, not what identities it
+-- currently has linked. NULL for password registration (INTERNAL/EXTERNAL is then derived on read
+-- from the email domain, see UserTypeResolver); 'FEDERATED_<PROVIDER>' for an account created by
+-- FederatedIdentityServiceImpl#insertFederatedUser on first contact. A password account that later
+-- LINKS a federated identity via the Security Center does NOT change origin — step 2 of
+-- findOrCreateFederatedUser (link-to-existing) deliberately never writes this column.
+SET @add_users_origin := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE users ADD COLUMN origin VARCHAR(30) DEFAULT NULL AFTER using_passkey',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'origin');
+PREPARE add_users_origin_stmt FROM @add_users_origin;
+EXECUTE add_users_origin_stmt;
+DEALLOCATE PREPARE add_users_origin_stmt;
+
 -- Widen users.image_url for federated avatar URLs.
 --
 -- The column was VARCHAR(255). Identity providers hand back longer URLs than that — a Google
@@ -425,6 +442,26 @@ CREATE TABLE IF NOT EXISTS oauthproviderlinks
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT UQ_OAuthProviderLinks_Provider_Subject UNIQUE (provider, provider_subject)
 );
+
+-- One-time backfill (2026-08-08): accounts created BEFORE users.origin existed are stuck at NULL,
+-- which the user-type badge (P2-1) reads as a password account — even when the account was
+-- actually born from a federated sign-in. A password-less account (password IS NULL, exactly how
+-- FederatedIdentityServiceImpl#insertFederatedUser creates one) with a linked identity was created
+-- BY federation, so backfill origin from the EARLIEST link on record (the provider that actually
+-- created the account, not one linked later). Guarded on origin IS NULL, so this can only ever set
+-- a value once per row — safe to re-run on every boot.
+UPDATE users u
+    JOIN (
+        SELECT opl.user_id, opl.provider
+        FROM oauthproviderlinks opl
+                 INNER JOIN (SELECT user_id, MIN(created_at) AS first_linked_at
+                             FROM oauthproviderlinks
+                             GROUP BY user_id) earliest
+                            ON earliest.user_id = opl.user_id AND earliest.first_linked_at = opl.created_at
+    ) first_link ON first_link.user_id = u.id
+SET u.origin = CONCAT('FEDERATED_', UPPER(first_link.provider))
+WHERE u.origin IS NULL
+  AND u.password IS NULL;
 
 -- ── Organizations + membership (org-scoped admin) ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS organizations

@@ -16,6 +16,8 @@ import { getEventDisplay } from '../../../utils/event-display.utils';
 import { UserInterface } from '../../../interface/user.interface';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../../constants/password-policy';
+import { PHONE_HINT, PHONE_PATTERN } from '../../../constants/phone-policy';
 
 // TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
 
@@ -43,6 +45,13 @@ export class ProfileComponent implements OnInit {
   @Input() user: UserInterface | undefined;
   /** Exposes the `DataState` enum to the template for asynchronous data handling. */
   readonly DataState = DataState;
+  /** Password requirements — mirrors the backend's `PasswordPolicy` exactly; see that constant's doc. */
+  protected readonly PASSWORD_MIN_LENGTH = PASSWORD_MIN_LENGTH;
+  protected readonly PASSWORD_PATTERN = PASSWORD_PATTERN;
+  protected readonly PASSWORD_HINT = PASSWORD_HINT;
+  /** Phone number shape — mirrors the backend's `PhonePolicy` exactly; see that constant's doc. */
+  protected readonly PHONE_PATTERN = PHONE_PATTERN;
+  protected readonly PHONE_HINT = PHONE_HINT;
   /**
    * Single source of truth for the profile view. Carries `dataState`,
    * `appData` (the full profile response), and optional `error` for the template.

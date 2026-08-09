@@ -159,8 +159,9 @@
                     <label for="phoneNumber">{{ t('profile.phone') }}</label>
                     <input [disabled]="isLoading()"
                            [ngModel]="state?.appData?.data?.user?.phoneNumber" class="form-control" id="phoneNumber"
-                           name="phoneNumber"
-                           type="text">
+                           name="phoneNumber" [pattern]="PHONE_PATTERN"
+                           type="tel">
+                    <small class="text-muted">{{ PHONE_HINT }}</small>
                   </div>
                 </div>
                 <div class="col-md-6">
@@ -223,9 +224,11 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label for="newPassword">{{ t('profile.newPassword') }}</label>
-                    <input [disabled]="isLoading()" class="form-control" id="newPassword" minlength="5"
+                    <input [disabled]="isLoading()" class="form-control" id="newPassword"
+                           [minlength]="PASSWORD_MIN_LENGTH" [pattern]="PASSWORD_PATTERN"
                            name="newPassword"
                            ngModel required type="password">
+                    <small class="text-muted">{{ PASSWORD_HINT }}</small>
                   </div>
                 </div>
                 <div class="col-md-6">

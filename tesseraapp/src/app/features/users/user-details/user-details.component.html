@@ -42,6 +42,21 @@
                     <p class="text-secondary mb-1">{{ state?.appData?.data?.selectedUser?.title }}</p>
                   }
                   <span class="badge bg-primary">{{ state?.appData?.data?.selectedUser?.roleName }}</span>
+                  @if (state?.appData?.data?.selectedUser?.userType; as userType) {
+                    <!-- P2-1: how the account was created (FEDERATED) or, for a password account,
+                         whether its email domain is on the deployment's internal allowlist
+                         (INTERNAL/EXTERNAL). See UserTypeResolver. -->
+                    <span [ngClass]="[
+                            userType === 'INTERNAL' ? ' bg-success' : '',
+                            userType === 'FEDERATED' ? ' bg-info' : '',
+                            userType === 'EXTERNAL' ? ' bg-secondary' : '',
+                          ]"
+                          [title]="userType === 'FEDERATED' && state?.appData?.data?.selectedUser?.origin
+                                    ? ('via ' + (state?.appData?.data?.selectedUser?.origin | slice: 10)) : ''"
+                          class="badge" style="margin-left: 6px;">
+                      {{ userType }}
+                    </span>
+                  }
                   <span [ngClass]="state?.appData?.data?.selectedUser?.enabled ? 'bg-success' : 'bg-secondary'"
                         class="badge" style="margin-left: 6px;">
                     {{ state?.appData?.data?.selectedUser?.enabled ? 'ENABLED' : 'DISABLED' }}
@@ -138,29 +153,63 @@
                       </small>
                     }
                   </form>
+                </div>
+              </div>
+            </div>
+          </div>
 
-                  <!--
-                    Session revocation sits OUTSIDE the settings form, not as another checkbox in it.
-                    Locking answers "can they sign in again?"; this answers "are they still signed in
-                    right now?" — and only the second ends an intrusion already under way, because an
-                    access token is verified by signature alone and a refresh token keeps minting new
-                    ones for five days. Making it a form field would also fire it as a side effect of
-                    saving unrelated settings.
-                  -->
-                  @if (canEditSettings && !isSelf()) {
-                    <hr class="my-3">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                      <div>
-                        <p class="mb-0 fw-semibold">{{ t('userDetails.revokeSessionsTitle') }}</p>
-                        <small class="text-secondary">{{ t('userDetails.revokeSessionsHint') }}</small>
-                      </div>
+          <!-- Sessions/devices — admin visibility + per-device or "sign out everywhere" revoke.
+               Locking the account (above) stops the NEXT sign-in; this answers "are they still
+               signed in right now?" — an access token verifies by signature alone and a live
+               refresh token keeps minting new ones for days, so ending sessions already open is
+               what actually stops an intrusion in progress. -->
+          <div class="row">
+            <div class="col-12">
+              <div class="card mb-4">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <h5 class="mb-0"><i class="bi bi-laptop" style="margin-right: 8px;"></i>Sessions</h5>
+                    @if (canEditSettings && !isSelf() && (state?.appData?.data?.sessions?.length ?? 0) > 0) {
                       <button (click)="revokeSessions()" [disabled]="isLoading()"
                               class="btn btn-outline-danger btn-sm" type="button">
                         <i class="bi bi-box-arrow-right" aria-hidden="true" style="margin-right: 6px;"></i>
                         {{ t('userDetails.revokeSessions') }}
                       </button>
-                    </div>
-                  }
+                    }
+                  </div>
+                  <table class="table table-hover mb-0">
+                    <thead>
+                    <tr>
+                      <th scope="col">{{ t('security.log.device') }}</th>
+                      <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
+                      <th scope="col">Created</th>
+                      <th scope="col">Last used</th>
+                      <th scope="col">{{ t('common.action') }}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                      @for (session of state?.appData?.data?.sessions; track session.family) {
+                        <tr>
+                          <td>{{ session.device }}</td>
+                          <td>{{ session.ipAddress }}</td>
+                          <td>{{ session.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                          <td>{{ session.lastUsedAt | date: 'MMM d, y, h:mm a' }}</td>
+                          <td>
+                            @if (canEditSettings && !isSelf()) {
+                              <button (click)="revokeSession(session.family)" [disabled]="isLoading()"
+                                      class="btn btn-outline-danger btn-sm" type="button">
+                                {{ t('common.delete') }}
+                              </button>
+                            }
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td class="text-muted" colspan="5">No active sessions.</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

@@ -17,6 +17,9 @@ services domain on top — in six languages.
 
 **Identity & access**
 - Registration with email verification, password reset, and per-account brute-force lockout
+- **Password complexity** (8+ chars, mixed case, digit) enforced identically on all three doors a
+  password can enter through — register, change, reset — and **phone-number shape validation** for
+  SMS 2FA opt-in, both backend-enforced with a matching frontend mirror for UX
 - **Rotating refresh sessions** — every refresh mints a new token and retires the old one; replaying
   a retired token revokes the whole session family (theft detection)
 - **Authenticator-app MFA (TOTP)** with single-use recovery codes, bound to a server-side challenge
@@ -54,7 +57,7 @@ services domain on top — in six languages.
 | Frontend | Angular 21 (standalone, zoneless, signals), Bootstrap 5, ngx-toastr, Transloco |
 | Backend | Spring Boot 4, Spring Security 7, Hibernate 7 |
 | Database | MySQL 8.4 |
-| Auth | JWT access + rotating refresh sessions (replay detection), authenticator-app TOTP, passkeys (webauthn4j), OAuth2/OIDC federation, SMS 2FA (Twilio — stubbed) |
+| Auth | JWT access + rotating refresh sessions (replay detection), authenticator-app TOTP, passkeys (webauthn4j), OAuth2/OIDC federation, SMS 2FA (Twilio) |
 | i18n | Transloco — runtime switching, 6 locales (en · es · fr · de · pt · zh) |
 | Runtime | Java 21, Node 22 |
 | Container | Docker (multi-stage build) |
@@ -68,6 +71,7 @@ Four documents cover the project, plus two deep-reference sets.
 | Document | What it covers |
 |---|---|
 | **[GUIDE.md](documentation/GUIDE.md)** | Everything operational: architecture, setup, configuration, the development loop, backend and frontend internals, the security model, the full API reference, the database, testing, and deployment. **Start here.** |
+| **[FEATURE-INVENTORY.md](documentation/FEATURE-INVENTORY.md)** | The exhaustive, verifiable "everything that's actually built" checklist — every library, every security control, every feature, each pointing at real code. Built to be checked against deliverables line-by-line. |
 | **[IMPLEMENTATION-HISTORY.md](documentation/IMPLEMENTATION-HISTORY.md)** | What was built over time, and — more usefully — the problems hit along the way and how each was diagnosed and solved. |
 | **[FUTURE-ENHANCEMENTS.md](documentation/FUTURE-ENHANCEMENTS.md)** | The backlog, the open defects, and what it would take to run this as a real product for a small business. |
 | **[flows/](documentation/flows/README.md)** | Click-to-database walkthroughs of every major flow — sequence diagrams, JWT/header state, request/response JSON, and the real SQL. |

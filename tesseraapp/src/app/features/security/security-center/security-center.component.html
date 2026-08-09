@@ -240,8 +240,8 @@
                   <div class="col-12 col-sm-auto flex-grow-1" style="max-width: 320px;">
                     <input id="smsPhoneNumber" name="phoneNumber" ngModel required
                            type="tel" inputmode="tel" autocomplete="tel"
-                           pattern="^\+?[0-9. ()-]{7,25}$"
-                           placeholder="+1 555 010 1234"
+                           [pattern]="PHONE_PATTERN"
+                           placeholder="(808) 482-4518"
                            [disabled]="isLoading()"
                            class="form-control form-control-sm" />
                     <small class="text-muted">{{ t('securityCenter.phoneHint') }}</small>

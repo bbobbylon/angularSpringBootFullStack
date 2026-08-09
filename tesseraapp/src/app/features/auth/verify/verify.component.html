@@ -141,9 +141,11 @@
                 <div class="sc-field">
                   <label class="form-label" for="newPassword">{{ t('verify.newPassword') }}</label>
                   <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
-                  <input id="newPassword" name="newPassword" ngModel required minlength="2" type="password"
+                  <input id="newPassword" name="newPassword" ngModel required [minlength]="PASSWORD_MIN_LENGTH"
+                         [pattern]="PASSWORD_PATTERN" type="password"
                          autocomplete="new-password" [placeholder]="t('verify.newPasswordPlaceholder')"
                          [disabled]="isLoading()" class="form-control sc-input" />
+                  <small class="text-muted">{{ PASSWORD_HINT }}</small>
                 </div>
 
                 <div class="sc-field">

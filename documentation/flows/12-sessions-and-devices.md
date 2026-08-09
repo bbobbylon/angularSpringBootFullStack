@@ -8,6 +8,12 @@
 **Route:** `/security` → `SecurityCenterComponent` (Sessions & devices panel)
 **Endpoints (all `authenticated`):** `GET /user/sessions` · `DELETE /user/sessions/{family}` ·
 `DELETE /user/sessions` → `SessionController`
+>
+> **Admin counterpart (2026-08-08):** the same revoke-family capability, exercised on *another*
+> user's sessions, now exists at `DELETE /admin/user/{id}/sessions[/{family}]` — see
+> [flow 20](./20-admin-users-rbac.md). `AdminUserController` calls the identical
+> `SessionService.listSessions` / `revokeSession` / `revokeAllSessions` methods this flow uses; only
+> the caller and the authorization checks differ (self only here, org-scoped-and-not-self there).
 
 ---
 

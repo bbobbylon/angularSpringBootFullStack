@@ -265,6 +265,43 @@ class AdminUserControllerTest {
         verify(sessionService, never()).revokeAllSessions(any(Long.class));
     }
 
+    // Granular sibling of the bulk revoke above: ends ONE device's session, not every one — the
+    // same three properties (works, org-scoped, self-refused) apply to the narrower action.
+
+    @Test
+    @DisplayName("an admin can revoke a single session for a user")
+    void adminCanRevokeOneSessionForAUser() throws Exception {
+        stubAssignmentSuccessPath();
+
+        mockMvc.perform(delete("/admin/user/{id}/sessions/{family}", TARGET_ID, "fam-123")
+                        .principal(adminAuth()))
+                .andExpect(status().isOk());
+
+        verify(sessionService).revokeSession(TARGET_ID, "fam-123");
+    }
+
+    @Test
+    @DisplayName("an org admin cannot revoke a single session for an out-of-scope user")
+    void revokeOneSessionRespectsOrganizationScope() throws Exception {
+        when(organizationService.isWithinOrganizationScope(ADMIN_ID, TARGET_ID)).thenReturn(false);
+
+        mockMvc.perform(delete("/admin/user/{id}/sessions/{family}", TARGET_ID, "fam-123")
+                        .principal(orgAdminAuth()))
+                .andExpect(status().isForbidden());
+
+        verify(sessionService, never()).revokeSession(any(Long.class), any(String.class));
+    }
+
+    @Test
+    @DisplayName("an admin cannot revoke one of their OWN sessions here")
+    void revokeOneSessionRefusesSelfTarget() throws Exception {
+        mockMvc.perform(delete("/admin/user/{id}/sessions/{family}", ADMIN_ID, "fam-123") // targeting self
+                        .principal(adminAuth()))
+                .andExpect(status().is4xxClientError());
+
+        verify(sessionService, never()).revokeSession(any(Long.class), any(String.class));
+    }
+
     @Test
     @DisplayName("the top tier can still assign everything below it")
     void applicationAdminCanAssignAnything() throws Exception {

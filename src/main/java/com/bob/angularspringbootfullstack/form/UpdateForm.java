@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.form;
 
+import com.bob.angularspringbootfullstack.constants.PhonePolicy;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
@@ -33,7 +34,7 @@ public class UpdateForm {
     private String email;
     private String imageUrl;
     private String address;
-    @Pattern(regexp = "^\\+?[0-9. ()-]{7,25}$", message = "Phone number is not valid")
+    @Pattern(regexp = PhonePolicy.PATTERN, message = PhonePolicy.MESSAGE)
     private String phoneNumber;
     private String bio;
     private String title;
