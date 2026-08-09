@@ -33,6 +33,9 @@ public class Constants {
                     // callback, and /oauth2/providers lets the SPA discover which providers
                     // are configured. All are pre-authentication by definition.
                     "/oauth2/**", "/login/oauth2/**",
+                    // Public services catalog browsing (PublicServicesController): a prospective
+                    // customer looking at what the business offers has no account yet by definition.
+                    "/services/public/**",
             };
 
     /*
@@ -72,7 +75,9 @@ public class Constants {
             "/user/verify/webauthn",
             // Federated login (FR-FED): skipped here so a stale Bearer header from the SPA
             // can never break the browser-redirect OAuth2 dance or provider discovery.
-            "/oauth2", "/login/oauth2"
+            "/oauth2", "/login/oauth2",
+            // Public services catalog browsing — must stay in lockstep with PUBLIC_URLS above.
+            "/services/public"
     };
 
     public static final String BOBBYLON_LLC = "BOBBYLON_LLC";

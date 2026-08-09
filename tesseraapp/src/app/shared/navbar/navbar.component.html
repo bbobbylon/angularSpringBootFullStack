@@ -95,6 +95,12 @@
               <li><a [routerLink]="['/services', 'manage']" class="dropdown-item">
                 <i class="bi bi-sliders"></i>{{ t('nav.manageServices') }}</a>
               </li>
+              <!-- Same destination as Manage Services, plus ?new so the create form opens
+                   immediately — mirrors New Customer / New Invoice being one click away rather
+                   than a click into the list followed by a click on "Add". -->
+              <li><a [routerLink]="['/services', 'manage']" [queryParams]="{ new: true }" class="dropdown-item">
+                <i class="bi bi-plus-circle"></i>{{ t('nav.newService') }}</a>
+              </li>
             }
             @if (canCreateRecords) {
               <li><a [routerLink]="['/invoice/new']" class="dropdown-item">

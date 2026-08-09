@@ -12,26 +12,26 @@ import { DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
-import { CustomerService } from '../../../service/customer.service';
+import { ServicesCatalogService, PublicServicesListDataInterface } from '../../../service/services-catalog.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
-import { NewInvoiceDataInterface } from '../../../interface/appstates.interface';
 import { ServicesInterface } from '../../../interface/services.interface';
-import { UserInterface } from '../../../interface/user.interface';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { PAGE_SIZE_OPTIONS, PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 
 /**
- * Service/app catalog page — {@code /services}.
+ * Public service/app catalog page — {@code /services}.
  *
- * Displays all services registered in the backend catalog so users can browse
- * available offerings and jump directly to a new invoice pre-selected for a
- * service. Data is fetched from {@code GET /customer/invoice/new}, which already
- * returns {@code availableServices} alongside the customer list — no additional
- * backend endpoint is needed for this view.
+ * Displays every active service in the backend catalog so anyone browsing the site — signed in or
+ * not — can see what the business offers. Data comes from {@link ServicesCatalogService#listPublic$},
+ * which hits {@code GET /services/public}: a genuinely unauthenticated endpoint, so this page does
+ * not silently go blank for a logged-out visitor. (An earlier version of this page reused the
+ * authenticated {@code GET /customer/invoice/new} response instead — convenient because no new
+ * endpoint was needed, but it meant "the public catalog" only ever worked for people who were
+ * already signed in, which defeats the point of a public catalog.)
  *
  * The "Create Invoice" action navigates to {@code /invoice/new}, which is where
  * organisations choose a service and customer and submit a billing request that
@@ -39,11 +39,10 @@ import { PAGE_SIZE_OPTIONS, PageSizeSelectComponent } from '../../../shared/page
  *
  * <h3>Why the grid pages on the client</h3>
  * Every other paged surface in the app asks the server for one page. This one cannot, and should
- * not: {@code /customer/invoice/new} exists to populate the new-invoice form, whose service picker
- * needs the <em>whole</em> active catalog in one response. Paging it server-side would either break
- * that form or require a second endpoint returning data this page has already been handed. So the
- * response is complete by construction and the grid slices it locally — the same choice
- * {@code customer-details} makes for a customer's invoice history.
+ * not: the public endpoint returns the <em>whole</em> active catalog in one response — there is no
+ * per-visitor state to page against, and a service worth showing on page one is worth showing on
+ * page five too. So the response is complete by construction and the grid slices it locally — the
+ * same choice {@code customer-details} makes for a customer's invoice history.
  */
 @Component({
   selector: 'app-services-catalog',
@@ -56,21 +55,18 @@ import { PAGE_SIZE_OPTIONS, PageSizeSelectComponent } from '../../../shared/page
 export class ServicesCatalogComponent implements OnInit {
   readonly DataState = DataState;
 
-  private readonly customerService = inject(CustomerService);
+  private readonly servicesCatalogService = inject(ServicesCatalogService);
   private readonly userService = inject(UserService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly router = inject(Router);
 
-  readonly pageState = signal<GlobalStateInterface<CustomHttpResponseInterface<NewInvoiceDataInterface>>>({
+  readonly pageState = signal<GlobalStateInterface<CustomHttpResponseInterface<PublicServicesListDataInterface>>>({
     dataState: DataState.LOADING,
   });
 
-  readonly user = computed<UserInterface | undefined>(
-    () => this.pageState().appData?.data?.user,
-  );
   readonly services = computed<ServicesInterface[]>(
-    () => this.pageState().appData?.data?.availableServices ?? [],
+    () => this.pageState().appData?.data?.services ?? [],
   );
 
   /**
@@ -162,8 +158,8 @@ export class ServicesCatalogComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.customerService
-      .newInvoice$()
+    this.servicesCatalogService
+      .listPublic$()
       .pipe(
         map((response) => ({ dataState: DataState.LOADED, appData: response })),
         startWith({ dataState: DataState.LOADING }),

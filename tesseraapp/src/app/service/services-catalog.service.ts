@@ -13,6 +13,11 @@ export interface ServicesListDataInterface {
   services: ServicesInterface[];
 }
 
+/** The {@code data} block of the public (unauthenticated) catalog response — no {@code user}. */
+export interface PublicServicesListDataInterface {
+  services: ServicesInterface[];
+}
+
 /** The {@code data} block of a single-service admin response. */
 export interface ServiceDataInterface {
   user: UserInterface;
@@ -24,16 +29,18 @@ export interface ServiceDataInterface {
  * (ROADMAP §2 — "Create / manage services").
  *
  * <p><b>Why it is separate from {@link CustomerService}.</b> Browsing the catalog and administering
- * it are different operations with different audiences. Every authenticated user reads the catalog
- * through {@code GET /customer/invoice/new} in order to raise an invoice; only staff may change it.
- * Pointing the write operations at {@code /admin/services/**} means SecurityConfig's existing
- * {@code /admin/**} matcher enforces {@code UPDATE:USER}/{@code UPDATE:ROLE} on the server, so the
- * SPA hiding the buttons is a convenience rather than the control.
+ * it are different operations with different audiences. An authenticated user raising an invoice
+ * reads the catalog through {@code GET /customer/invoice/new} (see {@code CustomerService}), an
+ * anonymous visitor reads it through {@code GET /services/public} (see {@link listPublic$}), and
+ * only staff may change it. Pointing the write operations at {@code /admin/services/**} means
+ * SecurityConfig's existing {@code /admin/**} matcher enforces {@code UPDATE:USER}/{@code
+ * UPDATE:ROLE} on the server, so the SPA hiding the buttons is a convenience rather than the
+ * control.
  *
- * <p>One genuine difference in what the two paths return: this one includes <em>retired</em>
- * services, which the public path deliberately omits. An administrator needs to see them (to
- * reinstate one, or to know why it is missing from the invoice form); a user raising an invoice
- * must not be offered something the business no longer sells.
+ * <p>One genuine difference in what the admin path returns: it includes <em>retired</em> services,
+ * which both read-only paths deliberately omit. An administrator needs to see them (to reinstate
+ * one, or to know why it is missing from the invoice form); a visitor or invoicing user must not be
+ * offered something the business no longer sells.
  */
 @Injectable({
   providedIn: 'root',
@@ -50,6 +57,20 @@ export class ServicesCatalogService {
   list$ = (): Observable<CustomHttpResponseInterface<ServicesListDataInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<ServicesListDataInterface>>(`${this.server}/admin/services/list`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Lists the active catalog for an unauthenticated visitor — {@code GET /services/public}.
+   *
+   * <p>No {@code Authorization} header is sent or required; {@code CustomAuthFilter} skips this
+   * path entirely (it is in {@code Constants.PUBLIC_ROUTES}), so a stale or absent token never
+   * turns into an error here the way it would on an authenticated endpoint.
+   *
+   * @returns Observable emitting the envelope carrying {@code services} (active only, no {@code user})
+   */
+  listPublic$ = (): Observable<CustomHttpResponseInterface<PublicServicesListDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<PublicServicesListDataInterface>>(`${this.server}/services/public`)
       .pipe(catchError(this.handleError));
 
   /**

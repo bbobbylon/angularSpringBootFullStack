@@ -614,6 +614,13 @@ select,
   text-transform: uppercase;
   color: var(--text-muted);
 }
+/* Wraps just the icon + input pair. .sc-field__icon anchors to THIS box, not .sc-field itself,
+   so a field that adds trailing content after the input (register/verify's password-requirements
+   hint) doesn't stretch the positioning context and drag the icon down behind that trailing text —
+   the bug this box exists to prevent. Fields with no trailing content don't need the wrapper: the
+   icon falls back to positioning against .sc-field, which is exactly as tall as label + input there
+   anyway, so the result is identical either way. */
+.sc-field__control { position: relative; }
 .sc-field__icon {
   position: absolute;
   left: 0.85rem;

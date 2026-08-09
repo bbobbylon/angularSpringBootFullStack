@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnIni
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { ServicesCatalogService, ServicesListDataInterface } from '../../../service/services-catalog.service';
@@ -52,6 +52,7 @@ export class ServicesAdminComponent implements OnInit {
   private readonly catalog = inject(ServicesCatalogService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly pageState = signal<GlobalStateInterface<CustomHttpResponseInterface<ServicesListDataInterface>>>({
     dataState: DataState.LOADING,
@@ -162,6 +163,14 @@ export class ServicesAdminComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    // Lets the navbar's "New Service" link and the command palette's matching entry land the
+    // reader directly in the create form instead of just the list, mirroring how /invoice/new and
+    // /customer/new are dedicated create destinations. This page has no separate create route —
+    // the form is an inline toggle over the same list — so a query param does the same job a route
+    // would on those other two screens.
+    if (this.route.snapshot.queryParamMap.get('new') !== null) {
+      this.startCreate();
+    }
   }
 
   /** Opens the create form and closes any open edit, so only one form is ever live. */
