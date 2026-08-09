@@ -416,31 +416,34 @@ is the same principle `TRUSTED_PROXY_COUNT` exists to enforce for client IPs.
 | CloudFront distribution live on HTTPS | ✅ Done, verified live |
 | `OAUTH2_REDIRECT_BASE_URL` implemented and pinned across all three providers | ✅ Done |
 | Deployed on **task-definition rev 14** setting `OAUTH2_REDIRECT_BASE_URL`, `UI_APP_URL` and `TRUSTED_PROXY_COUNT=2` | ✅ **Done — verified August 4, 2026.** The live authorize redirect now returns `redirect_uri=https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/github`, and the boot log prints `[NET] trusted-proxy-count=2` |
-| `https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/{google,github,microsoft}` registered in each provider console | ⚠ Pending — manual, per provider |
-| Real Google and GitHub credentials in Secrets Manager | ⚠ **Pending** — the only remaining functional blocker |
+| `https://tesseraapp.dev/login/oauth2/code/{google,github,microsoft}` registered in each provider console | ✅ **Done (2026-08-08)** |
+| Real Google and GitHub credentials in Secrets Manager | ✅ **Done (2026-08-08)** — see below |
 
-**The transport problem is fully closed.** Everything still outstanding is credential entry and
-provider-console registration — no code, no infrastructure, no domain.
+**The transport problem is fully closed, and federation is now fully closed too.** All three
+providers — Google, GitHub, Microsoft — hold real credentials in Secrets Manager and are confirmed
+live via the authorize redirect on `https://tesseraapp.dev`.
 
-> **Correction carried into the report.** Earlier revisions of this document stated that **GitHub
-> federated login worked in the deployed environment**. It did not, and it never has:
-> `tessera-app/github-client-id` and `github-client-secret` still hold the literal `CHANGE_ME`, and
-> the live authorize redirect returns `client_id=CHANGE_ME`. Google's are placeholders too. Only
-> Microsoft's credentials are populated. GitHub's `http://`-tolerance was real, but it was masking a
-> missing credential, not demonstrating a working flow.
+> **Correction, superseded 2026-08-08.** Earlier revisions of this document (through 2026-08-04)
+> stated that GitHub federated login worked in the deployed environment when it did not —
+> `tessera-app/github-client-id` and `github-client-secret` held the literal `CHANGE_ME`, and the
+> live authorize redirect returned `client_id=CHANGE_ME`. That was a real finding at the time, and
+> it recurred once more on 2026-08-08 (re-pasted credentials turned out to be UUIDs, not real
+> provider secrets, the same failure mode) before all three providers were verified with genuine
+> credentials. GitHub sign-in now works, but only on `tesseraapp.dev` — its original OAuth App
+> registered for the bare CloudFront URL is orphaned; Google and Microsoft still work on both.
 
 ### 8.3 ⚠ Other known gaps, stated plainly
 
 | Gap | Detail |
 |---|---|
 | ~~**Database connection is not encrypted**~~ | ✅ **Fixed August 4, 2026.** The JDBC URL had `useSSL=false` hardcoded with no production override, while Aiven is reached over the public internet. Now `sslMode` is env-driven (`MYSQL_SSL_MODE`), defaulting to `PREFERRED` and pinned to `REQUIRED` by the `prod`/`qa`/`stage` profiles, with `allowPublicKeyRetrieval` off in those profiles. Verified against the live Aiven instance before enabling: it negotiates **TLSv1.3 / TLS_AES_256_GCM_SHA384**. ⚠ Still `REQUIRED`, not `VERIFY_IDENTITY` — the connection is encrypted but the server's certificate is not validated, which needs Aiven's per-project CA shipped into the image |
-| **SMS 2FA is stubbed** | `SMSUtils` is fully implemented with a credentials-presence guard; only the call in `NotificationServiceImpl.sendTwoFactorCode` remains commented out to avoid Twilio charges. **TOTP is the fully functional second factor** |
+| ~~**SMS 2FA is stubbed**~~ | ✅ **Closed, delivered via voice call for now (2026-08-09).** `NotificationServiceImpl.sendTwoFactorCode` dispatches the code as a spoken phone call through `VoiceUtils`, not SMS: this Twilio number's US A2P 10DLC campaign registration is still pending carrier review (typically 5–10+ business days, sometimes weeks — too long for this deadline), and Twilio's Messaging API returns success the instant it *accepts* a message rather than once it's delivered, so an A2P-blocked text is silently dropped by the carrier with no exception thrown and gets billed anyway — confirmed against this account's own Twilio billing. Voice isn't A2P-gated, so it works today; confirmed live via a real call on 2026-08-09. Revert to SMS as the primary channel once the A2P campaign clears review. Still degrades to a logged code when Twilio secrets are unconfigured (dev/CI). **TOTP is the other fully functional second factor** |
 | **Rate-limit buckets are in-memory** | Limits will not hold across replicas; a shared store is needed for scale-out |
 | **No rate-limit `429` test, no SMS-toggle test** | Both were specified and are absent |
 | **`start.sh` uses system `mvn`**, not `./mvnw` | Reproducibility gap; one-line fix |
 | **N+1 queries** on customer/invoice lists | Identified, documented, unfixed |
 | **Placeholder `JWT_SECRET`** in `.env.example` | Mitigated: `JwtSecretGuard` fails fast under `prod` |
-| **Placeholder OAuth credentials in Secrets Manager** | `google-client-id`, `google-client-secret`, `github-client-id` and `github-client-secret` are `CHANGE_ME`. Federated sign-in for those two providers cannot work deployed until they are populated. There is **no fail-fast guard** for this, unlike `JWT_SECRET` — the app boots happily and only fails at the provider's authorize endpoint. A worthwhile small addition |
+| ~~**Placeholder OAuth credentials in Secrets Manager**~~ | ✅ **Closed (2026-08-08)** — all three providers now hold real credentials, confirmed live. There is still **no fail-fast guard** for a placeholder slipping back in, unlike `JWT_SECRET` — the app would boot happily and only fail at the provider's authorize endpoint. A worthwhile small addition |
 | **`schema.sql` applied by hand** | Deliberate trade — no migration tool |
 | **`assignments/` is gitignored** | The SRS and Phase 1 report have **no version-control backup** |
 

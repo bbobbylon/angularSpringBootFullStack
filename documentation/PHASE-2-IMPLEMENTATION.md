@@ -72,8 +72,8 @@ Phase 1 §8 listed seven limitations carried forward. **Five are closed, two rem
 | No frontend specs | ✅ **Closed** | 87 tests; `ng lint` green and gating in CI |
 | Profile-image storage is local filesystem | ✅ **Closed** | S3 behind an interface; local impl retained for dev |
 | No general / distributed rate limiting | ✅ **Closed** | `RateLimitFilter` returns `429` + `Retry-After` |
-| Federated login dormant pending credentials | ⚠ **Partially closed — transport solved, deployment pending** | All three providers wired (`47acebb`) and working locally. The deployed environment was blocked because Google and Entra refuse any `http://` redirect URI outside `localhost`; **that is now solved without buying a domain** — a CloudFront distribution supplies `https://d3911jyxcju4q4.cloudfront.net` and `OAUTH2_REDIRECT_BASE_URL` pins the redirect origin (see §6.1). What remains is operational, not architectural: deploy the fix, and populate the Google/GitHub credentials, which are still `CHANGE_ME` |
-| **SMS 2FA is stubbed** | ⚠ **Still open** | `NotificationServiceImpl.sendTwoFactorCode` still logs instead of sending; the `SMSUtils.sendSMS()` call remains commented out to avoid Twilio charges. **TOTP is the fully functional second factor** |
+| Federated login dormant pending credentials | ✅ **Closed (2026-08-08)** | All three providers wired (`47acebb`), working locally, and now live in production. The deployed environment was blocked because Google and Entra refuse any `http://` redirect URI outside `localhost`; solved via a CloudFront distribution on `https://tesseraapp.dev` with `OAUTH2_REDIRECT_BASE_URL` pinning the redirect origin (see §6.1), plus real Google/GitHub/Microsoft credentials populated in Secrets Manager and verified live via the authorize redirect |
+| **SMS 2FA is stubbed** | ✅ **Closed, voice-delivered for now (2026-08-09)** | `NotificationServiceImpl.sendTwoFactorCode` dispatches the code as a spoken phone call via `VoiceUtils` rather than SMS: this Twilio number's US A2P 10DLC campaign registration is still pending carrier review (typically 5–10+ business days), and — confirmed against this account's Twilio billing — an A2P-blocked SMS send is accepted and charged by Twilio's API, then silently dropped by the carrier with no exception thrown, so an SMS-first design could never detect the failure to fall back from. Voice isn't A2P-gated, so it works today; confirmed live via a real call. Still degrades to a logged code when Twilio secrets are unconfigured (dev/CI). Revert to SMS as the primary channel once the A2P campaign clears review. TOTP remains the other fully functional second factor |
 | **Placeholder JWT secret** | ⚠ **Still open** | `.env.example` still ships a placeholder. Mitigated, not removed: `JwtSecretGuard` fails fast under `prod` if the placeholder is present or the secret is too short |
 
 ---
@@ -260,11 +260,12 @@ hop that can write it.
 | CloudFront distribution live on HTTPS | ✅ Done, verified |
 | `OAUTH2_REDIRECT_BASE_URL` implemented in `OAuth2ClientConfig` | ✅ Done |
 | Deployed on **task-definition rev 14** with the variable set | ✅ **Done — verified August 4, 2026.** `redirect_uri` now comes back `https://…`; `[NET] trusted-proxy-count=2` in the boot log |
-| Callback URLs registered in the Google, GitHub and Entra consoles | ⚠ Pending — manual |
-| Google and GitHub credentials in Secrets Manager | ⚠ **Still the literal `CHANGE_ME`.** Microsoft's are real. This means the previous claim that "GitHub works deployed" was **false** — it was failing on a placeholder `client_id`, not on the callback scheme |
+| Callback URLs registered in the Google, GitHub and Entra consoles | ✅ **Done (2026-08-08)** |
+| Google and GitHub credentials in Secrets Manager | ✅ **Done (2026-08-08).** All three providers hold real credentials, confirmed live via the authorize redirect on `https://tesseraapp.dev` |
 
-The deployed app confirms the mechanism works end to end. The remaining two rows are credential
-entry and provider-console registration — neither is a code or infrastructure question.
+The deployed app confirms the mechanism works end to end, including credentials. GitHub only works
+on `tesseraapp.dev` — its original OAuth App registered for the bare CloudFront URL is orphaned;
+Google and Microsoft work on both URLs.
 
 Nothing else ever depended on the domain: deploys, the database, analytics, RBAC and i18n all ran
 normally throughout. Full operational detail: [`aws/RUNBOOK.md`](../aws/RUNBOOK.md) Part F.

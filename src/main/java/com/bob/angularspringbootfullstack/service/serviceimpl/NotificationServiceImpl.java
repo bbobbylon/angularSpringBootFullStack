@@ -3,7 +3,7 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 import com.bob.angularspringbootfullstack.enumeration.VerificationType;
 import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.NotificationService;
-import com.bob.angularspringbootfullstack.utils.SMSUtils;
+import com.bob.angularspringbootfullstack.utils.VoiceUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,7 +16,8 @@ import static com.bob.angularspringbootfullstack.enumeration.VerificationType.PA
 /**
  * Default {@link NotificationService} that fans dispatch out to channel-specific
  * collaborators. Email goes through {@link EmailService} (Spring's
- * {@code JavaMailSender}); SMS goes through {@link SMSUtils}, which sends for
+ * {@code JavaMailSender}); the 2FA code goes through {@link VoiceUtils} as a spoken
+ * call rather than SMS (see {@link #sendTwoFactorCode} for why), which sends for
  * real once Twilio credentials are configured and otherwise degrades to a log
  * line so the flow stays completable in dev/CI without a Twilio account.
  * <p>
@@ -48,14 +49,24 @@ public class NotificationServiceImpl implements NotificationService {
         dispatchVerificationEmail(firstName, email, verificationURL, PASSWORD);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p><b>Voice-only, not SMS-first-with-voice-fallback.</b> An earlier version of this method
+     * attempted SMS via {@code SMSUtils.sendSMS} and only fell back to {@link VoiceUtils} if that
+     * call threw. It didn't work: Twilio's Messaging API returns success the instant <em>Twilio</em>
+     * accepts a message, not once a carrier delivers it, so a message blocked by a pending US A2P
+     * 10DLC campaign registration is silently dropped downstream with no exception ever thrown to
+     * catch — confirmed against this account's own billing, which was charged for "dispatched"
+     * texts that never arrived. Dispatching straight to voice avoids paying twice (a dead SMS attempt
+     * plus the call) and removes the dependency on a failure signal Twilio doesn't reliably send.
+     * Revert to attempting SMS first once the A2P campaign clears review.
+     */
     @Override
     public void sendTwoFactorCode(String firstName, String phoneNumber, String code) {
-        CompletableFuture.runAsync(() -> SMSUtils.sendSMS(phoneNumber,
-                        "TesseraApp: Hi " + firstName + ", your 2FA code is " + code
-                                + ". It expires in 24 hours. Reply STOP to opt out."))
+        CompletableFuture.runAsync(() -> VoiceUtils.sendVerificationCall(phoneNumber, firstName, code))
                 .exceptionally(throwable -> {
-                    log.error("Failed to dispatch 2FA code to phone {}: {}",
+                    log.error("Failed to dispatch 2FA code via voice call to phone {}: {}",
                             phoneNumber, throwable.getMessage(), throwable);
                     return null;
                 });

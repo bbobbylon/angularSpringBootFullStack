@@ -107,17 +107,22 @@ class DatasourceTlsConfigTest {
     }
 
     /**
-     * Each deployed profile must pin {@code REQUIRED} rather than inherit {@code PREFERRED}, whose
-     * silent fallback to plaintext is the whole risk being closed here.
+     * Each deployed profile must pin {@code REQUIRED} or stricter ({@code VERIFY_CA}/
+     * {@code VERIFY_IDENTITY}) rather than inherit {@code PREFERRED}, whose silent fallback to
+     * plaintext is the whole risk being closed here. Accepting the stricter tiers too — rather than
+     * asserting exactly {@code REQUIRED} — means raising a profile's guarantee later (as {@code prod}
+     * did on 2026-08-08, moving to {@code VERIFY_IDENTITY} once Aiven's CA was shipped into the
+     * image) doesn't require touching this test again.
      */
     @ParameterizedTest(name = "the {0} profile refuses an unencrypted database connection")
     @ValueSource(strings = {"prod", "qa", "stage"})
     void deployedProfilesRequireTls(String profile) throws IOException {
         String yaml = read(RESOURCES.resolve("application-" + profile + ".yml"));
 
-        assertTrue(Pattern.compile("^\\s*MYSQL_SSL_MODE:\\s*REQUIRED\\s*$", Pattern.MULTILINE).matcher(yaml).find(),
-                "application-" + profile + ".yml must set MYSQL_SSL_MODE: REQUIRED — it points at a "
-                        + "managed database reached over the public internet");
+        assertTrue(Pattern.compile("^\\s*MYSQL_SSL_MODE:\\s*(REQUIRED|VERIFY_CA|VERIFY_IDENTITY)\\s*$", Pattern.MULTILINE)
+                        .matcher(yaml).find(),
+                "application-" + profile + ".yml must set MYSQL_SSL_MODE to REQUIRED or stricter — it "
+                        + "points at a managed database reached over the public internet");
         assertTrue(Pattern.compile("^\\s*MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL:\\s*false\\s*$", Pattern.MULTILINE)
                         .matcher(yaml).find(),
                 "application-" + profile + ".yml must set MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL: false — once "

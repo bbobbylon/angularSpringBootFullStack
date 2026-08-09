@@ -408,8 +408,8 @@ Route B below.** What remains is not architectural:
 | Remaining step | State |
 |---|---|
 | Deploy on a task-definition revision that sets `OAUTH2_REDIRECT_BASE_URL` | ✅ **Done — rev 14, verified August 4, 2026.** The live authorize redirect returns an `https://` `redirect_uri`, and the boot log prints `[NET] trusted-proxy-count=2` |
-| Register `https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/{google,github,microsoft}` in each provider console | ⚠ Pending — manual, per provider |
-| Real Google and GitHub credentials in Secrets Manager | ⚠ **Pending — `tessera-app/google-client-secret`, `github-client-id` and `github-client-secret` still hold the literal `CHANGE_ME`, and `google-client-id` is a placeholder too.** Microsoft's are populated. This means GitHub sign-in has *never* worked in the deployed environment, contrary to what the table above implied — it was blocked by a missing credential, not by the callback scheme |
+| Register `https://tesseraapp.dev/login/oauth2/code/{google,github,microsoft}` in each provider console | ✅ **Done (2026-08-08)** |
+| Real Google and GitHub credentials in Secrets Manager | ✅ **Done (2026-08-08).** All three providers — Google, GitHub, Microsoft — hold real credentials and are confirmed live via the authorize redirect on `https://tesseraapp.dev`. GitHub only works on `tesseraapp.dev`, not the bare CloudFront URL (its original OAuth App there is orphaned); Google and Microsoft work on both |
 
 **Route A — get a domain (the real fix).** Steps 2–4 below are automated by
 **[`aws/deploy-https.sh`](../aws/deploy-https.sh)**:

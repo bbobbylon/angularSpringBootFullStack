@@ -748,9 +748,12 @@ image must be one built after the property was added, or it is simply ignored.
 provider error page; the `Location` header contains `client_id=CHANGE_ME`.
 **Cause:** the credential in Secrets Manager is a placeholder. `OAuth2ClientConfig#federatedProviderCatalog`
 skips a provider whose client id is **blank**, but `CHANGE_ME` is not blank — so the button renders
-and the flow fails at the provider instead of being hidden. As of 2026-08-04
-`tessera-app/google-client-id`, `google-client-secret`, `github-client-id` and `github-client-secret`
-all hold placeholders; only Microsoft's are real.
+and the flow fails at the provider instead of being hidden. This bit the project twice
+(2026-08-04, then again 2026-08-08 when re-pasted credentials turned out to be UUIDs, not real
+provider secrets) before all three — Google, GitHub, Microsoft — were confirmed real and live on
+`tesseraapp.dev`. If this symptom recurs, check the live `client_id` format in the authorize
+redirect before assuming code is broken: a UUID or the literal `CHANGE_ME` means the Secrets
+Manager value is wrong, not a bug.
 **Fix:** `aws secretsmanager put-secret-value --secret-id tessera-app/github-client-id
 --secret-string '<real id>'` (repeat per credential), then force a new deployment — ECS resolves
 secrets at container start, so no new revision is needed but a restart is.

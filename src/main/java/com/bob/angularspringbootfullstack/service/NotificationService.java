@@ -38,17 +38,22 @@ public interface NotificationService {
     void sendPasswordResetVerification(String firstName, String email, String verificationURL);
 
     /**
-     * Sends the 2FA verification code to the recipient's phone via SMS.
+     * Sends the 2FA verification code to the recipient's phone via a spoken voice call.
      * Invoked from the login flow when the authenticated user has MFA enabled
      * and has just had a fresh code persisted.
      * <p>
-     * Delivery goes through {@link com.bob.angularspringbootfullstack.utils.SMSUtils#sendSMS},
-     * which sends a real Twilio text when credentials are configured and logs the code instead
-     * when they are not, so the flow stays completable in dev/CI without a Twilio account.
+     * Delivery goes through {@link com.bob.angularspringbootfullstack.utils.VoiceUtils#sendVerificationCall},
+     * not SMS: US A2P 10DLC campaign registration — required before Twilio's Messaging API will
+     * actually deliver a text from a long-code number — takes days to weeks to clear, and Twilio's
+     * API returns success the moment it *accepts* a message, not once a carrier delivers it, so an
+     * SMS-first design here would silently bill for texts that never reach a phone. Voice calls
+     * carry no such registration requirement. Same credentials-presence degradation as the SMS path
+     * it replaces: with no Twilio credentials configured, the code is logged instead of a call being
+     * placed, so the flow stays completable in dev/CI without a Twilio account.
      *
-     * @param firstName   recipient's first name, used in the SMS body
+     * @param firstName   recipient's first name, used in the spoken greeting
      * @param phoneNumber recipient's phone number (no country-code prefix;
-     *                    {@code SMSUtils} prepends {@code +1} for US numbers)
+     *                    {@code VoiceUtils}/{@code SMSUtils} prepend {@code +1} for US numbers)
      * @param code        the 7-character 2FA code the recipient must enter
      */
     void sendTwoFactorCode(String firstName, String phoneNumber, String code);
