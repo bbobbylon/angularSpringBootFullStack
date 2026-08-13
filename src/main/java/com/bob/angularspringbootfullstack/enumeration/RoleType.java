@@ -121,4 +121,37 @@ public enum RoleType {
         if (caller.isEmpty() || target.isEmpty()) return false;
         return target.get().getTier() <= caller.get().getTier();
     }
+
+    /**
+     * Whether a caller holding this role sees only the data of the organizations they actively
+     * belong to, rather than every organization's, on the org-aware admin surface
+     * ({@code AdminUserController}'s user directory, {@code AnalyticsController}'s rollups).
+     *
+     * <p>The unscoped tiers are the two highest — {@link #ROLE_ADMIN} and
+     * {@link #ROLE_APPLICATION_ADMIN} — everyone else is scoped, keyed off the tier rather than
+     * an enumerated list of "the scoped roles." Enumerating scoped roles by name is exactly the
+     * shape of bug this method replaces: {@code ROLE_HELP_DESK_ADMIN} also carries
+     * {@code UPDATE:USER} and reaches these endpoints, but a check that only recognised
+     * {@code ROLE_ORGANIZATION_ADMIN} by name let it through completely unscoped. Keying off
+     * "below the unscoped tiers" instead means a future role slotted in anywhere below tier 6
+     * is scoped automatically, with nothing new to remember to update here.
+     *
+     * @return true when this role is below the two unscoped tiers
+     */
+    public boolean isOrganizationScoped() {
+        return this.tier < ROLE_ADMIN.tier;
+    }
+
+    /**
+     * {@link #isOrganizationScoped()}, resolved from a role name and fail-closed: an
+     * unrecognised role is treated as scoped (restricted), never as unscoped (global access) —
+     * the same fail-closed direction {@link #canAssign} takes for an unrecognised name.
+     *
+     * @param roleName the caller's role name; may be null or blank
+     * @return true when the role is recognised and below the unscoped tiers, or when it is not
+     *         recognised at all
+     */
+    public static boolean isOrganizationScoped(String roleName) {
+        return from(roleName).map(RoleType::isOrganizationScoped).orElse(true);
+    }
 }

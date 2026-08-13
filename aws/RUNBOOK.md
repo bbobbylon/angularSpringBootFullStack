@@ -13,6 +13,38 @@ Its companion, [`README.md`](README.md), is the **reference**: what each AWS res
 
 - **Deploying a code change to an already-working environment?** Skip to [Part D](#part-d--redeploy-the-90-second-loop).
 - **Standing it up from nothing?** Start at Part A.
+- **"Do I even need to run anything, or did GitHub Actions already do it?"** — see the flowchart right below.
+
+## Do I need to run Part D manually, or is CI enough?
+
+This is the single most common point of confusion, so it gets its own answer before anything else:
+**a green checkmark in GitHub's Actions tab does not, by itself, mean AWS was touched.** Two
+different workflows both show up there, and only one of them deploys.
+
+```mermaid
+flowchart TD
+    A["Pushed a commit"] --> B{"Pushed to master?"}
+    B -- "No — feature branch" --> C["ci.yml runs\n(build + test only)"]
+    C --> D["Shows green in Actions.\nAWS was NOT touched."]
+    D --> E{"Want it live anyway?"}
+    E -- "Yes, right now" --> F["Run RUNBOOK Part D locally\n(deploys whatever's checked out,\nnot tied to master)"]
+    E -- "Yes, via GitHub" --> G["Actions -> deploy.yml -> Run workflow\n-> pick the branch (defaults to master!)"]
+    E -- "No, merge first" --> H["Merge to master,\nthen re-check this flowchart"]
+
+    B -- "Yes" --> I["deploy.yml triggers automatically"]
+    I --> J{"Did deploy.yml itself succeed?\n(not ci.yml — check the job name)"}
+    J -- "Yes" --> K["Done. deploy.yml already ran the FULL\nre-register (envsubst + register-task-definition\n+ force-new-deployment) for you."]
+    J -- "No — failed" --> L["Read the failure in the Actions log.\nCommon causes: missing GitHub Secret,\nAWS credential issue, or the ci.yml\nprerequisite job it calls failed first."]
+    L --> M["Fix the root cause, OR fall back to\nRUNBOOK Part D locally as a workaround"]
+```
+
+**The one thing worth memorizing:** when `deploy.yml` itself succeeds, it is *always* equivalent to
+the full "re-register the task definition" path in Part D below — it runs the exact same
+`envsubst` + `register-task-definition` + `force-new-deployment` sequence as a GitHub Actions job,
+every time, whether or not `aws/task-definition.json` actually changed. You never need to run
+anything manually after a genuinely successful `deploy.yml` run. Part D exists for everything
+*outside* that happy path: local testing before a push, a branch that hasn't reached `master` yet,
+or working around a broken workflow.
 
 ## Table of contents
 

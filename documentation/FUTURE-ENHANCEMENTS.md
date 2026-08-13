@@ -194,7 +194,7 @@ opposed to the product itself. None of it is started.
 |---|---|---|
 | ✅ **Global footer** | Done (2026-08-13) — `shared/footer/footer.component`, always-mounted in `AppComponent` below the router outlet via the sticky-footer flex layout. Copyright line + one-line privacy note, Terms/Privacy links, Contact Us set apart on its own line | |
 | ✅ **Contact Us page** | Done (2026-08-13) — public `/contact` route (`ContactComponent`), `POST /contact` (`ContactController`, public, rate-limited by the global tier), forwards to the app's mailbox via `NotificationService#sendContactMessage` → `EmailServiceImpl`, reusing the existing `multipart/alternative` + `EmailTemplate` pattern exactly as sketched. Visitor's address goes on `Reply-To`, not `From` | |
-| ⬜ **Public feature-preview / "product tour" pages** | Every real feature (dashboard, analytics, services catalog, security center) sits behind `capability.guard.ts`, so a visitor has no way to see what they'd be signing up for before creating an account | Static public routes (e.g. `/features`, `/tour`) built from screenshots/copy of the real screens — **not** live authenticated components rendered in a public context, to avoid any risk of a data-bound route slipping past the guard |
+| ✅ **Public feature-preview / "product tour" pages** | Done (2026-08-13) — `/features` (`FeatureTourComponent`), static copy/icon cards describing the seven real capability areas, linked from the login screen ("See what TesseraApp can do"). Copy only, no screenshots yet — a real screenshot pass is a separate, later effort. Static, no live/authenticated components, matching the original design constraint | |
 
 ---
 

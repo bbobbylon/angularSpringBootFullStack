@@ -189,6 +189,41 @@ html[data-theme="light"] code{color:var(--amber-dim)}
 .note.info{border-left-color:var(--cyan);background:color-mix(in srgb,var(--cyan) 6%,var(--bg-2))}
 .note.info .lbl{color:var(--cyan)}
 
+/* ---------- decision flowchart (hand-built, no diagramming library —
+   keeps this file's zero-external-dependency promise) ---------- */
+.flow{
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  margin:26px 0;font-family:var(--sans);font-size:13.6px
+}
+.flow__box{
+  display:inline-block;max-width:420px;padding:12px 18px;margin:2px 0;
+  border:1px solid var(--rule-2);border-radius:var(--radius);
+  background:var(--bg-2);box-shadow:var(--shadow);line-height:1.5
+}
+.flow__box--start{border-color:var(--cyan);color:var(--cyan);font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.flow__box--q{font-weight:600;border-style:dashed}
+.flow__box--end{max-width:360px}
+.flow__box--ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 7%,var(--bg-2))}
+.flow__box--danger{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 7%,var(--bg-2))}
+.flow__note{display:block;margin-top:4px;font-size:11.5px;color:var(--ink-3)}
+.flow__arrow{font-family:var(--mono);color:var(--ink-3);font-size:15px;line-height:1;margin:2px 0}
+.flow__branches{
+  display:flex;flex-wrap:wrap;justify-content:center;gap:22px;margin-top:8px;
+  padding-top:14px;border-top:1px dashed var(--rule-2);width:100%
+}
+.flow__branch{
+  flex:1 1 220px;max-width:300px;display:flex;flex-direction:column;align-items:center
+}
+.flow__branch-label{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin-bottom:6px;font-weight:700
+}
+.flow__branch-label--yes{color:var(--ok)}
+.flow__branch-label--no{color:var(--danger)}
+@media (max-width:640px){
+  .flow__box,.flow__box--end{max-width:100%}
+}
+
 /* ---------- tables ---------- */
 .tw{overflow-x:auto;margin:20px 0;border:1px solid var(--rule);border-radius:var(--radius)}
 table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:13.6px}
@@ -320,6 +355,82 @@ look. <em>This file tells you what to do; that one tells you why it broke.</em><
   <a href="#part-d">→ Deploying a code change? Skip to Part D</a>
   <a href="#part-a">→ Standing it up from nothing? Start at Part A</a>
   <a href="#part-h">→ Just want the logs? Part H</a>
+  <a href="#ci-flowchart">→ "Did CI already deploy this, or do I need Part D?"</a>
+</div>
+
+<!-- ================= CI DECISION FLOWCHART ================= -->
+<h2 id="ci-flowchart"><span class="pt">◆</span>Do I need to run Part D manually, or is CI enough?<a class="anch" href="#ci-flowchart">#</a></h2>
+<p>The single most common point of confusion, answered before anything else: <strong>a green checkmark
+in GitHub's Actions tab does not, by itself, mean AWS was touched.</strong> Two different workflows both
+show up there, and only one of them deploys.</p>
+
+<div class="flow">
+  <div class="flow__box flow__box--start">Pushed a commit</div>
+  <div class="flow__arrow">↓</div>
+  <div class="flow__box flow__box--q">Pushed to <code>master</code>?</div>
+
+  <div class="flow__branches">
+    <div class="flow__branch">
+      <div class="flow__branch-label flow__branch-label--no">No — feature branch</div>
+      <div class="flow__arrow">↓</div>
+      <div class="flow__box">
+        <code>ci.yml</code> runs (build + test only)<br>
+        <span class="flow__note">Shows green in Actions. <strong>AWS was NOT touched.</strong></span>
+      </div>
+      <div class="flow__arrow">↓</div>
+      <div class="flow__box flow__box--q">Want it live anyway?</div>
+      <div class="flow__branches">
+        <div class="flow__branch">
+          <div class="flow__branch-label">Right now, locally</div>
+          <div class="flow__box flow__box--end flow__box--ok">Run RUNBOOK <a href="#part-d">Part D</a> — deploys whatever's
+            checked out, not tied to <code>master</code></div>
+        </div>
+        <div class="flow__branch">
+          <div class="flow__branch-label">Via GitHub</div>
+          <div class="flow__box flow__box--end flow__box--ok">Actions → <code>deploy.yml</code> → Run workflow →
+            <strong>pick the branch</strong> (dropdown defaults to <code>master</code>!)</div>
+        </div>
+        <div class="flow__branch">
+          <div class="flow__branch-label">No — merge first</div>
+          <div class="flow__box flow__box--end">Merge to <code>master</code>, then re-check this flowchart</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow__branch">
+      <div class="flow__branch-label flow__branch-label--yes">Yes</div>
+      <div class="flow__arrow">↓</div>
+      <div class="flow__box"><code>deploy.yml</code> triggers automatically</div>
+      <div class="flow__arrow">↓</div>
+      <div class="flow__box flow__box--q">Did <code>deploy.yml</code> itself succeed?<br>
+        <span class="flow__note">(not <code>ci.yml</code> — check the job name)</span></div>
+      <div class="flow__branches">
+        <div class="flow__branch">
+          <div class="flow__branch-label flow__branch-label--yes">Yes</div>
+          <div class="flow__box flow__box--end flow__box--ok">Done. It already ran the FULL re-register
+            (<code>envsubst</code> + <code>register-task-definition</code> + <code>force-new-deployment</code>)
+            for you.</div>
+        </div>
+        <div class="flow__branch">
+          <div class="flow__branch-label flow__branch-label--no">No — failed</div>
+          <div class="flow__box flow__box--end flow__box--danger">Read the failure in the Actions log. Common
+            causes: missing GitHub Secret, AWS credential issue, or the <code>ci.yml</code> prerequisite job it
+            calls failed first. Fix the root cause, or fall back to Part D locally as a workaround.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note tip">
+<span class="lbl">The one thing worth memorizing</span>
+<p>When <code>deploy.yml</code> itself succeeds, it is <em>always</em> equivalent to the full
+"re-register the task definition" path in Part D — it runs the exact same <code>envsubst</code> +
+<code>register-task-definition</code> + <code>force-new-deployment</code> sequence as a GitHub
+Actions job, every time, whether or not <code>aws/task-definition.json</code> actually changed. You
+never need to run anything manually after a genuinely successful <code>deploy.yml</code> run. Part D
+exists for everything <em>outside</em> that happy path: local testing before a push, a branch that
+hasn't reached <code>master</code> yet, or working around a broken workflow.</p>
 </div>
 
 <!-- ================= WHAT EXISTS ================= -->

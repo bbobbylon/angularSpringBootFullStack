@@ -56,6 +56,12 @@
           <span class="sc-svcadmin__sep">·</span>
           <span>{{ t('servicesAdmin.summary.catalogValue') }} <strong>${{ catalogValue() | number: '1.2-2' }}</strong></span>
         </div>
+        <p class="small text-muted sc-reveal" style="--d: 50ms;">
+          <i class="bi bi-info-circle"></i>
+          A new service appears in the public Service Catalog and invoice forms immediately — no
+          separate publish step. "Retire" only hides it from both without deleting it; "Reinstate"
+          brings it back.
+        </p>
 
         <!-- ── Add form ─────────────────────────────────────────────────── -->
         @if (isCreating()) {
@@ -171,12 +177,12 @@
                             </button>
                             @if (service.active === false) {
                               <button (click)="toggleActive(service)" [disabled]="isSaving()"
-                                      class="btn btn-outline-success btn-sm" type="button">
+                                      class="btn btn-outline-success btn-sm" title="Adds this service back to the public Service Catalog" type="button">
                                 <i class="bi bi-arrow-counterclockwise"></i> {{ t('servicesAdmin.reinstate') }}
                               </button>
                             } @else {
                               <button (click)="toggleActive(service)" [disabled]="isSaving()"
-                                      class="btn btn-outline-warning btn-sm" type="button">
+                                      class="btn btn-outline-warning btn-sm" title="Removes this service from the public Service Catalog — it stays here to reinstate later" type="button">
                                 <i class="bi bi-archive"></i> {{ t('servicesAdmin.retire') }}
                               </button>
                             }
