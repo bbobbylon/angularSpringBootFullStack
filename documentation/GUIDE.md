@@ -392,15 +392,35 @@ cheapest confirmation the setting took effect.
 A provider's button appears only when its `CLIENT_ID` is set — the SPA discovers configured providers
 via `GET /oauth2/providers`. See [§3.4](#34-setting-up-a-federated-provider).
 
-**SMS 2FA (optional):** `TWILIO_FROM_NUMBER`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`. Leave them
-as placeholders and `SMSUtils` logs the code to the server console instead of sending — safe for
-dev/CI with no Twilio account. Fill in real values and `NotificationServiceImpl.sendTwoFactorCode`
-sends a real text; every send then incurs a Twilio cost. A placeholder like `CHANGE_ME_ACxxxxxxx`
-passes `SMSUtils.isConfigured()` silently (it only checks non-blank, not real) and degrades to the
-same console-log fallback as leaving the value unset entirely — see `aws/RUNBOOK.md` for the
-2026-08-08 incident this caused in production. Delivery also depends on the sending number's A2P
-10DLC campaign being carrier-approved, which is outside the app entirely — Twilio's send API can
-return success (message queued) while the carrier still silently drops it as `Undelivered`.
+**Phone 2FA (optional):** `TWILIO_FROM_NUMBER`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and
+optionally `TWILIO_VERIFY_SERVICE_SID`. Leave all four as placeholders and the code is logged to the
+server console instead of sent — safe for dev/CI with no Twilio account. A placeholder like
+`CHANGE_ME_ACxxxxxxx` passes `SMSUtils.isConfigured()`/`TwilioVerifyUtils.isConfigured()` silently
+(they only check non-blank, not real) and degrades to the same console-log fallback as leaving the
+value unset entirely — see `aws/RUNBOOK.md` for the 2026-08-08 incident this caused in production.
+
+`NotificationServiceImpl.sendTwoFactorCode` picks one of three paths, in priority order:
+
+1. **`TWILIO_VERIFY_SERVICE_SID` set** — dispatches through `TwilioVerifyUtils` (Twilio's Verify
+   API): `"sms"` first, retrying on `"call"` if that throws. Twilio generates, expires (10 minutes),
+   rate-limits, and owns the code entirely — this app never sees it. Verify is explicitly exempt
+   from US A2P 10DLC campaign registration for OTP-only traffic (Twilio's own compliance docs), so
+   SMS delivery works immediately, unlike the raw Messaging API below. Do **not** attach the
+   `TWILIO_FROM_NUMBER` number/messaging service to the Verify Service's SMS configuration in the
+   console — that would route Verify traffic back through that number's own (possibly still
+   pending) A2P campaign, defeating the point.
+2. **Only the three legacy Twilio vars set** — falls back to a spoken call via `VoiceUtils`, reading
+   the app's own locally-generated 7-character code aloud. This is the pre-Verify workaround: raw
+   SMS via `SMSUtils` is not attempted first (see `NotificationServiceImpl`'s Javadoc) because
+   Twilio's Messaging API returns success the instant *Twilio* accepts a message, not once a carrier
+   delivers it — a message blocked by a pending A2P campaign is silently dropped downstream with no
+   exception to catch. Voice calls carry no such registration requirement.
+3. **Nothing configured** — the code is logged to the console.
+
+Redemption mirrors this on `UserRepoImpl.verifyCode`: when the user is phone-2FA-enrolled and Verify
+is configured, the submitted code is checked against Twilio (`TwilioVerifyUtils.checkVerification`)
+rather than the local `twofactorverifications` table, since nothing was ever inserted there for that
+attempt.
 
 **User-type badge (optional, admin-only, P2-1):** `INTERNAL_DOMAINS` — comma-separated email
 domains (e.g. `lewisu.edu,tesseraapp.dev`) that read `INTERNAL` on the admin Users pages. Blank/unset
@@ -1208,9 +1228,10 @@ for verification, so the only serialization path exercised is the library's own 
 > (`DELETE /admin/user/{id}/passkeys[/{credentialId}]`) is **revocation only**: it forces the user to
 > enroll a fresh passkey (or fall back to password/TOTP) on their next sign-in.
 
-**SMS 2FA** sends for real once Twilio credentials are configured (`SMSUtils` logs the code instead
-when they're left as placeholders). TOTP takes precedence: a confirmed authenticator skips the SMS
-path entirely.
+**Phone 2FA** sends for real once Twilio credentials are configured — through Twilio Verify if
+`TWILIO_VERIFY_SERVICE_SID` is set, otherwise a spoken voice call (the code is logged instead when
+everything is left as placeholders; see §3.2's "Phone 2FA (optional)" entry for the three-way
+priority). TOTP takes precedence: a confirmed authenticator skips the phone-code path entirely.
 
 **Federated login** is a standard Authorization Code flow, active only when provider credentials are
 set. `OAuth2LoginSuccessHandler` performs find-or-create on `(provider, subject)` and issues **our**

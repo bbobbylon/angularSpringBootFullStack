@@ -169,8 +169,10 @@
     "description": "Description",
     "basePrice": "Base price",
     "noDescription": "No description provided.",
-    "emptyTitle": "The catalog is empty.",
-    "emptyHint": "Add your first service to make it selectable on new invoices.",
+    "emptyTitle": "No services found",
+    "emptyHint": "Try a different search term, or add your first service.",
+    "searchByName": "Search by name or description",
+    "searchAria": "Search the services catalog",
     "editNote": "Editing a service does not change invoices already raised — they keep the name and price captured at the time.",
     "summary": {
       "offered": "offered",
@@ -216,7 +218,9 @@
     "emptyTitle": "No services in catalog",
     "emptyHint": "No services have been published yet. Once they are, they'll appear here ready to add to an invoice.",
     "emptyHintAdmin": "Publish your first service to make it selectable on new invoices.",
-    "manageCatalog": "Manage catalog"
+    "manageCatalog": "Manage catalog",
+    "noResultsTitle": "No services found",
+    "noResultsHint": "Try a different search term."
   },
   "securityCenter": {
     "eyebrow": "Account",
@@ -355,9 +359,11 @@
     "title": "Invoices",
     "invoiceNumber": "Invoice #",
     "service": "Service",
-    "emptyTitle": "No invoices yet",
-    "emptyHint": "Invoices you create will appear here with their status and totals.",
-    "loading": "Loading invoices…"
+    "emptyTitle": "No invoices found",
+    "emptyHint": "Try a different search term, or create a new invoice.",
+    "loading": "Loading invoices…",
+    "searchByInvoiceNumber": "Search by invoice # or customer",
+    "searchAria": "Search invoices"
   },
   "users": {
     "breadcrumb": "Users",

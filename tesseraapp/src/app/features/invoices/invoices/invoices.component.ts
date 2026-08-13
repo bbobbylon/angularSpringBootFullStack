@@ -1,14 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { DatePipe, NgClass } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
-import { map, of, startWith, switchMap } from 'rxjs';
+import { debounceTime, map, of, startWith, Subject, switchMap } from 'rxjs';
+import { catchError, filter } from 'rxjs/operators';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { CustomerService } from '../../../service/customer.service';
 import { InvoiceListDataInterface } from '../../../interface/appstates.interface';
-import { catchError } from 'rxjs/operators';
 import { HttpEvent, HttpEventType } from '@angular/common/http';
 import { saveAs } from 'file-saver';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
@@ -19,15 +19,17 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
 
 /**
- * All-invoice list view with pagination.
+ * All-invoice list view with search and pagination.
  *
- * Fetches a paginated list of invoices from {@code GET /customer/invoice/list}
- * and renders them in a table with status badges and a Print action per row.
+ * Fetches from {@code GET /customer/invoice/list} (no search term) or
+ * {@code GET /customer/invoice/search} (with a search term, matched against the invoice number
+ * and the owning customer's name) and renders the page in a table with status badges and a Print
+ * action per row.
  *
  * State is held in {@link invoiceState}, a writable signal driven by changes to
- * the {@link currentPage} signal — bridged through {@code toObservable} so the
- * existing RxJS pipeline (with {@code switchMap} cancel-stale semantics) is
- * preserved without rewriting the service layer.
+ * {@link query} — bridged through {@code toObservable} so the existing RxJS pipeline
+ * (with {@code switchMap} cancel-stale semantics) is preserved without rewriting the service
+ * layer. Mirrors {@code CustomersComponent}'s search wiring so the two list screens stay one idiom.
  */
 @Component({
   selector: 'app-invoices',
@@ -69,14 +71,21 @@ export class InvoicesComponent implements OnInit {
   pageSize$ = this.pageSize.asReadonly();
 
   /**
-   * Page index and row count as one derived value — the single input to the fetch pipeline.
-   *
-   * <p>One source rather than two {@code toObservable} bridges combined with {@code combineLatest}:
-   * {@link changePageSize} writes both signals in one go, and two independent bridges would each
-   * fire an effect in the same flush, issuing two requests for the same intent. {@code switchMap}
-   * would cancel one, but the server would still have answered it.
+   * The active (debounced) search term; an empty string means no search is active and
+   * {@link query} routes to {@code /customer/invoice/list} instead of {@code /invoice/search}.
    */
-  private readonly query = computed(() => ({ page: this.currentPage(), size: this.pageSize() }));
+  private currentSearchTerm = signal('');
+
+  /**
+   * Page, size and search term as one derived value — the single input to the fetch pipeline.
+   *
+   * <p>One source rather than separate {@code toObservable} bridges combined with
+   * {@code combineLatest}: {@link changePageSize} and the debounced search subscription each write
+   * two signals in one go, and independent bridges would each fire an effect in the same flush,
+   * issuing two requests for the same intent. {@code switchMap} would cancel one, but the server
+   * would still have answered it.
+   */
+  private readonly query = computed(() => ({ page: this.currentPage(), size: this.pageSize(), term: this.currentSearchTerm() }));
   private readonly _query$ = toObservable(this.query);
   private readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
@@ -93,19 +102,36 @@ export class InvoicesComponent implements OnInit {
   protected fileStatus = signal<{ status: string; type: string; percent: number } | undefined>(undefined);
 
   /**
-   * Wires the {@link query} signal to the invoice-list endpoint.
+   * Raw keystrokes from the search input are pushed here.
+   * The debounced subscription in {@link ngOnInit} gates what actually reaches {@link currentSearchTerm}.
+   */
+  private readonly searchInput$ = new Subject<string>();
+
+  /**
+   * Wires the {@link query} signal to the invoice-list/search endpoints.
    *
    * {@code toObservable} converts the signal into an Observable so we can keep
-   * using {@code switchMap}'s cancel-on-new-emission behavior — pagination clicks
-   * cancel any in-flight request rather than racing it. The inner pipe's
-   * {@code startWith} re-emits LOADING (with cached data) on every page change so
+   * using {@code switchMap}'s cancel-on-new-emission behavior — pagination or search
+   * changes cancel any in-flight request rather than racing it. The inner pipe's
+   * {@code startWith} re-emits LOADING (with cached data) on every change so
    * the template never blanks out between fetches.
    */
   ngOnInit(): void {
+    this.searchInput$
+      .pipe(
+        debounceTime(300),
+        filter((term) => term.length === 0 || term.length >= 3),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((term) => {
+        this.currentSearchTerm.set(term);
+        this.currentPage.set(0);
+      });
+
     this._query$
       .pipe(
-        switchMap(({ page, size }) =>
-          this.customerService.invoices$(page, size).pipe(
+        switchMap(({ page, size, term }) =>
+          (term ? this.customerService.searchInvoices$(term, page, size) : this.customerService.invoices$(page, size)).pipe(
             map((response) => {
               this.data.set(response);
               return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>;
@@ -120,6 +146,16 @@ export class InvoicesComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((state) => this.invoiceState.set(state));
+  }
+
+  /**
+   * Called on every keystroke in the search input. Pushes the raw term into
+   * {@link searchInput$}, which the debounced subscription in {@link ngOnInit} gates.
+   *
+   * @param term - the current value of the search input
+   */
+  onSearchInput(term: string): void {
+    this.searchInput$.next(term);
   }
 
   /**

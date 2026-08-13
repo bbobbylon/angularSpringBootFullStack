@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.1
-**Last Updated:** 2026-08-08
+**Version:** 3.2
+**Last Updated:** 2026-08-09
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -185,6 +185,17 @@ trigger), and whether there is a cap on pin count.
 | ⬜ **Real production domain** | Same blocker as HTTPS: ACM cannot issue a certificate without proving DNS control, and you cannot prove control of the ALB's own `*.elb.amazonaws.com` name. No code marker remains — CORS origins are already env-driven | Buy a domain → ACM DNS validation → HTTPS listener |
 | ⬜ **`start.sh` → Maven wrapper** | Uses bare `mvn`; `./mvnw` pins the version so a teammate's Maven install cannot change the build | One-line change |
 
+### 3.5 Public-facing & marketing surface
+
+Everything below is pre-signup surface — pages a visitor sees before they have an account, as
+opposed to the product itself. None of it is started.
+
+| Enhancement | Why | Sketch |
+|---|---|---|
+| 🔄 **Global footer** | Every page currently ends abruptly with no legal links or copyright line — table-stakes for a public-facing app. **Incoming as of 2026-08-09** — the user has a design ready and will screenshot it; noted here so it isn't lost, no implementation yet | A shared footer component (legal links, copyright) reused across every layout, same pattern as the existing shared `page-size-select`/navbar components |
+| ⬜ **Contact Us page** | No way for a prospective or existing user to reach the team without already having an account | A public route with a simple form; reuse `EmailServiceImpl`'s existing `multipart/alternative` + `EmailTemplate` branded-HTML pattern rather than building new email infrastructure |
+| ⬜ **Public feature-preview / "product tour" pages** | Every real feature (dashboard, analytics, services catalog, security center) sits behind `capability.guard.ts`, so a visitor has no way to see what they'd be signing up for before creating an account | Static public routes (e.g. `/features`, `/tour`) built from screenshots/copy of the real screens — **not** live authenticated components rendered in a public context, to avoid any risk of a data-bound route slipping past the guard |
+
 ---
 
 ## 4. Code TODO audit
@@ -204,7 +215,6 @@ works correctly today and would simply be tidier done differently.
 | `UserController.java:62` | `TODO(refactor-user-fetch)` — standardize the authenticated-user fetch | Refactor |
 | `UserRepoImpl.java:63` | `TODO(refactor-architecture)` — SRP violation | It is a repo, a `UserDetailsService`, **and** a business-logic holder |
 | `RoleRepoImpl.java:25` | `TODO(org-roles)` — org-scoped role system | §3.2 |
-| `NotificationServiceImpl.java:54` | Enable SMS (Twilio) when ready | §3.3 — deliberate, documented stub |
 
 Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/getById` throw
 `UnsupportedOperationException` (roles are seed-only).

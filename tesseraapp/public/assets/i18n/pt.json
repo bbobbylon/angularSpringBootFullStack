@@ -169,8 +169,10 @@
     "description": "Descrição",
     "basePrice": "Preço base",
     "noDescription": "Nenhuma descrição fornecida.",
-    "emptyTitle": "O catálogo está vazio.",
-    "emptyHint": "Adicione seu primeiro serviço para que ele possa ser selecionado em novas faturas.",
+    "emptyTitle": "Nenhum serviço encontrado",
+    "emptyHint": "Tente outro termo de pesquisa ou adicione seu primeiro serviço.",
+    "searchByName": "Pesquisar por nome ou descrição",
+    "searchAria": "Pesquisar no catálogo de serviços",
     "editNote": "Editar um serviço não altera faturas já emitidas — elas mantêm o nome e o preço registrados na época.",
     "summary": {
       "offered": "oferecidos",
@@ -216,7 +218,9 @@
     "emptyTitle": "Nenhum serviço no catálogo",
     "emptyHint": "Ainda não há serviços publicados. Assim que houver, eles aparecerão aqui prontos para serem adicionados a uma fatura.",
     "emptyHintAdmin": "Publique o seu primeiro serviço para que ele possa ser selecionado em novas faturas.",
-    "manageCatalog": "Gerenciar catálogo"
+    "manageCatalog": "Gerenciar catálogo",
+    "noResultsTitle": "Nenhum serviço encontrado",
+    "noResultsHint": "Tente outro termo de pesquisa."
   },
   "securityCenter": {
     "eyebrow": "Conta",
@@ -355,9 +359,11 @@
     "title": "Faturas",
     "invoiceNumber": "N.º da fatura",
     "service": "Serviço",
-    "emptyTitle": "Ainda não há faturas",
-    "emptyHint": "As faturas que você criar aparecerão aqui com seu status e totais.",
-    "loading": "Carregando faturas…"
+    "emptyTitle": "Nenhuma fatura encontrada",
+    "emptyHint": "Tente outro termo de pesquisa ou crie uma nova fatura.",
+    "loading": "Carregando faturas…",
+    "searchByInvoiceNumber": "Pesquisar por n.º da fatura ou cliente",
+    "searchAria": "Pesquisar faturas"
   },
   "users": {
     "breadcrumb": "Usuários",

@@ -396,6 +396,42 @@ public class CustomerController {
     }
 
     /**
+     * Searches for invoices whose invoice number or owning customer's name contains the given
+     * search term.
+     *
+     * @param user the authenticated user making the request
+     * @param term the substring to search for, matched against the invoice number and the
+     *             owning customer's name (defaults to empty, returning all)
+     * @param page zero-based page index (defaults to 0)
+     * @param size number of records per page (defaults to 20)
+     * @return 200 OK with the authenticated user and a page of matching invoices
+     */
+    @GetMapping("/invoice/search")
+    public ResponseEntity<HttpResponse> searchInvoices(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> term, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) {
+        Collection<Long> scope = resolveScope(user);
+        int pageIndex = page.orElse(0);
+        int pageSize = size.orElse(20);
+        String search = term.orElse("");
+        Page<Invoice> results;
+        if (scope == null) {
+            results = customerService.searchInvoices(search, pageIndex, pageSize);
+        } else if (scope.isEmpty()) {
+            results = Page.empty(PageRequest.of(pageIndex, pageSize));
+        } else {
+            results = customerService.searchInvoicesForOrganizations(search, scope, pageIndex, pageSize);
+        }
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "invoices", results))
+                        .message("Invoices found!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
      * Returns all data needed to populate the new-invoice creation form in the UI.
      * <p>
      * Returns the authenticated user, the full unpaginated customer list (for the

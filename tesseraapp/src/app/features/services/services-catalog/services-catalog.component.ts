@@ -81,6 +81,39 @@ export class ServicesCatalogComponent implements OnInit {
   );
 
   /**
+   * The current catalog search term, matched against each service's name and description.
+   *
+   * <p>Client-side, for the same reason the pagination below is: the public endpoint already
+   * returns the whole active catalog in one response, so there is no per-visitor server state to
+   * search against and filtering it in the browser needs no round trip.
+   */
+  protected readonly catalogSearchTerm = signal('');
+
+  /**
+   * The catalog narrowed by {@link catalogSearchTerm}. Feeds {@link pagedServices} and the pager,
+   * but deliberately not {@link catalogTotal} — the headline catalog value is a total of *every*
+   * offering, and silently becoming "of what you searched for" would read as a value regression,
+   * not a filter.
+   */
+  protected readonly filteredServices = computed(() => {
+    const term = this.catalogSearchTerm().trim().toLowerCase();
+    if (!term) return this.services();
+    return this.services().filter(
+      (svc) => svc.name.toLowerCase().includes(term) || (svc.description ?? '').toLowerCase().includes(term),
+    );
+  });
+
+  /**
+   * Pushes a new search term and returns the grid to its first page.
+   *
+   * @param term - the raw value of the search input
+   */
+  protected onCatalogSearch(term: string): void {
+    this.catalogSearchTerm.set(term);
+    this.catalogPage.set(0);
+  }
+
+  /**
    * Cards per page. Ten matches the admin catalog at {@code /services/manage}, so an administrator
    * moving between the two views does not have the page size change under them.
    */
@@ -90,7 +123,7 @@ export class ServicesCatalogComponent implements OnInit {
   protected readonly catalogPage = signal(0);
 
   protected readonly catalogTotalPages = computed(() =>
-    Math.ceil(this.services().length / this.catalogPageSize()),
+    Math.ceil(this.filteredServices().length / this.catalogPageSize()),
   );
 
   /**
@@ -109,7 +142,7 @@ export class ServicesCatalogComponent implements OnInit {
   protected readonly pagedServices = computed(() => {
     const size = this.catalogPageSize();
     const start = this.safeCatalogPage() * size;
-    return this.services().slice(start, start + size);
+    return this.filteredServices().slice(start, start + size);
   });
 
   /**

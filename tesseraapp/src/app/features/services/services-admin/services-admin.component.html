@@ -12,6 +12,12 @@
         </p>
       </div>
       <div class="sc-svcadmin__actions">
+        <label class="sc-search">
+          <i class="bi bi-search"></i>
+          <input #catalogSearchForm (input)="onCatalogSearch(catalogSearchForm.value)"
+                 class="form-control form-control-sm" id="catalogSearch"
+                 [placeholder]="t('servicesAdmin.searchByName')" type="text" [attr.aria-label]="t('servicesAdmin.searchAria')" />
+        </label>
         <a [routerLink]="['/services']" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-grid-1x2-fill"></i> {{ t('servicesAdmin.publicCatalog') }}
         </a>
@@ -82,7 +88,7 @@
 
         <!-- ── Catalog table ────────────────────────────────────────────── -->
         <section class="sc-panel sc-reveal" style="--d: 80ms;">
-          @if (services().length === 0) {
+          @if (filteredServices().length === 0) {
             <div class="sc-svcadmin__empty">
               <i class="bi bi-grid-3x3" aria-hidden="true"></i>
               <p class="mb-1">{{ t('servicesAdmin.emptyTitle') }}</p>
@@ -193,7 +199,7 @@
                                         [size]="catalogPageSize()"></app-page-size-select>
                   <span class="text-muted small mono">
                     {{ t('common.pageXofY', { page: safeCatalogPage() + 1, total: catalogTotalPages() }) }}
-                    · {{ t('common.nTotal', { count: services().length }) }}
+                    · {{ t('common.nTotal', { count: filteredServices().length }) }}
                   </span>
                 </div>
                 @if (showCatalogPager()) {

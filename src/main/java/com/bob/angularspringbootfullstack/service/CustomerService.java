@@ -267,4 +267,28 @@ public interface CustomerService {
      * @return a page of matching customers restricted to those organizations
      */
     Page<Customer> searchCustomersForOrganizations(String name, Collection<Long> organizationIds, int page, int size);
+
+    /**
+     * Returns a paginated page of invoices whose invoice number or owning customer's name
+     * contains the given search term.
+     *
+     * @param term the substring to search for, matched against both the invoice number and
+     *             the owning customer's name
+     * @param page zero-based page index
+     * @param size number of records per page
+     * @return a page of matching invoices
+     */
+    Page<Invoice> searchInvoices(String term, int page, int size);
+
+    /**
+     * Org-scoped form of {@link #searchInvoices(String, int, int)} (FR-ORG-2), restricted to
+     * invoices billed to customers owned by the given organizations.
+     *
+     * @param term            the substring to search for
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @param page            zero-based page index
+     * @param size            records per page
+     * @return a page of matching invoices restricted to those organizations
+     */
+    Page<Invoice> searchInvoicesForOrganizations(String term, Collection<Long> organizationIds, int page, int size);
 }

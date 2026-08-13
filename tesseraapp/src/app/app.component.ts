@@ -2,28 +2,31 @@ import { Component, inject } from '@angular/core';
 import { ChildrenOutletContexts, RouterOutlet } from '@angular/router';
 import { routeTransition } from './shared/animations/route-animations';
 import { CommandPaletteComponent } from './shared/command-palette/command-palette.component';
+import { FooterComponent } from './shared/footer/footer.component';
 
 /**
  * Root shell for the standalone Angular application.
  *
- * <p>Hosts the single router outlet that every feature view renders into, and the two
- * always-on chrome pieces that must survive across route changes:
+ * <p>Hosts the single router outlet that every feature view renders into, and the always-on
+ * chrome pieces that must survive across route changes:
  * <ul>
  *   <li>the {@link routeTransition} animation, bound around the outlet so navigations
- *       cross-fade instead of snapping; and</li>
+ *       cross-fade instead of snapping;</li>
  *   <li>the global {@link CommandPaletteComponent} (⌘/Ctrl+K), which self-gates on
- *       authentication so it is inert on the public auth screens.</li>
+ *       authentication so it is inert on the public auth screens; and</li>
+ *   <li>the global {@link FooterComponent}, rendered on every screen — authenticated or
+ *       not — via the sticky-footer flex layout in {@code app.component.css}.</li>
  * </ul>
  *
  * <p>Because there is no persistent navbar in this shell — each feature component renders
  * its own {@code <app-navbar>} — {@code AppComponent} is the only correct home for
- * app-wide behaviour like these two. Change detection is left at the default strategy so
+ * app-wide behaviour like these. Change detection is left at the default strategy so
  * the router-driven {@code getRouteAnimationData()} binding re-evaluates on every
  * navigation without extra plumbing.
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, CommandPaletteComponent],
+  imports: [RouterOutlet, CommandPaletteComponent, FooterComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
   standalone: true,

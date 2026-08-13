@@ -12,6 +12,7 @@ import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import com.bob.angularspringbootfullstack.service.ImageStorageService;
 import com.bob.angularspringbootfullstack.service.NotificationService;
+import com.bob.angularspringbootfullstack.utils.TwilioVerifyUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
@@ -463,15 +464,42 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * Verifies that a 2FA code exists, is not expired, and belongs to the given email.
      *
      * <p>If the code is valid, the verification row is deleted (single-use).
+     *
+     * <p><b>Two redemption paths, one endpoint.</b> {@code GET /user/verify/code/{email}/{code}}
+     * stays the single entry point described on
+     * {@link com.bob.angularspringbootfullstack.repo.UserRepo#issueVerificationCode}, but the code
+     * it redeems no longer always lives in {@code twofactorverifications}: when the user is enrolled
+     * in phone-based 2FA ({@link User#isUsing2FA()}) and {@link TwilioVerifyUtils#isConfigured()},
+     * {@code NotificationServiceImpl#sendTwoFactorCode} dispatched the code through Twilio Verify,
+     * which owns it entirely — nothing was ever inserted locally for that attempt, so this delegates
+     * the check to {@link TwilioVerifyUtils#checkVerification} instead of querying this table. Every
+     * other case (the FR-TPF-1 email step-up code, and phone 2FA when Verify isn't configured) still
+     * redeems against the local table exactly as before.
      */
     @Override
     public User verifyCode(String email, String code) {
+        User userByEmail;
+        try {
+            userByEmail = jdbcTemplate.queryForObject(SELECT_USER_BY_EMAIL_QUERY, of("email", email), new UserRowMapper());
+        } catch (EmptyResultDataAccessException e) {
+            log.error("The User is not found in our database: {}", email);
+            throw new UsernameNotFoundException("User not found in our database: " + email);
+        }
+
+        if (userByEmail.isUsing2FA() && TwilioVerifyUtils.isConfigured()) {
+            log.info("User with email '{}' is attempting to use 2FA/MFA: verifying code via Twilio Verify.", email);
+            if (TwilioVerifyUtils.checkVerification(userByEmail.getPhoneNumber(), code)) {
+                return userByEmail;
+            }
+            log.error("Invalid 2FA code verification attempt for email: {}", email);
+            throw new BadCredentialsException("Code is not valid. Please try again!");
+        }
+
         if (isVerificationCodeExpired(code))
             throw new ApiException("This code has expired. Please request a new code to verify your account.");
         try {
             log.info("User with email '{}' is attempting to use 2FA/MFA: verifying code.", email);
             User userByCode = jdbcTemplate.queryForObject(SELECT_USER_BY_USER_CODE_QUERY, of("code", code), new UserRowMapper());
-            User userByEmail = jdbcTemplate.queryForObject(SELECT_USER_BY_EMAIL_QUERY, of("email", email), new UserRowMapper());
             if (userByCode.getEmail().equalsIgnoreCase(userByEmail.getEmail())) {
                 jdbcTemplate.update(DELETE_2FA_CODE_BY_CODE_QUERY, of("code", code));
                 return userByCode;

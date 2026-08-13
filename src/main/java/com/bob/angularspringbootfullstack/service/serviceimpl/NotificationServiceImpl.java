@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 import com.bob.angularspringbootfullstack.enumeration.VerificationType;
 import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.NotificationService;
+import com.bob.angularspringbootfullstack.utils.TwilioVerifyUtils;
 import com.bob.angularspringbootfullstack.utils.VoiceUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,18 +53,45 @@ public class NotificationServiceImpl implements NotificationService {
     /**
      * {@inheritDoc}
      *
-     * <p><b>Voice-only, not SMS-first-with-voice-fallback.</b> An earlier version of this method
-     * attempted SMS via {@code SMSUtils.sendSMS} and only fell back to {@link VoiceUtils} if that
-     * call threw. It didn't work: Twilio's Messaging API returns success the instant <em>Twilio</em>
-     * accepts a message, not once a carrier delivers it, so a message blocked by a pending US A2P
-     * 10DLC campaign registration is silently dropped downstream with no exception ever thrown to
-     * catch — confirmed against this account's own billing, which was charged for "dispatched"
-     * texts that never arrived. Dispatching straight to voice avoids paying twice (a dead SMS attempt
-     * plus the call) and removes the dependency on a failure signal Twilio doesn't reliably send.
-     * Revert to attempting SMS first once the A2P campaign clears review.
+     * <p><b>Twilio Verify when configured, the local-code voice path otherwise.</b> An earlier
+     * version of this method always dispatched over {@link VoiceUtils}, bypassing SMS entirely:
+     * Twilio's Messaging API returns success the instant <em>Twilio</em> accepts a message, not once
+     * a carrier delivers it, so a message blocked by a pending US A2P 10DLC campaign registration was
+     * silently dropped downstream with no exception ever thrown to catch — confirmed against this
+     * account's own billing, which was charged for "dispatched" texts that never arrived. Twilio
+     * Verify sidesteps that entire problem rather than working around it: Twilio's own A2P 10DLC
+     * compliance docs carry an explicit exception for OTP-only traffic sent through Verify, so SMS
+     * delivery works today without waiting on this account's campaign review. See
+     * {@link TwilioVerifyUtils} for why that exemption holds and what Verify takes over.
+     * <p>
+     * When {@link TwilioVerifyUtils#isConfigured()}, the {@code code} parameter is ignored — Twilio
+     * generates and owns the code for this path — and delivery goes through
+     * {@link TwilioVerifyUtils#startVerification}: {@code "sms"} first, and only on that call
+     * throwing (not merely "accepted", since Verify still can't promise carrier delivery any more
+     * than raw Messaging can) do we retry on {@code "call"}, which is the "keep voice as a fallback"
+     * requirement — now a second Verify call instead of a second integration. When Verify isn't
+     * configured (no {@code TWILIO_VERIFY_SERVICE_SID}, e.g. dev/CI), this falls back unchanged to
+     * the locally-generated {@code code} read aloud via {@link VoiceUtils}.
      */
     @Override
     public void sendTwoFactorCode(String firstName, String phoneNumber, String code) {
+        if (TwilioVerifyUtils.isConfigured()) {
+            CompletableFuture.runAsync(() -> {
+                        try {
+                            TwilioVerifyUtils.startVerification(phoneNumber, "sms");
+                        } catch (Exception smsFailure) {
+                            log.warn("Twilio Verify SMS challenge failed for {}, falling back to a voice call: {}",
+                                    phoneNumber, smsFailure.getMessage());
+                            TwilioVerifyUtils.startVerification(phoneNumber, "call");
+                        }
+                    })
+                    .exceptionally(throwable -> {
+                        log.error("Failed to dispatch 2FA code via Twilio Verify (sms and call) to phone {}: {}",
+                                phoneNumber, throwable.getMessage(), throwable);
+                        return null;
+                    });
+            return;
+        }
         CompletableFuture.runAsync(() -> VoiceUtils.sendVerificationCall(phoneNumber, firstName, code))
                 .exceptionally(throwable -> {
                     log.error("Failed to dispatch 2FA code via voice call to phone {}: {}",

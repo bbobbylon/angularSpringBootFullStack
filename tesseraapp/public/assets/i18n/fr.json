@@ -169,8 +169,10 @@
     "description": "Description",
     "basePrice": "Prix de base",
     "noDescription": "Aucune description fournie.",
-    "emptyTitle": "Le catalogue est vide.",
-    "emptyHint": "Ajoutez votre premier service pour qu'il puisse être sélectionné sur les nouvelles factures.",
+    "emptyTitle": "Aucun service trouvé",
+    "emptyHint": "Essayez un autre terme de recherche ou ajoutez votre premier service.",
+    "searchByName": "Rechercher par nom ou description",
+    "searchAria": "Rechercher dans le catalogue de services",
     "editNote": "Modifier un service ne change pas les factures déjà émises : elles conservent le nom et le prix enregistrés à ce moment-là.",
     "summary": {
       "offered": "proposés",
@@ -216,7 +218,9 @@
     "emptyTitle": "Aucun service au catalogue",
     "emptyHint": "Aucun service n'a encore été publié. Dès qu'ils le seront, ils apparaîtront ici, prêts à être ajoutés à une facture.",
     "emptyHintAdmin": "Publiez votre premier service pour qu'il soit sélectionnable sur les nouvelles factures.",
-    "manageCatalog": "Gérer le catalogue"
+    "manageCatalog": "Gérer le catalogue",
+    "noResultsTitle": "Aucun service trouvé",
+    "noResultsHint": "Essayez un autre terme de recherche."
   },
   "securityCenter": {
     "eyebrow": "Compte",
@@ -355,9 +359,11 @@
     "title": "Factures",
     "invoiceNumber": "N° de facture",
     "service": "Service",
-    "emptyTitle": "Aucune facture pour le moment",
-    "emptyHint": "Les factures que vous créez apparaîtront ici avec leur statut et leurs totaux.",
-    "loading": "Chargement des factures…"
+    "emptyTitle": "Aucune facture trouvée",
+    "emptyHint": "Essayez un autre terme de recherche ou créez une nouvelle facture.",
+    "loading": "Chargement des factures…",
+    "searchByInvoiceNumber": "Rechercher par n° de facture ou client",
+    "searchAria": "Rechercher des factures"
   },
   "users": {
     "breadcrumb": "Utilisateurs",

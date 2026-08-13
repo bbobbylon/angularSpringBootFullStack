@@ -347,6 +347,23 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Page<Invoice> searchInvoices(String term, int page, int size) {
+        return invoiceRepo.searchByInvoiceNumberOrCustomerName(term, of(page, size));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Page<Invoice> searchInvoicesForOrganizations(String term, Collection<Long> organizationIds, int page, int size) {
+        requireScope(organizationIds);
+        return invoiceRepo.searchByInvoiceNumberOrCustomerNameAndOrganizationIdIn(term, organizationIds, of(page, size));
+    }
+
+    /**
      * Rejects an absent or empty organization scope before it reaches the database.
      *
      * <p>This is a fail-closed guard, not a convenience check. An empty {@code IN ()} list is

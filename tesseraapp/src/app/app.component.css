@@ -1,0 +1,11 @@
+/*
+  Sticky-footer layout: app-root becomes the flex column, and app-footer's `margin-top: auto`
+  (see footer.component.css) consumes whatever vertical space the page content didn't use,
+  pushing the footer to the bottom of the viewport on short pages without needing every feature
+  component to opt into a min-height itself.
+*/
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}

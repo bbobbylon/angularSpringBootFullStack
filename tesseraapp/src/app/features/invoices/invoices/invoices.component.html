@@ -18,6 +18,12 @@
               <h1 class="sc-head__title">{{ t('invoices.title') }}</h1>
             </div>
             <div class="sc-head__actions">
+              <label class="sc-search">
+                <i class="bi bi-search"></i>
+                <input #searchForm (input)="onSearchInput(searchForm.value)"
+                       class="form-control form-control-sm" id="invoiceSearch"
+                       [placeholder]="t('invoices.searchByInvoiceNumber')" type="text" [attr.aria-label]="t('invoices.searchAria')" />
+              </label>
               <a [routerLink]="['/invoice/new']" class="btn btn-primary btn-sm sc-panel__action">
                 <i class="bi bi-receipt"></i> New invoice
               </a>

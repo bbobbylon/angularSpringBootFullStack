@@ -172,7 +172,8 @@ jobs:
           # Manager, which then fails with AccessDeniedException (see aws/README.md Troubleshooting).
           for s in JWT_SECRET:jwt-secret DB_PASSWORD:db-password MAIL_USERNAME:mail-username \
                    MAIL_PASSWORD:mail-password TWILIO_SID:twilio-sid TWILIO_TOKEN:twilio-token \
-                   TWILIO_FROM_NUMBER:twilio-from-number GOOGLE_CLIENT_ID:google-client-id \
+                   TWILIO_FROM_NUMBER:twilio-from-number TWILIO_VERIFY_SERVICE_SID:twilio-verify-service-sid \
+                   GOOGLE_CLIENT_ID:google-client-id \
                    GOOGLE_CLIENT_SECRET:google-client-secret GITHUB_CLIENT_ID:github-client-id \
                    GITHUB_CLIENT_SECRET:github-client-secret; do
             var_name="${s%%:*}_ARN"

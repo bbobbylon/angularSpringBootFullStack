@@ -169,8 +169,10 @@
     "description": "描述",
     "basePrice": "基准价格",
     "noDescription": "未提供描述。",
-    "emptyTitle": "目录为空。",
-    "emptyHint": "添加第一项服务，即可在新建发票时选择它。",
+    "emptyTitle": "未找到服务",
+    "emptyHint": "请尝试其他搜索词，或添加第一项服务。",
+    "searchByName": "按名称或描述搜索",
+    "searchAria": "搜索服务目录",
     "editNote": "编辑服务不会改动已开具的发票——它们保留开具当时记录的名称和价格。",
     "summary": {
       "offered": "提供中",
@@ -216,7 +218,9 @@
     "emptyTitle": "目录中暂无服务",
     "emptyHint": "尚未发布任何服务。发布后将在此处显示，可直接添加到发票中。",
     "emptyHintAdmin": "发布您的第一个服务，使其可在新发票中选择。",
-    "manageCatalog": "管理目录"
+    "manageCatalog": "管理目录",
+    "noResultsTitle": "未找到服务",
+    "noResultsHint": "请尝试其他搜索词。"
   },
   "securityCenter": {
     "eyebrow": "账户",
@@ -355,9 +359,11 @@
     "title": "发票",
     "invoiceNumber": "发票编号",
     "service": "服务",
-    "emptyTitle": "暂无发票",
-    "emptyHint": "您创建的发票会连同状态和金额显示在这里。",
-    "loading": "正在加载发票…"
+    "emptyTitle": "未找到发票",
+    "emptyHint": "请尝试其他搜索词，或创建一张新发票。",
+    "loading": "正在加载发票…",
+    "searchByInvoiceNumber": "按发票编号或客户搜索",
+    "searchAria": "搜索发票"
   },
   "users": {
     "breadcrumb": "用户",

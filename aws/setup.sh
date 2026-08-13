@@ -336,6 +336,7 @@ create_secret "mail-password"         "CHANGE_ME_16char_app_password"
 create_secret "twilio-sid"            "CHANGE_ME_ACxxxxxxx"
 create_secret "twilio-token"          "CHANGE_ME_twilio_auth_token"
 create_secret "twilio-from-number"    "+10000000000"
+create_secret "twilio-verify-service-sid" "CHANGE_ME_VAxxxxxxx"
 create_secret "google-client-id"      "CHANGE_ME.apps.googleusercontent.com"
 create_secret "google-client-secret"  "CHANGE_ME"
 create_secret "github-client-id"      "CHANGE_ME"
@@ -513,7 +514,8 @@ export ECR_IMAGE_URI="${ECR_URI}:latest"
 # AccessDeniedException on ssm:GetParameters (see Troubleshooting in aws/README.md).
 for s in JWT_SECRET:jwt-secret DB_PASSWORD:db-password MAIL_USERNAME:mail-username \
          MAIL_PASSWORD:mail-password TWILIO_SID:twilio-sid TWILIO_TOKEN:twilio-token \
-         TWILIO_FROM_NUMBER:twilio-from-number GOOGLE_CLIENT_ID:google-client-id \
+         TWILIO_FROM_NUMBER:twilio-from-number TWILIO_VERIFY_SERVICE_SID:twilio-verify-service-sid \
+         GOOGLE_CLIENT_ID:google-client-id \
          GOOGLE_CLIENT_SECRET:google-client-secret GITHUB_CLIENT_ID:github-client-id \
          GITHUB_CLIENT_SECRET:github-client-secret MICROSOFT_CLIENT_ID:microsoft-client-id \
          MICROSOFT_CLIENT_SECRET:microsoft-client-secret; do

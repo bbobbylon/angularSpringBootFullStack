@@ -59,4 +59,40 @@ public interface InvoiceRepo extends PagingAndSortingRepository<Invoice, Long>, 
      */
     @Query("SELECT i FROM Invoice i WHERE i.customer.organizationId IN :organizationIds")
     List<Invoice> findByOrganizationIdIn(@Param("organizationIds") Collection<Long> organizationIds);
+
+    /**
+     * Returns a page of invoices whose invoice number or owning customer's name contains the
+     * given term (case-insensitive) — the search half of {@code GET /customer/invoice/search}.
+     *
+     * <p>One term matched against two columns, mirroring how {@code CustomerRepo}'s search matches
+     * a single field: a reader searching invoices rarely knows which of "the invoice number" or
+     * "the customer's name" they actually remember, so requiring them to pick the right field first
+     * would defeat the point of a search box. A draft invoice (no customer yet) still matches on
+     * its invoice number since {@code customer} being {@code null} only fails the second half of
+     * the {@code OR}, never the query itself.
+     *
+     * @param term     the substring to search for; matched against both columns
+     * @param pageable pagination and sorting parameters
+     * @return a page of invoices whose number or customer name contains the term
+     */
+    @Query("SELECT i FROM Invoice i WHERE LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :term, '%')) "
+            + "OR LOWER(i.customer.customerName) LIKE LOWER(CONCAT('%', :term, '%'))")
+    Page<Invoice> searchByInvoiceNumberOrCustomerName(@Param("term") String term, Pageable pageable);
+
+    /**
+     * Org-scoped form of {@link #searchByInvoiceNumberOrCustomerName(String, Pageable)} (FR-ORG-2),
+     * for an org admin's use of {@code GET /customer/invoice/search} — otherwise a scoped caller
+     * could search their way to an invoice outside their organizations even though the plain list
+     * is scoped.
+     *
+     * @param term            the substring to search for; matched against both columns
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @param pageable        pagination and sorting parameters
+     * @return a page of matching invoices restricted to those organizations
+     */
+    @Query("SELECT i FROM Invoice i WHERE i.customer.organizationId IN :organizationIds "
+            + "AND (LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :term, '%')) "
+            + "OR LOWER(i.customer.customerName) LIKE LOWER(CONCAT('%', :term, '%')))")
+    Page<Invoice> searchByInvoiceNumberOrCustomerNameAndOrganizationIdIn(
+            @Param("term") String term, @Param("organizationIds") Collection<Long> organizationIds, Pageable pageable);
 }

@@ -211,6 +211,24 @@ export class CustomerService {
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
+   * Searches for invoices whose invoice number or owning customer's name contains the given
+   * term via GET /customer/invoice/search.
+   *
+   * Results are paginated identically to {@link invoices$}.
+   *
+   * @param term - the substring to match against invoice numbers and customer names
+   * @param page - zero-based page index (defaults to 0)
+   * @param size - number of records per page (defaults to 20)
+   * @returns Observable emitting an {@link InvoiceListDataInterface} response containing the matching page
+   */
+  searchInvoices$ = (term: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
+    this.http
+      .get<
+        CustomHttpResponseInterface<InvoiceListDataInterface>
+      >(`${this.server}/customer/invoice/search?term=${encodeURIComponent(term)}&page=${page}&size=${size}`)
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
    * Normalises HTTP errors into a single Observable<never> so all callers
    * receive a consistent Error instance regardless of whether the failure
    * was a client-side network event or a structured server error response.

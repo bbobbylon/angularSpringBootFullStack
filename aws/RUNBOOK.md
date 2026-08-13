@@ -312,7 +312,10 @@ aws secretsmanager update-secret $R --secret-id tessera-app/microsoft-client-sec
 #     Develop, not Security — confirmed 2026-08-08 against the live console.)
 #   From-number: Phone Numbers → Manage → Active Numbers → click the number you bought — copy it
 #     exactly as shown (already E.164-formatted, e.g. +18084315852). Must be A2P 10DLC (or
-#     toll-free) verified for SMS or Twilio will reject sends even with correct credentials.
+#     toll-free) verified for SMS or Twilio will reject sends even with correct credentials. This
+#     number/its A2P campaign is now only the VoiceUtils fallback path (see the Verify Service SID
+#     below) — TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN are shared with Verify, so this section still
+#     has to be filled in either way.
 aws secretsmanager update-secret $R --secret-id tessera-app/twilio-sid          --secret-string '<Account SID, starts with AC>'
 aws secretsmanager update-secret $R --secret-id tessera-app/twilio-token        --secret-string '<Auth Token>'
 aws secretsmanager update-secret $R --secret-id tessera-app/twilio-from-number  --secret-string '<+1XXXXXXXXXX>'
@@ -321,6 +324,25 @@ aws secretsmanager update-secret $R --secret-id tessera-app/twilio-from-number  
 # currently running task until you restart it:
 aws ecs update-service $R --cluster tessera-app-cluster --service tessera-app-service --force-new-deployment
 ```
+
+### Wiring Twilio Verify into production (optional, additive)
+
+**Status as of 2026-08-12: fully done except the actual deploy.**
+
+1. ✅ Verify Service created in console.twilio.com — SID `VAb30518dae8f392c259a41974ae40f966`. Its
+   Messaging Configuration was left on Twilio's default sender (the existing `twilio-from-number`
+   was never attached), so it isn't riding that number's own A2P 10DLC campaign.
+2. ✅ `TWILIO_VERIFY_SERVICE_SID` wired into `aws/task-definition.json` (`_variables` + env entry)
+   and both secret-resolution `for` loops (`aws/setup.sh` and `.github/workflows/deploy.yml`).
+3. ✅ Secret created and confirmed live in Secrets Manager:
+   `arn:aws:secretsmanager:us-east-1:468670609216:secret:tessera-app/twilio-verify-service-sid-l71jLM`.
+4. ⬜ **Not yet redeployed.** All of the above — plus the rest of today's `TwilioVerifyUtils` /
+   `NotificationServiceImpl` / `UserRepoImpl` code — is still sitting uncommitted on the local
+   `MastersProjectSRSImpl` branch. `deploy.yml` deploys whatever's actually on GitHub (push to
+   `master`, or manual `workflow_dispatch` against a pushed ref), so nothing here reaches AWS until
+   it's committed and pushed. `--force-new-deployment` alone would not be enough even once pushed —
+   this is a *new* env entry baked into a task definition revision, not a rotated value, so it needs
+   a fresh `register-task-definition`, which the normal `deploy.yml` run performs.
 
 If the values already exist in a local `.env`, copy them across without ever printing them:
 
@@ -791,11 +813,14 @@ MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
 
 Run it in one window while you `--force-new-deployment` in another to watch a boot in real time.
 
-**Finding an SMS 2FA code when Twilio is unconfigured.** `NotificationServiceImpl.sendTwoFactorCode()`
-sends a real text via `SMSUtils` whenever `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER`
-are populated in Secrets Manager. If any of the three is still a placeholder, `SMSUtils.sendSMS`
-degrades to logging the code instead of throwing — this is the only way to retrieve it for a user
-stuck at the code-entry screen in that state:
+**Finding a 2FA code when Twilio/Verify is unconfigured.** `NotificationServiceImpl.sendTwoFactorCode()`
+picks one of three paths, in order: Twilio Verify (SMS, falling back to a Verify voice call) when
+`TWILIO_VERIFY_SERVICE_SID` is populated; otherwise a hand-built `VoiceUtils` call when
+`TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` are populated; otherwise the code is
+logged instead of anything being sent. That last case is the only one CloudWatch can help with — a
+Verify challenge's code is never known to this application at all (Twilio generates and owns it), so
+a user stuck at the code-entry screen with Verify configured has to be helped via the Twilio Console
+(Verify → Services → your service → the number's verification attempts), not this log:
 
 ```bash
 MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
@@ -997,7 +1022,8 @@ Set in `aws/task-definition.json`. Plain values are in `environment`; the rest a
 | `JWT_SECRET` | secret | `openssl rand -base64 48` |
 | `MYSQL_PASSWORD` | secret | Aiven password |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | secret | Gmail address + 16-char app password |
-| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | secret | Real texts send once all three are populated (each one incurs a Twilio cost); leave as placeholders and SMS 2FA degrades to a logged code instead |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | secret | Shared with Verify below; on their own (no Verify Service SID) this is the `VoiceUtils` fallback path — a spoken call once all three are populated, each incurring a Twilio cost; leave as placeholders and 2FA degrades to a logged code instead |
+| `TWILIO_VERIFY_SERVICE_SID` | secret, wired and created — **live in Secrets Manager as of 2026-08-12** | Optional — when set, 2FA goes through Twilio Verify (SMS, falling back to a Verify voice call) instead of the `VoiceUtils` path above; A2P-10DLC-exempt for OTP traffic. Only remaining step is getting the code that reads it onto GitHub and deployed — see "Wiring Twilio Verify into production" above |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | secret | omit to hide the Google button |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | secret | omit to hide the GitHub button |
 | `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | secret | omit to hide the Microsoft button |

@@ -169,8 +169,10 @@
     "description": "Beschreibung",
     "basePrice": "Grundpreis",
     "noDescription": "Keine Beschreibung vorhanden.",
-    "emptyTitle": "Der Katalog ist leer.",
-    "emptyHint": "Fügen Sie Ihre erste Leistung hinzu, damit sie auf neuen Rechnungen ausgewählt werden kann.",
+    "emptyTitle": "Keine Leistungen gefunden",
+    "emptyHint": "Versuchen Sie einen anderen Suchbegriff oder fügen Sie Ihre erste Leistung hinzu.",
+    "searchByName": "Nach Name oder Beschreibung suchen",
+    "searchAria": "Leistungskatalog durchsuchen",
     "editNote": "Das Bearbeiten einer Leistung ändert bereits erstellte Rechnungen nicht – sie behalten den damals erfassten Namen und Preis.",
     "summary": {
       "offered": "im Angebot",
@@ -216,7 +218,9 @@
     "emptyTitle": "Keine Leistungen im Katalog",
     "emptyHint": "Es wurden noch keine Leistungen veröffentlicht. Sobald das geschehen ist, erscheinen sie hier und können einer Rechnung hinzugefügt werden.",
     "emptyHintAdmin": "Veröffentlichen Sie Ihre erste Leistung, damit sie für neue Rechnungen auswählbar wird.",
-    "manageCatalog": "Katalog verwalten"
+    "manageCatalog": "Katalog verwalten",
+    "noResultsTitle": "Keine Leistungen gefunden",
+    "noResultsHint": "Versuchen Sie einen anderen Suchbegriff."
   },
   "securityCenter": {
     "eyebrow": "Konto",
@@ -355,9 +359,11 @@
     "title": "Rechnungen",
     "invoiceNumber": "Rechnungsnr.",
     "service": "Leistung",
-    "emptyTitle": "Noch keine Rechnungen",
-    "emptyHint": "Von Ihnen erstellte Rechnungen erscheinen hier mit Status und Summen.",
-    "loading": "Rechnungen werden geladen…"
+    "emptyTitle": "Keine Rechnungen gefunden",
+    "emptyHint": "Versuchen Sie einen anderen Suchbegriff oder erstellen Sie eine neue Rechnung.",
+    "loading": "Rechnungen werden geladen…",
+    "searchByInvoiceNumber": "Nach Rechnungsnr. oder Kunde suchen",
+    "searchAria": "Rechnungen suchen"
   },
   "users": {
     "breadcrumb": "Benutzer",

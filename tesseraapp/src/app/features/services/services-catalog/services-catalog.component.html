@@ -13,6 +13,12 @@
         </p>
       </div>
       <div class="sc-catalog__actions">
+        <label class="sc-search">
+          <i class="bi bi-search"></i>
+          <input #catalogSearchForm (input)="onCatalogSearch(catalogSearchForm.value)"
+                 class="form-control form-control-sm" id="publicCatalogSearch"
+                 [placeholder]="t('servicesAdmin.searchByName')" type="text" [attr.aria-label]="t('servicesAdmin.searchAria')" />
+        </label>
         @if (isAdmin) {
           <a [routerLink]="['/billing']" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-graph-up-arrow"></i> {{ t('nav.billingOverview') }}
@@ -45,7 +51,7 @@
 
     <!-- ── Service grid ─────────────────────────────────────────────────── -->
     @if (pageState().dataState === DataState.LOADED) {
-      @if (services().length) {
+      @if (filteredServices().length) {
         <div class="sc-catalog-summary sc-reveal" style="--d: 40ms;">
           <span class="sc-catalog-summary__count">
             <strong>{{ services().length }}</strong> {{ t('servicesCatalog.servicesAvailable') }}
@@ -90,7 +96,7 @@
                                     [size]="catalogPageSize()"></app-page-size-select>
               <span class="text-muted small">
                 {{ t('common.pageXofY', { page: safeCatalogPage() + 1, total: catalogTotalPages() }) }}
-                · {{ t('common.nTotal', { count: services().length }) }}
+                · {{ t('common.nTotal', { count: filteredServices().length }) }}
               </span>
             </div>
             @if (showCatalogPager()) {
@@ -114,6 +120,15 @@
             }
           </div>
         }
+      } @else if (services().length) {
+        <!-- A non-empty catalog with zero search matches — distinct from the true empty state
+             below, which is about there being nothing in the catalog at all rather than nothing
+             matching this search. -->
+        <div class="sc-empty sc-reveal">
+          <span class="sc-empty__icon"><i class="bi bi-search"></i></span>
+          <p class="sc-empty__title">{{ t('servicesCatalog.noResultsTitle') }}</p>
+          <p class="sc-empty__hint">{{ t('servicesCatalog.noResultsHint') }}</p>
+        </div>
       } @else {
         <!-- Empty state. The hint is audience-dependent: this is the MARKETPLACE view that every
              signed-in user sees, so the default copy must not instruct a ROLE_USER to go and add
