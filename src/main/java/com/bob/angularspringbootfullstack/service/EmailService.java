@@ -54,4 +54,19 @@ public interface EmailService {
      * @param reasonSummary human-readable description of what looked unusual
      */
     void sendSecurityAlertEmail(String firstName, String email, String reasonSummary);
+
+    /**
+     * Forwards a public Contact Us submission to the app's own mailbox (SRS §3.5 public-facing
+     * surface). Unlike every other method here, the recipient is the team, not the visitor who
+     * triggered the send — there is no account, and therefore no {@code firstName}/{@code email}
+     * of a signed-in user to address it to.
+     *
+     * @param name    the visitor's supplied name
+     * @param email   the visitor's supplied reply-to address — never verified, since there is no
+     *                account to verify it against; set as the message's {@code Reply-To}, not its
+     *                {@code From}, so the team can reply directly without spoofing the envelope sender
+     * @param subject the visitor's supplied subject line
+     * @param message the visitor's supplied message body
+     */
+    void sendContactMessage(String name, String email, String subject, String message);
 }

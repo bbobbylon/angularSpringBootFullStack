@@ -209,7 +209,7 @@ start_local() {
   # ── Spring Boot ──────────────────────────────────────────────────
   log "Starting Spring Boot on port $LOCAL_BACKEND_PORT (dev profile)..."
   cd "$SCRIPT_DIR"
-  mvn spring-boot:run --no-transfer-progress &
+  ./mvnw spring-boot:run --no-transfer-progress &
   SPRING_PID=$!
 
   # ── Ready banner ─────────────────────────────────────────────────

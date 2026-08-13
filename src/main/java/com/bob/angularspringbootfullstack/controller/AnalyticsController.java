@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -195,6 +196,46 @@ public class AnalyticsController {
             invoices = Page.empty(PageRequest.of(pageIndex, pageSize));
         } else {
             invoices = customerService.getInvoicesForOrganizations(scope, pageIndex, pageSize);
+        }
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "invoices", invoices))
+                        .message("Analytics invoices retrieved successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Every invoice for the caller's scope, unpaginated — for chart derivations that need
+     * a true total (monthly revenue trend, status breakdown, service revenue table) rather
+     * than a page.
+     *
+     * <p><b>Why this exists alongside {@link #getInvoices}.</b> The Billing overview computed
+     * its charts from {@code GET /admin/analytics/invoices?size=200} entirely client-side, so
+     * any account with more than 200 invoices silently dropped the rest — the chart looked
+     * complete but was quietly wrong, with nothing to indicate truncation. Reuses the exact
+     * unpaginated {@code CustomerService} methods {@code CustomerController#exportInvoiceReport}
+     * already calls for the invoice XLSX export, which are already org-scoped correctly
+     * (FR-ORG-2) — this is not new data access, just a second way to reach data the app
+     * already fetches in full elsewhere.
+     *
+     * @param user the authenticated (admin) principal, embedded in the envelope
+     * @return 200 OK with {@code user} and the full unpaginated {@code invoices}
+     */
+    @GetMapping("/invoices/all")
+    @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
+    public ResponseEntity<HttpResponse> getAllInvoices(@AuthenticationPrincipal UserDTO user) {
+        Collection<Long> scope = resolveScope(user);
+        Iterable<Invoice> invoices;
+        if (scope == null) {
+            invoices = customerService.getInvoices();
+        } else if (scope.isEmpty()) {
+            invoices = List.of();
+        } else {
+            invoices = customerService.getInvoicesForOrganizations(scope);
         }
         return ResponseEntity.ok(
                 HttpResponse.builder()

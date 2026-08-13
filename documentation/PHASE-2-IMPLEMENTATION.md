@@ -49,7 +49,7 @@ Phase 1 §9 committed to eight items. **Seven were delivered; one was not.**
 |---|---|---|---|
 | **P1** | Security-critical-path tests — refresh rotation / reuse detection, TOTP challenge binding, org-scope enforcement | ✅ **Delivered** | `SessionServiceImplTest` (4), `TotpServiceImplTest` (5), `AdminUserControllerOrgScopeTest` (5), `AnalyticsControllerOrgScopeTest` (8) |
 | **P1** | Frontend specs — Angular component and service tests | ✅ **Delivered** | 8 spec files / **87 tests**, Vitest + jsdom via `@angular/build:unit-test` |
-| **P2** | Switch `start.sh` to the Maven wrapper for reproducible builds | ❌ **Not done** | `start.sh:208` still calls bare `mvn spring-boot:run` |
+| **P2** | Switch `start.sh` to the Maven wrapper for reproducible builds | ✅ **Delivered (2026-08-12)** | `start.sh` now calls `./mvnw spring-boot:run` |
 | **P2** | Expose MySQL `3306` in `docker-compose.yml` | ✅ **Delivered** | `docker-compose.yml:8` — `"${MYSQL_HOST_PORT:-3306}:3306"` |
 | **P3** | Drop redundant `jjwt` artifacts from `pom.xml` | ✅ **Delivered** | `pom.xml:37` carries the removal note; only `com.auth0:java-jwt` remains |
 | **P3** | Validate a full prod-profile boot (`ddl-auto: validate`) | ✅ **Delivered** | `application-prod.yml:31-32` pins `ddl-auto: validate` + `show-sql: false`; runs on AWS ECS Fargate via `deploy.yml`. *Live service state is external to the repo — re-check before citing.* |

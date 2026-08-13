@@ -548,6 +548,18 @@ fire — so step-up looks present and does nothing.</td></tr>
 <!-- ================= PART D ================= -->
 <h2 id="part-d"><span class="pt">D</span>Redeploy — the 90-second loop<a class="anch" href="#part-d">#</a></h2>
 <p>This is the loop you will actually use day to day.</p>
+
+<div class="note info">
+<span class="lbl">This loop deploys whatever branch is checked out locally — not <code>master</code> specifically</span>
+<p>It builds the image from your current working tree, full stop. That is a real difference from GitHub
+Actions: <code>deploy.yml</code> only triggers on a push to <code>master</code> (or an explicit <code>workflow_dispatch</code> where
+you pick the branch), so a push to a feature branch runs <code>ci.yml</code> (build + test) and nothing else — it
+will show green in the Actions tab without deploying anything. If you see a successful Actions run against
+your feature branch and AWS still looks stale, that is almost certainly <code>ci.yml</code>, not a deploy; use this
+loop (or a <code>workflow_dispatch</code> with the branch explicitly selected — the dropdown defaults to
+<code>master</code>, so change it) to actually ship a non-master branch.</p>
+</div>
+
 <div class="cb" data-lang="bash"><pre>cd /path/to/angularSpringBootFullStack
 
 # 0. Docker Desktop must be running.
@@ -570,6 +582,17 @@ aws ecs describe-services --cluster tessera-app-cluster --services tessera-app-s
 <p><strong>Step 2 is enough only when the image tag is unchanged.</strong> ECS pulls <code>:latest</code> fresh on each new task,
 so a code change needs no new task-definition revision.</p>
 
+<div class="note warn">
+<span class="lbl">⚠ This 3-step loop does NOT pick up a new or changed environment variable or secret — ever, even after
+"1. Build" pushes an image containing code that reads one</span>
+<p>Step 2 restarts the service on whatever task-definition revision is <em>already registered</em>; it does not
+re-read <code>aws/task-definition.json</code>. Shipping code that reads a <strong>new</strong> env var/secret through this loop
+alone produces exactly the confusing failure mode of "the new code is running, but it behaves as if the
+feature is unconfigured" — silent, no error, nothing in the logs points at the cause. If your change added
+or renamed anything in <code>aws/task-definition.json</code>, skip straight to the re-register sequence below; the
+90-second loop is not enough this time, regardless of how small the code change feels.</p>
+</div>
+
 <p><strong>You must re-register the task definition when you change a task-definition value</strong> — an environment
 variable, a secret reference, CPU/memory. Those are baked into the revision, not read live:</p>
 
@@ -588,7 +611,8 @@ export APP_DOMAIN=http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com
 # and fails with AccessDeniedException on ssm:GetParameters.
 for s in JWT_SECRET:jwt-secret DB_PASSWORD:db-password MAIL_USERNAME:mail-username \
          MAIL_PASSWORD:mail-password TWILIO_SID:twilio-sid TWILIO_TOKEN:twilio-token \
-         TWILIO_FROM_NUMBER:twilio-from-number GOOGLE_CLIENT_ID:google-client-id \
+         TWILIO_FROM_NUMBER:twilio-from-number TWILIO_VERIFY_SERVICE_SID:twilio-verify-service-sid \
+         GOOGLE_CLIENT_ID:google-client-id \
          GOOGLE_CLIENT_SECRET:google-client-secret GITHUB_CLIENT_ID:github-client-id \
          GITHUB_CLIENT_SECRET:github-client-secret MICROSOFT_CLIENT_ID:microsoft-client-id \
          MICROSOFT_CLIENT_SECRET:microsoft-client-secret; do
@@ -640,6 +664,39 @@ aws ecs register-task-definition --cli-input-json "$(cat td-new.json)" --region 
 with all 13 secret ARNs preserved verbatim.</p>
 </div>
 
+<p><strong>Adding a brand-new secret this way</strong> (rather than changing an existing value) is a different
+<code>jq</code> operation — appending to <code>.secrets</code>, not rewriting <code>.environment</code> in place. Written
+idempotently (safe to re-run: replaces any existing entry of the same name instead of duplicating it), so
+a retry after a typo never leaves two conflicting entries:</p>
+<div class="cb" data-lang="bash"><pre>R="--region us-east-1"
+LIVE=$(aws ecs describe-services $R --cluster tessera-app-cluster --services tessera-app-service \
+        --query 'services[0].taskDefinition' --output text)
+aws ecs describe-task-definition $R --task-definition "$LIVE" \
+  --query 'taskDefinition' --output json &gt; td-live.json
+
+# Create the secret itself first if it doesn't exist yet:
+#   aws secretsmanager create-secret --name tessera-app/&lt;name&gt; --secret-string '&lt;value&gt;' --region us-east-1
+
+jq --arg name "MY_NEW_SECRET" \
+   --arg arn  "$(aws secretsmanager describe-secret --secret-id tessera-app/my-new-secret \
+                  --query ARN --output text --region us-east-1)" \
+   'del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+        .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)
+    | .containerDefinitions[0].secrets |=
+        (map(select(.name != $name)) + [{name: $name, valueFrom: $arn}])' \
+  td-live.json &gt; td-new.json
+
+# Diff before registering — confirm exactly one line changed and nothing else moved:
+diff &lt;(jq '.containerDefinitions[0].secrets' td-live.json) &lt;(jq '.containerDefinitions[0].secrets' td-new.json)
+
+aws ecs register-task-definition $R --cli-input-json "$(cat td-new.json)"
+aws ecs update-service $R --cluster tessera-app-cluster --service tessera-app-service \
+  --task-definition tessera-app --force-new-deployment</pre></div>
+<p>Remember to also add the new env-var name to <code>aws/task-definition.json</code>'s
+<code>_variables</code>/<code>environment</code> block and <strong>all three</strong> copies of the ARN-resolution
+<code>for</code> loop (<code>aws/setup.sh</code>, <code>.github/workflows/deploy.yml</code>, and this file's own re-register
+sequence above) — otherwise the next <em>templated</em> re-register (not this shortcut) silently drops it again.</p>
+
 <p><strong>Rotating a secret's value needs no new revision</strong> — the reference is to the secret, not its contents —
 but it <em>does</em> need a task restart, because ECS resolves secrets at container start:</p>
 <div class="cb" data-lang="bash"><pre>aws secretsmanager update-secret --region us-east-1 \
@@ -666,6 +723,17 @@ aws ecs describe-task-definition \
   --output table
 #    → MYSQL_DATABASE must be db3.
 
+# 1b. Does the RUNNING revision actually reference the secret you think it does? A code change
+#     that reads a new env var can be live in the container image while the task definition it's
+#     running under still has no idea the secret exists — see the 90-second-loop warning in Part D.
+#     Swap TWILIO_VERIFY_SERVICE_SID for whichever secret you're chasing.
+aws ecs describe-task-definition \
+  --task-definition "$(aws ecs describe-services --cluster tessera-app-cluster \
+      --services tessera-app-service --query 'services[0].taskDefinition' --output text)" \
+  --query "taskDefinition.containerDefinitions[0].secrets[?name=='TWILIO_VERIFY_SERVICE_SID']" \
+  --output json
+#    → [] means it never reached the task definition — re-register (Part D), don't just restart.
+
 # 2. Is it up?
 curl -s http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com/actuator/health
 #    → {"status":"UP"}
@@ -675,7 +743,22 @@ curl -s http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com/oauth2/pro
 
 # 4. Recent logs (startup failures, ddl-auto validation errors, the [NET] line).
 MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
-  aws logs tail /ecs/tessera-app --since 10m --region us-east-1</pre></div>
+  aws logs tail /ecs/tessera-app --since 10m --region us-east-1
+
+# 5. Is the rollout actually converging, or stuck? Right after register-task-definition +
+#    force-new-deployment, the service briefly carries BOTH the old and new revision as separate
+#    deployment entries — that is normal, not stuck. It has converged once this returns exactly 1.
+aws ecs describe-services --cluster tessera-app-cluster --services tessera-app-service \
+  --region us-east-1 --query 'services[0].deployments[*].{status:status,taskDef:taskDefinition,running:runningCount,desired:desiredCount,rolloutState:rolloutState}'
+
+# 5b. If a new task never reaches running:1, find out why rather than waiting indefinitely —
+#     STOPPED tasks carry the actual reason (image pull failure, health check failure, out of
+#     memory, etc.), which the deployment summary above never shows.
+aws ecs list-tasks --cluster tessera-app-cluster --region us-east-1 --desired-status STOPPED \
+  --query 'taskArns[:3]' --output json
+# then, for each ARN returned:
+aws ecs describe-tasks --cluster tessera-app-cluster --region us-east-1 --tasks &lt;task-arn&gt; \
+  --query 'tasks[*].{taskDef:taskDefinitionArn,lastStatus:lastStatus,stoppedReason:stoppedReason,stopCode:stopCode}'</pre></div>
 
 <div class="note warn">
 <span class="lbl">⚠ MSYS2_ARG_CONV_EXCL is required, not decoration</span>

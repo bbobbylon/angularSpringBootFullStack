@@ -12,6 +12,7 @@ import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.PasskeyService;
 import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.SessionService;
+import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import com.bob.angularspringbootfullstack.utils.UserTypeResolver;
 import jakarta.validation.Valid;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Collection;
 
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ACCOUNT_SETTINGS_UPDATE;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.MFA_RESET;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.PASSKEY_REMOVED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.PROFILE_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ROLE_UPDATE;
@@ -90,6 +92,7 @@ public class AdminUserController {
     private final OrganizationService organizationService;
     private final SessionService sessionService;
     private final PasskeyService passkeyService;
+    private final TotpService totpService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -503,6 +506,41 @@ public class AdminUserController {
                                 "selectedUser", refreshedTarget(id),
                                 "passkeys", passkeyService.listCredentials(id)))
                         .message("All passkeys for this user have been revoked.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Force-disables a managed user's authenticator MFA — the admin recovery path for an account
+     * that has lost both its authenticator and every recovery code, and so has no live code to
+     * present through the self-service disable flow (which {@link TotpService#disableTotp}
+     * deliberately requires, so a hijacked session alone cannot strip the second factor). Trust
+     * here comes from the caller's {@code UPDATE:USER} authority instead, exactly like every other
+     * action on this controller. Same self-target refusal, organization scope, and audit
+     * convention as {@link #revokeAllUserPasskeys}. Audited as MFA_RESET, not TOTP_DISABLED, so the
+     * trail distinguishes administrator action from self-service.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the target user's primary key
+     * @return 200 OK with the refreshed target user (usingTotp now false)
+     */
+    @PreAuthorize("hasAuthority('UPDATE:USER')")
+    @DeleteMapping("/{id}/totp")
+    public ResponseEntity<HttpResponse> resetUserTotp(Authentication authentication, @PathVariable Long id) {
+        requireNotSelf(authentication, id, "Use your Security Center to manage your own authenticator.");
+        requireOrganizationScope(authentication, id);
+        UserDTO target = userService.getUserById(id);
+        totpService.adminResetTotp(id);
+        eventPublisher.publishEvent(new NewUserEvent(target.getEmail(), MFA_RESET));
+        log.warn("Admin '{}' reset TOTP for user id {} (email={})",
+                getAuthenticatedUser(authentication).getEmail(), id, target.getEmail());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", getAuthenticatedUser(authentication),
+                                "selectedUser", refreshedTarget(id)))
+                        .message("Authenticator MFA reset for this user.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

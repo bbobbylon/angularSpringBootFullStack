@@ -87,4 +87,16 @@ public interface NotificationService {
      * @param reasonSummary human-readable description of what looked unusual
      */
     void sendSecurityAlert(String firstName, String email, String reasonSummary);
+
+    /**
+     * Forwards a public Contact Us submission to the app's own mailbox. Purely informational like
+     * {@link #sendSecurityAlert} — a delivery failure is logged and dropped rather than surfaced to
+     * the visitor, since there is no fallback channel and no account state riding on it.
+     *
+     * @param name    the visitor's supplied name
+     * @param email   the visitor's supplied reply-to address, unverified
+     * @param subject the visitor's supplied subject line
+     * @param message the visitor's supplied message body
+     */
+    void sendContactMessage(String name, String email, String subject, String message);
 }

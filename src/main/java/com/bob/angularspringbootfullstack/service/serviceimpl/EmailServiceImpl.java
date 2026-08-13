@@ -175,6 +175,37 @@ public class EmailServiceImpl implements EmailService {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>Sent to this application's own {@link #FROM_ADDRESS} — there is no separate support
+     * mailbox configured, and adding one is a config change, not a code one, whenever that becomes
+     * worth doing. The visitor's address goes on {@code Reply-To}, never {@code From}: setting an
+     * unverified third-party address as the envelope sender is exactly the shape SPF/DKIM checks
+     * reject, and would risk the message never arriving at all.
+     */
+    @Override
+    public void sendContactMessage(String name, String email, String subject, String message) {
+        String mailSubject = "TesseraApp Contact Us: " + subject;
+
+        String plain = "New Contact Us submission\n\n"
+                + "From: " + name + " <" + email + ">\n"
+                + "Subject: " + subject + "\n\n"
+                + message;
+
+        String html = EmailTemplate.builder()
+                .preheader("New Contact Us submission from " + name)
+                .eyebrow("Contact Us")
+                .heading(subject)
+                .paragraph("From: " + name + " (" + email + ")")
+                .paragraph(message)
+                .note("Reply directly to this email to respond — Reply-To is set to the sender's address.")
+                .build();
+
+        sendWithReplyTo(FROM_ADDRESS, mailSubject, plain, html, email);
+        log.info("Contact Us submission from {} <{}> forwarded to {}", name, email, FROM_ADDRESS);
+    }
+
+    /**
      * Builds and sends one {@code multipart/alternative} message.
      * <p>
      * {@link MimeMessageHelper#setText(String, String)} is what creates the two-part body: the
@@ -196,6 +227,19 @@ public class EmailServiceImpl implements EmailService {
      * @throws MailPreparationException if the message cannot be composed
      */
     private void send(String to, String subject, String plain, String html) {
+        sendWithReplyTo(to, subject, plain, html, null);
+    }
+
+    /**
+     * {@link #send}, with an optional {@code Reply-To} address for the one flow
+     * ({@link #sendContactMessage}) where the recipient should reply to someone other than
+     * {@link #FROM_ADDRESS}.
+     *
+     * @param replyTo address to set as {@code Reply-To}, or {@code null} to omit the header entirely
+     *                (every other caller — the header only makes sense when the reply audience
+     *                differs from the sender)
+     */
+    private void sendWithReplyTo(String to, String subject, String plain, String html, String replyTo) {
         MimeMessage message = mailSender.createMimeMessage();
         try {
             // multipart=true is what allows a text/html part alongside text/plain; without it the
@@ -203,6 +247,9 @@ public class EmailServiceImpl implements EmailService {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
             helper.setTo(to);
             helper.setFrom(FROM_ADDRESS, FROM_NAME);
+            if (replyTo != null) {
+                helper.setReplyTo(replyTo);
+            }
             helper.setSubject(subject);
             helper.setText(plain, html);
         } catch (MessagingException | UnsupportedEncodingException e) {

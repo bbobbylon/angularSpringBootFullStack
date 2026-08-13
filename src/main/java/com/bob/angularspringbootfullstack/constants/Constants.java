@@ -36,6 +36,9 @@ public class Constants {
                     // Public services catalog browsing (PublicServicesController): a prospective
                     // customer looking at what the business offers has no account yet by definition.
                     "/services/public/**",
+                    // Contact Us submission (ContactController): a visitor with no account at all
+                    // is exactly who this route exists for.
+                    "/contact/**",
             };
 
     /*
@@ -77,7 +80,9 @@ public class Constants {
             // can never break the browser-redirect OAuth2 dance or provider discovery.
             "/oauth2", "/login/oauth2",
             // Public services catalog browsing — must stay in lockstep with PUBLIC_URLS above.
-            "/services/public"
+            "/services/public",
+            // Contact Us submission — must stay in lockstep with PUBLIC_URLS above.
+            "/contact"
     };
 
     public static final String BOBBYLON_LLC = "BOBBYLON_LLC";

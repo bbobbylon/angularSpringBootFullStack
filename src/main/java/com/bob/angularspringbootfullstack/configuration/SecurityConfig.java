@@ -273,7 +273,7 @@ class SecurityConfig {
                                     "/invoice/new", "/invoices", "/invoice/**", "/profile", "/security",
                                     "/users", "/users/**", "/roles", "/billing", "/services",
                                     "/services/manage", "/analytics", "/security-overview",
-                                    "/privacy", "/terms").permitAll()
+                                    "/privacy", "/terms", "/contact").permitAll()
                             .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
                             .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
                             .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")

@@ -8,6 +8,7 @@ import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.PasskeyService;
 import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.SessionService;
+import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -71,10 +72,11 @@ class AdminUserControllerTest {
         organizationService = mock(OrganizationService.class);
         sessionService = mock(SessionService.class);
         PasskeyService passkeyService = mock(PasskeyService.class);
+        TotpService totpService = mock(TotpService.class);
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
         AdminUserController controller = new AdminUserController(userService, roleService, eventService,
-                organizationService, sessionService, passkeyService, eventPublisher);
+                organizationService, sessionService, passkeyService, totpService, eventPublisher);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())

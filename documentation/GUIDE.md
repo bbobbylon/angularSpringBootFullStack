@@ -437,6 +437,34 @@ The current cloud database is `db3`.
 | **`prod`** | `SPRING_ACTIVE_PROFILES=prod`, or the image's `ENTRYPOINT` | **No fallbacks** — a missing variable is a startup failure. No seeder. `ddl-auto: validate`, `show-sql: false`, `app.error.expose-details: false` | `application-prod.yml` |
 | `qa`, `stage` | declared in `pom.xml` | Set the profile name only; they fall back to base `application.yml` and require every env var | `application-qa.yml` / `application-stage.yml` |
 
+**Running an environment locally via a dedicated Docker MySQL container.** `docker-compose.yml` is
+not one-file-per-environment — it is a single, generic definition (a `mysql:8.4` service + the `app`
+service) whose behavior is entirely driven by which `--env-file` you pass it:
+
+```bash
+docker compose --env-file .env.qa up
+```
+
+`.env.qa.example` is the only environment currently set up this way. Copy it to `.env.qa`
+(gitignored) and it gives QA its own fully isolated stack, distinct from `dev`'s: a separate database
+name (`tessera_qa`, vs. dev's default), a separate host port for the MySQL container
+(`MYSQL_HOST_PORT=3307`, so it doesn't collide with dev MySQL on 3306), a separate app port
+(`APP_PORT=8091`), and its own JWT secret. The `mysql` service itself is not "QA-flavored" in any
+way — it is the exact same image the `dev` compose run uses; every difference is environment
+variables, not a different Docker service or Dockerfile.
+
+*Extending this to another environment (e.g., a local `stage` stack) needs no `docker-compose.yml`
+changes at all* — the file is already environment-agnostic. It needs a new `.env.<name>` populated
+the same way `.env.qa.example` is: a unique `MYSQL_DATABASE`, a unique `MYSQL_HOST_PORT` (so it can
+run alongside `dev` and `qa` simultaneously without a port clash), a unique `APP_PORT`, and a
+`SPRING_DATASOURCE_URL` pointed at `127.0.0.1:<that port>` rather than a managed host. Note that
+**`.env.stage.example` does not currently follow this pattern** — it points `SPRING_DATASOURCE_URL`
+at a real managed Aiven instance (`your-stage-instance.aivencloud.com`) rather than a local container,
+so "stage" today means "a cloud database reached from a local app," not "a local Docker database." If
+a fully local, disposable `stage` stack (mirroring what QA already has) is ever wanted, it is a
+same-shape copy of `.env.qa.example`'s database block — nothing in the compose file or application
+code needs to change to support it.
+
 ### 3.4 Setting up a federated provider
 
 All three use the same callback shape — `http://localhost:8080/login/oauth2/code/{provider}` — which

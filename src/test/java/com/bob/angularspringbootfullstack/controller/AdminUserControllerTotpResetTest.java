@@ -19,10 +19,7 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.util.List;
-
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,25 +28,22 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Guards the admin passkey-revocation endpoints ({@link AdminUserController#revokeUserPasskey} and
- * {@link AdminUserController#revokeAllUserPasskeys}) — the "help reset" capability. There is no
- * "regenerate a passkey" test because there is no such operation: a passkey's private key never
- * leaves its authenticator, so revocation is the only lever anyone, including an administrator, has
- * (see both endpoints' Javadoc).
+ * Guards {@link AdminUserController#resetUserTotp} — the admin recovery path for an account that
+ * has lost both its authenticator and every recovery code, and so has no live code to present
+ * through the self-service disable flow at all ({@link TotpService#disableTotp} deliberately
+ * requires one).
  *
  * <p>Same {@code standaloneSetup} + real {@link GlobalExceptionHandler} pattern as
- * {@link AdminUserControllerTest}, whose self-target and organization-scope suites this one
- * deliberately does not re-derive from scratch — it asserts the same three properties
- * ({@code UPDATE:USER} required, self-target refused, organization scope enforced) apply to these
- * two new routes specifically, since each endpoint wires those checks independently and a route can
- * be added without one of them by mistake.
+ * {@link AdminUserControllerPasskeyTest}, whose sibling endpoints this test asserts the identical
+ * three properties against ({@code UPDATE:USER} required, self-target refused, organization scope
+ * enforced) — this route wires those checks independently of the passkey routes, so nothing here
+ * is inherited automatically; a route can be added without one of them by mistake.
  */
-class AdminUserControllerPasskeyTest {
+class AdminUserControllerTotpResetTest {
 
     private static final long ADMIN_ID = 1L;
     private static final long TARGET_ID = 99L;
 
-    private PasskeyService passkeyService;
     private TotpService totpService;
     private OrganizationService organizationService;
     private MockMvc mockMvc;
@@ -61,7 +55,7 @@ class AdminUserControllerPasskeyTest {
         EventService eventService = mock(EventService.class);
         organizationService = mock(OrganizationService.class);
         SessionService sessionService = mock(SessionService.class);
-        passkeyService = mock(PasskeyService.class);
+        PasskeyService passkeyService = mock(PasskeyService.class);
         totpService = mock(TotpService.class);
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
@@ -69,7 +63,6 @@ class AdminUserControllerPasskeyTest {
         target.setId(TARGET_ID);
         target.setEmail("target@example.com");
         when(userService.getUserById(TARGET_ID)).thenReturn(target);
-        when(passkeyService.listCredentials(anyLong())).thenReturn(List.of());
 
         AdminUserController controller = new AdminUserController(userService, roleService, eventService,
                 organizationService, sessionService, passkeyService, totpService, eventPublisher);
@@ -98,78 +91,46 @@ class AdminUserControllerPasskeyTest {
     }
 
     @Test
-    @DisplayName("an admin can revoke a single passkey belonging to another user")
-    void adminCanRevokeOnePasskey() throws Exception {
-        mockMvc.perform(delete("/admin/user/{id}/passkeys/{credentialId}", TARGET_ID, 5L)
+    @DisplayName("an admin can reset TOTP for another user, with no code required")
+    void adminCanResetTotp() throws Exception {
+        mockMvc.perform(delete("/admin/user/{id}/totp", TARGET_ID)
                         .principal(adminAuth()))
                 .andExpect(status().isOk());
 
-        verify(passkeyService).deleteCredential(TARGET_ID, 5L);
+        verify(totpService).adminResetTotp(TARGET_ID);
     }
 
     @Test
-    @DisplayName("an admin can revoke ALL passkeys belonging to another user")
-    void adminCanRevokeAllPasskeys() throws Exception {
-        mockMvc.perform(delete("/admin/user/{id}/passkeys", TARGET_ID)
-                        .principal(adminAuth()))
-                .andExpect(status().isOk());
-
-        verify(passkeyService).deleteAllCredentials(TARGET_ID);
-    }
-
-    @Test
-    @DisplayName("an admin cannot revoke their OWN passkeys through this endpoint")
-    void selfTargetIsRefusedForSinglePasskey() throws Exception {
-        mockMvc.perform(delete("/admin/user/{id}/passkeys/{credentialId}", ADMIN_ID, 5L)
+    @DisplayName("an admin cannot reset their OWN TOTP through this endpoint")
+    void selfTargetIsRefused() throws Exception {
+        mockMvc.perform(delete("/admin/user/{id}/totp", ADMIN_ID)
                         .principal(adminAuth()))
                 .andExpect(status().is4xxClientError());
 
-        verify(passkeyService, never()).deleteCredential(any(Long.class), any(Long.class));
+        verify(totpService, never()).adminResetTotp(any(Long.class));
     }
 
     @Test
-    @DisplayName("an admin cannot revoke ALL of their OWN passkeys through this endpoint")
-    void selfTargetIsRefusedForAllPasskeys() throws Exception {
-        mockMvc.perform(delete("/admin/user/{id}/passkeys", ADMIN_ID)
-                        .principal(adminAuth()))
-                .andExpect(status().is4xxClientError());
-
-        verify(passkeyService, never()).deleteAllCredentials(any(Long.class));
-    }
-
-    @Test
-    @DisplayName("an org admin cannot revoke passkeys for an out-of-scope user")
-    void orgScopeIsEnforcedForSinglePasskey() throws Exception {
+    @DisplayName("an org admin cannot reset TOTP for an out-of-scope user")
+    void orgScopeIsEnforced() throws Exception {
         when(organizationService.isWithinOrganizationScope(ADMIN_ID, TARGET_ID)).thenReturn(false);
 
-        mockMvc.perform(delete("/admin/user/{id}/passkeys/{credentialId}", TARGET_ID, 5L)
+        mockMvc.perform(delete("/admin/user/{id}/totp", TARGET_ID)
                         .principal(orgAdminAuth()))
                 .andExpect(status().isForbidden());
 
-        verify(passkeyService, never()).deleteCredential(any(Long.class), any(Long.class));
+        verify(totpService, never()).adminResetTotp(any(Long.class));
     }
 
     @Test
-    @DisplayName("an org admin cannot revoke ALL passkeys for an out-of-scope user")
-    void orgScopeIsEnforcedForAllPasskeys() throws Exception {
-        when(organizationService.isWithinOrganizationScope(ADMIN_ID, TARGET_ID)).thenReturn(false);
-
-        mockMvc.perform(delete("/admin/user/{id}/passkeys", TARGET_ID)
-                        .principal(orgAdminAuth()))
-                .andExpect(status().isForbidden());
-
-        verify(passkeyService, never()).deleteAllCredentials(any(Long.class));
-    }
-
-    @Test
-    @DisplayName("an org admin CAN revoke passkeys for an in-scope user")
-    void orgAdminCanRevokeInScopeUserPasskeys() throws Exception {
+    @DisplayName("an org admin CAN reset TOTP for an in-scope user")
+    void orgAdminCanResetInScopeUserTotp() throws Exception {
         when(organizationService.isWithinOrganizationScope(ADMIN_ID, TARGET_ID)).thenReturn(true);
 
-        mockMvc.perform(delete("/admin/user/{id}/passkeys", TARGET_ID)
+        mockMvc.perform(delete("/admin/user/{id}/totp", TARGET_ID)
                         .principal(orgAdminAuth()))
                 .andExpect(status().isOk());
 
-        verify(passkeyService).deleteAllCredentials(TARGET_ID);
+        verify(totpService).adminResetTotp(TARGET_ID);
     }
 }

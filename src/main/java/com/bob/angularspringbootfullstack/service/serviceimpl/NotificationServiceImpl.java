@@ -143,6 +143,20 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void sendContactMessage(String name, String email, String subject, String message) {
+        CompletableFuture
+                .runAsync(() -> emailService.sendContactMessage(name, email, subject, message))
+                .exceptionally(throwable -> {
+                    log.error("Failed to forward Contact Us submission from {} <{}>: {}",
+                            name, email, throwable.getMessage(), throwable);
+                    return null;
+                });
+    }
+
+    /**
      * Shared async wrapper for both email-based verification flows. Hands the
      * composition off to {@link EmailService#sendVerificationEmail} on a
      * worker thread and routes any failure into a single SLF4J error log
