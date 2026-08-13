@@ -59,6 +59,10 @@ export const routes: Routes = [
     path: 'terms',
     loadComponent: () => import('./features/legal/terms/terms.component').then((m) => m.TermsComponent),
   },
+  {
+    path: 'contact',
+    loadComponent: () => import('./features/legal/contact/contact.component').then((m) => m.ContactComponent),
+  },
   // Federated login landing (SRS FR-FED-4): the backend's OAuth2 success handler
   // redirects here with tokens (or an MFA handoff) in the URL fragment. Public by
   // design — the user is mid-authentication when they arrive.

@@ -61,6 +61,8 @@ export class SecurityCenterComponent implements OnInit {
   protected readonly setup = signal<TotpSetupInterface | undefined>(undefined);
   /** Plaintext recovery codes — held only while the 'codes' step is on screen. */
   protected readonly recoveryCodes = signal<string[]>([]);
+  /** Whether the inline "regenerate recovery codes" code-entry form is showing. */
+  protected readonly regenerateOpen = signal(false);
   /** Live sessions for the devices panel. */
   protected readonly sessions = signal<SessionInterface[]>([]);
 
@@ -232,6 +234,40 @@ export class SecurityCenterComponent implements OnInit {
           this.notification.onError(error);
           this.isLoading.set(false);
           disableForm.reset();
+        },
+      });
+  }
+
+  /** Toggles the inline regenerate-recovery-codes form without touching any other panel state. */
+  protected toggleRegenerateForm(): void {
+    this.regenerateOpen.update((open) => !open);
+  }
+
+  /**
+   * Replaces the entire recovery-code batch on demand. The backend demands the same proof
+   * of possession as {@link disableTotp} (a live TOTP or recovery code), so this reuses the
+   * same 'codes' reveal step {@link confirmEnrollment} lands on — the new codes are shown
+   * exactly the same way whether they came from first enrollment or a regeneration.
+   */
+  protected regenerateRecoveryCodes(regenerateForm: NgForm): void {
+    this.isLoading.set(true);
+    this.userService
+      .regenerateRecoveryCodes$(regenerateForm.value.code)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.recoveryCodes.set(response.data?.recoveryCodes ?? []);
+          this.enrollStep.set('codes');
+          this.regenerateOpen.set(false);
+          this.isLoading.set(false);
+          this.notification.onSuccess(this.transloco.translate('toasts.recoveryCodesRegenerated'));
+          this.refreshTotpStatus();
+          regenerateForm.reset();
+        },
+        error: (error: string) => {
+          this.notification.onError(error);
+          this.isLoading.set(false);
+          regenerateForm.reset();
         },
       });
   }

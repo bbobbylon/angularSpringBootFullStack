@@ -7,6 +7,7 @@ import { CustomHttpResponseInterface } from '../interface/customhttpresponse.int
 import {
   PasskeysDataInterface,
   ProviderLinksDataInterface,
+  RecoveryCodesInterface,
   SessionsDataInterface,
   TotpEnableInterface,
   TotpSetupInterface,
@@ -307,6 +308,19 @@ export class UserService {
   totpDisable$ = (code: string): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/totp/disable`, { code })
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Replaces the entire recovery-code batch on demand ({@code POST /user/totp/recovery-codes/regenerate},
+   * authenticated) — the standalone counterpart to disable-then-re-enroll. Requires the same
+   * proof of possession as {@link totpDisable$}.
+   *
+   * @param code - a current authenticator code or an unused (about-to-be-replaced) recovery code
+   * @returns Observable of the API envelope carrying the fresh plaintext {@code recoveryCodes}
+   */
+  regenerateRecoveryCodes$ = (code: string): Observable<CustomHttpResponseInterface<RecoveryCodesInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<RecoveryCodesInterface>>(`${this.server}/user/totp/recovery-codes/regenerate`, { code })
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**

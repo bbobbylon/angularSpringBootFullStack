@@ -1,0 +1,53 @@
+<div class="container py-5" style="max-width: 640px;">
+  <a class="d-inline-flex align-items-center gap-2 text-decoration-none mb-4" routerLink="/login">
+    <i class="bi bi-shield-lock-fill"></i>
+    <span class="fw-semibold">Tessera<span class="text-primary">App</span></span>
+  </a>
+
+  <h1 class="h3 mb-1">Contact Us</h1>
+  <p class="text-muted mb-4">
+    Questions, feedback, or something not working right? Send us a message and we'll get back to
+    you.
+  </p>
+
+  <div class="card">
+    <div class="card-body">
+      @if (submitted()) {
+        <div class="text-center py-4">
+          <i class="bi bi-check-circle-fill text-success" style="font-size: 2.5rem;"></i>
+          <h2 class="h5 mt-3">Thanks for reaching out</h2>
+          <p class="text-muted mb-0">We've received your message and will get back to you soon.</p>
+        </div>
+      } @else {
+        <form #contactForm="ngForm" (ngSubmit)="submit(contactForm)" novalidate>
+          <div class="mb-3">
+            <label class="form-label" for="name">Name</label>
+            <input [disabled]="isLoading()" class="form-control" id="name" maxlength="100"
+                   name="name" ngModel required type="text">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="email">Email</label>
+            <input [disabled]="isLoading()" class="form-control" email id="email"
+                   name="email" ngModel required type="email">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="subject">Subject</label>
+            <input [disabled]="isLoading()" class="form-control" id="subject" maxlength="150"
+                   name="subject" ngModel required type="text">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="message">Message</label>
+            <textarea [disabled]="isLoading()" class="form-control" id="message" maxlength="5000"
+                      name="message" ngModel required rows="5"></textarea>
+          </div>
+          <button [disabled]="contactForm.invalid || isLoading()" class="btn btn-primary" type="submit">
+            @if (isLoading()) {
+              <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+            }
+            Send message
+          </button>
+        </form>
+      }
+    </div>
+  </div>
+</div>

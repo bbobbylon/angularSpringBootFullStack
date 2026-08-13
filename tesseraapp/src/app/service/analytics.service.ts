@@ -5,6 +5,7 @@ import { Observable, throwError } from 'rxjs';
 // import { catchError, tap } from 'rxjs/operators';
 import { catchError } from 'rxjs/operators';
 import {
+  AllInvoicesDataInterface,
   CustomerListDataInterface,
   InvoiceListDataInterface,
   StatsDataInterface,
@@ -78,6 +79,20 @@ export class AnalyticsService {
       .get<CustomHttpResponseInterface<InvoiceListDataInterface>>(
         `${this.server}/admin/analytics/invoices?page=${page}&size=${size}`,
       )
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Fetches every invoice in the caller's scope, unpaginated ({@code GET
+   * /admin/analytics/invoices/all}, admin-gated). For chart derivations that must be
+   * numerically correct over the whole dataset (monthly revenue, status breakdown, service
+   * revenue) — {@link invoices$}'s fixed page size silently truncates past its page size,
+   * which is invisible in a chart until an account's invoice count actually exceeds it.
+   *
+   * @returns Observable emitting an {@link AllInvoicesDataInterface} response
+   */
+  allInvoices$ = (): Observable<CustomHttpResponseInterface<AllInvoicesDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<AllInvoicesDataInterface>>(`${this.server}/admin/analytics/invoices/all`)
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**

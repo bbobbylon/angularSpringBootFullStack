@@ -243,6 +243,27 @@ export class UserDetailsComponent implements OnInit {
   }
 
   /**
+   * Force-disables the managed user's authenticator MFA — the admin recovery path for an account
+   * that has lost both its authenticator and every recovery code, and so has no live code to
+   * present through the self-service disable flow (Security Center) at all. Unlike
+   * {@link revokePasskey}, there is nothing to pick: one action, the whole authenticator state,
+   * gone. Returns just the refreshed user (no passkey list), so this uses {@link applyMutation}
+   * rather than {@link applyPasskeyMutation}.
+   */
+  protected resetTotp(): void {
+    const targetId = this.data()?.data?.selectedUser?.id;
+    if (!targetId) return;
+    this.isLoading.set(true);
+    this.adminUserService
+      .resetTotp$(targetId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.applyMutation(response, 'Authenticator MFA reset'),
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
    * Merges a passkey-mutation response into the cached detail state. Same shape as
    * {@link applyMutation} plus the refreshed {@code passkeys} slice those two endpoints also return.
    */

@@ -139,7 +139,31 @@
                         {{ t('securityCenter.disableAuthenticator') }}
                       </button>
                     </div>
+                    <div class="col-auto">
+                      <button (click)="toggleRegenerateForm()" [disabled]="isLoading()"
+                              class="btn btn-outline-secondary btn-sm" type="button">
+                        {{ t('securityCenter.regenerateCodes') }}
+                      </button>
+                    </div>
                   </form>
+
+                  <!-- Regenerate recovery codes: same proof-of-possession requirement as disable,
+                       since a hijacked session must not be able to invalidate the real codes and
+                       walk away with a fresh set only it saw. -->
+                  @if (regenerateOpen()) {
+                    <form #regenerateForm="ngForm" (ngSubmit)="regenerateRecoveryCodes(regenerateForm)" class="row g-2 align-items-end mt-2">
+                      <div class="col-auto">
+                        <label class="form-label mb-1" for="regenerateCode">{{ t('securityCenter.disableCodeLabel') }}</label>
+                        <input [disabled]="isLoading()" autocomplete="one-time-code" class="form-control form-control-sm"
+                               id="regenerateCode" name="code" ngModel placeholder="123456" required type="text">
+                      </div>
+                      <div class="col-auto">
+                        <button [disabled]="regenerateForm.invalid || isLoading()" class="btn btn-outline-primary btn-sm" type="submit">
+                          {{ t('securityCenter.regenerateConfirm') }}
+                        </button>
+                      </div>
+                    </form>
+                  }
                 }
               }
 

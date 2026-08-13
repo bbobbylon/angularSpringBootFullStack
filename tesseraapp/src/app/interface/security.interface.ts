@@ -30,6 +30,12 @@ export interface TotpStatusInterface {
   recoveryCodesRemaining: number;
 }
 
+/** Payload of {@code POST /user/totp/recovery-codes/regenerate}: the replacement one-time reveal. */
+export interface RecoveryCodesInterface {
+  /** Plaintext recovery codes, shown exactly once — the backend stores only hashes. */
+  recoveryCodes: string[];
+}
+
 /**
  * One live refresh session (one device/browser login) from {@code GET /user/sessions}.
  * {@code family} is the stable session identity across token rotations and the handle

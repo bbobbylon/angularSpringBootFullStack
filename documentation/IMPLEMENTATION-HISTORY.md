@@ -545,6 +545,61 @@ before. `Map.of`/`List.of`'s null-hostility in particular is a recurring trap in
 specifically because the "everything real" convention (no defensive null-checks for internal
 invariants) reads, at a glance, the same as "this can't be null" when it sometimes can.
 
+### 4.27 Maven's incremental compiler reported "Nothing to compile" against code that had just changed
+
+**Symptom** (2026-08-12). After editing `AdminUserController.java` to add a new constructor
+dependency, `mvn -o test-compile` printed `[INFO] Nothing to compile - all classes are up to date.`
+and exited `BUILD SUCCESS` — including for the three test files whose `new AdminUserController(...)`
+calls no longer matched the new constructor's argument list.
+
+**Cause.** Maven's incremental compiler compares source and `.class` file timestamps to decide
+whether a recompile is needed. An edit written by an external tool doesn't always advance that
+timestamp in a way the staleness check reliably detects, so the compiler trusted a build artifact
+that was already wrong. `mvn compile`/`test-compile` on their own were reporting a false "clean"
+exactly like Docker's layer cache did in §4.25 — same shape of bug, different build tool.
+
+**Fix.** `mvn -o clean test-compile` (or `clean compile`) forces every class to actually recompile,
+which surfaced the real error: three test files still calling the old 7-argument constructor against
+a now-8-argument one. Fixed by threading a mocked `TotpService` through each.
+
+**The standing lesson:** the same one §4.25 already drew, generalized past Docker — **any build
+tool's incremental/cache layer can report "nothing changed" when something did.** After a
+non-trivial edit (a constructor signature, a shared interface, a config file consumed at build
+time), reach for the `clean` variant before trusting a suspiciously fast, all-green build result —
+especially right before treating that result as a "this is verified, move on" signal.
+
+### 4.28 A push that looked like a deploy wasn't one — and the redeploy script that followed only fixed the code, not the AWS wiring
+
+**Symptom** (2026-08-12/13). After pushing new commits to the feature branch and later manually
+re-running the "90-second loop" redeploy script, a newly added Twilio Verify secret still never
+reached the running container — the app kept falling back to its pre-Verify behavior in AWS while
+working correctly locally. Checking GitHub Actions showed a green run "triggered via push" against
+the feature branch, which looked like confirmation the deploy had happened.
+
+**Cause, layered — three separate things stacked, each masking the next:**
+1. `deploy.yml` (the workflow that actually touches AWS) only triggers on a push to `master` or an
+   explicit `workflow_dispatch`. The green run visible in the Actions tab was `ci.yml` (build + test),
+   which triggers on push to *any* branch — a real, passing result, just not the one it looked like.
+2. `master` itself had not moved in over two weeks (still at an old PR merge); the redeploy that
+   *did* touch AWS was a manual local run of the RUNBOOK's "Part D" script — image build + push +
+   `--force-new-deployment` only, never a `register-task-definition`.
+3. That fast redeploy path restarts the service on **whatever task definition is already
+   registered** — it never re-reads `aws/task-definition.json`, so a *new* secret reference added to
+   that file has no path into the running container through it at all, regardless of how correct the
+   newly built image is.
+
+**Fix.** Diagnosed by comparing the actually-registered task definition's `secrets` array
+(`aws ecs describe-task-definition ... --query '...secrets'`) against what the JSON template
+expected — the new entry was simply absent. Fixed by deriving a new revision from the *live* one
+(appending the one new secret via `jq`, not rebuilding from the template) and registering it, which
+is also faster and safer than the full template-and-`envsubst` path when only one value changed.
+
+**The standing lesson:** three independent, each-individually-reasonable assumptions — "a green CI
+run means it shipped," "I redeployed, so it's current," "the code change and the infra change land
+together" — compounded into one confusing failure with no single obvious cause. Verifying *at the
+infrastructure layer* (what does the running task definition actually reference?) cut through all
+three at once, where reasoning about any single layer in isolation would not have.
+
 ---
 
 ## 5. Retired documents (registry)

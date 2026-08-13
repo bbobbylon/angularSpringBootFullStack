@@ -18,7 +18,7 @@ import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
-import { InvoiceListDataInterface, StatsDataInterface } from '../../../interface/appstates.interface';
+import { AllInvoicesDataInterface, StatsDataInterface } from '../../../interface/appstates.interface';
 import { InvoiceInterface } from '../../../interface/invoice.interface';
 import { UserInterface } from '../../../interface/user.interface';
 import { TranslocoDirective } from '@jsverse/transloco';
@@ -68,15 +68,17 @@ interface ServiceRow {
  * {@code /admin/**} matcher plus a method-level {@code @PreAuthorize} lock to the same
  * UPDATE:USER / UPDATE:ROLE authorities. A plain ROLE_USER who bypasses the route guard
  * still receives a 403 from the API — the route gate and the API gate are in lockstep.
- * The presentation layer alone differs by role: super admins see a scope badge of
- * "All Organizations"; org admins see "Your Organization" (org-scoped backend filtering
- * of the aggregates is a future addition; both currently receive system-wide data).
+ * The presentation layer differs by role only in the scope badge text ("All Organizations"
+ * vs. "Your Organization") — the underlying data is genuinely org-scoped server-side
+ * (FR-ORG-2, {@code AnalyticsController#resolveScope}), not just relabeled.
  *
  * Data comes from two admin-only endpoints:
  * {@code GET /admin/analytics/summary} for KPI totals and
- * {@code GET /admin/analytics/invoices?page=0&size=200} for the detailed breakdown.
- * All visual derivations (monthly bars, status donut, service rows) are computed
- * signals that recalculate automatically when either source updates.
+ * {@code GET /admin/analytics/invoices/all} — unpaginated, not the paginated
+ * {@code /admin/analytics/invoices} — for the detailed breakdown, since every chart here
+ * (monthly bars, status donut, service rows) needs the true total rather than one page of
+ * it. All visual derivations are computed signals that recalculate automatically when
+ * either source updates.
  */
 @Component({
   selector: 'app-billing',
@@ -97,14 +99,14 @@ export class BillingComponent implements OnInit {
   readonly statsState = signal<GlobalStateInterface<CustomHttpResponseInterface<StatsDataInterface>>>({
     dataState: DataState.LOADING,
   });
-  readonly invoicesState = signal<GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>>({
+  readonly invoicesState = signal<GlobalStateInterface<CustomHttpResponseInterface<AllInvoicesDataInterface>>>({
     dataState: DataState.LOADING,
   });
 
   readonly user = computed<UserInterface | undefined>(() => this.statsState().appData?.data?.user);
   readonly stats = computed(() => this.statsState().appData?.data?.stats);
   readonly invoices = computed<InvoiceInterface[]>(
-    () => this.invoicesState().appData?.data?.invoices?.content ?? [],
+    () => this.invoicesState().appData?.data?.invoices ?? [],
   );
 
   /**
@@ -270,7 +272,7 @@ export class BillingComponent implements OnInit {
       .subscribe((state) => this.statsState.set(state));
 
     this.analytics
-      .invoices$(0, 200)
+      .allInvoices$()
       .pipe(
         map((response) => ({ dataState: DataState.LOADED, appData: response })),
         startWith({ dataState: DataState.LOADING }),

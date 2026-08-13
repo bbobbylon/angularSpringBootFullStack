@@ -169,6 +169,21 @@ export class AdminUserService {
       .pipe(catchError(this.handleError));
 
   /**
+   * Force-disables a managed user's authenticator MFA ({@code DELETE /admin/user/:id/totp},
+   * requires UPDATE:USER) — the admin recovery path for an account that has lost both its
+   * authenticator and every recovery code, and so has no live code to present through the
+   * self-service disable flow at all. Unlike {@link revokePasskey$}, there is nothing to pick —
+   * one action, the whole authenticator state, gone.
+   *
+   * @param id - the managed user's primary key
+   * @returns Observable of the API envelope carrying the refreshed selectedUser (usingTotp now false)
+   */
+  resetTotp$ = (id: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/totp`)
+      .pipe(catchError(this.handleError));
+
+  /**
    * Normalises HTTP errors into a single Observable<never> so all callers receive a
    * consistent Error instance — same contract as {@code UserService#handleError}.
    *
