@@ -151,6 +151,21 @@ public class SessionController {
      * within 30 minutes. What this stops is the ability to <em>renew</em>, which is what turns a
      * stolen refresh token into indefinite access.
      *
+     * <p><b>{@code Clear-Site-Data: "cache"}.</b> Now that GET responses carry an ETag and
+     * {@code Cache-Control: private, no-cache} ({@link com.bob.angularspringbootfullstack.filter.HttpCacheHeadersFilter}),
+     * the browser always revalidates before reusing a cached body rather than blindly trusting one
+     * — but revalidation is an ETag comparison, not an identity check, so if two different users'
+     * responses for the same URL ever hashed to the same ETag (an empty list, for instance), a
+     * browser that still had User A's cached bytes on file could accept a {@code 304} answered
+     * under User B's freshly-authenticated request and hand User B stale data belonging to User A.
+     * This header tells the browser to drop its entire HTTP cache for the origin on sign-out,
+     * closing that narrow window outright rather than relying on hash collisions never happening.
+     * It is the server-driven replacement for the old {@code HttpCacheService#evictAll()} call
+     * that {@code cacheInterceptor} needed — that in-memory client cache had no freshness check at
+     * all, so it required an explicit, JS-triggered eviction on every logout; this cache always
+     * revalidates on its own, so eviction is only needed for this one same-tab, different-user
+     * edge case.
+     *
      * @param authentication the current Spring Security authentication
      * @return 200 OK confirming the session was ended
      */
@@ -162,8 +177,9 @@ public class SessionController {
             sessionService.revokeSession(userDTO.getId(), family);
             eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), SESSION_REVOKED));
         }
-        return ResponseEntity.ok(
-                HttpResponse.builder()
+        return ResponseEntity.ok()
+                .header("Clear-Site-Data", "\"cache\"")
+                .body(HttpResponse.builder()
                         .timeStamp(now().toString())
                         .message("You have been signed out.")
                         .status(OK)

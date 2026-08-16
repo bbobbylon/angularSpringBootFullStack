@@ -243,56 +243,58 @@
                 <div class="card-body">
                   <h5 class="card-title">{{ t('nav.invoices') }}</h5>
                   <h6 class="card-subtitle mb-2 text-muted">{{ t('customerDetails.customerInvoices') }}</h6>
-                  <table class="table table-hover align-middle">
-                    <thead>
-                    <tr>
-                      <th scope="col">{{ t('customerDetails.invoiceNumber') }}</th>
-                      <th scope="col">{{ t('invoices.service') }}</th>
-                      <th scope="col">{{ t('common.status') }}</th>
-                      <th scope="col">{{ t('common.date') }}</th>
-                      <th scope="col">{{ t('common.total') }}</th>
-                      <th scope="col">{{ t('common.action') }}</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                      <!-- pagedInvoices(), not the raw collection. The summary list above still
-                           reduces over every invoice, so Total Billed / Paid / Active / Pending
-                           stay true totals rather than becoming per-page figures. -->
-                      @for (invoice of pagedInvoices(); track invoice.id) {
-                        <tr>
-                          <td>{{ invoice.invoiceNumber }}</td>
-                          <td>
-                            @for (svc of invoice.services; track svc.name; let last = $last) {
-                              {{ svc.name }}@if (!last) {
-                                ,
+                  <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                      <thead>
+                      <tr>
+                        <th scope="col">{{ t('customerDetails.invoiceNumber') }}</th>
+                        <th scope="col">{{ t('invoices.service') }}</th>
+                        <th scope="col">{{ t('common.status') }}</th>
+                        <th scope="col">{{ t('common.date') }}</th>
+                        <th scope="col">{{ t('common.total') }}</th>
+                        <th scope="col">{{ t('common.action') }}</th>
+                      </tr>
+                      </thead>
+                      <tbody>
+                        <!-- pagedInvoices(), not the raw collection. The summary list above still
+                             reduces over every invoice, so Total Billed / Paid / Active / Pending
+                             stay true totals rather than becoming per-page figures. -->
+                        @for (invoice of pagedInvoices(); track invoice.id) {
+                          <tr>
+                            <td>{{ invoice.invoiceNumber }}</td>
+                            <td>
+                              @for (svc of invoice.services; track svc.name; let last = $last) {
+                                {{ svc.name }}@if (!last) {
+                                  ,
+                                }
                               }
-                            }
-                          </td>
-                          <td>
-                            <span
-                              [ngClass]="[
-                                invoice.status === 'PAID' ? ' bg-success' : '',
-                                invoice.status === 'ACTIVE' ? ' bg-success' : '',
-                                invoice.status === 'PENDING' ? ' bg-primary' : '',
-                                invoice.status === 'OVERDUE' ? ' bg-warning' : '',
-                                invoice.status === 'CANCELED' ? ' bg-danger' : '',
-                              ]"
-                              class="badge">
-                              {{ invoice.status }}
-                            </span>
-                          </td>
-                          <td>{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
-                          <td>${{ invoice.totalAmount }}</td>
-                          <td>
-                            <button [routerLink]="['/invoice/', invoice.id, invoice.invoiceNumber]"
-                                    class="btn btn-info btn-sm" type="button">
-                              Print
-                            </button>
-                          </td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
+                            </td>
+                            <td>
+                              <span
+                                [ngClass]="[
+                                  invoice.status === 'PAID' ? ' bg-success' : '',
+                                  invoice.status === 'ACTIVE' ? ' bg-success' : '',
+                                  invoice.status === 'PENDING' ? ' bg-primary' : '',
+                                  invoice.status === 'OVERDUE' ? ' bg-warning' : '',
+                                  invoice.status === 'CANCELED' ? ' bg-danger' : '',
+                                ]"
+                                class="badge">
+                                {{ invoice.status }}
+                              </span>
+                            </td>
+                            <td>{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
+                            <td>${{ invoice.totalAmount }}</td>
+                            <td>
+                              <button [routerLink]="['/invoice/', invoice.id, invoice.invoiceNumber]"
+                                      class="btn btn-info btn-sm" type="button">
+                                Print
+                              </button>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
 
 <!-- Gated on the invoice COUNT, not the page count: at 100 rows/page a 30-invoice
                        history is one page, and a totalPages gate would hide the size selector that

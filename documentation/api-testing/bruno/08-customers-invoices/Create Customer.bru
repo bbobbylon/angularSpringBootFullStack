@@ -1,0 +1,43 @@
+meta {
+  name: Create Customer
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/customer/create
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "firstName": "Bruno",
+    "lastName": "Customer",
+    "email": "bruno.customer.{{$timestamp}}@example.com",
+    "address": "123 Test St",
+    "type": "INDIVIDUAL"
+  }
+}
+
+script:post-response {
+  const json = res.getBody();
+  if (json.data && json.data.customer) {
+    bru.setVar("customerId", json.data.customer.id);
+  }
+}
+
+tests {
+  test("status is 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+}
+
+docs {
+  No DELETE endpoint exists for customers — this leaves a permanent row.
+}

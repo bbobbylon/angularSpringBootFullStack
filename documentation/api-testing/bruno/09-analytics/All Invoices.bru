@@ -1,0 +1,21 @@
+meta {
+  name: All Invoices
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/admin/analytics/invoices/all
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

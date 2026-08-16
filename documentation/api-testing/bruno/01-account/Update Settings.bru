@@ -1,0 +1,29 @@
+meta {
+  name: Update Settings
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/user/update/settings
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "enabled": true,
+    "notLocked": true
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

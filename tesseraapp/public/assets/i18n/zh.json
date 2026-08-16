@@ -152,6 +152,21 @@
       "passwordOnly": "仅密码",
       "federatedSignIns": "联合登录",
       "recoveryCodesUsed": "已使用的恢复码"
+    },
+    "settings": {
+      "title": "异常检测设置",
+      "subtitle": "更改将在下一次登录时立即生效——无需重新部署。",
+      "enabledLabel": "异常检测",
+      "useDefault": "使用服务器默认值",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "historyLimitLabel": "登录历史窗口",
+      "historyLimitHint": "新登录会与该账户最近的多少次登录进行比对。",
+      "historyLimitPlaceholder": "服务器默认值",
+      "clearOverride": "使用默认值",
+      "save": "保存更改",
+      "saving": "保存中…",
+      "unsavedChanges": "有未保存的更改"
     }
   },
   "servicesAdmin": {

@@ -10,7 +10,6 @@ import { GlobalStateInterface } from '../../../interface/global-state.interface'
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { AdminUserListInterface } from '../../../interface/admin.interface';
 import { AdminUserService } from '../../../service/admin-user.service';
-import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { NotificationsService } from '../../../service/notifications-service';
 import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 import { TranslocoDirective } from '@jsverse/transloco';
@@ -31,7 +30,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-users',
-  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, SlicePipe, TranslocoDirective, PageSizeSelectComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, NgOptimizedImage, SlicePipe, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './users.component.html',
   styleUrl: './users.component.css',
   standalone: true,
@@ -69,7 +68,21 @@ export class UsersComponent implements OnInit {
   pageSize$ = this.pageSize.asReadonly();
 
   /**
-   * Page, size and search term as one derived value — the single input to the fetch pipeline.
+   * The column currently sorted on, or {@code null} for the server's default (newest-first) order.
+   * Only fields in the backend's {@code AdminUserController#USER_SORT_FIELDS} allow-list have any
+   * effect — an unrecognized field is silently treated as unsorted, so this never needs to mirror
+   * that list. Mirrors {@code CustomersComponent#sortField}.
+   */
+  private sortField = signal<string | null>(null);
+
+  /** Direction for {@link sortField}. Meaningless while {@link sortField} is {@code null}. */
+  private sortDirection = signal<'asc' | 'desc'>('asc');
+
+  /** Read-only view of the active sort, for the template to render the column indicator. */
+  sort$ = computed(() => ({ field: this.sortField(), direction: this.sortDirection() }));
+
+  /**
+   * Page, size, search term and sort as one derived value — the single input to the fetch pipeline.
    *
    * <p>Replaces a {@code combineLatest} over two {@code toObservable} bridges. Both writers that
    * touch two signals at once — {@link changePageSize} and the debounced search subscription, each
@@ -81,6 +94,7 @@ export class UsersComponent implements OnInit {
     page: this.currentPage(),
     size: this.pageSize(),
     term: this.currentSearchTerm(),
+    sort: this.sortField() ? `${this.sortField()},${this.sortDirection()}` : undefined,
   }));
   private readonly _query$ = toObservable(this.query);
 
@@ -120,8 +134,8 @@ export class UsersComponent implements OnInit {
       });
 
     const users$ = this._query$.pipe(
-      switchMap(({ page, size, term }) =>
-        this.adminUserService.users$(page, term, size).pipe(
+      switchMap(({ page, size, term, sort }) =>
+        this.adminUserService.users$(page, term, size, sort).pipe(
           map((response) => ({ dataState: DataState.LOADED, appData: response })),
           startWith({ dataState: DataState.LOADING }),
           catchError((error: string) => {
@@ -185,5 +199,37 @@ export class UsersComponent implements OnInit {
    */
   protected getAvatarColor(id: number): string {
     return '#' + this.avatarColors[id % this.avatarColors.length];
+  }
+
+  /**
+   * Sorts by the given column, toggling direction on repeated clicks of the same header.
+   * Mirrors {@code CustomersComponent#toggleSort} — see that method for the rationale behind
+   * always starting a new column ascending and resetting to page 0 on every re-sort.
+   *
+   * @param field - a field from the backend's {@code USER_SORT_FIELDS} allow-list
+   */
+  toggleSort(field: string): void {
+    if (this.sortField() === field) {
+      this.sortDirection.update((current) => (current === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortField.set(field);
+      this.sortDirection.set('asc');
+    }
+    this.currentPage.set(0);
+  }
+
+  /**
+   * Bootstrap Icons class for a sortable column header: a neutral up/down glyph when this column
+   * is not the active sort, or a direction-specific arrow when it is.
+   *
+   * @param field - the field name the column sorts by
+   * @returns a single `bi-*` class name for use in `[ngClass]`
+   */
+  protected sortIconClass(field: string): string {
+    const active = this.sort$();
+    if (active.field !== field) {
+      return 'bi-arrow-down-up';
+    }
+    return active.direction === 'asc' ? 'bi-sort-down' : 'bi-sort-up';
   }
 }

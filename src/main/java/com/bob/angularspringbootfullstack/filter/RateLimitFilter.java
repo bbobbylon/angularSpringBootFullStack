@@ -80,7 +80,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/user/new/password",
             "/user/verify/account",
             "/user/resetpassword",
-            "/user/verify/code"
+            "/user/verify/code",
+            "/user/verify/resend"
     );
 
     private static final int AUTH_CAPACITY     = 10;   // requests per minute on auth endpoints

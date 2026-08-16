@@ -138,8 +138,9 @@ message reflects the count: `"Logged out of N other session(s)."` or
 | revoke one | `REVOKE_FAMILY_FOR_USER_QUERY` | `UPDATE refreshsessions SET revoked=TRUE WHERE family=:family AND user_id=:userId AND revoked=FALSE` |
 | revoke others | `REVOKE_OTHER_SESSIONS_QUERY` | `UPDATE refreshsessions SET revoked=TRUE WHERE user_id=:userId AND family != :family AND revoked=FALSE` |
 
-`DELETE` is a mutation, so the SPA's `cacheInterceptor` evicts the whole HTTP cache on these calls
-([`00 §2.2`](./00-anatomy-of-a-request.md)).
+A revoked session is visible immediately without any client-side cache to evict: the session list
+is a GET behind `HttpCacheHeadersFilter`, so the browser always revalidates with the server before
+reusing a response ([`00 §2.3`](./00-anatomy-of-a-request.md)).
 
 ---
 

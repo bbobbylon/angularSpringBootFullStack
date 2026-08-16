@@ -5,6 +5,7 @@ import com.bob.angularspringbootfullstack.model.Invoice;
 import com.bob.angularspringbootfullstack.model.Services;
 import com.bob.angularspringbootfullstack.model.Stats;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 
 import java.util.Collection;
 import java.util.Map;
@@ -44,9 +45,10 @@ public interface CustomerService {
      *
      * @param page zero-based page index
      * @param size number of records per page
+     * @param sort the column(s) to order by; {@link Sort#unsorted()} preserves insertion order
      * @return a page of customers
      */
-    Page<Customer> getCustomers(int page, int size);
+    Page<Customer> getCustomers(int page, int size, Sort sort);
 
     /**
      * Returns all customers without pagination.
@@ -78,9 +80,10 @@ public interface CustomerService {
      *
      * @param page zero-based page index
      * @param size number of records per page
+     * @param sort the column(s) to order by; {@link Sort#unsorted()} preserves insertion order
      * @return a page of invoices
      */
-    Page<Invoice> getInvoices(int page, int size);
+    Page<Invoice> getInvoices(int page, int size, Sort sort);
 
     /**
      * Returns all invoices without pagination, for use in report generation.
@@ -142,9 +145,10 @@ public interface CustomerService {
      * @param name the substring to search for within customer names
      * @param page zero-based page index
      * @param size number of records per page
+     * @param sort the column(s) to order by; {@link Sort#unsorted()} preserves insertion order
      * @return a page of matching customers
      */
-    Page<Customer> searchCustomers(String name, int page, int size);
+    Page<Customer> searchCustomers(String name, int page, int size, Sort sort);
 
     /**
      * Retrieves a single invoice by its unique ID.
@@ -208,9 +212,10 @@ public interface CustomerService {
      * @param organizationIds the caller's active organization ids; must not be empty
      * @param page            zero-based page index
      * @param size            records per page
+     * @param sort            the column(s) to order by; {@link Sort#unsorted()} preserves insertion order
      * @return a page of customers restricted to those organizations
      */
-    Page<Customer> getCustomersForOrganizations(Collection<Long> organizationIds, int page, int size);
+    Page<Customer> getCustomersForOrganizations(Collection<Long> organizationIds, int page, int size, Sort sort);
 
     /**
      * Paginated invoices billed to customers owned by the given organizations.
@@ -218,9 +223,10 @@ public interface CustomerService {
      * @param organizationIds the caller's active organization ids; must not be empty
      * @param page            zero-based page index
      * @param size            records per page
+     * @param sort            the column(s) to order by; {@link Sort#unsorted()} preserves insertion order
      * @return a page of invoices restricted to those organizations
      */
-    Page<Invoice> getInvoicesForOrganizations(Collection<Long> organizationIds, int page, int size);
+    Page<Invoice> getInvoicesForOrganizations(Collection<Long> organizationIds, int page, int size, Sort sort);
 
     /**
      * Aggregated dashboard statistics restricted to the given organizations.
@@ -264,9 +270,10 @@ public interface CustomerService {
      * @param organizationIds the caller's active organization ids; must not be empty
      * @param page            zero-based page index
      * @param size            records per page
+     * @param sort            the column(s) to order by; {@link Sort#unsorted()} preserves insertion order
      * @return a page of matching customers restricted to those organizations
      */
-    Page<Customer> searchCustomersForOrganizations(String name, Collection<Long> organizationIds, int page, int size);
+    Page<Customer> searchCustomersForOrganizations(String name, Collection<Long> organizationIds, int page, int size, Sort sort);
 
     /**
      * Returns a paginated page of invoices whose invoice number or owning customer's name
@@ -276,9 +283,10 @@ public interface CustomerService {
      *             the owning customer's name
      * @param page zero-based page index
      * @param size number of records per page
+     * @param sort the column(s) to order by; {@link Sort#unsorted()} preserves insertion order
      * @return a page of matching invoices
      */
-    Page<Invoice> searchInvoices(String term, int page, int size);
+    Page<Invoice> searchInvoices(String term, int page, int size, Sort sort);
 
     /**
      * Org-scoped form of {@link #searchInvoices(String, int, int)} (FR-ORG-2), restricted to
@@ -288,7 +296,8 @@ public interface CustomerService {
      * @param organizationIds the caller's active organization ids; must not be empty
      * @param page            zero-based page index
      * @param size            records per page
+     * @param sort            the column(s) to order by; {@link Sort#unsorted()} preserves insertion order
      * @return a page of matching invoices restricted to those organizations
      */
-    Page<Invoice> searchInvoicesForOrganizations(String term, Collection<Long> organizationIds, int page, int size);
+    Page<Invoice> searchInvoicesForOrganizations(String term, Collection<Long> organizationIds, int page, int size, Sort sort);
 }

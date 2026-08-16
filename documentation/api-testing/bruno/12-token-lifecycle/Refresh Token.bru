@@ -1,0 +1,34 @@
+meta {
+  name: Refresh Token
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/user/refresh/token
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminRefreshToken}}
+}
+
+script:post-response {
+  const json = res.getBody();
+  if (json.data && json.data.access_token) {
+    bru.setVar("adminAccessToken", json.data.access_token);
+    bru.setVar("adminRefreshToken", json.data.refresh_token);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  Sends the REFRESH token, not the access token. Rotates both and updates the
+  collection variables.
+}

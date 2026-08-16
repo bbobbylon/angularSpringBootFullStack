@@ -24,7 +24,6 @@ sequenceDiagram
     participant DOM as customers.component.html
     participant CMP as CustomersComponent
     participant SVC as CustomerService
-    participant CACHE as cacheInterceptor
     participant CTRL as CustomerController
     participant DB as DB
     U->>DOM: type in search / click page
@@ -33,9 +32,8 @@ sequenceDiagram
     CMP->>CMP: currentSearchTerm.set + currentPage.set(0)  :107-110
     Note over CMP: signals → toObservable → combineLatest([page,term])  :73-74,112
     CMP->>SVC: switchMap → term ? searchCustomers$ : customers$  :113-114
-    SVC->>CACHE: GET /customer/list?page&size (or /search?name&page&size)
-    Note over CACHE: GET, cacheable → cache hit short-circuits (no token attach)  00 §2.2
-    CACHE->>CTRL: (on miss) forward 🔑
+    SVC->>CTRL: GET /customer/list?page&size (or /search?name&page&size)  🔑
+    Note over CTRL: response carries Cache-Control/ETag  00 §2.3
     CTRL->>DB: getCustomers(page,size) + getStats()  :87-89
     CTRL-->>SVC: 200 { user, page: Page<Customer>, stats }
     SVC-->>CMP: map → { LOADED, appData } ; startWith LOADING ; catchError ERROR  :115-122
@@ -63,14 +61,11 @@ sequenceDiagram
     actor U as User
     participant CMP as NewCustomerComponent
     participant SVC as CustomerService
-    participant CACHE as cacheInterceptor
     participant CTRL as CustomerController
     participant DB as DB
     U->>CMP: fill form, submit  → createNewCustomer(form)  :113
     CMP->>SVC: newCustomer$(form.value)  :116 / customer.service.ts:101
-    SVC->>CACHE: POST /customer/create
-    Note over CACHE: non-GET → evictAll() then forward 🔑  00 §2.2
-    CACHE->>CTRL: createCustomer(@RequestBody Customer)  :171
+    SVC->>CTRL: POST /customer/create → createCustomer(@RequestBody Customer)  🔑  :171
     Note over CTRL: ⚠️ no @Valid — server-side field validation is absent
     CTRL->>DB: INSERT customer
     CTRL-->>SVC: 201 { user, customer }
@@ -82,8 +77,9 @@ sequenceDiagram
 > client-side only; a direct API call bypasses it. The form's defaults (`type:'INDIVIDUAL'`,
 > `status:'ACTIVE'`) come from `new-customer.component.ts:122`.
 
-Because `POST` is a mutation, `cacheInterceptor.evictAll()` fires, so the next visit to the customer
-list re-fetches fresh ([`00 §2.2`](./00-anatomy-of-a-request.md)).
+No client-side eviction is needed for the next visit to the customer list to see the new row: its
+GET always revalidates with the server (`HttpCacheHeadersFilter`, [`00 §2.3`](./00-anatomy-of-a-request.md)),
+so a changed ETag simply returns the fresh page instead of a `304`.
 
 ---
 

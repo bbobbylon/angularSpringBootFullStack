@@ -27,7 +27,6 @@ and each per-flow diagram reuses the same named lifelines:
 | **DOM** | the component's HTML template | `*.component.html` |
 | **CMP** | the component class | `*.component.ts` |
 | **SVC** | `UserService` / `AdminUserService` / `CustomerService` | `src/app/service/*.ts` |
-| **CACHE** | `cacheInterceptor` (runs first) | `src/app/interceptor/cache.interceptor.ts` |
 | **TOK** | `tokenInterceptor` (attaches the JWT) | `src/app/interceptor/token.interceptor.ts` |
 | **LS** | `localStorage` (`access_token` / `refresh_token`) | browser |
 | **NET** | the browser's HTTP stack / the wire | — |
@@ -148,7 +147,6 @@ kept for the source-marker pointers but should not be trusted over that file for
 
 | Item | Source | Note |
 | --- | --- | --- |
-| HTTP caching is client-side | `cache.interceptor.ts` TODO | still open — move to backend (ETag / Redis) and delete the interceptor. See FUTURE-ENHANCEMENTS §3.4 |
 | `url` column stores a bare key | `UserQuery.java:36`, `UserRepoImpl.java:182` | still open — rename to `verification_key` (DB migration deferred). See FUTURE-ENHANCEMENTS §4 |
 
 **Resolved since this table was last accurate (re-verified 2026-08-08):**

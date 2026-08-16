@@ -7,17 +7,22 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Specs for {@link CapabilityCatalog} — the mapping that lets a 403 name the capability the caller
  * was missing (ROADMAP §2, API-level permission-denied UX).
  *
- * <p>Two properties matter here, and they pull against each other. The message must be
- * <b>specific</b> enough to tell a user what to ask an administrator for, and <b>generic</b> enough
- * that it never becomes an enumeration channel. The ordering tests protect the first; the
- * non-enumeration tests protect the second.
+ * <p>Since backend-driven i18n (FUTURE-ENHANCEMENTS.md §3.3), this class resolves a request to a
+ * {@code messages*.properties} <b>key</b> only — never a finished sentence, and never in a specific
+ * language. Locale-aware text resolution, and the non-enumeration / frontend-phrasing-match
+ * properties that depend on the resolved English text, moved to
+ * {@code CustomAccessDeniedHandlerTest}, which is where a {@code MessageSource} is actually
+ * available to resolve them.
+ *
+ * <p>Two properties matter here, and they pull against each other. The key must be
+ * <b>specific</b> enough to eventually tell a user what to ask an administrator for, and
+ * <b>generic</b> enough that it never becomes an enumeration channel. The ordering tests protect
+ * the first; the prefix-matching test protects the second.
  *
  * <p>Rule ordering gets its own cases because it is the failure mode that will actually happen: the
  * table is ordered most-specific-first, exactly like {@code SecurityConfig}'s matchers, and someone
@@ -44,48 +49,50 @@ class CapabilityCatalogTest {
     @CsvSource({
             // Administrative surfaces. The first three prove that method-specific rules beat the
             // broader /admin/user rule sitting below them.
-            "PATCH,  /admin/user/12/role,           assign roles",
-            "PATCH,  /admin/user/12/settings,       change account state",
-            "PATCH,  /admin/user/12/update,         edit other users' profiles",
-            "GET,    /admin/security/overview,      view security monitoring",
-            "GET,    /admin/analytics/summary,      view billing and analytics",
-            "POST,   /admin/services/create,        manage the services catalog",
-            "GET,    /admin/user/list,              manage users",
+            "PATCH,  /admin/user/12/role,           capability.assignRoles",
+            "PATCH,  /admin/user/12/settings,       capability.changeAccountState",
+            "PATCH,  /admin/user/12/update,         capability.editOtherUsersProfiles",
+            "PATCH,  /admin/security/anomaly-settings, capability.changeSecuritySettings",
+            "GET,    /admin/security/anomaly-settings, capability.viewSecurityMonitoring",
+            "GET,    /admin/security/overview,      capability.viewSecurityMonitoring",
+            "GET,    /admin/analytics/summary,      capability.viewBillingAnalytics",
+            "POST,   /admin/services/create,        capability.manageServicesCatalog",
+            "GET,    /admin/user/list,              capability.manageUsers",
             // Business domain.
-            "DELETE, /customer/delete/9,            delete customers",
-            "DELETE, /user/delete/9,                delete users",
-            "PATCH,  /customer/invoice/update/4,    edit invoices",
-            "POST,   /customer/create,              create customers",
-            "POST,   /customer/invoice/create,      create invoices",
+            "DELETE, /customer/delete/9,            capability.deleteCustomers",
+            "DELETE, /user/delete/9,                capability.deleteUsers",
+            "PATCH,  /customer/invoice/update/4,    capability.editInvoices",
+            "POST,   /customer/create,              capability.createCustomers",
+            "POST,   /customer/invoice/create,      capability.createInvoices",
     })
-    @DisplayName("names the capability behind each protected surface")
-    void mapsRequestsToCapabilityPhrases(String method, String path, String expected) {
-        assertEquals(expected, CapabilityCatalog.actionFor(request(method, path)));
+    @DisplayName("names the capability key behind each protected surface")
+    void mapsRequestsToCapabilityKeys(String method, String path, String expected) {
+        assertEquals(expected, CapabilityCatalog.actionKeyFor(request(method, path)));
     }
 
     @Test
     @DisplayName("a specific admin rule wins over the broad one, whatever order they appear in")
     void specificRulesTakePrecedenceOverBroadOnes() {
         // If a broad /admin rule ever drifts above the narrow ones, every administrative refusal
-        // collapses into the same vague sentence and the feature quietly stops working — without
-        // any test failing unless one asserts the distinction directly.
-        String role = CapabilityCatalog.actionFor(request("PATCH", "/admin/user/12/role"));
-        String users = CapabilityCatalog.actionFor(request("GET", "/admin/user/list"));
-        String generic = CapabilityCatalog.actionFor(request("GET", "/admin/something-else"));
+        // collapses into the same vague key and the feature quietly stops working — without any
+        // test failing unless one asserts the distinction directly.
+        String role = CapabilityCatalog.actionKeyFor(request("PATCH", "/admin/user/12/role"));
+        String users = CapabilityCatalog.actionKeyFor(request("GET", "/admin/user/list"));
+        String generic = CapabilityCatalog.actionKeyFor(request("GET", "/admin/something-else"));
 
-        assertEquals("assign roles", role);
-        assertEquals("manage users", users);
-        assertEquals("access administrative features", generic);
+        assertEquals("capability.assignRoles", role);
+        assertEquals("capability.manageUsers", users);
+        assertEquals("capability.accessAdministrativeFeatures", generic);
     }
 
     @Test
-    @DisplayName("falls back to a vague phrase rather than guessing at an unmapped path")
+    @DisplayName("falls back to the default key rather than guessing at an unmapped path")
     void unmappedPathsFallBack() {
-        assertEquals(CapabilityCatalog.DEFAULT_ACTION,
-                CapabilityCatalog.actionFor(request("GET", "/something/unmapped")));
+        assertEquals(CapabilityCatalog.DEFAULT_ACTION_KEY,
+                CapabilityCatalog.actionKeyFor(request("GET", "/something/unmapped")));
         // A null request is not expected, but this runs on an error path — where the one outcome
         // that must never happen is a second exception.
-        assertEquals(CapabilityCatalog.DEFAULT_ACTION, CapabilityCatalog.actionFor(null));
+        assertEquals(CapabilityCatalog.DEFAULT_ACTION_KEY, CapabilityCatalog.actionKeyFor(null));
     }
 
     @Test
@@ -93,41 +100,7 @@ class CapabilityCatalogTest {
     void prefixMatchingRespectsSegmentBoundaries() {
         // "/admin" must not match "/administration-console": prefix matching that ignores segment
         // boundaries would attach admin phrasing to unrelated endpoints.
-        assertEquals(CapabilityCatalog.DEFAULT_ACTION,
-                CapabilityCatalog.actionFor(request("GET", "/administration-console")));
-    }
-
-    @Test
-    @DisplayName("the message never leaks internal vocabulary or record existence")
-    void messagesAreNonEnumerating() {
-        String[] paths = {
-                "/admin/user/12/role", "/admin/security/overview", "/customer/delete/9",
-                "/customer/invoice/update/4", "/something/unmapped",
-        };
-
-        for (String path : paths) {
-            String message = CapabilityCatalog.messageFor(request("GET", path));
-
-            // No authority strings, no role names — those are how the server reasons about the
-            // decision, not something the user can act on.
-            assertFalse(message.contains("UPDATE:"), "leaked an authority string: " + message);
-            assertFalse(message.contains("READ:"), "leaked an authority string: " + message);
-            assertFalse(message.contains("DELETE:"), "leaked an authority string: " + message);
-            assertFalse(message.toLowerCase().contains("role_"), "leaked a role name: " + message);
-            // No identifiers from the path: a 403 covers out-of-scope resources too, so echoing an
-            // id back would confirm that the id is real.
-            assertFalse(message.matches(".*\\d+.*"), "leaked a record identifier: " + message);
-            // And it must still point the user somewhere useful.
-            assertTrue(message.contains("contact your administrator"), "lost the remedy: " + message);
-        }
-    }
-
-    @Test
-    @DisplayName("uses the same sentence the SPA's route guards use")
-    void messageMatchesTheFrontendPhrasing() {
-        // adminGuard and capabilityGuard build exactly this sentence. A user who hits the same
-        // restriction at the route level and again at the API level must read one message, not two.
-        assertEquals("You don't have permission to assign roles — contact your administrator.",
-                CapabilityCatalog.messageFor(request("PATCH", "/admin/user/12/role")));
+        assertEquals(CapabilityCatalog.DEFAULT_ACTION_KEY,
+                CapabilityCatalog.actionKeyFor(request("GET", "/administration-console")));
     }
 }

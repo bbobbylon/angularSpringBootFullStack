@@ -630,6 +630,52 @@ next *templated* re-register (not this shortcut) silently drops it again.
 > `No such file or directory` for a path fragment alongside the parsing error above. Two errors, one
 > cause.
 
+#### Worked example — adding `TWILIO_VERIFY_SERVICE_SID` this way (run 2026-08-14)
+
+Real run against the live service, from a machine with no way to commit/push (so going through
+`deploy.yml` wasn't an option) — confirms the shortcut works end to end and the diff really does
+come back as exactly one line:
+
+```bash
+SCRATCH="/c/Users/bobby/AppData/Local/Temp/claude/.../scratchpad"   # any writable, gitignored dir
+mkdir -p "$SCRATCH"
+set -e
+
+LIVE=$(aws ecs describe-services --cluster tessera-app-cluster --services tessera-app-service \
+        --region us-east-1 --query 'services[0].taskDefinition' --output text)
+echo "Live task definition: $LIVE"                    # arn:...:task-definition/tessera-app:15
+
+aws ecs describe-task-definition --task-definition "$LIVE" --region us-east-1 \
+  --query 'taskDefinition' --output json > "$SCRATCH/td-live.json"
+
+jq --arg arn "arn:aws:secretsmanager:us-east-1:468670609216:secret:tessera-app/twilio-verify-service-sid-l71jLM" \
+   'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities,
+        .registeredAt, .registeredBy, .deregisteredAt)
+    | .containerDefinitions[0].secrets |=
+        (map(select(.name != "TWILIO_VERIFY_SERVICE_SID")) + [{name:"TWILIO_VERIFY_SERVICE_SID", valueFrom:$arn}])' \
+  "$SCRATCH/td-live.json" > "$SCRATCH/td-new.json"
+
+# Diff before registering — this is the step that matters. A clean run shows ONLY the new
+# secret appended; anything else in the diff means the wrong revision was pulled or a prior
+# edit is still sitting in the live task definition unaccounted for.
+diff <(jq '.containerDefinitions[0].secrets' "$SCRATCH/td-live.json") \
+     <(jq '.containerDefinitions[0].secrets' "$SCRATCH/td-new.json") || true
+```
+
+Confirmed clean against `tessera-app:15` — the diff showed exactly the one new
+`TWILIO_VERIFY_SERVICE_SID` entry appended, nothing else moved. That confirms the JSON is safe to
+register; it does **not** by itself register or roll anything. Finish it with the two commands from
+the template above (substitute `$SCRATCH/td-new.json` for `.temp/next.json`):
+
+```bash
+aws ecs register-task-definition --region us-east-1 --cli-input-json "$(cat "$SCRATCH/td-new.json")"
+aws ecs update-service --cluster tessera-app-cluster --service tessera-app-service \
+  --task-definition tessera-app --force-new-deployment --region us-east-1
+```
+
+Then verify with Part E below — specifically 1b, which confirms the *running* revision (not just
+the newest registered one) actually carries the secret.
+
 **Rotating a secret's value needs no new revision** — the reference is to the secret, not its contents — but it *does* need a task restart, because ECS resolves secrets at container start:
 
 ```bash
@@ -904,7 +950,9 @@ is destroyed when the task stops, which is exactly the moment you most want to r
 
 ```
 Spring Boot (Logback console appender)
-   │  no logback-spring.xml in the repo; no logging.file.* set anywhere
+   │  src/main/resources/logback-spring.xml (added 2026-08-15): prod/qa/stage render one
+   │  JSON object per line (LogstashEncoder); dev/local keep Boot's plain human-readable
+   │  console line unchanged. Still no logging.file.* anywhere — stdout only, either way.
    ▼
 Container stdout/stderr   (Dockerfile: ENTRYPOINT ["java","-jar","app.jar"], no redirection)
    ▼
@@ -920,6 +968,18 @@ CloudWatch Logs
 ECS treats logging as a hard dependency: if the awslogs driver cannot initialise, the task does
 not start at all. That is why a missing `AWS_REGION` surfaces as `ResourceInitializationError`
 rather than as silently missing logs.
+
+**JSON logs, why now (2026-08-15).** Every deployed event line is now one JSON object —
+`@timestamp`, `level`, `logger_name`, `thread_name`, `message`, plus `stack_trace` on exceptions
+— instead of one plain-text line. `CloudWatch Logs Insights` always keeps `@message` as the full
+raw line regardless of format, so **every existing query on this page still works unchanged**
+(`filter @message like /\[AUTH-GRANT\]|.../ ` still matches, because that text is still a literal
+substring of the line — it is just wrapped in `{"message":"..."}` now). What JSON actually buys is
+the ability to query the *structured* fields directly instead of pattern-matching text — see the
+new example in H2. Local `dev`/`local` runs are deliberately untouched: nobody reads a laptop
+console through Logs Insights, and a human scanning a terminal wants the old colored line, not
+JSON. See `src/main/resources/logback-spring.xml` for the profile-conditional config and
+`logstash-logback-encoder` in `pom.xml`.
 
 ### H2. Reading them
 
@@ -971,6 +1031,16 @@ SOURCE logGroups(namePrefix: ["/ecs/tessera-app"]) START=-86400s END=0s
 SOURCE logGroups(namePrefix: ["/ecs/tessera-app"]) START=-3600s END=0s
 | stats count(*) as events by @logStream
 | sort events asc
+```
+
+```
+-- Structured-field query (JSON logs only, i.e. any deploy after 2026-08-15): filters on the
+-- real `level` field instead of pattern-matching @message, and counts by logger — the kind of
+-- query the plain-text format could only do with a fragile regex against the whole line.
+SOURCE logGroups(namePrefix: ["/ecs/tessera-app"]) START=-3600s END=0s
+| filter level = "ERROR"
+| stats count(*) as errors by logger_name
+| sort errors desc
 ```
 
 ### H3. Why you can't find the startup block

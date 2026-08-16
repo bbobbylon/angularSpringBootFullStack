@@ -59,6 +59,12 @@ export class LoginComponent implements OnInit {
    * information — it is useless without the authenticator.
    */
   private readonly challenge = signal<string | null>(null);
+  /** True while a resend request is in flight, so the button can't be double-clicked. */
+  protected readonly resendInFlight = signal(false);
+  /** Seconds remaining before another resend is allowed. Client-side courtesy only — the
+   *  backend's own auth-tier rate limit (10/min/IP) is the real enforcement. */
+  protected readonly resendCooldown = signal(0);
+  private resendCooldownHandle: ReturnType<typeof setInterval> | undefined;
 
   /**
    * Boot logic for the login screen. Beyond the original authenticated-redirect,
@@ -226,6 +232,53 @@ export class LoginComponent implements OnInit {
         });
       },
     });
+  }
+
+  /**
+   * Requests redelivery of the outstanding SMS/email code from the "Resend code" link.
+   * Only reachable for the {@code 'sms'}/{@code 'email'} methods — TOTP has no server-issued
+   * code to resend, so the template hides the link entirely for that method.
+   *
+   * <p>The backend's response is deliberately non-committal (FR-AUTH-4) — it never confirms
+   * whether a code was actually resent — so this always shows the same neutral confirmation
+   * and starts a client-side cooldown, both to discourage repeat clicks and to mirror the
+   * backend's own auth-tier rate limit (10 req/min/IP) with immediate UI feedback rather than
+   * only surfacing a 429 after the fact.
+   */
+  resendCode(): void {
+    const email = this.email();
+    if (!email || this.resendInFlight() || this.resendCooldown() > 0) {
+      return;
+    }
+    this.resendInFlight.set(true);
+    this.userService
+      .resendCode$(email)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.resendInFlight.set(false);
+          this.notification.onSuccess("If a code is pending, we've sent it again.");
+          this.startResendCooldown();
+        },
+        error: (error: string) => {
+          this.resendInFlight.set(false);
+          this.notification.onError(error);
+        },
+      });
+  }
+
+  /** Runs a 30-second countdown, ticking {@link resendCooldown} down to 0 once a second. */
+  private startResendCooldown(): void {
+    clearInterval(this.resendCooldownHandle);
+    this.resendCooldown.set(30);
+    this.resendCooldownHandle = setInterval(() => {
+      const remaining = this.resendCooldown() - 1;
+      this.resendCooldown.set(Math.max(remaining, 0));
+      if (remaining <= 0) {
+        clearInterval(this.resendCooldownHandle);
+      }
+    }, 1000);
+    this.destroyRef.onDestroy(() => clearInterval(this.resendCooldownHandle));
   }
 
   /**

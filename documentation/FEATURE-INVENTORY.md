@@ -210,7 +210,7 @@ Maven profiles: `dev` (default), `prod`, `qa`, `stage`, `local` — each sets `s
 - **Lazy-loaded, preloaded routes** (`loadComponent` + `PreloadAllModules`)
 - **Route guards**: `authenticationGuard`, `adminGuard`, `capabilityGuard` — usability aids; the backend independently enforces the same rules, so a guard bypass gains nothing
 - **`token.interceptor`**: attaches `Authorization: Bearer`, and on a 401 silently calls the refresh endpoint and retries once — concurrent 401s share a single in-flight refresh via a `BehaviorSubject` guard rather than firing N parallel refresh calls
-- **`cache.interceptor`**: client-side GET caching, invalidated on mutations (known limitation: purely client-side, so one user's write doesn't invalidate another user's cache — tracked, not yet backend-driven)
+- **Backend HTTP caching**: `HttpCacheHeadersFilter` sends `Cache-Control: private, no-cache` + an ETag on data-bearing GETs; the browser's native HTTP cache always revalidates with the server before reusing a response, so a write from another user is reflected on the very next request (POST-SUBMISSION-UPGRADES.md #3, superseding the former client-only `cache.interceptor`)
 - **Design system**: dark/indigo theme, a shared `.sc-*` "data surface" CSS layer reused across every list/detail page, self-hosted fonts/icons (CSP-driven, not a preference)
 - **⌘/Ctrl-K command palette** for navigation
 - **Six-language i18n** (Transloco, runtime switching — not compile-time — across 26 of 28 templates, plus toasts and the command palette)

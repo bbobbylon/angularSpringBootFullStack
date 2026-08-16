@@ -129,8 +129,10 @@
                     <th class="text-center text-muted">{{ customer.id }}</th>
                     <td>
                       @if (customer.imageUrl) {
-                        <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
-                             loading="lazy" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">
+                        <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
+                          <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
+                               loading="lazy" style="object-fit: cover;">
+                        </div>
                       } @else {
                         <div [style.background-color]="getAvatarColor(customer.id)" class="sc-avatar">
                           {{ customer.customerName.charAt(0).toUpperCase() }}
@@ -174,15 +176,9 @@
                           class="page-link">&laquo; {{ t('common.prev') }}
                   </button>
                 </li>
-                @for (_page of (state?.appData?.data?.page?.page?.totalPages ?? 0) | ExtractArrayValue: 'number'; track $index; let i = $index) {
-                  <li class="page-item pointer">
-                    <button (click)="goToPage(i)"
-                            [ngClass]="i === currentPage() ? 'active' : ''"
-                            class="page-link">
-                      {{ i + 1 }}
-                    </button>
-                  </li>
-                }
+                <li class="page-item disabled">
+                  <span class="page-link">{{ t('common.pageXofY', { page: currentPage() + 1, total: state?.appData?.data?.page?.page?.totalPages ?? 1 }) }}</span>
+                </li>
                 <li
                   [ngClass]="((state?.appData?.data?.page?.page?.totalPages ?? 0) - 1) === currentPage() ? 'disabled' : ''"
                   class="page-item pointer">

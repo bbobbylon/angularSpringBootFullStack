@@ -9,7 +9,6 @@ import { GlobalStateInterface } from '../../../interface/global-state.interface'
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { CustomerListDataInterface } from '../../../interface/appstates.interface';
 import { CustomerService } from '../../../service/customer.service';
-import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { CustomerTrendComponent } from '../../../shared/charts/customer-trend/customer-trend.component';
@@ -26,7 +25,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-customers',
-  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, CustomerTrendComponent, TranslocoDirective, PageSizeSelectComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, NgOptimizedImage, CustomerTrendComponent, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.css',
   standalone: true,
@@ -87,7 +86,21 @@ export class CustomersComponent implements OnInit {
   pageSize$ = this.pageSize.asReadonly();
 
   /**
-   * Page, size and search term as one derived value — the single input to the fetch pipeline.
+   * The column currently sorted on, or {@code null} for the server's default (insertion) order.
+   * Only fields in the backend's {@code CUSTOMER_SORT_FIELDS} allow-list have any effect — an
+   * unrecognized field is silently treated as unsorted, so this never needs to mirror that list.
+   */
+  private sortField = signal<string | null>(null);
+
+  /** Direction for {@link sortField}. Meaningless while {@link sortField} is {@code null}. */
+  private sortDirection = signal<'asc' | 'desc'>('asc');
+
+  /** Read-only view of the active sort, for the template to render the column indicator. */
+  sort$ = computed(() => ({ field: this.sortField(), direction: this.sortDirection() }));
+
+  /**
+   * Page, size, search term and sort as one derived value — the single input to the fetch
+   * pipeline.
    *
    * <p>This replaced a {@code combineLatest} over separate {@code toObservable} bridges. Because
    * each bridge runs its own effect, the two places that legitimately write two signals at once —
@@ -100,6 +113,7 @@ export class CustomersComponent implements OnInit {
     page: this.currentPage(),
     size: this.pageSize(),
     term: this.currentSearchTerm(),
+    sort: this.sortField() ? `${this.sortField()},${this.sortDirection()}` : undefined,
   }));
   private readonly _query$ = toObservable(this.query);
 
@@ -140,8 +154,8 @@ export class CustomersComponent implements OnInit {
       });
 
     const customers$ = this._query$.pipe(
-      switchMap(({ page, size, term }) =>
-        (term ? this.customerService.searchCustomers$(term, page, size) : this.customerService.customers$(page, size)).pipe(
+      switchMap(({ page, size, term, sort }) =>
+        (term ? this.customerService.searchCustomers$(term, page, size, sort) : this.customerService.customers$(page, size, sort)).pipe(
           map((response) => {
             return { dataState: DataState.LOADED, appData: response };
           }),
@@ -209,6 +223,29 @@ export class CustomersComponent implements OnInit {
   }
 
   /**
+   * Sorts by the given column, toggling direction on repeated clicks of the same header.
+   *
+   * <p>Clicking a new column always starts ascending — a first click that flipped straight to
+   * descending would be surprising, since nothing on screen indicated a prior direction to
+   * reverse. Clicking the already-active column toggles, which is the conventional spreadsheet
+   * behaviour every user of a sortable table already expects.
+   *
+   * <p>Resets to the first page for the same reason {@link changePageSize} does: a page index is
+   * only meaningful relative to the current ordering, and re-sorting changes which rows occupy it.
+   *
+   * @param field - a JPA property path from the backend's {@code CUSTOMER_SORT_FIELDS} allow-list
+   */
+  toggleSort(field: string): void {
+    if (this.sortField() === field) {
+      this.sortDirection.update((current) => (current === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortField.set(field);
+      this.sortDirection.set('asc');
+    }
+    this.currentPage.set(0);
+  }
+
+  /**
    * Returns a deterministic local fallback image path for the given customer ID.
    *
    * Uses modulo arithmetic against {@link localDefaultImages} so that each customer
@@ -219,5 +256,20 @@ export class CustomersComponent implements OnInit {
    */
   protected getAvatarColor(id: number): string {
     return '#' + this.avatarColors[id % this.avatarColors.length];
+  }
+
+  /**
+   * Bootstrap Icons class for a sortable column header: a neutral up/down glyph when this column
+   * is not the active sort, or a direction-specific arrow when it is.
+   *
+   * @param field - the JPA property path the column sorts by
+   * @returns a single `bi-*` class name for use in `[ngClass]`
+   */
+  protected sortIconClass(field: string): string {
+    const active = this.sort$();
+    if (active.field !== field) {
+      return 'bi-arrow-down-up';
+    }
+    return active.direction === 'asc' ? 'bi-sort-down' : 'bi-sort-up';
   }
 }

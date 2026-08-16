@@ -20,8 +20,12 @@ import { ProfileInterface } from '../interface/appstates.interface';
  * The obvious fix — have {@code NavbarComponent} call {@code profile$()} in its own
  * {@code ngOnInit} — trades one problem for another. The navbar is not a singleton: every feature
  * template instantiates its own, so a per-instance fetch means one {@code /user/profile} request
- * per navigation. {@code cacheInterceptor} masks that until any mutation calls
- * {@code evictAll()}, after which every navigation pays for it again.
+ * per navigation. Backend HTTP caching (POST-SUBMISSION-UPGRADES.md #3) does not fix this the way
+ * the old client-side {@code cacheInterceptor} briefly appeared to: {@code Cache-Control:
+ * private, no-cache} means the browser always revalidates over the network before reusing a
+ * response, so N navbar instances still cost N real round trips (each cheaply answered with a
+ * {@code 304} if nothing changed, but a round trip all the same) — deduping the fetch still has
+ * to happen here, in application code, not for free at the HTTP layer.
  *
  * <p>Holding the user in a root-provided signal fetches it once for the application's lifetime and
  * hands the same value to every reader. It also gives the profile screen somewhere to publish an

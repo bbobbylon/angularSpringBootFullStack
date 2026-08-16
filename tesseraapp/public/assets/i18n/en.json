@@ -152,6 +152,21 @@
       "passwordOnly": "Password only",
       "federatedSignIns": "Federated sign-ins",
       "recoveryCodesUsed": "Recovery codes used"
+    },
+    "settings": {
+      "title": "Anomaly detection settings",
+      "subtitle": "Overrides take effect on the very next sign-in — no redeploy required.",
+      "enabledLabel": "Anomaly detection",
+      "useDefault": "Use server default",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "historyLimitLabel": "Login history window",
+      "historyLimitHint": "How many of the account's recent sign-ins a new one is compared against.",
+      "historyLimitPlaceholder": "Server default",
+      "clearOverride": "Use default",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "unsavedChanges": "Unsaved changes"
     }
   },
   "servicesAdmin": {

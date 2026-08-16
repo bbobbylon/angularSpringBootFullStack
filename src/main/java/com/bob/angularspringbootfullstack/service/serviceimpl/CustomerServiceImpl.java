@@ -14,6 +14,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -107,8 +108,8 @@ public class CustomerServiceImpl implements CustomerService {
      * {@inheritDoc}
      */
     @Override
-    public Page<Customer> getCustomers(int page, int size) {
-        return customerRepo.findAll(of(page, size));
+    public Page<Customer> getCustomers(int page, int size, Sort sort) {
+        return customerRepo.findAll(of(page, size, sort));
     }
 
     /**
@@ -142,8 +143,8 @@ public class CustomerServiceImpl implements CustomerService {
      * {@inheritDoc}
      */
     @Override
-    public Page<Invoice> getInvoices(int page, int size) {
-        return invoiceRepo.findAll(of(page, size));
+    public Page<Invoice> getInvoices(int page, int size, Sort sort) {
+        return invoiceRepo.findAll(of(page, size, sort));
     }
 
     /**
@@ -222,8 +223,8 @@ public class CustomerServiceImpl implements CustomerService {
      * {@inheritDoc}
      */
     @Override
-    public Page<Customer> searchCustomers(String customerName, int page, int size) {
-        return customerRepo.findByCustomerNameContaining(customerName, of(page, size));
+    public Page<Customer> searchCustomers(String customerName, int page, int size, Sort sort) {
+        return customerRepo.findByCustomerNameContaining(customerName, of(page, size, sort));
     }
 
     /**
@@ -278,18 +279,18 @@ public class CustomerServiceImpl implements CustomerService {
      * {@inheritDoc}
      */
     @Override
-    public Page<Customer> getCustomersForOrganizations(Collection<Long> organizationIds, int page, int size) {
+    public Page<Customer> getCustomersForOrganizations(Collection<Long> organizationIds, int page, int size, Sort sort) {
         requireScope(organizationIds);
-        return customerRepo.findByOrganizationIdIn(organizationIds, of(page, size));
+        return customerRepo.findByOrganizationIdIn(organizationIds, of(page, size, sort));
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Page<Invoice> getInvoicesForOrganizations(Collection<Long> organizationIds, int page, int size) {
+    public Page<Invoice> getInvoicesForOrganizations(Collection<Long> organizationIds, int page, int size, Sort sort) {
         requireScope(organizationIds);
-        return invoiceRepo.findByOrganizationIdIn(organizationIds, of(page, size));
+        return invoiceRepo.findByOrganizationIdIn(organizationIds, of(page, size, sort));
     }
 
     /**
@@ -341,26 +342,26 @@ public class CustomerServiceImpl implements CustomerService {
      * {@inheritDoc}
      */
     @Override
-    public Page<Customer> searchCustomersForOrganizations(String name, Collection<Long> organizationIds, int page, int size) {
+    public Page<Customer> searchCustomersForOrganizations(String name, Collection<Long> organizationIds, int page, int size, Sort sort) {
         requireScope(organizationIds);
-        return customerRepo.findByCustomerNameContainingAndOrganizationIdIn(name, organizationIds, of(page, size));
+        return customerRepo.findByCustomerNameContainingAndOrganizationIdIn(name, organizationIds, of(page, size, sort));
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Page<Invoice> searchInvoices(String term, int page, int size) {
-        return invoiceRepo.searchByInvoiceNumberOrCustomerName(term, of(page, size));
+    public Page<Invoice> searchInvoices(String term, int page, int size, Sort sort) {
+        return invoiceRepo.searchByInvoiceNumberOrCustomerName(term, of(page, size, sort));
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Page<Invoice> searchInvoicesForOrganizations(String term, Collection<Long> organizationIds, int page, int size) {
+    public Page<Invoice> searchInvoicesForOrganizations(String term, Collection<Long> organizationIds, int page, int size, Sort sort) {
         requireScope(organizationIds);
-        return invoiceRepo.searchByInvoiceNumberOrCustomerNameAndOrganizationIdIn(term, organizationIds, of(page, size));
+        return invoiceRepo.searchByInvoiceNumberOrCustomerNameAndOrganizationIdIn(term, organizationIds, of(page, size, sort));
     }
 
     /**

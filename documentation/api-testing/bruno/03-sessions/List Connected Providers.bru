@@ -1,0 +1,21 @@
+meta {
+  name: List Connected Providers
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/user/sessions/providers
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

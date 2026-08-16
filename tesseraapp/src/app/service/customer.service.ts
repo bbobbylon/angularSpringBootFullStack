@@ -60,12 +60,15 @@ export class CustomerService {
    *
    * @param page - zero-based page index (defaults to 0)
    * @param size - number of records per page (defaults to 20)
+   * @param sort - column to order by as `field,direction` (e.g. `customerName,desc`); omitted
+   *               when absent rather than sent as an empty query param
    * @returns Observable emitting a {@link CustomerListDataInterface} response containing the page and stats
    */
-  customers$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
-    //TODO allow sorting, filtering, and infinite scrolling later
+  customers$ = (page = 0, size = 20, sort?: string): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
     this.http
-      .get<CustomHttpResponseInterface<CustomerListDataInterface>>(`${this.server}/customer/list?page=${page}&size=${size}`)
+      .get<CustomHttpResponseInterface<CustomerListDataInterface>>(
+        `${this.server}/customer/list?page=${page}&size=${size}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}`,
+      )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
   /**
    * Fetches a single customer's complete record by numeric ID.
@@ -116,11 +119,15 @@ export class CustomerService {
    *
    * @param page - zero-based page index (defaults to 0)
    * @param size - number of records per page (defaults to 20)
+   * @param sort - column to order by as `field,direction` (e.g. `invoiceDate,desc`); omitted
+   *               when absent rather than sent as an empty query param
    * @returns Observable emitting an {@link InvoiceListDataInterface} response containing the page and authenticated user
    */
-  invoices$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
+  invoices$ = (page = 0, size = 20, sort?: string): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
     this.http
-      .get<CustomHttpResponseInterface<InvoiceListDataInterface>>(`${this.server}/customer/invoice/list?page=${page}&size=${size}`)
+      .get<CustomHttpResponseInterface<InvoiceListDataInterface>>(
+        `${this.server}/customer/invoice/list?page=${page}&size=${size}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}`,
+      )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
@@ -201,13 +208,19 @@ export class CustomerService {
    * @param name - the substring to match against customer names
    * @param page - zero-based page index (defaults to 0)
    * @param size - number of records per page (defaults to 20)
+   * @param sort - column to order by as `field,direction`; omitted when absent
    * @returns Observable emitting a {@link CustomerListDataInterface} response containing the matching page
    */
-  searchCustomers$ = (customerName: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
+  searchCustomers$ = (
+    customerName: string,
+    page = 0,
+    size = 20,
+    sort?: string,
+  ): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
     this.http
-      .get<
-        CustomHttpResponseInterface<CustomerListDataInterface>
-      >(`${this.server}/customer/search?name=${encodeURIComponent(customerName)}&page=${page}&size=${size}`)
+      .get<CustomHttpResponseInterface<CustomerListDataInterface>>(
+        `${this.server}/customer/search?name=${encodeURIComponent(customerName)}&page=${page}&size=${size}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}`,
+      )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
@@ -219,13 +232,19 @@ export class CustomerService {
    * @param term - the substring to match against invoice numbers and customer names
    * @param page - zero-based page index (defaults to 0)
    * @param size - number of records per page (defaults to 20)
+   * @param sort - column to order by as `field,direction`; omitted when absent
    * @returns Observable emitting an {@link InvoiceListDataInterface} response containing the matching page
    */
-  searchInvoices$ = (term: string, page = 0, size = 20): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
+  searchInvoices$ = (
+    term: string,
+    page = 0,
+    size = 20,
+    sort?: string,
+  ): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
     this.http
-      .get<
-        CustomHttpResponseInterface<InvoiceListDataInterface>
-      >(`${this.server}/customer/invoice/search?term=${encodeURIComponent(term)}&page=${page}&size=${size}`)
+      .get<CustomHttpResponseInterface<InvoiceListDataInterface>>(
+        `${this.server}/customer/invoice/search?term=${encodeURIComponent(term)}&page=${page}&size=${size}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}`,
+      )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**

@@ -10,11 +10,13 @@ import com.bob.angularspringbootfullstack.report.InvoiceReport;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import com.bob.angularspringbootfullstack.utils.SortUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -29,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static java.time.LocalTime.now;
@@ -80,6 +83,22 @@ public class CustomerController {
     private final OrganizationService organizationService;
 
     /**
+     * JPA property paths the {@code /customer/list} and {@code /customer/search} endpoints may
+     * sort by. Enforced by {@link SortUtils#resolveSort} — see that class for why this is an
+     * allow-list rather than passing the client's field straight through.
+     */
+    private static final Set<String> CUSTOMER_SORT_FIELDS =
+            Set.of("customerName", "status", "type", "email", "createdAt");
+
+    /**
+     * JPA property paths the {@code /customer/invoice/list} and {@code /customer/invoice/search}
+     * endpoints may sort by. {@code customer.customerName} is a joined path — the customer
+     * association Hibernate already loads to render the invoice's owner column.
+     */
+    private static final Set<String> INVOICE_SORT_FIELDS =
+            Set.of("invoiceNumber", "status", "invoiceDate", "totalAmount", "customer.customerName");
+
+    /**
      * Returns aggregated dashboard statistics: total customers, total invoices,
      * and the sum of all invoice totalAmount values.
      *
@@ -119,18 +138,21 @@ public class CustomerController {
      * @param user the authenticated user making the request
      * @param page zero-based page index (defaults to 0)
      * @param size number of records per page (defaults to 20)
+     * @param sort the column to order by as {@code field,direction} (e.g. {@code customerName,desc});
+     *             unset or unrecognized falls back to unsorted — see {@link #CUSTOMER_SORT_FIELDS}
      * @return 200 OK with the authenticated user and a page of customers
      */
     @GetMapping("/list")
-    public ResponseEntity<HttpResponse> getCustomers(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) {
+    public ResponseEntity<HttpResponse> getCustomers(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size, @RequestParam Optional<String> sort) {
         Collection<Long> scope = resolveScope(user);
         int pageIndex = page.orElse(0);
         int pageSize = size.orElse(20);
+        Sort resolvedSort = SortUtils.resolveSort(sort, CUSTOMER_SORT_FIELDS);
         Page<Customer> customers;
         Stats stats;
         Map<String, Integer> statusBreakdown;
         if (scope == null) {
-            customers = customerService.getCustomers(pageIndex, pageSize);
+            customers = customerService.getCustomers(pageIndex, pageSize, resolvedSort);
             stats = customerService.getStats();
             statusBreakdown = customerService.getCustomerStatusBreakdown();
         } else if (scope.isEmpty()) {
@@ -138,7 +160,7 @@ public class CustomerController {
             stats = new Stats();
             statusBreakdown = Map.of();
         } else {
-            customers = customerService.getCustomersForOrganizations(scope, pageIndex, pageSize);
+            customers = customerService.getCustomersForOrganizations(scope, pageIndex, pageSize, resolvedSort);
             stats = customerService.getStatsForOrganizations(scope);
             statusBreakdown = customerService.getCustomerStatusBreakdownForOrganizations(scope);
         }
@@ -184,23 +206,26 @@ public class CustomerController {
      * @param name the substring to search for within customer names (defaults to empty, returning all)
      * @param page zero-based page index (defaults to 0)
      * @param size number of records per page (defaults to 20)
+     * @param sort the column to order by as {@code field,direction}; unset or unrecognized falls
+     *             back to unsorted — see {@link #CUSTOMER_SORT_FIELDS}
      * @return 200 OK with the authenticated user and a page of matching customers
      * // @throws InterruptedException if the thread is interrupted during the artificial delay
      */
     @GetMapping("/search")
-    public ResponseEntity<HttpResponse> searchCustomer(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> name, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) { //throws InterruptedException {
+    public ResponseEntity<HttpResponse> searchCustomer(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> name, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size, @RequestParam Optional<String> sort) { //throws InterruptedException {
         //TimeUnit.SECONDS.sleep(2); // Artificial delay to simulate real-world search latency
         Collection<Long> scope = resolveScope(user);
         int pageIndex = page.orElse(0);
         int pageSize = size.orElse(20);
         String term = name.orElse("");
+        Sort resolvedSort = SortUtils.resolveSort(sort, CUSTOMER_SORT_FIELDS);
         Page<Customer> results;
         if (scope == null) {
-            results = customerService.searchCustomers(term, pageIndex, pageSize);
+            results = customerService.searchCustomers(term, pageIndex, pageSize, resolvedSort);
         } else if (scope.isEmpty()) {
             results = Page.empty(PageRequest.of(pageIndex, pageSize));
         } else {
-            results = customerService.searchCustomersForOrganizations(term, scope, pageIndex, pageSize);
+            results = customerService.searchCustomersForOrganizations(term, scope, pageIndex, pageSize, resolvedSort);
         }
         return ResponseEntity.ok(
                 HttpResponse.builder()
@@ -369,20 +394,23 @@ public class CustomerController {
      * @param user the authenticated user making the request
      * @param page zero-based page index (defaults to 0)
      * @param size number of records per page (defaults to 20)
+     * @param sort the column to order by as {@code field,direction}; unset or unrecognized falls
+     *             back to unsorted — see {@link #INVOICE_SORT_FIELDS}
      * @return 200 OK with the authenticated user and a page of invoices
      */
     @GetMapping("/invoice/list")
-    public ResponseEntity<HttpResponse> getInvoices(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) {
+    public ResponseEntity<HttpResponse> getInvoices(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size, @RequestParam Optional<String> sort) {
         Collection<Long> scope = resolveScope(user);
         int pageIndex = page.orElse(0);
         int pageSize = size.orElse(20);
+        Sort resolvedSort = SortUtils.resolveSort(sort, INVOICE_SORT_FIELDS);
         Page<Invoice> invoices;
         if (scope == null) {
-            invoices = customerService.getInvoices(pageIndex, pageSize);
+            invoices = customerService.getInvoices(pageIndex, pageSize, resolvedSort);
         } else if (scope.isEmpty()) {
             invoices = Page.empty(PageRequest.of(pageIndex, pageSize));
         } else {
-            invoices = customerService.getInvoicesForOrganizations(scope, pageIndex, pageSize);
+            invoices = customerService.getInvoicesForOrganizations(scope, pageIndex, pageSize, resolvedSort);
         }
         return ResponseEntity.ok(
                 HttpResponse.builder()
@@ -404,21 +432,24 @@ public class CustomerController {
      *             owning customer's name (defaults to empty, returning all)
      * @param page zero-based page index (defaults to 0)
      * @param size number of records per page (defaults to 20)
+     * @param sort the column to order by as {@code field,direction}; unset or unrecognized falls
+     *             back to unsorted — see {@link #INVOICE_SORT_FIELDS}
      * @return 200 OK with the authenticated user and a page of matching invoices
      */
     @GetMapping("/invoice/search")
-    public ResponseEntity<HttpResponse> searchInvoices(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> term, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size) {
+    public ResponseEntity<HttpResponse> searchInvoices(@AuthenticationPrincipal UserDTO user, @RequestParam Optional<String> term, @RequestParam Optional<Integer> page, @RequestParam Optional<Integer> size, @RequestParam Optional<String> sort) {
         Collection<Long> scope = resolveScope(user);
         int pageIndex = page.orElse(0);
         int pageSize = size.orElse(20);
         String search = term.orElse("");
+        Sort resolvedSort = SortUtils.resolveSort(sort, INVOICE_SORT_FIELDS);
         Page<Invoice> results;
         if (scope == null) {
-            results = customerService.searchInvoices(search, pageIndex, pageSize);
+            results = customerService.searchInvoices(search, pageIndex, pageSize, resolvedSort);
         } else if (scope.isEmpty()) {
             results = Page.empty(PageRequest.of(pageIndex, pageSize));
         } else {
-            results = customerService.searchInvoicesForOrganizations(search, scope, pageIndex, pageSize);
+            results = customerService.searchInvoicesForOrganizations(search, scope, pageIndex, pageSize, resolvedSort);
         }
         return ResponseEntity.ok(
                 HttpResponse.builder()

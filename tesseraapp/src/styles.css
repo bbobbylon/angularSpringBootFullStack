@@ -708,11 +708,16 @@ select,
 /* ---- Footer links ---- */
 .sc-auth__links {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-3) var(--space-4);
   margin-top: var(--space-5);
   font-size: var(--fs-sm);
+}
+.sc-auth__links > a,
+.sc-linkbtn {
+  white-space: nowrap;
 }
 .sc-linkbtn {
   display: inline-flex;

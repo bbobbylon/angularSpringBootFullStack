@@ -351,41 +351,43 @@
             </form>
           }
 
-          <table class="table table-hover mb-0">
-            <thead>
-            <tr>
-              <th scope="col">Passkey</th>
-              <th scope="col">Created</th>
-              <th scope="col">Last used</th>
-              <th scope="col">{{ t('common.action') }}</th>
-            </tr>
-            </thead>
-            <tbody>
-              @for (passkey of passkeys(); track passkey.id) {
-                <tr>
-                  <td>
-                    <i class="bi" [class.bi-phone]="passkey.transports?.includes('hybrid')"
-                       [class.bi-usb-symbol]="passkey.transports?.includes('usb')"
-                       [class.bi-fingerprint]="!passkey.transports || passkey.transports === 'internal'"
-                       style="margin-right: 6px;"></i>
-                    {{ passkey.deviceName || 'Passkey' }}
-                  </td>
-                  <td>{{ passkey.createdAt | date: 'MMM d, y' }}</td>
-                  <td>{{ passkey.lastUsedAt ? (passkey.lastUsedAt | date: 'MMM d, y, h:mm a') : 'Never' }}</td>
-                  <td>
-                    <button (click)="removePasskey(passkey.id)" [disabled]="isLoading()"
-                            class="btn btn-outline-danger btn-sm" type="button">
-                      {{ t('common.delete') }}
-                    </button>
-                  </td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td class="text-muted" colspan="4">No passkeys registered yet.</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+              <tr>
+                <th scope="col">Passkey</th>
+                <th scope="col">Created</th>
+                <th scope="col">Last used</th>
+                <th scope="col">{{ t('common.action') }}</th>
+              </tr>
+              </thead>
+              <tbody>
+                @for (passkey of passkeys(); track passkey.id) {
+                  <tr>
+                    <td>
+                      <i class="bi" [class.bi-phone]="passkey.transports?.includes('hybrid')"
+                         [class.bi-usb-symbol]="passkey.transports?.includes('usb')"
+                         [class.bi-fingerprint]="!passkey.transports || passkey.transports === 'internal'"
+                         style="margin-right: 6px;"></i>
+                      {{ passkey.deviceName || 'Passkey' }}
+                    </td>
+                    <td>{{ passkey.createdAt | date: 'MMM d, y' }}</td>
+                    <td>{{ passkey.lastUsedAt ? (passkey.lastUsedAt | date: 'MMM d, y, h:mm a') : 'Never' }}</td>
+                    <td>
+                      <button (click)="removePasskey(passkey.id)" [disabled]="isLoading()"
+                              class="btn btn-outline-danger btn-sm" type="button">
+                        {{ t('common.delete') }}
+                      </button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td class="text-muted" colspan="4">No passkeys registered yet.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     }
@@ -453,48 +455,50 @@
           </div>
         </div>
 
-        <table class="table table-hover mb-0">
-          <thead>
-          <tr>
-            <th scope="col">{{ t('security.log.device') }}</th>
-            <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
-            <th scope="col">{{ t('securityCenter.signedIn') }}</th>
-            <th scope="col">{{ t('securityCenter.lastActive') }}</th>
-            <th scope="col">{{ t('securityCenter.expires') }}</th>
-            <th scope="col">{{ t('common.action') }}</th>
-          </tr>
-          </thead>
-          <tbody>
-            @for (session of sessions(); track session.family) {
-              <tr>
-                <td>
-                  {{ session.device }}
-                  @if (session.family === currentFamily()) {
-                    <span class="badge bg-info ms-2">{{ t('securityCenter.thisDevice') }}</span>
-                  }
-                </td>
-                <td class="mono">{{ session.ipAddress }}</td>
-                <td>{{ session.createdAt | date: 'MMM d, y, h:mm a' }}</td>
-                <td>{{ session.lastUsedAt | date: 'MMM d, y, h:mm a' }}</td>
-                <td>{{ session.expiresAt | date: 'MMM d, y, h:mm a' }}</td>
-                <td>
-                  <button (click)="revokeSession(session.family)"
-                          [disabled]="isLoading() || session.family === currentFamily()"
-                          [title]="session.family === currentFamily() ? t('securityCenter.useLogoutTitle') : t('securityCenter.revokeTitle')"
-                          class="btn btn-outline-danger btn-sm" type="button">
-                    {{ t('securityCenter.revoke') }}
-                  </button>
-                </td>
-              </tr>
-            } @empty {
-              <tr>
-                <td class="text-muted" colspan="6">
-                  No tracked sessions yet — sessions appear here after your next sign-in.
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+            <tr>
+              <th scope="col">{{ t('security.log.device') }}</th>
+              <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
+              <th scope="col">{{ t('securityCenter.signedIn') }}</th>
+              <th scope="col">{{ t('securityCenter.lastActive') }}</th>
+              <th scope="col">{{ t('securityCenter.expires') }}</th>
+              <th scope="col">{{ t('common.action') }}</th>
+            </tr>
+            </thead>
+            <tbody>
+              @for (session of sessions(); track session.family) {
+                <tr>
+                  <td>
+                    {{ session.device }}
+                    @if (session.family === currentFamily()) {
+                      <span class="badge bg-info ms-2">{{ t('securityCenter.thisDevice') }}</span>
+                    }
+                  </td>
+                  <td class="mono">{{ session.ipAddress }}</td>
+                  <td>{{ session.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                  <td>{{ session.lastUsedAt | date: 'MMM d, y, h:mm a' }}</td>
+                  <td>{{ session.expiresAt | date: 'MMM d, y, h:mm a' }}</td>
+                  <td>
+                    <button (click)="revokeSession(session.family)"
+                            [disabled]="isLoading() || session.family === currentFamily()"
+                            [title]="session.family === currentFamily() ? t('securityCenter.useLogoutTitle') : t('securityCenter.revokeTitle')"
+                            class="btn btn-outline-danger btn-sm" type="button">
+                      {{ t('securityCenter.revoke') }}
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="text-muted" colspan="6">
+                    No tracked sessions yet — sessions appear here after your next sign-in.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -508,52 +512,54 @@
           Every security event on your account — newest first.
         </h6>
 
-        <table class="table table-hover mb-2">
-          <thead>
-          <tr>
-            <th scope="col">{{ t('securityCenter.event') }}</th>
-            <th scope="col">Device</th>
-            <th scope="col">IP Address</th>
-            <th scope="col">{{ t('common.date') }}</th>
-          </tr>
-          </thead>
-          <tbody>
-            @for (event of events(); track event.id) {
-              <tr>
-                <td>
-                  <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
-                    <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
-                    {{ getEventDisplay(event.type).label }}
-                  </span>
-                  <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
-                </td>
-                <td style="font-size: 0.85rem;">{{ event.device }}</td>
-                <td class="mono" style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
-                <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
-              </tr>
-            } @empty {
-              <tr>
-                <td class="text-muted text-center" colspan="4">{{ t('securityCenter.noEvents') }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <div class="table-responsive">
+          <table class="table table-hover mb-2">
+            <thead>
+            <tr>
+              <th scope="col">{{ t('securityCenter.event') }}</th>
+              <th scope="col">Device</th>
+              <th scope="col">IP Address</th>
+              <th scope="col">{{ t('common.date') }}</th>
+            </tr>
+            </thead>
+            <tbody>
+              @for (event of events(); track event.id) {
+                <tr>
+                  <td>
+                    <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
+                      <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
+                      {{ getEventDisplay(event.type).label }}
+                    </span>
+                    <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
+                  </td>
+                  <td style="font-size: 0.85rem;">{{ event.device }}</td>
+                  <td class="mono" style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
+                  <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="text-muted text-center" colspan="4">{{ t('securityCenter.noEvents') }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
 
         @if (eventsTotalPages() > 1) {
           <nav [attr.aria-label]="t('securityCenter.activityPagination')">
             <ul class="pagination pagination-sm justify-content-end mb-0">
               <li [class.disabled]="currentEventPage() === 0" class="page-item">
-                <button (click)="goToEventsPage(currentEventPage() - 1)" class="page-link">&laquo;</button>
+                <button (click)="goToEventsPage(currentEventPage() - 1)"
+                        [disabled]="currentEventPage() === 0"
+                        class="page-link">&laquo;</button>
               </li>
-              @for (p of [].constructor(eventsTotalPages()); track $index; let i = $index) {
-                <li class="page-item">
-                  <button (click)="goToEventsPage(i)"
-                          [class.active]="i === currentEventPage()"
-                          class="page-link">{{ i + 1 }}</button>
-                </li>
-              }
+              <li class="page-item disabled">
+                <span class="page-link">{{ t('common.pageXofY', { page: currentEventPage() + 1, total: eventsTotalPages() }) }}</span>
+              </li>
               <li [class.disabled]="currentEventPage() === eventsTotalPages() - 1" class="page-item">
-                <button (click)="goToEventsPage(currentEventPage() + 1)" class="page-link">&raquo;</button>
+                <button (click)="goToEventsPage(currentEventPage() + 1)"
+                        [disabled]="currentEventPage() === eventsTotalPages() - 1"
+                        class="page-link">&raquo;</button>
               </li>
             </ul>
           </nav>

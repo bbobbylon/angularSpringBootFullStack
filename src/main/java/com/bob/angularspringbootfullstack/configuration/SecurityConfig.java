@@ -201,7 +201,18 @@ class SecurityConfig {
                     .authorizeHttpRequests(auth -> auth
                             .requestMatchers(POST, "/user/register").permitAll()
                             .requestMatchers(POST, "/user/login").permitAll()
-                            .requestMatchers("/actuator/**").permitAll()
+                            // /actuator/health and /actuator/info stay unauthenticated: the ALB target
+                            // group (aws/setup.sh) and the ECS container health check (task-definition.json)
+                            // both hit /actuator/health with no Authorization header, and a health check that
+                            // requires a JWT can never pass. Everything else under /actuator/** — notably
+                            // /actuator/metrics, which NewUserEventListener's user.events.total counter now
+                            // populates with per-EventType counts (login failures, suspicious logins, token
+                            // reuse…) — is operational data, not something an unauthenticated caller should
+                            // read, so it requires the same staff-grade authority /admin/** does. This matcher
+                            // MUST precede the broad one below, since Spring evaluates top-down and the first
+                            // match wins.
+                            .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                            .requestMatchers("/actuator/**").hasAnyAuthority("UPDATE:USER", "UPDATE:ROLE")
                             .requestMatchers(PUBLIC_URLS).permitAll()
                             .requestMatchers(DELETE, "/user/delete/**").hasAnyAuthority("DELETE:USER")
                             .requestMatchers(DELETE, "/customer/delete/**").hasAnyAuthority("DELETE:CUSTOMER")

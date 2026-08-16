@@ -152,6 +152,21 @@
       "passwordOnly": "Solo contraseña",
       "federatedSignIns": "Inicios de sesión federados",
       "recoveryCodesUsed": "Códigos de recuperación usados"
+    },
+    "settings": {
+      "title": "Configuración de detección de anomalías",
+      "subtitle": "Los cambios se aplican en el siguiente inicio de sesión — no requiere una nueva implementación.",
+      "enabledLabel": "Detección de anomalías",
+      "useDefault": "Usar valor predeterminado del servidor",
+      "enabled": "Activada",
+      "disabled": "Desactivada",
+      "historyLimitLabel": "Ventana de historial de inicios de sesión",
+      "historyLimitHint": "Cuántos de los inicios de sesión recientes de la cuenta se usan para comparar uno nuevo.",
+      "historyLimitPlaceholder": "Valor predeterminado del servidor",
+      "clearOverride": "Usar valor predeterminado",
+      "save": "Guardar cambios",
+      "saving": "Guardando…",
+      "unsavedChanges": "Cambios sin guardar"
     }
   },
   "servicesAdmin": {

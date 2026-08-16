@@ -6,8 +6,10 @@ import com.bob.angularspringbootfullstack.enumeration.LoginRiskReason;
 import com.bob.angularspringbootfullstack.enumeration.StepUpMethod;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.model.LoginContext;
+import com.bob.angularspringbootfullstack.model.SecuritySettings;
 import com.bob.angularspringbootfullstack.repo.LoginRiskRepo;
 import com.bob.angularspringbootfullstack.service.NotificationService;
+import com.bob.angularspringbootfullstack.service.SecuritySettingsService;
 import com.bob.angularspringbootfullstack.utils.RequestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -80,6 +83,8 @@ class LoginRiskServiceImplTest {
     private NotificationService notificationService;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private SecuritySettingsService securitySettingsService;
 
     @InjectMocks
     private LoginRiskServiceImpl loginRiskService;
@@ -92,6 +97,12 @@ class LoginRiskServiceImplTest {
         // @Value fields are populated by the container, which is not running here.
         ReflectionTestUtils.setField(loginRiskService, "anomalyDetectionEnabled", true);
         ReflectionTestUtils.setField(loginRiskService, "historyLimit", 50);
+        // No overrides on record by default, so every existing test below exercises the env-driven
+        // fallback exactly as it did before the settings table existed. Tests that care about an
+        // override re-stub this per-case. lenient() because the recordSuspiciousLogin-only tests
+        // never call assess() and therefore never touch this mock — strict stubbing would otherwise
+        // fail them for an unused stub.
+        lenient().when(securitySettingsService.getSettings()).thenReturn(SecuritySettings.builder().build());
 
         request = requestFrom(CHROME_UA, CURRENT_IP);
 
@@ -202,6 +213,32 @@ class LoginRiskServiceImplTest {
 
         assertFalse(loginRiskService.assess(user, request).elevated());
         verifyNoInteractions(loginRiskRepo);
+    }
+
+    @Test
+    @DisplayName("a securitysettings override of enabled=false wins over the env default of true")
+    void dbOverrideDisablesDetectionEvenWhenEnvDefaultIsTrue() {
+        // The env-driven field is still true (see setUp) — only the DB override says otherwise.
+        when(securitySettingsService.getSettings())
+                .thenReturn(SecuritySettings.builder().anomalyEnabled(false).build());
+
+        assertFalse(loginRiskService.assess(user, request).elevated());
+        verifyNoInteractions(loginRiskRepo);
+    }
+
+    @Test
+    @DisplayName("a securitysettings override of the history limit is what gets passed to the repo")
+    void dbOverrideOfHistoryLimitReachesTheRepo() {
+        when(securitySettingsService.getSettings())
+                .thenReturn(SecuritySettings.builder().anomalyHistoryLimit(5).build());
+        historyIs(new LoginContext(currentDevice(), CURRENT_IP));
+
+        loginRiskService.assess(user, request);
+
+        // The env default (50, set in setUp) must NOT be what reaches the repo once an override
+        // is on record — proves assess() re-resolves the effective limit rather than reading the
+        // @Value field directly.
+        verify(loginRiskRepo).findRecentLoginContexts(USER_ID, 5);
     }
 
     @Test

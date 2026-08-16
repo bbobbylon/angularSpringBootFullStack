@@ -107,6 +107,16 @@ class AdminUserControllerOrgScopeTest {
         return authFor("ROLE_ADMIN");
     }
 
+    /**
+     * A help-desk administrator — also carries {@code UPDATE:USER} and reaches this controller,
+     * but is tier 4, below the unscoped tiers. Regression coverage for the 2026-08-13 fix: this
+     * role used to bypass organization scope entirely because the old check only recognised
+     * {@code ROLE_ORGANIZATION_ADMIN} by name.
+     */
+    private static Authentication helpDeskAdmin() {
+        return authFor("ROLE_HELP_DESK_ADMIN");
+    }
+
     private static Authentication authFor(String roleName) {
         UserDTO caller = new UserDTO();
         caller.setId(ORG_ADMIN_ID);
@@ -178,6 +188,32 @@ class AdminUserControllerOrgScopeTest {
         // Not merely "allowed" — the membership question is never even asked. Asserting the call
         // never happens is what distinguishes "unscoped by design" from "happened to be a member".
         verify(organizationService, never()).isWithinOrganizationScope(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("a help-desk admin is scoped too, not just an org admin (regression, 2026-08-13)")
+    void helpDeskAdminIsScopedTooNotJustOrgAdmin() throws Exception {
+        // Same shape as outOfScopeReadIsForbidden, but for the role the old name-only check missed
+        // entirely. Before the fix this assertion failed: a help-desk admin sailed straight through
+        // to 200 OK for ANY user id, org membership never even consulted.
+        when(organizationService.isWithinOrganizationScope(ORG_ADMIN_ID, OUT_OF_SCOPE_TARGET)).thenReturn(false);
+
+        mockMvc.perform(get("/admin/user/{id}", OUT_OF_SCOPE_TARGET).principal(helpDeskAdmin()))
+                .andExpect(status().isForbidden());
+
+        verify(userService, never()).getUserById(OUT_OF_SCOPE_TARGET);
+    }
+
+    @Test
+    @DisplayName("a help-desk admin CAN read a user inside their own organization")
+    void helpDeskAdminInScopeReadIsAllowed() throws Exception {
+        when(organizationService.isWithinOrganizationScope(ORG_ADMIN_ID, IN_SCOPE_TARGET)).thenReturn(true);
+        stubExistingTarget(IN_SCOPE_TARGET);
+
+        mockMvc.perform(get("/admin/user/{id}", IN_SCOPE_TARGET).principal(helpDeskAdmin()))
+                .andExpect(status().isOk());
+
+        verify(userService).getUserById(IN_SCOPE_TARGET);
     }
 
     @Test

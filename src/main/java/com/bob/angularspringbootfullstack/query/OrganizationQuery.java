@@ -54,7 +54,7 @@ public class OrganizationQuery {
             "JOIN userorganizations b ON b.user_id = u.id AND b.active = TRUE " +
             "JOIN userorganizations a ON a.organization_id = b.organization_id AND a.user_id = :adminId AND a.active = TRUE " +
             "WHERE (u.first_name LIKE :searchTerm OR u.last_name LIKE :searchTerm OR u.email LIKE :searchTerm) " +
-            "ORDER BY u.created_at DESC, u.id DESC LIMIT :pageSize OFFSET :offset";
+            "ORDER BY %s LIMIT :pageSize OFFSET :offset";
 
     /**
      * Counts the rows {@link #SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY} would

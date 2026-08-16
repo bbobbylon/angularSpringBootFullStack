@@ -323,7 +323,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info   # only expose these two publicly
+        # health/info stay unauthenticated (SecurityConfig permitAll's them — the ALB target
+        # group and the ECS container health check both hit /actuator/health with no token,
+        # see aws/setup.sh and aws/task-definition.json). metrics is exposed here but is NOT
+        # public: SecurityConfig gates every other /actuator/** path behind the same
+        # UPDATE:USER/UPDATE:ROLE authority /admin/** requires, because per-EventType counts
+        # (login failures, suspicious logins, token-reuse detections…) are operational data an
+        # unauthenticated caller should not be able to read.
+        include: health, info, metrics
   endpoint:
     health:
       show-details: never

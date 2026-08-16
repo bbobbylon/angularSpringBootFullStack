@@ -1,0 +1,27 @@
+meta {
+  name: Search Customers
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/customer/search?name=a&page=0&size=5
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+params:query {
+  name: a
+  page: 0
+  size: 5
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

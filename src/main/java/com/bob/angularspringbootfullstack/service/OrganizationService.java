@@ -57,9 +57,13 @@ public interface OrganizationService {
      * @param searchTerm free-text filter; blank or null lists everyone in scope
      * @param page       0-indexed page number
      * @param pageSize   rows per page
-     * @return the in-scope users on the requested page, newest accounts first
+     * @param orderBy    a validated, {@code u.}-qualified {@code "column ASC|DESC"} SQL fragment
+     *                   (see {@code SortUtils#resolveSqlOrderBy}), e.g. {@code "u.created_at DESC, u.id DESC"} —
+     *                   qualified because the query joins {@code userorganizations}, so an unqualified
+     *                   column name could collide with one on the joined table
+     * @return the in-scope users on the requested page, in the requested order
      */
-    Collection<UserDTO> searchUsersSharingOrganizations(Long adminId, String searchTerm, int page, int pageSize);
+    Collection<UserDTO> searchUsersSharingOrganizations(Long adminId, String searchTerm, int page, int pageSize, String orderBy);
 
     /**
      * Counts the users {@link #searchUsersSharingOrganizations} would match, for

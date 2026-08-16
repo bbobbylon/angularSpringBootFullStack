@@ -62,11 +62,11 @@ public class OrganizationServiceImpl implements OrganizationService {
      * {@link OrganizationService#searchUsersSharingOrganizations}.
      */
     @Override
-    public Collection<UserDTO> searchUsersSharingOrganizations(Long adminId, String searchTerm, int page, int pageSize) {
+    public Collection<UserDTO> searchUsersSharingOrganizations(Long adminId, String searchTerm, int page, int pageSize, String orderBy) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(pageSize, 1), 100);
         try {
-            Collection<User> users = jdbcTemplate.query(SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY,
+            Collection<User> users = jdbcTemplate.query(String.format(SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY, orderBy),
                     Map.of("adminId", adminId,
                             "searchTerm", toLikePattern(searchTerm),
                             "pageSize", safeSize,

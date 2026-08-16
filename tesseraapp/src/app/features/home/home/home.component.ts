@@ -12,7 +12,6 @@ import { CustomHttpResponseInterface } from '../../../interface/customhttprespon
 import { CustomerListDataInterface } from '../../../interface/appstates.interface';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { CustomerService } from '../../../service/customer.service';
-import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { HttpEvent, HttpEventType } from '@angular/common/http';
 import { saveAs } from 'file-saver';
 import { NotificationsService } from '../../../service/notifications-service';
@@ -30,7 +29,7 @@ import { TranslocoService } from '@jsverse/transloco';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [NgClass, RouterModule, NavbarComponent, StatsComponent, InsightsComponent, ExtractArrayValuePipe, NgOptimizedImage, TranslocoDirective, PageSizeSelectComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, StatsComponent, InsightsComponent, NgOptimizedImage, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,

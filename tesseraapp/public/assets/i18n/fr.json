@@ -152,6 +152,21 @@
       "passwordOnly": "Mot de passe uniquement",
       "federatedSignIns": "Connexions fédérées",
       "recoveryCodesUsed": "Codes de récupération utilisés"
+    },
+    "settings": {
+      "title": "Paramètres de détection des anomalies",
+      "subtitle": "Les modifications prennent effet dès la prochaine connexion — aucun redéploiement requis.",
+      "enabledLabel": "Détection des anomalies",
+      "useDefault": "Utiliser la valeur par défaut du serveur",
+      "enabled": "Activée",
+      "disabled": "Désactivée",
+      "historyLimitLabel": "Fenêtre d'historique de connexion",
+      "historyLimitHint": "Nombre de connexions récentes du compte utilisées pour comparer une nouvelle connexion.",
+      "historyLimitPlaceholder": "Valeur par défaut du serveur",
+      "clearOverride": "Utiliser la valeur par défaut",
+      "save": "Enregistrer les modifications",
+      "saving": "Enregistrement…",
+      "unsavedChanges": "Modifications non enregistrées"
     }
   },
   "servicesAdmin": {

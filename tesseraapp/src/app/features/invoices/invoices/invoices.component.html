@@ -50,11 +50,23 @@
                 <table class="table table-hover align-middle">
                   <thead>
                   <tr>
-                    <th scope="col">{{ t('invoices.invoiceNumber') }}</th>
+                    <th (click)="toggleSort('invoiceNumber')" (keydown.enter)="toggleSort('invoiceNumber')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('invoices.invoiceNumber') }} <i [class]="'bi ' + sortIconClass('invoiceNumber')"></i>
+                    </th>
                     <th scope="col">{{ t('invoices.service') }}</th>
-                    <th scope="col">{{ t('common.status') }}</th>
-                    <th scope="col">{{ t('common.date') }}</th>
-                    <th scope="col">{{ t('common.total') }}</th>
+                    <th (click)="toggleSort('status')" (keydown.enter)="toggleSort('status')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('common.status') }} <i [class]="'bi ' + sortIconClass('status')"></i>
+                    </th>
+                    <th (click)="toggleSort('invoiceDate')" (keydown.enter)="toggleSort('invoiceDate')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('common.date') }} <i [class]="'bi ' + sortIconClass('invoiceDate')"></i>
+                    </th>
+                    <th (click)="toggleSort('totalAmount')" (keydown.enter)="toggleSort('totalAmount')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('common.total') }} <i [class]="'bi ' + sortIconClass('totalAmount')"></i>
+                    </th>
                     <th class="text-end" scope="col">{{ t('common.action') }}</th>
                   </tr>
                   </thead>
@@ -96,23 +108,22 @@
 
               <div class="sc-panel__foot d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <app-page-size-select (sizeSelected)="changePageSize($event)" [size]="pageSize$()"></app-page-size-select>
-                <nav aria-label="Page navigation">
+                <nav [attr.aria-label]="t('common.pageNavigation')">
                   <ul class="pagination justify-content-end mb-0">
                     <li [ngClass]="0 === (currentPage()) ? ' disabled' : ''" class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; Prev</button>
+                      <button (click)="goToNextOrPreviousPage('backward')"
+                              [disabled]="0 === (currentPage())"
+                              class="page-link">&laquo; {{ t('common.prev') }}</button>
                     </li>
-                    @for (pageNumber of [].constructor(state?.appData?.data?.invoices?.page?.totalPages); track pageNumber; let i = $index) {
-                      <li class="page-item pointer">
-                        <button (click)="goToPage(i)" [ngClass]="i === (currentPage()) ? ' active' : ''"
-                                class="page-link">
-                          {{ i + 1 }}
-                        </button>
-                      </li>
-                    }
+                    <li class="page-item disabled">
+                      <span class="page-link">{{ t('common.pageXofY', { page: currentPage() + 1, total: state?.appData?.data?.invoices?.page?.totalPages ?? 1 }) }}</span>
+                    </li>
                     <li
                       [ngClass]="(state?.appData?.data?.invoices?.page?.totalPages ?? 0) - 1 === (currentPage()) ? ' disabled' : ''"
                       class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">{{ t('common.next') }} &raquo;</button>
+                      <button (click)="goToNextOrPreviousPage('forward')"
+                              [disabled]="(state?.appData?.data?.invoices?.page?.totalPages ?? 0) - 1 === (currentPage())"
+                              class="page-link">{{ t('common.next') }} &raquo;</button>
                     </li>
                   </ul>
                 </nav>

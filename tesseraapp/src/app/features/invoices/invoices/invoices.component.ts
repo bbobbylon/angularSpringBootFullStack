@@ -77,7 +77,21 @@ export class InvoicesComponent implements OnInit {
   private currentSearchTerm = signal('');
 
   /**
-   * Page, size and search term as one derived value — the single input to the fetch pipeline.
+   * The column currently sorted on, or {@code null} for the server's default (insertion) order.
+   * Only fields in the backend's {@code INVOICE_SORT_FIELDS} allow-list have any effect — an
+   * unrecognized field is silently treated as unsorted, so this never needs to mirror that list.
+   */
+  private sortField = signal<string | null>(null);
+
+  /** Direction for {@link sortField}. Meaningless while {@link sortField} is {@code null}. */
+  private sortDirection = signal<'asc' | 'desc'>('asc');
+
+  /** Read-only view of the active sort, for the template to render the column indicator. */
+  sort$ = computed(() => ({ field: this.sortField(), direction: this.sortDirection() }));
+
+  /**
+   * Page, size, search term and sort as one derived value — the single input to the fetch
+   * pipeline.
    *
    * <p>One source rather than separate {@code toObservable} bridges combined with
    * {@code combineLatest}: {@link changePageSize} and the debounced search subscription each write
@@ -85,7 +99,12 @@ export class InvoicesComponent implements OnInit {
    * issuing two requests for the same intent. {@code switchMap} would cancel one, but the server
    * would still have answered it.
    */
-  private readonly query = computed(() => ({ page: this.currentPage(), size: this.pageSize(), term: this.currentSearchTerm() }));
+  private readonly query = computed(() => ({
+    page: this.currentPage(),
+    size: this.pageSize(),
+    term: this.currentSearchTerm(),
+    sort: this.sortField() ? `${this.sortField()},${this.sortDirection()}` : undefined,
+  }));
   private readonly _query$ = toObservable(this.query);
   private readonly customerService = inject(CustomerService);
   private readonly destroyRef = inject(DestroyRef);
@@ -130,8 +149,8 @@ export class InvoicesComponent implements OnInit {
 
     this._query$
       .pipe(
-        switchMap(({ page, size, term }) =>
-          (term ? this.customerService.searchInvoices$(term, page, size) : this.customerService.invoices$(page, size)).pipe(
+        switchMap(({ page, size, term, sort }) =>
+          (term ? this.customerService.searchInvoices$(term, page, size, sort) : this.customerService.invoices$(page, size, sort)).pipe(
             map((response) => {
               this.data.set(response);
               return { dataState: DataState.LOADED, appData: response } as GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>;
@@ -192,6 +211,44 @@ export class InvoicesComponent implements OnInit {
   changePageSize(size: number): void {
     this.pageSize.set(size);
     this.currentPage.set(0);
+  }
+
+  /**
+   * Sorts by the given column, toggling direction on repeated clicks of the same header.
+   *
+   * <p>Clicking a new column always starts ascending — a first click that flipped straight to
+   * descending would be surprising, since nothing on screen indicated a prior direction to
+   * reverse. Clicking the already-active column toggles, which is the conventional spreadsheet
+   * behaviour every user of a sortable table already expects.
+   *
+   * <p>Resets to the first page for the same reason {@link changePageSize} does: a page index is
+   * only meaningful relative to the current ordering, and re-sorting changes which rows occupy it.
+   *
+   * @param field - a JPA property path from the backend's {@code INVOICE_SORT_FIELDS} allow-list
+   */
+  toggleSort(field: string): void {
+    if (this.sortField() === field) {
+      this.sortDirection.update((current) => (current === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortField.set(field);
+      this.sortDirection.set('asc');
+    }
+    this.currentPage.set(0);
+  }
+
+  /**
+   * Bootstrap Icons class for a sortable column header: a neutral up/down glyph when this column
+   * is not the active sort, or a direction-specific arrow when it is.
+   *
+   * @param field - the JPA property path the column sorts by
+   * @returns a single `bi-*` class name for use in `[ngClass]`
+   */
+  protected sortIconClass(field: string): string {
+    const active = this.sort$();
+    if (active.field !== field) {
+      return 'bi-arrow-down-up';
+    }
+    return active.direction === 'asc' ? 'bi-sort-down' : 'bi-sort-up';
   }
 
   /**

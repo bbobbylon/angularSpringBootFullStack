@@ -135,6 +135,19 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- JSON structured logging for prod/qa/stage (POST-SUBMISSION-UPGRADES.md "Structured
+             logging + metrics"): renders Logback events as one JSON object per line via
+             logback-spring.xml's LogstashEncoder appender, so CloudWatch Logs Insights can query
+             level/logger_name/message as first-class fields instead of substring-matching plain
+             text. Not managed by the Spring Boot BOM (a third-party project, not part of Spring's
+             release train) — version pinned explicitly like the other non-Boot dependencies above
+             (twilio, java-jwt, zxing, bucket4j, webauthn4j). 7.4 targets SLF4J 2.x / Logback
+             1.3–1.5, matching the Logback 1.5.x line spring-boot-starter-parent:4.0.6 resolves. -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>7.4</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>

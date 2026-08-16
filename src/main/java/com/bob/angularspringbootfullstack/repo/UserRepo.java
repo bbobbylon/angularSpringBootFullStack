@@ -47,9 +47,11 @@ public interface UserRepo<T extends User> {
      * @param searchTerm free-text filter; blank or null means "no filter"
      * @param page       the page number (0-indexed)
      * @param pageSize   the number of users per page
-     * @return the matching users on the requested page, newest accounts first
+     * @param orderBy    a validated {@code "column ASC|DESC"} SQL fragment (see
+     *                   {@code SortUtils#resolveSqlOrderBy}), e.g. {@code "created_at DESC, id DESC"}
+     * @return the matching users on the requested page, in the requested order
      */
-    Collection<T> searchUsers(String searchTerm, int page, int pageSize);
+    Collection<T> searchUsers(String searchTerm, int page, int pageSize, String orderBy);
 
     /**
      * Counts the users the same filter in {@link #searchUsers} would match, so callers
@@ -125,6 +127,20 @@ public interface UserRepo<T extends User> {
      * @return the user if the code is valid and not expired
      */
     User verifyCode(String email, String code);
+
+    /**
+     * Reports whether the given user currently has an outstanding, unexpired 2FA/step-up code.
+     *
+     * <p>A code only ever becomes pending as a side effect of a successful password check in
+     * {@code UserController#authenticate} (see {@link #sendVerificationCode} and
+     * {@link #issueVerificationCode}), so this doubles as the gate for
+     * {@code UserService#resendVerificationCode}: resend is only honoured while this is true,
+     * which stands in for re-proving the password on every click without actually requiring it.
+     *
+     * @param userId the account to check
+     * @return true if a non-expired {@code twofactorverifications} row exists for this user
+     */
+    boolean hasPendingVerificationCode(Long userId);
 
     /**
      * Initiates password reset for the given email.

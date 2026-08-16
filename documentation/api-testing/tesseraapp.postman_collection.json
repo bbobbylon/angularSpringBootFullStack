@@ -1,0 +1,563 @@
+{
+  "info": {
+    "_postman_id": "6f9d6e0a-3c1c-4b3e-9d0a-tesseraapp001",
+    "name": "TesseraApp API",
+    "description": "Full API surface per documentation/GUIDE.md §8. Companion to curl-smoke-test.sh and the Bruno collection in this same folder (documentation/api-testing/). WebAuthn/passkey endpoints are intentionally omitted — they require a real browser-generated public-key credential that cannot be produced from Postman.\n\nRun order: Account > Login (No MFA) first — its test script captures {{adminAccessToken}}/{{adminRefreshToken}}/{{adminId}} into collection variables that every other folder's requests reuse. Demo credentials (all seeded accounts share the password TesseraDemo@1): eve.admin@tessera.dev (ROLE_ADMIN), dave.org@tessera.dev (ROLE_ORGANIZATION_ADMIN), carol.help@tessera.dev (ROLE_HELP_DESK_ADMIN), bob.mod@tessera.dev (ROLE_MODERATOR), alice.guest@tessera.dev (ROLE_GUEST), frank.app@tessera.dev (ROLE_APPLICATION_ADMIN).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "adminEmail", "value": "eve.admin@tessera.dev" },
+    { "key": "adminPassword", "value": "TesseraDemo@1" },
+    { "key": "adminAccessToken", "value": "" },
+    { "key": "adminRefreshToken", "value": "" },
+    { "key": "adminId", "value": "" },
+    { "key": "serviceId", "value": "" },
+    { "key": "customerId", "value": "" },
+    { "key": "invoiceId", "value": "" },
+    { "key": "etag", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Account (§8.2)",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Postman\",\n  \"lastName\": \"Test\",\n  \"email\": \"postman.test.{{$timestamp}}@example.com\",\n  \"password\": \"PostmanTest@123\"\n}" },
+            "url": "{{baseUrl}}/user/register",
+            "description": "Public. The account stays unverified — no automated way to read the verification email from here."
+          }
+        },
+        {
+          "name": "Login (No MFA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.access_token) {",
+                  "  pm.collectionVariables.set('adminAccessToken', json.data.access_token);",
+                  "  pm.collectionVariables.set('adminRefreshToken', json.data.refresh_token);",
+                  "  pm.collectionVariables.set('adminId', json.data.user.id);",
+                  "  pm.test('Login returned tokens', () => pm.expect(json.data.access_token).to.be.a('string'));",
+                  "} else {",
+                  "  console.log('No access_token — demo account may have MFA enabled, or a challenge was returned:', json);",
+                  "  pm.test.skip('Login returned a challenge, not tokens');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}" },
+            "url": "{{baseUrl}}/user/login",
+            "description": "Public. Populates {{adminAccessToken}}/{{adminRefreshToken}}/{{adminId}} for every other request in this collection."
+          }
+        },
+        {
+          "name": "Reset Password Request",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/user/resetpassword/{{adminEmail}}",
+            "description": "Public. Always 200 regardless of whether the email exists — user-enumeration protection."
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/user/profile"
+          }
+        },
+        {
+          "name": "Get My Events",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/user/events?page=0&size=10"
+          }
+        },
+        {
+          "name": "Update Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"enabled\": true,\n  \"notLocked\": true\n}" },
+            "url": "{{baseUrl}}/user/update/settings"
+          }
+        }
+      ]
+    },
+    {
+      "name": "MFA & Passkeys (§8.3)",
+      "item": [
+        {
+          "name": "TOTP Setup",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/user/totp/setup",
+            "description": "Returns a QR code / otpauth URI. TOTP Enable needs a real 6-digit code generated from that secret, so it isn't wired up here — copy the secret into an authenticator app first."
+          }
+        },
+        {
+          "name": "TOTP Status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/user/totp/status"
+          }
+        },
+        {
+          "name": "TOTP Enable (fill in code)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"REPLACE_WITH_6_DIGIT_CODE\"\n}" },
+            "url": "{{baseUrl}}/user/totp/enable",
+            "description": "Not runnable as-is — replace the code with a live TOTP value from the secret returned by TOTP Setup."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sessions & Connected Accounts (§8.4)",
+      "item": [
+        {
+          "name": "List Sessions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/user/sessions"
+          }
+        },
+        {
+          "name": "List Connected Providers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/user/sessions/providers"
+          }
+        },
+        {
+          "name": "Logout (this session)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sends Clear-Site-Data: \"cache\"', () => {",
+                  "  pm.expect(pm.response.headers.get('Clear-Site-Data')).to.include('cache');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/user/sessions/logout",
+            "description": "Run this LAST — it ends the session the captured access token belongs to. See HttpCacheHeadersFilter / SessionController#logout."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Federated Login (§8.5)",
+      "item": [
+        {
+          "name": "List OAuth2 Providers",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/oauth2/providers" }
+        }
+      ]
+    },
+    {
+      "name": "Admin - User Management (§8.6)",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/user/list?page=0&size=10"
+          }
+        },
+        {
+          "name": "Get User By Id (self)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/user/{{adminId}}"
+          }
+        },
+        {
+          "name": "Get User Events",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/user/{{adminId}}/events?page=0&size=10"
+          }
+        },
+        {
+          "name": "Update User Role (fill in {id}/{role})",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/user/REPLACE_ID/role/ROLE_MODERATOR",
+            "description": "Needs UPDATE:ROLE and forbids self-targeting — point this at a different seeded account's id."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Security Dashboard (§8.7)",
+      "item": [
+        {
+          "name": "Get Overview",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/security/overview?days=7&suspiciousPage=0&suspiciousSize=10&restrictedPage=0&restrictedSize=10"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Services Catalog (§8.8)",
+      "item": [
+        {
+          "name": "List Services (Admin, includes retired)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/services/list"
+          }
+        },
+        {
+          "name": "List Public Services",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/services/public" }
+        },
+        {
+          "name": "Create Service",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.service) { pm.collectionVariables.set('serviceId', json.data.service.id); }",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Postman Test Service\",\n  \"description\": \"Created by the Postman collection — safe to leave retired.\",\n  \"price\": 1.00\n}" },
+            "url": "{{baseUrl}}/admin/services/create",
+            "description": "Captures {{serviceId}} for the two requests below."
+          }
+        },
+        {
+          "name": "Get Service By Id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/services/get/{{serviceId}}"
+          }
+        },
+        {
+          "name": "Retire Service",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/services/{{serviceId}}/active/false",
+            "description": "There is deliberately no DELETE for services — retire, never delete (invoices copy the name/price at creation time)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customers & Invoices (§8.9)",
+      "item": [
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/customer/stats"
+          }
+        },
+        {
+          "name": "List Customers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/customer/list?page=0&size=10"
+          }
+        },
+        {
+          "name": "Search Customers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/customer/search?name=a&page=0&size=5"
+          }
+        },
+        {
+          "name": "Create Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.customer) { pm.collectionVariables.set('customerId', json.data.customer.id); }",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Postman\",\n  \"lastName\": \"Customer\",\n  \"email\": \"postman.customer.{{$timestamp}}@example.com\",\n  \"address\": \"123 Test St\",\n  \"type\": \"INDIVIDUAL\"\n}" },
+            "url": "{{baseUrl}}/customer/create",
+            "description": "No DELETE endpoint exists for customers — this leaves a permanent row. Captures {{customerId}}."
+          }
+        },
+        {
+          "name": "Get Customer By Id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/customer/get/{{customerId}}"
+          }
+        },
+        {
+          "name": "New Invoice Form Data",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/customer/invoice/new",
+            "description": "Also used verbatim by the Services Catalog page — see documentation/flows/35-services-catalog.md."
+          }
+        },
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/customer/invoice/list?page=0&size=10"
+          }
+        },
+        {
+          "name": "Create Invoice For Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const inv = json.data && (json.data.invoice || json.data.invoices);",
+                  "if (inv && inv.id) { pm.collectionVariables.set('invoiceId', inv.id); }",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"invoiceNumber\": \"POSTMAN-001\",\n  \"status\": \"PENDING\",\n  \"totalAmount\": 10.0,\n  \"invoiceDate\": \"2026-01-01\"\n}" },
+            "url": "{{baseUrl}}/customer/invoice/addtocustomer/{{customerId}}",
+            "description": "Run after Create Customer. Captures {{invoiceId}}."
+          }
+        },
+        {
+          "name": "Update Invoice",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"PAID\"\n}" },
+            "url": "{{baseUrl}}/customer/invoice/update/{{invoiceId}}"
+          }
+        },
+        {
+          "name": "Download Customer Report (XLSX)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/customer/download/report",
+            "description": "Binary response. URL contains 'download' — HttpCacheHeadersFilter bypasses it, no Cache-Control/ETag."
+          }
+        },
+        {
+          "name": "Download Invoice Report (XLSX)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/customer/invoice/download/report"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/analytics/summary"
+          }
+        },
+        {
+          "name": "Customers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/analytics/customers?page=0&size=10"
+          }
+        },
+        {
+          "name": "Invoices",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/analytics/invoices?page=0&size=10"
+          }
+        },
+        {
+          "name": "All Invoices",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/admin/analytics/invoices/all"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contact",
+      "item": [
+        {
+          "name": "Submit Contact Form",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Postman Test\",\n  \"email\": \"postman.test@example.com\",\n  \"subject\": \"Smoke test\",\n  \"message\": \"Sent by the Postman collection — safe to ignore.\"\n}" },
+            "url": "{{baseUrl}}/contact",
+            "description": "Public. Sends a REAL notification via NotificationService — think before mashing Send repeatedly."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Backend HTTP Caching Demo",
+      "item": [
+        {
+          "name": "1. GET Customer List (capture ETag)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const etag = pm.response.headers.get('ETag');",
+                  "if (etag) { pm.collectionVariables.set('etag', etag); }",
+                  "const cc = pm.response.headers.get('Cache-Control') || '';",
+                  "pm.test('Cache-Control is private, no-cache', () => { pm.expect(cc).to.include('private'); pm.expect(cc).to.include('no-cache'); });",
+                  "pm.test('ETag present', () => pm.expect(etag).to.not.be.null);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/customer/list?page=0&size=5"
+          }
+        },
+        {
+          "name": "2. GET Customer List (If-None-Match, expect 304)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Revalidated with 304', () => pm.response.to.have.status(304));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "If-None-Match", "value": "{{etag}}" }
+            ],
+            "url": "{{baseUrl}}/customer/list?page=0&size=5",
+            "description": "Run request 1 first in this same run so {{etag}} is populated. See documentation/flows/00-anatomy-of-a-request.md §2.3."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Token Lifecycle",
+      "item": [
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.access_token) {",
+                  "  pm.collectionVariables.set('adminAccessToken', json.data.access_token);",
+                  "  pm.collectionVariables.set('adminRefreshToken', json.data.refresh_token);",
+                  "}",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminRefreshToken}}" }],
+            "url": "{{baseUrl}}/user/refresh/token",
+            "description": "Sends the REFRESH token, not the access token. Rotates both and updates the collection variables."
+          }
+        }
+      ]
+    }
+  ]
+}

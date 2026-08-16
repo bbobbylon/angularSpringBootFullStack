@@ -152,6 +152,21 @@
       "passwordOnly": "Nur Passwort",
       "federatedSignIns": "Föderierte Anmeldungen",
       "recoveryCodesUsed": "Verwendete Wiederherstellungscodes"
+    },
+    "settings": {
+      "title": "Einstellungen zur Anomalieerkennung",
+      "subtitle": "Überschreibungen wirken sich sofort auf die nächste Anmeldung aus – kein erneutes Deployment nötig.",
+      "enabledLabel": "Anomalieerkennung",
+      "useDefault": "Serverstandard verwenden",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "historyLimitLabel": "Anmeldeverlauf-Fenster",
+      "historyLimitHint": "Wie viele der letzten Anmeldungen des Kontos zum Vergleich mit einer neuen herangezogen werden.",
+      "historyLimitPlaceholder": "Serverstandard",
+      "clearOverride": "Standard verwenden",
+      "save": "Änderungen speichern",
+      "saving": "Wird gespeichert…",
+      "unsavedChanges": "Nicht gespeicherte Änderungen"
     }
   },
   "servicesAdmin": {

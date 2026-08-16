@@ -9,6 +9,7 @@ import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.service.NotificationService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -96,6 +97,32 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDTO verifyCode(String email, String code) {
         return mapToUserDTO(userRepo.verifyCode(email, code));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Every branch that isn't "redeliver" falls through to the same silent return, so the
+     * caller (an unauthenticated visitor mid-login) gets an identical response whether the email
+     * doesn't exist, belongs to a TOTP user, or simply has no challenge outstanding right now —
+     * only the presence of a pending code, never the email's validity, is observable.
+     */
+    @Override
+    public void resendVerificationCode(String email) {
+        UserDTO userDTO;
+        try {
+            userDTO = getUserByEmail(email);
+        } catch (UsernameNotFoundException e) {
+            return;
+        }
+        if (userDTO.isUsingTotp() || !userRepo.hasPendingVerificationCode(userDTO.getId())) {
+            return;
+        }
+        if (userDTO.isUsing2FA()) {
+            sendVerificationCode(userDTO);
+        } else {
+            sendStepUpCode(userDTO, "You requested another copy of your verification code.");
+        }
     }
 
     /**
@@ -241,11 +268,13 @@ public class UserServiceImpl implements UserService {
      * @param searchTerm free-text filter; blank or null lists everyone
      * @param page       0-indexed page number
      * @param pageSize   rows per page
-     * @return the matching users on the requested page, newest accounts first
+     * @param orderBy    a validated {@code "column ASC|DESC"} SQL fragment (see
+     *                   {@code SortUtils#resolveSqlOrderBy}), e.g. {@code "created_at DESC, id DESC"}
+     * @return the matching users on the requested page, in the requested order
      */
     @Override
-    public Collection<UserDTO> searchUsers(String searchTerm, int page, int pageSize) {
-        return userRepo.searchUsers(searchTerm, page, pageSize).stream()
+    public Collection<UserDTO> searchUsers(String searchTerm, int page, int pageSize, String orderBy) {
+        return userRepo.searchUsers(searchTerm, page, pageSize, orderBy).stream()
                 .map(this::mapToUserDTO)
                 .toList();
     }

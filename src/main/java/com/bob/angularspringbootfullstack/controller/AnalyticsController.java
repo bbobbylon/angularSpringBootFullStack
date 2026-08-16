@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.RoleType;
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.Invoice;
@@ -8,9 +9,11 @@ import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import com.bob.angularspringbootfullstack.utils.SortUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,8 +26,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
-import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpStatus.OK;
@@ -90,6 +93,16 @@ public class AnalyticsController {
     /** Resolves which organizations a scoped caller may see (FR-ORG-2). */
     private final OrganizationService organizationService;
 
+    /** Mirrors {@code CustomerController}'s customer sort allow-list — kept as a separate
+     * constant because the two controllers are not otherwise coupled and a shared field would
+     * invite one to change silently for the other. */
+    private static final Set<String> CUSTOMER_SORT_FIELDS =
+            Set.of("customerName", "status", "type", "email", "createdAt");
+
+    /** Mirrors {@code CustomerController}'s invoice sort allow-list. */
+    private static final Set<String> INVOICE_SORT_FIELDS =
+            Set.of("invoiceNumber", "status", "invoiceDate", "totalAmount", "customer.customerName");
+
     /**
      * KPI summary for the Billing overview: system-wide totals plus the per-status
      * customer breakdown. Mirrors the {@code stats}/{@code statusBreakdown} keys of
@@ -133,21 +146,25 @@ public class AnalyticsController {
      * @param user the authenticated (admin) principal, embedded in the envelope
      * @param page zero-based page index (defaults to 0)
      * @param size number of records per page (defaults to 20)
+     * @param sort the column to order by as {@code field,direction}; unset or unrecognized falls
+     *             back to unsorted
      * @return 200 OK with {@code user}, {@code page}, {@code stats}, {@code statusBreakdown}
      */
     @GetMapping("/customers")
     @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
     public ResponseEntity<HttpResponse> getCustomers(@AuthenticationPrincipal UserDTO user,
                                                      @RequestParam Optional<Integer> page,
-                                                     @RequestParam Optional<Integer> size) {
+                                                     @RequestParam Optional<Integer> size,
+                                                     @RequestParam Optional<String> sort) {
         Collection<Long> scope = resolveScope(user);
         int pageIndex = page.orElse(0);
         int pageSize = size.orElse(20);
+        Sort resolvedSort = SortUtils.resolveSort(sort, CUSTOMER_SORT_FIELDS);
         Page<Customer> customers;
         Stats stats;
         Map<String, Integer> statusBreakdown;
         if (scope == null) {
-            customers = customerService.getCustomers(pageIndex, pageSize);
+            customers = customerService.getCustomers(pageIndex, pageSize, resolvedSort);
             stats = customerService.getStats();
             statusBreakdown = customerService.getCustomerStatusBreakdown();
         } else if (scope.isEmpty()) {
@@ -155,7 +172,7 @@ public class AnalyticsController {
             stats = new Stats();
             statusBreakdown = Map.of();
         } else {
-            customers = customerService.getCustomersForOrganizations(scope, pageIndex, pageSize);
+            customers = customerService.getCustomersForOrganizations(scope, pageIndex, pageSize, resolvedSort);
             stats = customerService.getStatsForOrganizations(scope);
             statusBreakdown = customerService.getCustomerStatusBreakdownForOrganizations(scope);
         }
@@ -179,23 +196,27 @@ public class AnalyticsController {
      * @param user the authenticated (admin) principal, embedded in the envelope
      * @param page zero-based page index (defaults to 0)
      * @param size number of records per page (defaults to 20)
+     * @param sort the column to order by as {@code field,direction}; unset or unrecognized falls
+     *             back to unsorted
      * @return 200 OK with {@code user} and {@code invoices}
      */
     @GetMapping("/invoices")
     @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
     public ResponseEntity<HttpResponse> getInvoices(@AuthenticationPrincipal UserDTO user,
                                                     @RequestParam Optional<Integer> page,
-                                                    @RequestParam Optional<Integer> size) {
+                                                    @RequestParam Optional<Integer> size,
+                                                    @RequestParam Optional<String> sort) {
         Collection<Long> scope = resolveScope(user);
         int pageIndex = page.orElse(0);
         int pageSize = size.orElse(20);
+        Sort resolvedSort = SortUtils.resolveSort(sort, INVOICE_SORT_FIELDS);
         Page<Invoice> invoices;
         if (scope == null) {
-            invoices = customerService.getInvoices(pageIndex, pageSize);
+            invoices = customerService.getInvoices(pageIndex, pageSize, resolvedSort);
         } else if (scope.isEmpty()) {
             invoices = Page.empty(PageRequest.of(pageIndex, pageSize));
         } else {
-            invoices = customerService.getInvoicesForOrganizations(scope, pageIndex, pageSize);
+            invoices = customerService.getInvoicesForOrganizations(scope, pageIndex, pageSize, resolvedSort);
         }
         return ResponseEntity.ok(
                 HttpResponse.builder()
@@ -251,16 +272,24 @@ public class AnalyticsController {
     /**
      * Resolves the organization restriction that applies to this caller's reports (FR-ORG-2).
      *
-     * <p>Returns {@code null} for the unscoped tiers ({@code ROLE_ADMIN},
-     * {@code ROLE_APPLICATION_ADMIN}), which see every organization's data — the same rule
+     * <p>Delegates to {@link RoleType#isOrganizationScoped(String)} — {@code null} for the two
+     * unscoped tiers ({@code ROLE_ADMIN}, {@code ROLE_APPLICATION_ADMIN}), which see every
+     * organization's data; scoped for everyone else. The same rule
      * {@link AdminUserController#isOrganizationScoped} applies to the user directory, kept
-     * deliberately in one shape so "who is scoped?" has a single answer across the admin surface.
+     * deliberately in one shape (now the same method, not two independently-maintained copies of
+     * the same check) so "who is scoped?" has a single answer across the admin surface.
      *
-     * <p>For {@code ROLE_ORGANIZATION_ADMIN} it returns that admin's active organization ids,
-     * <em>which may be empty</em>. Empty is a meaningful verdict, not an error: an administrator
-     * belonging to no active organization may see nothing, and callers render zeros rather than
-     * falling back to system-wide data. Collapsing the empty case into "unscoped" would hand the
-     * global view to precisely the account with the least established membership.
+     * <p><b>Fixed 2026-08-13:</b> this used to check the caller's role name against the literal
+     * string {@code "ROLE_ORGANIZATION_ADMIN"}, which had the identical bug
+     * {@code AdminUserController#isOrganizationScoped} did for the identical reason —
+     * {@code ROLE_HELP_DESK_ADMIN} also carries {@code UPDATE:USER} / reaches this controller, but
+     * was never in that one-name check, so it saw every organization's rollups unscoped.
+     *
+     * <p>For a scoped caller this returns their active organization ids, <em>which may be
+     * empty</em>. Empty is a meaningful verdict, not an error: an administrator belonging to no
+     * active organization may see nothing, and callers render zeros rather than falling back to
+     * system-wide data. Collapsing the empty case into "unscoped" would hand the global view to
+     * precisely the account with the least established membership.
      *
      * <p>The three-way return ({@code null} / empty / populated) is why callers branch explicitly
      * rather than passing this straight through: an empty collection cannot be handed to the
@@ -271,7 +300,7 @@ public class AnalyticsController {
      * @return {@code null} when the caller is unscoped, otherwise their active organization ids
      */
     private Collection<Long> resolveScope(UserDTO caller) {
-        if (!ROLE_ORGANIZATION_ADMIN.name().equals(caller.getRoleName())) {
+        if (!RoleType.isOrganizationScoped(caller.getRoleName())) {
             return null;
         }
         return organizationService.findActiveOrganizationIds(caller.getId());

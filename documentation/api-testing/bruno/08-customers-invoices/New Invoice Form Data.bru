@@ -1,0 +1,26 @@
+meta {
+  name: New Invoice Form Data
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/customer/invoice/new
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  Also used verbatim by the Services Catalog page — see
+  documentation/flows/35-services-catalog.md.
+}

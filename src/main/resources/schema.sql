@@ -606,6 +606,33 @@ CREATE TABLE IF NOT EXISTS passkeycredentials
     INDEX IX_PasskeyCredentials_User_Id (user_id)
 );
 
+-- ── Security settings (admin-tunable overrides for env-driven defaults) ────────────────
+--
+-- A single pinned row (id = 1), the same "one row, no key to look up" shape a table like this
+-- always ends up wanting. Every column is NULLable and NULL means "no override — use the
+-- application.yml / env default", which LoginRiskServiceImpl still owns. That split matters: this
+-- table only ever widens what an admin CAN change without a redeploy, it does not replace the env
+-- defaults or require every environment to populate it.
+--
+-- INSERT IGNORE, not the ON DUPLICATE KEY UPDATE the `roles` seed above uses. `roles` is reset to
+-- the literal values this file specifies on every boot because an operator never edits it by hand.
+-- This table is the opposite — an admin is expected to change it at runtime through the settings
+-- panel, and a schema.sql that runs on every boot (`spring.sql.init.mode: always`) must not stomp
+-- that edit back to NULL the next time the app restarts. IGNORE inserts the row only if it is
+-- missing and otherwise leaves whatever is there untouched.
+CREATE TABLE IF NOT EXISTS securitysettings
+(
+    id                     BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    anomaly_enabled        BOOLEAN  DEFAULT NULL,
+    anomaly_history_limit  INT      DEFAULT NULL,
+    updated_at             DATETIME DEFAULT NULL,
+    updated_by             BIGINT UNSIGNED DEFAULT NULL,
+    FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+INSERT IGNORE INTO securitysettings (id, anomaly_enabled, anomaly_history_limit, updated_at, updated_by)
+VALUES (1, NULL, NULL, NULL, NULL);
+
 -- ── Server-side refresh sessions (rotation + reuse detection) ───────────────────────────
 CREATE TABLE IF NOT EXISTS refreshsessions
 (

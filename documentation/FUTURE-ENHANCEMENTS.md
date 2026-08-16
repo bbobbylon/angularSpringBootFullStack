@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.2
-**Last Updated:** 2026-08-09
+**Version:** 3.7
+**Last Updated:** 2026-08-14
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -11,6 +11,11 @@ This is **the** place for future work. Everything already built lives in
 [GUIDE.md](GUIDE.md). When you add a `TODO` in code, either fix it or add a one-line entry here and
 reference it — planning that re-scatters across files is the exact problem this document exists to
 prevent.
+
+**Everything from item 4 onward in §2 Active queue / this backlog, built after the Master's course
+submission, is tracked as done in [POST-SUBMISSION-UPGRADES.md](POST-SUBMISSION-UPGRADES.md), not
+here** — that document is the scope boundary between what was graded and what came after; this one
+stays the technical backlog either side of that line draws from.
 
 **Status legend:** ⬜ not started · 🔄 in progress · ✅ done · 🔴 open defect
 
@@ -78,18 +83,30 @@ opened CSP to a third party for a cosmetic asset. Measured, production build:
 | **Preload the icon woff2** | Icons pop in slightly late; discovered only after the deferred stylesheet applies | Needs a build-time hook because `outputHashing` renames the file |
 | **Confirm `jspdf`/`html2canvas` laziness** | The 427 kB `invoice-detail` chunk is the largest in the app | Already lazy; verify it loads on the export click, not on route entry |
 
-### 2.2 ⬜ Remaining frontend specs
+### 2.2 ✅ Remaining frontend specs
 
-Backend security paths are covered. The one meaningful client-side gap left is **`cacheInterceptor`**
-(`interceptor/cache.interceptor.ts`) — the last unspecced interceptor, and its invalidation rules are
-exactly the kind of logic that silently serves one user another user's data.
+Done (2026-08-13, `ebf4f5e`) — `cache.interceptor.spec.ts` (149 lines) now covers bypass, eviction,
+and cache-hit/miss behavior for `cacheInterceptor` (`interceptor/cache.interceptor.ts`), which was
+the last unspecced interceptor and the one whose invalidation rules could silently serve one user
+another user's data.
 
-### 2.3 ⬜ Exercise a real production boot
+### 2.3 ✅ Exercise a real production boot
 
-`ddl-auto=validate` against a MySQL initialised **only** by `schema.sql`. Only the offline
-`JpaSchemaSyncTest` has run; that catches entity/DDL drift but cannot catch a schema the app has
-never actually started against. This is the single largest untested assumption in the project — a
-deploy that builds cleanly and then fails at startup is the most likely production failure mode.
+Done (2026-08-14) — ran the full Spring context (`AngularSpringBootFullStackApplicationTests`,
+which is `@SpringBootTest` with no profile override, so it honours whatever `SPRING_ACTIVE_PROFILES`
+is set to) under `SPRING_ACTIVE_PROFILES=prod` against a brand-new, disposable local MySQL database
+(`prodboot_test`) that had never been touched by anything but this run — no dev seeder, no manual
+schema, nothing. `spring.sql.init.mode: always` applied `schema.sql` from empty, then
+`ddl-auto: validate` checked the JPA-managed tables (`Customer`/`Invoice`/`Services`/
+`invoiceserviceitems`) against the live Hibernate entity mappings. Result: **clean boot, exit code
+0, no `SchemaManagementException`** — `schema.sql`'s hand-written DDL genuinely matches what
+`validate` expects, not just what `JpaSchemaSyncTest`'s offline Hibernate check expects. Deliberately
+run as a bounded `mvnw test` invocation rather than a long-lived `spring-boot:run` process (the test
+JVM starts the full context and exits on its own), and against a disposable local database rather
+than Aiven, so nothing live was touched. Database dropped after. `MYSQL_SSL_MODE` was overridden to
+`PREFERRED` for this run only — the real prod value (`VERIFY_IDENTITY`) needs Aiven's CA in the
+truststore, which only exists in the built Docker image, not a bare local MySQL; that half is already
+verified separately (see the `MYSQL_SSL_MODE` history in this file's changelog / RUNBOOK).
 
 ### 2.4 ⬜ Move per-instance security state off the heap
 
@@ -118,29 +135,59 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 |---|---|---|
 | ⬜ **Distributed brute-force + rate-limit + link-ticket state** | See §2.4 — the scale-out blocker | Move counters to the database or Redis; the service interfaces do not change (`bucket4j-redis` exists for exactly this) |
 | ✅ **Session revocation from the security dashboard** | Done (2026-08-08) — `GET /admin/user/{id}` now returns the target's live sessions (same `RefreshSession` shape as the Security Center, already `@JsonIgnore`-safe); `DELETE /admin/user/{id}/sessions/{family}` revokes one device, alongside the existing bulk `DELETE /admin/user/{id}/sessions`. Org-scoped, self-target-refused, audited against the target — same convention as every other admin action. Frontend: a Sessions panel on the user-detail page (`user-details.component`), per-row revoke + a bulk "sign out everywhere" button | |
-| ⬜ **Admin-initiated MFA reset** | An account that loses both its authenticator and its recovery codes is currently unrecoverable without direct DB access | Admin action + an `MFA_RESET` audit event; gate on staff authority and audit loudly |
-| ⬜ **Regenerate recovery codes** | There is no standalone endpoint — replacing a depleted set today means disable-and-re-enroll TOTP | `issueRecoveryCodes()` already does the delete-then-insert this needs; it just has no route |
+| ✅ **Admin-initiated MFA reset** | Done (2026-08-13, `ebf4f5e`) — `AdminUserController` carries the reset action, gated on staff authority and audited as `MFA_RESET`; `AdminUserControllerTotpResetTest` covers it | |
+| ✅ **Regenerate recovery codes** | Done (2026-08-13, `ebf4f5e`) — `POST /user/totp/recovery-codes/regenerate` (`TotpController`), reusing `issueRecoveryCodes()`'s existing delete-then-insert; no more disable-and-re-enroll round trip | |
+| ✅ **Resend an outstanding 2FA/step-up code** | Done (2026-08-14) — `POST /user/verify/resend` (public, auth-tier rate limit). Redelivers only when `UserRepo#hasPendingVerificationCode` is true; no-ops identically for an unknown email, a TOTP account, or nothing pending (FR-AUTH-4). Dispatches over whichever channel the outstanding challenge used — SMS/Twilio Verify for a 2FA account, email for an FR-TPF-1 step-up. "Resend code" link added to the login screen's MFA panel; `UserServiceImplResendCodeTest` covers all five branches | |
 | ✅ **Role-tier ceiling on reassignment** | Done (2026-08-07, `ec26adc`) — `RoleType.canAssign` + `AdminUserController#requireAssignableTier` reject assigning any role above the caller's own tier, fails closed on an unrecognised role name | |
 | ✅ **Single CORS source of truth** | Done — verified in code 2026-08-12. `SecurityConfig#corsConfigurationSource()` is now the single bean, built from `app.cors.allowed-origin-patterns`; `AngularSpringBootFullStackApplication#corsFilter` takes that same `CorsConfigurationSource` as a constructor argument instead of building its own rival config. No hardcoded origin list remains | |
-| ⬜ **Anomaly signal tuning UI** | `ANOMALY_HISTORY_LIMIT` and the enable flag are env-only, so tuning needs a redeploy | Persisted settings + an admin panel; keep env as the fallback default |
+| ✅ **Anomaly signal tuning UI** | Done (2026-08-14) — new pinned-singleton `securitysettings` row (id=1, seeded via `INSERT IGNORE` so a re-run of `schema.sql` never stomps a live admin edit) with nullable `anomaly_enabled`/`anomaly_history_limit` override columns, `null` meaning "use the env default". `SecuritySettingsService`/`Impl` (JDBC, no Repo/RepoImpl — one row, same service-owns-its-SQL shape as `OrganizationServiceImpl`) is consulted **live** inside `LoginRiskServiceImpl#assess` on every login rather than cached, so a change from the panel takes effect on the very next sign-in with no redeploy; the `@Value` fields stay as the fallback default. New `GET`/`PATCH /admin/security/anomaly-settings` on `SecurityDashboardController` (reuses the existing `UPDATE:USER`/`UPDATE:ROLE` gate — no `SecurityConfig` matcher change), `AnomalySettingsForm` (both fields nullable by design — `null` clears an override, not a validation failure), and a `CapabilityCatalog` rule so the PATCH gets its own 403 message ("change security settings") ahead of the broader `/admin/security` rule. Frontend: a settings panel added to `/security-overview` (three-way default/enabled/disabled selector + history-limit input with a "use default" clear button, dirty-state gated Save), full 6-locale i18n. New tests: `SecuritySettingsServiceImplTest`, `SecurityDashboardControllerSecurityTest`, plus two new `LoginRiskServiceImplTest` cases proving a DB override wins over the env default | |
 | ⬜ **P2-3 — Machine-to-machine API access** | Lets scripts and CI authenticate without a browser. Deferred deliberately: it adds a second authentication front door, the highest-risk change on this list | **Option A — API keys:** an `X-API-Key` filter ahead of `CustomAuthFilter` resolving a **hashed** key to an `Authentication` carrying authority strings, so every existing `hasAnyAuthority`/`@PreAuthorize` rule applies unchanged. **Option B — OAuth2 client-credentials:** `POST /oauth/token`. Both converge on "a request arrives already carrying authorities". Needs `service_accounts` + hashed `api_keys` tables, new audit event types, and `PUBLIC_URLS` ↔ `PUBLIC_ROUTES` lockstep. **Large, higher risk — do last, with dedicated review** |
 
 ### 3.2 Access model
 
 | Enhancement | Why | Sketch |
 |---|---|---|
-| ⬜ **Role CRUD** | Roles are seed-only; `RoleRepoImpl.create/update/delete` throw `UnsupportedOperationException`. Fine while the seven roles are fixed, blocking the moment anyone wants an eighth | Implement the stubs + an admin screen; the permissions matrix UI already exists to edit against |
+| ⬜ **Role CRUD** | Roles are seed-only; `RoleRepoImpl.create/update/delete` throw `UnsupportedOperationException`. Fine while the seven roles are fixed, blocking the moment anyone wants an eighth | **Design session held 2026-08-14, implementation deliberately deferred pending one more decision — see below.** |
+| ⬜ **Time-boxed role assignment** (new, spun out of the Role CRUD design session) | An assignment made today has no way to say "only until a date" — every grant is permanent until someone manually reverts it. Comes up naturally once role assignment is a first-class admin action | Nullable `expires_at` on `userroles`. **Decided:** on expiry, auto-revert to `ROLE_USER`, enforced **live** at login/token issuance (the existing role lookup checks `expires_at`, no scheduled sweep job) — not a background job, not a "flag but don't enforce" state. A calendar/date picker on the assignment UI; unlimited (`NULL`) is the default |
 | ⬜ **Self-service organization management** | Orgs are seeded/DB-managed; there is no UI to create one or move a user between them. This is the single biggest gap between "demo" and "a business could run this" | Admin CRUD over `organizations` + `userorganizations`; must respect the same org scope it edits |
 | ✅ **Org scope for business data** | Done (2026-08-08) — every `/customer/**` read (`stats`, list, single get, search, invoice list/get, the new-invoice picker, both XLSX exports) is now restricted for `ROLE_ORGANIZATION_ADMIN` to customers/invoices owned by their active organizations, reusing the exact `*ForOrganizations` service methods `AnalyticsController` already had. Every other role (including plain `ROLE_USER`) keeps today's system-wide view — this closes the specific "org admin sees every customer" gap, not a broader per-user multi-tenancy wall. Found and fixed two pre-existing bugs along the way: `List.of(...).contains(null)` throws instead of returning `false` (would have crashed the scope check on any unowned row), and `GET /customer/invoice/get/{id}` 500'd unconditionally on a draft invoice (`Map.of` rejects a null value) — both predate this change. New suite: `CustomerControllerOrgScopeTest` (14 tests) | |
-| ⬜ **Scope every `UPDATE:USER` holder, not just one role name** | `isOrganizationScoped` matches the literal `ROLE_ORGANIZATION_ADMIN`. `ROLE_HELP_DESK_ADMIN` also carries `UPDATE:USER` and reaches `/admin/**` unscoped | Key scoping off a capability rather than a role name |
+| ✅ **Scope every `UPDATE:USER` holder, not just one role name** | Done (2026-08-14) — new `RoleType.isOrganizationScoped(roleName)` capability check; `AdminUserController#isOrganizationScoped` and `AnalyticsController#resolveScope` both delegate to it instead of each independently hardcoding `ROLE_ORGANIZATION_ADMIN.name().equals(...)`. `ROLE_HELP_DESK_ADMIN` (which also carries `UPDATE:USER`) is now correctly scoped on both surfaces instead of seeing every organization unscoped | |
 | ⬜ **Per-organization role definitions** | `RoleRepoImpl.java` `TODO(org-roles)`. FR-ORG scopes *administration*, not role *definitions* — every org shares one role catalogue | Only worth it for genuine multi-tenancy; it changes the authority-string model, so not a small change |
 | ✅ **P2-1 — User type classification** | Done (2026-08-08) — badge shows `INTERNAL` / `EXTERNAL` / `FEDERATED` on the admin Users list and detail pages. `users.origin` is an immutable fact stamped once, at account creation, by `FederatedIdentityServiceImpl#insertFederatedUser` (`"FEDERATED_" + provider`) — never touched again, including when an existing password account later links a federated identity. `UserTypeResolver` derives `INTERNAL`/`EXTERNAL` fresh on every read from the email domain against the env-driven `INTERNAL_DOMAINS` allowlist (`AdminUserController`). `AZURE_B2B` was dropped from scope — this app has no actual Azure B2B guest integration, only consumer OAuth via Google/GitHub/Microsoft, and fabricating a category for a provider that isn't built would misrepresent capability | |
+
+#### Role CRUD — design session notes (2026-08-14), implementation deliberately not started
+
+Investigating the stubs surfaced a real architectural constraint worth recording before anyone
+picks this up: `RoleType` (the tier/privilege-ladder enum `RoleType.java`) is **deliberately
+compile-time, not data-driven** — `canAssign()` fails closed (returns `false`) for any role name it
+doesn't recognize, by design, so nothing "invents a tier for it and guesses at a security boundary."
+A role created purely through the `roles` table would be exactly that: unrecognized, and therefore
+**never assignable** through the existing role-reassignment endpoint until `RoleType` gets a matching
+constant and the app is redeployed.
+
+**Decided:** that's an acceptable, explicit tradeoff, not a blocker. A role can be created and sit
+inert in the catalog — listed, editable, deletable — before it's wired into `RoleType` and becomes
+assignable. The admin UI must surface that state plainly ("created, not yet assignable") rather than
+let it be a silent trap discovered later via a confused support ticket.
+
+**Still open, blocking implementation start:** which tier may CRUD the role *catalog itself*
+(create a role, edit an existing role's permission string, delete a role) — as opposed to
+`UPDATE:ROLE`, which today only means "assign an *existing* role to a user" and is held by tiers 5–7
+(`ROLE_ORGANIZATION_ADMIN` and up). Redefining what a role means for everyone who holds it is a much
+bigger blast radius than assigning one existing role to one user, which argues for gating catalog
+CRUD more narrowly than assignment. Proposed but **not yet confirmed**: restrict catalog CRUD to the
+single top tier, `ROLE_APPLICATION_ADMIN` — open question is whether `ROLE_ADMIN` (tier 6) should
+also have it.
+
+Time-boxed role assignment (the row above) was decided in the same session and is ready to implement
+independently of this open question, since it operates on `userroles` (an existing assignment),
+not the role catalog.
 
 ### 3.3 Product & data
 
 | Enhancement | Why | Sketch |
 |---|---|---|
-| ⬜ **List sorting & filtering** | `customer.service.ts:57`. Customers and invoices are paged but not sortable or filterable. Becomes a real problem at a few thousand rows | Push sort/filter into the query params and the SQL — the org-scoping work already established the "filter in SQL, never post-filter a page" rule for exactly this reason |
+| ✅ **List sorting & filtering** | Done — Customers/Invoices (2026-08-14, POST-SUBMISSION-UPGRADES.md #1) and the JDBC-based admin User Directory (2026-08-14, POST-SUBMISSION-UPGRADES.md #11), which needed its own allow-listed `ORDER BY` mechanism since it isn't Spring Data JPA | |
 | ✅ **Invoice total aggregation query** | Done (2026-08-12), but not the way this row originally described — see below | |
 | ⬜ **P2-2 — Batch upload** | CSV/Excel import for customers and invoices — the most-requested "real business app" feature still missing | Per-row validation with a partial-success report (`{ imported, failed: [{row, reason}] }`), per-chunk commits, a dedupe key, async job for large files. Gate on `UPDATE:CUSTOMER`. Apache Commons CSV (+ POI only for `.xlsx`) |
 | ⬜ **Favorites / pinned destinations bar** | Navigation has outgrown the navbar: the Admin dropdown alone holds six destinations, so common pages are two clicks deep behind a menu that must be opened to be read | **Build it on `command-palette.service.ts`, not a new route list** — see the design note below |
@@ -179,11 +226,12 @@ trigger), and whether there is a cap on pin count.
 
 | Enhancement | Why | Sketch |
 |---|---|---|
-| ⬜ **Backend HTTP caching** | `cache.interceptor.ts:35` + `http-cache.service.ts:25` — caching is client-side only, so it cannot be invalidated by a write from another user | `Cache-Control`/`ETag` on read endpoints; Redis if it needs to be shared |
-| ⬜ **Structured logging + metrics** | Actuator is present but nothing scrapes it; the audit log is the only operational visibility | Micrometer + JSON logs; the security dashboard's counters are the obvious first metrics to export |
-| 🔴 **HTTPS on the ALB** | **The highest-priority open item.** Plain HTTP today, which makes HSTS inert, leaves every token transit unencrypted, and **blocks Google and Microsoft federated login outright** — both reject non-`https` redirect URIs except on `localhost`. Only GitHub works on the deployed URL. It would also block WebAuthn (§3.1), which needs a secure context | Two routes, see §6.8 |
-| ⬜ **Real production domain** | Same blocker as HTTPS: ACM cannot issue a certificate without proving DNS control, and you cannot prove control of the ALB's own `*.elb.amazonaws.com` name. No code marker remains — CORS origins are already env-driven | Buy a domain → ACM DNS validation → HTTPS listener |
-| ⬜ **`start.sh` → Maven wrapper** | Uses bare `mvn`; `./mvnw` pins the version so a teammate's Maven install cannot change the build | One-line change |
+| ✅ **Backend HTTP caching** | Done (2026-08-14, see POST-SUBMISSION-UPGRADES.md #3) — the client-side cache (`cache.interceptor.ts` + `http-cache.service.ts`, both now deleted) could not be invalidated by a write from another user. `HttpCacheHeadersFilter` now sets `Cache-Control: private, no-cache` + an ETag on data-bearing GETs, so the browser always revalidates with the server instead of trusting a local copy; no Redis needed since the ETag is derived fresh per request. A same-day live-testing pass caught the hash including a volatile per-response timestamp field that defeated the `304` short-circuit entirely — corrected same day, see POST-SUBMISSION-UPGRADES.md #3's correction note | |
+| ✅ **Structured logging + metrics** | Done (2026-08-15, see POST-SUBMISSION-UPGRADES.md #5) — `user.events.total` Micrometer counter (tagged by `EventType`) added at `NewUserEventListener`'s single event-listener seam, exposed admin-authenticated at `/actuator/metrics`; `logback-spring.xml` added, JSON console logs (`logstash-logback-encoder`) on `prod`/`qa`/`stage`, plain console unchanged on `dev`/`local` | |
+| ✅ **HTTPS in front of the app** | Resolved via Route B (§6.8) — CloudFront terminates TLS on its auto-issued certificate, since 2026-08-04. This row previously contradicted §6.8's own conclusion; corrected 2026-08-14 to stop asserting 🔴 against a fix already documented lower in the same file | |
+| ✅ **Real production domain** | Done (2026-08-08) — `tesseraapp.dev` (Porkbun) attached to the CloudFront distribution as an alternate domain name; see §6.8 | |
+| ✅ **`start.sh` → Maven wrapper** | Already done — `start.sh` runs `./mvnw`, not bare `mvn`. This row was stale; no code change was needed | |
+| ✅ **API testing suite (Postman/Bruno/cURL)** | Done (2026-08-14, see POST-SUBMISSION-UPGRADES.md #4) — not a pre-existing backlog item, added directly on request. The old `documentation/APIs.postman_collection` covered ~5 endpoints and hadn't been touched since May; `documentation/api-testing/` now ships three parity-checked runners (a dependency-free `curl-smoke-test.sh`, a Postman collection, a Bruno collection) covering all 12 controllers | |
 
 ### 3.5 Public-facing & marketing surface
 
@@ -223,12 +271,16 @@ Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/
 
 | Location | Intent | Notes |
 |---|---|---|
-| `cache.interceptor.ts:35` + `http-cache.service.ts:25` | Move caching to the backend and delete both | §3.4 |
 | `new-customer.component.ts:27, :80, :87` | Lighter user-only prefill endpoint | Currently fetches **every customer** to prefill one field |
 | `customer.service.ts:41` + `stats.component.ts:14` | `StatsComponent` self-fetch — `stats$()` is declared but unused | Refactor |
-| `customer.service.ts:59` | Sorting / filtering / infinite scroll | §3.3 |
 | `navbar.component.ts:18` | Decouple user data from the `/customer/list` response | Fetch `/user/profile` independently |
 | `profile.component.ts:19` | Reactive forms for profile | Refactor |
+
+> **Closed since the last audit:** `cache.interceptor.ts:35` + `http-cache.service.ts:25` — both
+> files are deleted; caching moved to the backend (§3.4, POST-SUBMISSION-UPGRADES.md #3).
+> `customer.service.ts:59`'s sorting/filtering TODO is also done (POST-SUBMISSION-UPGRADES.md #1),
+> as is the admin User Directory's own sorting, added later via a JDBC-safe `ORDER BY` mechanism
+> since that domain isn't JPA (POST-SUBMISSION-UPGRADES.md #11).
 
 > **Closed since the last audit:** the "real prod domain" `TODO` in
 > `AngularSpringBootFullStackApplication.java` is **gone** — CORS origins are now read from
@@ -240,7 +292,7 @@ Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/
 ## 5. Engineering debt
 
 - ⬜ **Per-instance security state** (brute force, rate limiting, link tickets) — §2.4. The scale-out blocker.
-- ⬜ **Untried production boot** with `ddl-auto=validate` — §2.3.
+- ✅ **Production boot with `ddl-auto=validate`** — §2.3. Verified 2026-08-14 against a fresh local database.
 - ⬜ **No test touches the real filter chain.** Every slice test uses `standaloneSetup`, which skips
   `SecurityConfig` by design — so matcher **ordering**, the thing most likely to break, has no
   automated guard at all. A `@SpringBootTest(webEnvironment=RANDOM_PORT)` + `TestRestTemplate` happy

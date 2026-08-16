@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
-import { SecurityOverviewDataInterface } from '../interface/security-overview.interface';
+import { SecurityOverviewDataInterface, SecuritySettingsDataInterface } from '../interface/security-overview.interface';
 import { environment } from '../../environments/environment';
 
 /**
@@ -71,6 +71,38 @@ export class SecurityDashboardService {
           `&suspiciousPage=${suspiciousPage}&suspiciousSize=${suspiciousSize}` +
           `&restrictedPage=${restrictedPage}&restrictedSize=${restrictedSize}`,
       )
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Fetches the current anomaly detection overrides (FUTURE-ENHANCEMENTS "Anomaly signal tuning
+   * UI"). A {@code null} field means no override is on record — see
+   * {@link SecuritySettingsInterface} for why that must not be treated as false/zero.
+   *
+   * @returns Observable emitting the envelope carrying {@code user} and {@code settings}
+   */
+  anomalySettings$ = (): Observable<CustomHttpResponseInterface<SecuritySettingsDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<SecuritySettingsDataInterface>>(`${this.server}/admin/security/anomaly-settings`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Sets or clears the anomaly detection overrides. A full replace, not a partial patch — passing
+   * {@code null} for either argument clears that override back to the server's env default, so a
+   * caller that wants to change only one field must resend the other's current value.
+   *
+   * @param enabled      the new override, or null to clear it
+   * @param historyLimit the new override, or null to clear it
+   * @returns Observable emitting the envelope carrying {@code user} and the settings as persisted
+   */
+  updateAnomalySettings$ = (
+    enabled: boolean | null,
+    historyLimit: number | null,
+  ): Observable<CustomHttpResponseInterface<SecuritySettingsDataInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<SecuritySettingsDataInterface>>(`${this.server}/admin/security/anomaly-settings`, {
+        enabled,
+        historyLimit,
+      })
       .pipe(catchError(this.handleError));
 
   /**

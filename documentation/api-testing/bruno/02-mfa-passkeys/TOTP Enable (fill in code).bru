@@ -1,0 +1,29 @@
+meta {
+  name: TOTP Enable (fill in code)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/user/totp/enable
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "code": "REPLACE_WITH_6_DIGIT_CODE"
+  }
+}
+
+docs {
+  Not runnable as-is — replace the code with a live TOTP value generated from
+  the secret returned by TOTP Setup. WebAuthn/passkey enrollment isn't
+  included in this collection at all: it needs a real browser-generated
+  public-key credential that no HTTP client can fake.
+}

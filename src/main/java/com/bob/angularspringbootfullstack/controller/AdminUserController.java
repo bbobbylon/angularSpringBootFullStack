@@ -14,6 +14,7 @@ import com.bob.angularspringbootfullstack.service.RoleService;
 import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import com.bob.angularspringbootfullstack.utils.SortUtils;
 import com.bob.angularspringbootfullstack.utils.UserTypeResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collection;
+import java.util.Map;
+import java.util.Optional;
 
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ACCOUNT_SETTINGS_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.MFA_RESET;
@@ -41,7 +44,6 @@ import static com.bob.angularspringbootfullstack.enumeration.EventType.PASSKEY_R
 import static com.bob.angularspringbootfullstack.enumeration.EventType.PROFILE_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ROLE_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.SESSION_REVOKED;
-import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
@@ -86,6 +88,32 @@ public class AdminUserController {
     /** Default directory/event page size, matching NFR-PERF-3's stated default of 10. */
     private static final int DEFAULT_PAGE_SIZE = 10;
 
+    /**
+     * Client-facing sort fields the {@code /admin/user/list} directory accepts, mapped to the
+     * actual {@code users} column each names — the raw-JDBC counterpart of
+     * {@code CustomerController#CUSTOMER_SORT_FIELDS}. Resolved through
+     * {@link SortUtils#resolveSqlOrderBy}, which only ever hands back one of these values (or the
+     * default), so the fragment spliced into {@code UserQuery#SELECT_USERS_PAGED_QUERY} is always
+     * one this controller wrote, never anything client-supplied.
+     */
+    private static final Map<String, String> USER_SORT_FIELDS =
+            Map.of("id", "id", "firstName", "first_name", "lastName", "last_name", "email", "email", "createdAt", "created_at");
+
+    /**
+     * The organization-scoped sibling of {@link #USER_SORT_FIELDS}, {@code u.}-qualified because
+     * {@code OrganizationQuery#SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY} joins
+     * {@code userorganizations} under aliases {@code a}/{@code b} and an unqualified column name
+     * could otherwise collide with one on the joined table.
+     */
+    private static final Map<String, String> ORG_SCOPED_USER_SORT_FIELDS =
+            Map.of("id", "u.id", "firstName", "u.first_name", "lastName", "u.last_name", "email", "u.email", "createdAt", "u.created_at");
+
+    /** Unsorted default for both directory queries — newest accounts first. */
+    private static final String DEFAULT_USER_ORDER_BY = "created_at DESC, id DESC";
+
+    /** {@link #DEFAULT_USER_ORDER_BY}, {@code u.}-qualified for the organization-scoped query. */
+    private static final String DEFAULT_ORG_SCOPED_USER_ORDER_BY = "u.created_at DESC, u.id DESC";
+
     private final UserService userService;
     private final RoleService roleService;
     private final EventService eventService;
@@ -121,24 +149,29 @@ public class AdminUserController {
      * @param page           0-indexed page number (defaults to 0)
      * @param size           rows per page (defaults to {@value DEFAULT_PAGE_SIZE}; capped in the repository)
      * @param searchTerm     optional free-text filter; blank lists everyone
+     * @param sort           optional {@code field,direction} sort (e.g. {@code "email,desc"}); unset or
+     *                       unrecognized falls back to the newest-first default — see {@link #USER_SORT_FIELDS}
      * @return 200 OK with users, pagination metadata, and the roles catalogue
      */
     @GetMapping("/list")
     public ResponseEntity<HttpResponse> listUsers(Authentication authentication,
                                                   @RequestParam(defaultValue = "0") int page,
                                                   @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
-                                                  @RequestParam(defaultValue = "") String searchTerm) {
+                                                  @RequestParam(defaultValue = "") String searchTerm,
+                                                  @RequestParam Optional<String> sort) {
         UserDTO caller = getAuthenticatedUser(authentication);
         // FR-ORG-1/2: an organization administrator's directory contains only users who
         // share an active organization with them; other admin tiers see everyone.
         long totalElements;
         Collection<UserDTO> users;
         if (isOrganizationScoped(caller)) {
+            String orderBy = SortUtils.resolveSqlOrderBy(sort, ORG_SCOPED_USER_SORT_FIELDS, DEFAULT_ORG_SCOPED_USER_ORDER_BY);
             totalElements = organizationService.countUsersSharingOrganizations(caller.getId(), searchTerm);
-            users = organizationService.searchUsersSharingOrganizations(caller.getId(), searchTerm, page, size);
+            users = organizationService.searchUsersSharingOrganizations(caller.getId(), searchTerm, page, size, orderBy);
         } else {
+            String orderBy = SortUtils.resolveSqlOrderBy(sort, USER_SORT_FIELDS, DEFAULT_USER_ORDER_BY);
             totalElements = userService.countUsers(searchTerm);
-            users = userService.searchUsers(searchTerm, page, size);
+            users = userService.searchUsers(searchTerm, page, size, orderBy);
         }
         int totalPages = (int) Math.ceil((double) totalElements / Math.max(size, 1));
         users.forEach(this::stampUserType);
@@ -592,15 +625,24 @@ public class AdminUserController {
     }
 
     /**
-     * Whether the caller's authority is bounded by organization membership. Only
-     * {@code ROLE_ORGANIZATION_ADMIN} is scoped; {@code ROLE_ADMIN} and
-     * {@code ROLE_APPLICATION_ADMIN} act globally (FR-ORG-3).
+     * Whether the caller's authority is bounded by organization membership. Delegates to
+     * {@link RoleType#isOrganizationScoped(String)} — every role below the two unscoped tiers
+     * ({@code ROLE_ADMIN}, {@code ROLE_APPLICATION_ADMIN}, FR-ORG-3) is scoped, not just
+     * {@code ROLE_ORGANIZATION_ADMIN} by name.
+     *
+     * <p><b>Fixed 2026-08-13:</b> this used to check the caller's role name against the literal
+     * string {@code "ROLE_ORGANIZATION_ADMIN"}. {@code ROLE_HELP_DESK_ADMIN} also carries
+     * {@code UPDATE:USER} and reaches every endpoint on this controller, but was never in that
+     * one-name check — so a help-desk admin saw and acted on every user system-wide, unscoped,
+     * while an org admin doing the identical job was correctly restricted. See
+     * {@link AnalyticsController#resolveScope}, which had the identical bug for the identical
+     * reason and is fixed the same way.
      *
      * @param caller the calling administrator from the token principal
      * @return true when organization-scope checks apply to this caller
      */
     private static boolean isOrganizationScoped(UserDTO caller) {
-        return ROLE_ORGANIZATION_ADMIN.name().equals(caller.getRoleName());
+        return RoleType.isOrganizationScoped(caller.getRoleName());
     }
 
     /**

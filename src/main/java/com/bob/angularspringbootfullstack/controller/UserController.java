@@ -181,6 +181,35 @@ public class UserController {
     }
 
     /**
+     * Redelivers an outstanding 2FA/step-up code — the "resend code" link on the verify screen.
+     *
+     * <p>Pre-authentication by definition (same as {@link #verifyCode}, which this exists to
+     * support), so it is listed in {@code Constants.PUBLIC_URLS}/{@code PUBLIC_ROUTES} and sits in
+     * {@code RateLimitFilter}'s tighter auth tier (10 req/min per IP) rather than the global tier —
+     * an unauthenticated "send me a code" endpoint is a live SMS/email-bombing target, not just a
+     * general-purpose route.
+     *
+     * <p><b>Anti-enumeration (FR-AUTH-4):</b> {@link UserService#resendVerificationCode} silently
+     * no-ops for an unknown email, a TOTP account, or an account with nothing pending, so this
+     * always returns the identical 200 regardless — the response can never be used to test which
+     * emails are registered or how an account has MFA configured.
+     *
+     * @param form validated body carrying the email a code may be outstanding for
+     * @return 200 OK with a deliberately non-committal message
+     */
+    @PostMapping("/verify/resend")
+    public ResponseEntity<HttpResponse> resendVerificationCode(@RequestBody @Valid ResendCodeForm form) {
+        userService.resendVerificationCode(form.getEmail());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .message("If a verification code is pending for that account, we've sent it again.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
      * Reloads the User entity and Role for the given DTO and wraps them in a
      * UserPrincipal so TokenProvider can mint tokens whose authorities reflect
      * the user's current permissions.

@@ -5,8 +5,8 @@
 > [README cast table](./README.md#the-shared-cast-sequence-diagram-lifelines).
 
 A single authenticated request — say the Profile page loading `GET /user/profile` — touches
-**eleven** distinct pieces of code across the two tiers before the user sees a pixel change.
-This document walks all eleven in order, then details the JWT anatomy, the authorization
+**ten** distinct pieces of code across the two tiers before the user sees a pixel change.
+This document walks all ten in order, then details the JWT anatomy, the authorization
 matcher table, and the error/refresh paths that the happy path doesn't show.
 
 ---
@@ -20,7 +20,6 @@ sequenceDiagram
     participant DOM as HTML template
     participant CMP as Component.ts
     participant SVC as UserService
-    participant CACHE as cacheInterceptor
     participant TOK as tokenInterceptor
     participant LS as localStorage
     participant NET as Browser / wire
@@ -35,9 +34,7 @@ sequenceDiagram
     U->>DOM: click / navigate
     DOM->>CMP: (event) handler fires
     CMP->>SVC: someService.method$()
-    SVC->>CACHE: HttpClient request
-    Note over CACHE: GET + cacheable + cache hit?<br/>→ return immediately, TOK never runs
-    CACHE->>TOK: cache miss → forward
+    SVC->>TOK: HttpClient request
     TOK->>LS: read access_token
     TOK->>NET: clone req + Authorization: Bearer <jwt> 🔑
     NET->>FILT: HTTP request reaches Spring
@@ -45,16 +42,16 @@ sequenceDiagram
     TP-->>FILT: valid → authorities
     FILT->>SEC: SecurityContext populated, chain continues
     SEC->>CTRL: authority matches matcher → dispatch
+    Note over SEC,CTRL: HttpCacheHeadersFilter also sits here — see §2.3.<br/>On a GET with a matching If-None-Match it answers<br/>304 itself and CTRL never runs.
     CTRL->>SRV: business call
     SRV->>REPO: query / mutate
     REPO->>DB: SQL via JdbcTemplate
     DB-->>REPO: rows
     REPO-->>SRV: domain objects
     SRV-->>CTRL: result
-    CTRL-->>NET: 200 + HttpResponse envelope (data map)
+    CTRL-->>NET: 200 + HttpResponse envelope (data map)<br/>+ Cache-Control/ETag on cacheable GETs
     NET-->>TOK: response
-    TOK-->>CACHE: pass through (store if cacheable GET)
-    CACHE-->>SVC: Observable emits
+    TOK-->>SVC: Observable emits
     SVC-->>CMP: .subscribe(next)
     CMP->>DOM: signal/state → DataState.LOADED
     DOM-->>U: UI re-renders
@@ -81,48 +78,70 @@ profile$ = (): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
 hardcoded API base. `handleError` (`user.service.ts:419`) normalizes every failure into one
 `Error` carrying the server's `reason` string, so components handle errors uniformly.
 
-### 2.2 The interceptor chain — order is load-bearing
+### 2.2 The interceptor chain
 
 Both interceptors are registered, **in this order**, at
-`tesseraapp/src/app/app.config.ts:49`:
+`tesseraapp/src/app/app.config.ts:55`:
 
 ```ts
-provideHttpClient(withInterceptors([cacheInterceptor, tokenInterceptor]))
+provideHttpClient(withInterceptors([languageInterceptor, tokenInterceptor]))
 ```
 
 ```mermaid
 flowchart TD
-    A["HttpClient request"] --> B{"cacheInterceptor<br/>cache.interceptor.ts:36"}
-    B -->|"bypassRoutes:<br/>verify/login/register/<br/>refresh/resetpassword/<br/>new/password"| F["forward, no cache"]
-    B -->|"non-GET or 'download'"| E["evictAll() then forward"]
-    B -->|"GET + cache HIT"| H["return of(cached) ✋<br/>tokenInterceptor NEVER runs<br/>→ no Authorization header"]
-    B -->|"GET + cache MISS"| F
-    F --> T{"tokenInterceptor<br/>token.interceptor.ts:35"}
-    E --> T
+    A["HttpClient request"] --> L{"languageInterceptor<br/>language.interceptor.ts"}
+    L -->|"always"| ADDLANG["adds Accept-Language<br/>from localStorage, forwards"]
+    ADDLANG --> T{"tokenInterceptor<br/>token.interceptor.ts:35"}
     T -->|"publicRoutes:<br/>login/register/verify/<br/>resetpassword/refresh"| P["forward, 🔓 no token"]
     T -->|"everything else"| ADD["clone + Authorization:<br/>Bearer access_token 🔑<br/>token.interceptor.ts:79"]
     ADD --> NET["→ server"]
     P --> NET
 ```
 
-**Why the order matters (a real correctness/security property):** because `cacheInterceptor`
-runs *first*, a cache hit returns via `of(cachedResponse)` (`cache.interceptor.ts:81`) **without
-ever calling `next()`** — so `tokenInterceptor` is skipped and no `Authorization` header is
-attached to a request that never leaves the browser. The two interceptors also keep *separate*
-bypass lists for *different* reasons:
+Neither interceptor ever short-circuits the request — both always call `next()` — so their
+relative order has no functional effect on each other; `languageInterceptor` is listed first
+simply because it is the smaller, header-only concern. `tokenInterceptor.publicRoutes`
+(`token.interceptor.ts:49`) skips endpoints hit *before* a token exists, where attaching one would
+be pointless or wrong. Note `refresh` is here because the refresh call sends the **refresh** token
+explicitly, not the access token (see §6).
 
-- `cacheInterceptor.bypassRoutes` (`cache.interceptor.ts:47`) — these endpoints return
-  *non-cacheable* data (a login returns a token, not a resource) or are flows where stale data
-  would be harmful (password reset).
-- `tokenInterceptor.publicRoutes` (`token.interceptor.ts:49`) — these are hit *before* a token
-  exists, so attaching one is pointless or wrong. Note `refresh` is here because the refresh call
-  sends the **refresh** token explicitly, not the access token (see §6).
+> There used to be a third interceptor here, `cacheInterceptor`, which *did* short-circuit — a
+> cache hit returned via `of(cachedResponse)` without ever calling `next()`, so `tokenInterceptor`
+> was skipped entirely on a hit. GET-response caching is backend-driven now; see §2.3.
 
-> ⚠️ **`logOut()` evicts the cache for a reason.** `UserService.logOut()`
-> (`user.service.ts:405`) clears both tokens *and* calls `httpCache.evictAll()`. Without that,
-> a second user signing in within the same SPA session (no full page reload) could be served the
-> first user's cached `/user/profile` — a cross-session leak. The login POST is in `bypassRoutes`,
-> so it would never trigger the normal mutation-based eviction.
+### 2.3 Response caching: backend-driven, not an interceptor
+
+`HttpCacheHeadersFilter` (backend, `filter/`) sets `Cache-Control: private, no-cache` plus an ETag
+on data-bearing GET responses; the **browser's own native HTTP cache** decides whether to reuse a
+response, transparently to Angular. No frontend code participates — there is no interceptor or
+service on this side to trace.
+
+```mermaid
+flowchart TD
+    A["GET reaches HttpCacheHeadersFilter<br/>(after SecurityFilterChain, before the controller)"] --> B{"bypass list?<br/>verify/login/register/refresh/<br/>resetpassword/new-password/download"}
+    B -->|"yes"| F["pass through untouched — no headers"]
+    B -->|"no"| C["run the controller, buffer its response,<br/>hash it (ShallowEtagHeaderFilter)"]
+    C --> D{"request's If-None-Match<br/>== fresh hash?"}
+    D -->|"yes"| E["304 Not Modified, empty body"]
+    D -->|"no"| G["200 + full body + fresh ETag<br/>+ Cache-Control: private, no-cache"]
+```
+
+`no-cache` does not mean "do not cache" — paired with an ETag it means "never reuse a cached copy
+without asking the server first." Every GET therefore still makes a real network round trip: a
+304 is cheap (no body), but the server is always consulted, so a write from a **different** user
+is reflected on the very next request — the exact property the old client-only cache could not
+provide (POST-SUBMISSION-UPGRADES.md #3). `private` matters because this API sits behind
+CloudFront (`aws/RUNBOOK.md`), a shared cache — without it, one organization's response could
+legally be served to a different organization hitting the same URL.
+
+> ⚠️ **`logout` clears the browser's cache for a reason.** `SessionController#logout` answers
+> with `Clear-Site-Data: "cache"`. Always-revalidate handles a *changed* response correctly on its
+> own, but not the edge case where two different users' responses for the same URL hash to the
+> *same* ETag (an empty list, for instance) — without this header, a second user signing in on the
+> same tab could receive a stale `304` validated against the first user's cached bytes. This is the
+> server-driven replacement for the old `UserService.logOut()` → `httpCache.evictAll()` call, which
+> existed because that client cache had no freshness check of its own and `/user/login` being a
+> bypass route meant the usual mutation-based eviction never fired on sign-in either.
 
 ---
 

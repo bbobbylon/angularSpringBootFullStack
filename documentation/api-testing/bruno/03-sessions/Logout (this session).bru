@@ -1,0 +1,29 @@
+meta {
+  name: Logout (this session)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/user/sessions/logout
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("sends Clear-Site-Data: \"cache\"", function () {
+    expect(res.getHeader("clear-site-data")).to.include("cache");
+  });
+}
+
+docs {
+  Run this LAST — it ends the session the captured access token belongs to.
+  See HttpCacheHeadersFilter / SessionController#logout.
+}

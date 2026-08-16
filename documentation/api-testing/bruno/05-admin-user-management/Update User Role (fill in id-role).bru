@@ -1,0 +1,20 @@
+meta {
+  name: Update User Role (fill in id-role)
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/admin/user/REPLACE_ID/role/ROLE_MODERATOR
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+docs {
+  Needs UPDATE:ROLE and forbids self-targeting — point this at a different
+  seeded account's id (e.g. bob.mod@tessera.dev), not {{adminId}}.
+}

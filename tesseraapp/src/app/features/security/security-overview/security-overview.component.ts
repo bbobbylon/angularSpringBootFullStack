@@ -15,11 +15,12 @@ import {
   PageInfoInterface,
   RestrictedAccountInterface,
   SecurityOverviewDataInterface,
+  SecuritySettingsInterface,
   SuspiciousLoginInterface,
 } from '../../../interface/security-overview.interface';
 import { UserInterface } from '../../../interface/user.interface';
 import { PAGE_SIZE_OPTIONS, PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
-import { TranslocoDirective } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 /** One plotted day of the login-outcome trend, with SVG coordinates pre-computed. */
 interface TrendColumn {
@@ -85,6 +86,7 @@ export class SecurityOverviewComponent implements OnInit {
   private readonly securityDashboard = inject(SecurityDashboardService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly transloco = inject(TranslocoService);
 
   /** The windows offered in the selector — a week, a month, a quarter. */
   protected readonly windowOptions = [7, 30, 90];
@@ -265,8 +267,109 @@ export class SecurityOverviewComponent implements OnInit {
   /** Accounts held back by verification rather than by a lockout. */
   protected readonly disabledCount = computed(() => this.restrictedAccounts().filter((account) => !account.enabled).length);
 
+  // ── Anomaly signal tuning (FUTURE-ENHANCEMENTS "Anomaly signal tuning UI") ─────────────────
+  // A separate request and a separate state signal from the overview above: the settings panel
+  // is admin configuration, not a reporting figure, and must not be re-fetched (or accidentally
+  // reset) every time the reporting window or a table page changes.
+
+  /** The settings row as last confirmed by the server — the baseline {@link isDirty} compares against. */
+  protected readonly savedSettings = signal<SecuritySettingsInterface | null>(null);
+
+  /**
+   * The enabled-override the admin is currently editing: {@code null} means "use the server
+   * default", matching the API's own null-means-no-override contract so there is nothing to
+   * translate between the draft and the request body.
+   */
+  protected readonly enabledDraft = signal<boolean | null>(null);
+
+  /** The history-limit override the admin is currently editing; {@code null} means "use the default". */
+  protected readonly historyLimitDraft = signal<number | null>(null);
+
+  protected readonly settingsSaving = signal(false);
+
+  /**
+   * Whether the draft differs from what the server last confirmed — gates the Save button so a
+   * click with nothing changed cannot fire a pointless request, and lets the template show an
+   * "unsaved changes" hint.
+   */
+  protected readonly settingsDirty = computed(() => {
+    const saved = this.savedSettings();
+    if (!saved) return false;
+    return saved.anomalyEnabled !== this.enabledDraft() || saved.anomalyHistoryLimit !== this.historyLimitDraft();
+  });
+
   ngOnInit(): void {
     this.load(this.selectedWindow());
+    this.loadAnomalySettings();
+  }
+
+  /** Fetches the current anomaly detection overrides and resets the draft to match. */
+  private loadAnomalySettings(): void {
+    this.securityDashboard
+      .anomalySettings$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          const settings = response.data?.settings;
+          if (!settings) return;
+          this.savedSettings.set(settings);
+          this.enabledDraft.set(settings.anomalyEnabled);
+          this.historyLimitDraft.set(settings.anomalyHistoryLimit);
+        },
+        error: (error: string) => this.notification.onError(error),
+      });
+  }
+
+  /**
+   * Sets the enabled-override draft. Called from a three-way button group (default / enabled /
+   * disabled) rather than a checkbox, since "unset" is a genuine third state here, not the
+   * absence of a boolean.
+   *
+   * @param value - null for "use the server default", otherwise the override to stage
+   */
+  protected selectEnabledDraft(value: boolean | null): void {
+    this.enabledDraft.set(value);
+  }
+
+  /**
+   * Reads the history-limit number input and stages it as the draft override; an empty field
+   * clears the override back to null ("use the default") rather than coercing to 0, which would
+   * be a real (and nonsensical) override value.
+   *
+   * @param raw - the input element's string value
+   */
+  protected onHistoryLimitInput(raw: string): void {
+    const trimmed = raw.trim();
+    this.historyLimitDraft.set(trimmed === '' ? null : Number(trimmed));
+  }
+
+  /** Clears the history-limit draft back to "use the server default". */
+  protected clearHistoryLimitDraft(): void {
+    this.historyLimitDraft.set(null);
+  }
+
+  /** Persists the draft and refreshes {@link savedSettings} so {@link settingsDirty} clears. */
+  protected saveAnomalySettings(): void {
+    if (!this.settingsDirty() || this.settingsSaving()) return;
+    this.settingsSaving.set(true);
+    this.securityDashboard
+      .updateAnomalySettings$(this.enabledDraft(), this.historyLimitDraft())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          const settings = response.data?.settings;
+          this.settingsSaving.set(false);
+          if (!settings) return;
+          this.savedSettings.set(settings);
+          this.enabledDraft.set(settings.anomalyEnabled);
+          this.historyLimitDraft.set(settings.anomalyHistoryLimit);
+          this.notification.onSuccess(this.transloco.translate('toasts.settingsUpdated'));
+        },
+        error: (error: string) => {
+          this.notification.onError(error);
+          this.settingsSaving.set(false);
+        },
+      });
   }
 
   /**

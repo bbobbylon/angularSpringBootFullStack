@@ -34,9 +34,9 @@ src/app/
 │   ├── users/                admin: users, user-details, roles-matrix
 │   ├── security/             Account Security Center (MFA + sessions)
 │   └── profile/              profile + password
-├── service/                  user, admin-user, customer, theme, notifications, http-cache
+├── service/                  user, admin-user, customer, theme, notifications
 ├── guard/                    authentication.guard, admin.guard
-├── interceptor/              token.interceptor (auth + refresh), cache.interceptor
+├── interceptor/              token.interceptor (auth + refresh), language.interceptor
 ├── interface/                API/UI TypeScript contracts
 └── enumeration/              Key (storage keys), DataState, EventType
 ```

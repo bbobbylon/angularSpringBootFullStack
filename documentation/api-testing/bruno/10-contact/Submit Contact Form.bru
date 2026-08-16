@@ -1,0 +1,35 @@
+meta {
+  name: Submit Contact Form
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/contact
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Bruno Test",
+    "email": "bruno.test@example.com",
+    "subject": "Smoke test",
+    "message": "Sent by the Bruno collection — safe to ignore."
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  Public. Sends a REAL notification via NotificationService — think before
+  mashing Send repeatedly.
+}

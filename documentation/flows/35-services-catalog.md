@@ -39,7 +39,6 @@ sequenceDiagram
     participant DOM as services-catalog.component.html
     participant CMP as ServicesCatalogComponent
     participant SVC as CustomerService
-    participant CACHE as cacheInterceptor
     participant TOK as tokenInterceptor
     participant CTRL as CustomerController
     participant SRV as CustomerServiceImpl
@@ -48,9 +47,7 @@ sequenceDiagram
     U->>DOM: navigate /services (navbar → Service Catalog  :53)
     Note over CMP: ngOnInit → newInvoice$()  :73-75
     CMP->>SVC: newInvoice$()  customer.service.ts:139-142
-    SVC->>CACHE: GET /customer/invoice/new
-    Note over CACHE: GET, url has no bypass token → cacheable<br/>hit short-circuits (no token attach)  cache.interceptor.ts
-    CACHE->>TOK: (on miss) forward
+    SVC->>TOK: GET /customer/invoice/new
     Note over TOK: not a public route → attach Bearer 🔑  token.interceptor.ts
     TOK->>CTRL: GET /customer/invoice/new  🔑
     CTRL->>SRV: getServices() + getCustomers()  :248-249
@@ -73,10 +70,14 @@ sequenceDiagram
 > likewise inherited verbatim: `"New invoice page reached and Customers have been retrieved!"`
 > (`CustomerController.java:250`), which reads oddly on a catalog page.
 
-> **Cache sharing.** Because the key is the bare URL `/customer/invoice/new`, the catalog and the
-> [New Invoice](./31-invoices.md) page share **one** cache entry. Visiting one warms the other; any
-> mutation (`POST /customer/create`, `POST /customer/invoice/addtocustomer/{id}`, …) calls
-> `cacheInterceptor.evictAll()` and the next catalog visit re-fetches fresh ([`00 §2.2`](./00-anatomy-of-a-request.md)).
+> **Cache sharing, revised.** The browser's native HTTP cache is still keyed by the bare URL
+> `/customer/invoice/new`, so the catalog and the [New Invoice](./31-invoices.md) page still share
+> one cache entry — visiting one still "warms" the other, in the sense that its ETag is now on
+> file. What changed is what warming buys: it no longer lets a visit skip the network. Every visit
+> to either page always revalidates with the server (`Cache-Control: private, no-cache`); a prior
+> mutation (`POST /customer/create`, `POST /customer/invoice/addtocustomer/{id}`, …) simply means
+> that revalidation comes back `200` with fresh data instead of an empty `304`, with no explicit
+> eviction call required on either side ([`00 §2.3`](./00-anatomy-of-a-request.md)).
 
 ---
 

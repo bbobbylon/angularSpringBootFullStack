@@ -152,6 +152,21 @@
       "passwordOnly": "Somente senha",
       "federatedSignIns": "Logins federados",
       "recoveryCodesUsed": "Códigos de recuperação usados"
+    },
+    "settings": {
+      "title": "Configurações de detecção de anomalias",
+      "subtitle": "As alterações têm efeito já no próximo login — sem necessidade de novo deploy.",
+      "enabledLabel": "Detecção de anomalias",
+      "useDefault": "Usar padrão do servidor",
+      "enabled": "Ativada",
+      "disabled": "Desativada",
+      "historyLimitLabel": "Janela de histórico de login",
+      "historyLimitHint": "Quantos dos logins recentes da conta são usados para comparar com um novo login.",
+      "historyLimitPlaceholder": "Padrão do servidor",
+      "clearOverride": "Usar padrão",
+      "save": "Salvar alterações",
+      "saving": "Salvando…",
+      "unsavedChanges": "Alterações não salvas"
     }
   },
   "servicesAdmin": {

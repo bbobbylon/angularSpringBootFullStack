@@ -27,7 +27,6 @@ sequenceDiagram
     participant DOM as register.component.html
     participant CMP as RegisterComponent.ts
     participant SVC as UserService
-    participant CACHE as cacheInterceptor
     participant TOK as tokenInterceptor
     participant SEC as SecurityConfig
     participant CTRL as UserController
@@ -40,9 +39,7 @@ sequenceDiagram
     CMP->>CMP: registerState.set({ LOADING })  :50
     Note over DOM: button → spinner "Creating account…", inputs disabled
     CMP->>SVC: register$(registerForm.value)  :51 / user.service.ts:91
-    SVC->>CACHE: POST /user/register
-    Note over CACHE: 'register' ∈ bypassRoutes → no cache  :47
-    CACHE->>TOK: forward
+    SVC->>TOK: POST /user/register
     Note over TOK: 'register' ∈ publicRoutes → 🔓 no token  :49
     TOK->>SEC: POST /user/register
     Note over SEC: matcher #1 permitAll  :137

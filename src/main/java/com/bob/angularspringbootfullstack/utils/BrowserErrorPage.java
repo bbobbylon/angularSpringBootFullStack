@@ -238,9 +238,10 @@ public final class BrowserErrorPage {
     /**
      * Escapes XML-significant characters so message text cannot break out of the surrounding markup.
      * <p>
-     * Relevant because the 403 message is derived from the request path by
-     * {@code CapabilityCatalog.messageFor(request)} — attacker-influenced input reaching a rendered
-     * page is precisely the reflected-XSS shape, and this is the one place it could land.
+     * Relevant because the 403 message is derived from the request path via
+     * {@code CapabilityCatalog.actionKeyFor(request)} and a {@code MessageSource} lookup in
+     * {@code CustomAccessDeniedHandler} — attacker-influenced input reaching a rendered page is
+     * precisely the reflected-XSS shape, and this is the one place it could land.
      *
      * @param value raw text, possibly {@code null}
      * @return escaped text, or an empty string when {@code value} is {@code null}

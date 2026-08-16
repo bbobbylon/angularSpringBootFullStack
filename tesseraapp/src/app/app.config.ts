@@ -6,7 +6,7 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { routes } from './app.routes';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { tokenInterceptor } from './interceptor/token.interceptor';
-import { cacheInterceptor } from './interceptor/cache.interceptor';
+import { languageInterceptor } from './interceptor/language.interceptor';
 import { provideToastr } from 'ngx-toastr';
 import { provideTransloco } from '@jsverse/transloco';
 import { TranslocoHttpLoader } from './service/transloco-loader';
@@ -42,14 +42,19 @@ export const appConfig: ApplicationConfig = {
      * Registers Angular's HttpClient so it can be injected anywhere in the app
      * (services, components, etc.) to make HTTP requests to the backend.
      *
-     * withInterceptors([cacheInterceptor, tokenInterceptor]) plugs both interceptors
-     * into the HTTP pipeline in order. cacheInterceptor runs first — a cache hit
-     * returns immediately without ever invoking tokenInterceptor, so no Authorization
-     * header is attached to a request that never leaves the browser. On a cache miss,
-     * the request flows through to tokenInterceptor, which attaches the JWT header
-     * before forwarding to the server.
+     * withInterceptors([languageInterceptor, tokenInterceptor]) plugs both into the HTTP
+     * pipeline in order. languageInterceptor runs first and only ever adds an Accept-Language
+     * header — it never short-circuits the request — before tokenInterceptor attaches the JWT
+     * header and forwards to the server.
+     *
+     * There used to be a third, cacheInterceptor, doing GET-response caching from an in-memory
+     * store keyed by URL with no freshness check — it could not tell when another user's write
+     * made its cached copy stale (POST-SUBMISSION-UPGRADES.md #3). That responsibility has moved
+     * to the backend: HttpCacheHeadersFilter now sends Cache-Control: private, no-cache plus an
+     * ETag on every cacheable GET, so the browser's own native HTTP cache always revalidates with
+     * the server before reusing a response — no Angular-side interceptor or service required.
      */
-    provideHttpClient(withInterceptors([cacheInterceptor, tokenInterceptor])),
+    provideHttpClient(withInterceptors([languageInterceptor, tokenInterceptor])),
 
     { provide: IMAGE_CONFIG, useValue: { disableImageSizeWarning: true } },
     provideAnimationsAsync(),

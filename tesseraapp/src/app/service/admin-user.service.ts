@@ -17,9 +17,10 @@ import { environment } from '../../environments/environment';
  * administrative operations on OTHER users never share a code path; that separation
  * is part of how the app closes the FR-RBAC-4 self-role-elevation gap.
  *
- * Mutations here are PATCH requests, so {@code cacheInterceptor} evicts its whole GET
- * cache on each one — the directory and detail views always refetch fresh state after
- * a role or account-state change.
+ * Mutations here are PATCH requests. GET responses on the directory/detail views carry
+ * {@code Cache-Control: private, no-cache} + an ETag (backend-driven, see
+ * {@code HttpCacheHeadersFilter}), so the browser always revalidates with the server on the next
+ * fetch — a role or account-state change is visible immediately without any explicit eviction.
  */
 @Injectable({
   providedIn: 'root',
@@ -35,12 +36,15 @@ export class AdminUserService {
    * @param page       - 0-based page index
    * @param searchTerm - free-text filter; empty string lists everyone
    * @param size       - rows per page (backend default and cap apply)
+   * @param sort       - optional `field,direction` (e.g. `"email,desc"`); unset or a field outside
+   *                     the backend's allow-list (`AdminUserController#USER_SORT_FIELDS`) falls
+   *                     back to the default newest-first order
    * @returns Observable of the API envelope carrying users, paging metadata, and roles
    */
-  users$ = (page = 0, searchTerm = '', size = 10): Observable<CustomHttpResponseInterface<AdminUserListInterface>> =>
+  users$ = (page = 0, searchTerm = '', size = 10, sort?: string): Observable<CustomHttpResponseInterface<AdminUserListInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<AdminUserListInterface>>(
-        `${this.server}/admin/user/list?page=${page}&size=${size}&searchTerm=${encodeURIComponent(searchTerm)}`,
+        `${this.server}/admin/user/list?page=${page}&size=${size}&searchTerm=${encodeURIComponent(searchTerm)}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}`,
       )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 

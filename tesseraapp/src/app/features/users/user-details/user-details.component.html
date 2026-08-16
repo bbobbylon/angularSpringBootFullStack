@@ -177,39 +177,41 @@
                       </button>
                     }
                   </div>
-                  <table class="table table-hover mb-0">
-                    <thead>
-                    <tr>
-                      <th scope="col">{{ t('security.log.device') }}</th>
-                      <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
-                      <th scope="col">Created</th>
-                      <th scope="col">Last used</th>
-                      <th scope="col">{{ t('common.action') }}</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                      @for (session of state?.appData?.data?.sessions; track session.family) {
-                        <tr>
-                          <td>{{ session.device }}</td>
-                          <td>{{ session.ipAddress }}</td>
-                          <td>{{ session.createdAt | date: 'MMM d, y, h:mm a' }}</td>
-                          <td>{{ session.lastUsedAt | date: 'MMM d, y, h:mm a' }}</td>
-                          <td>
-                            @if (canEditSettings && !isSelf()) {
-                              <button (click)="revokeSession(session.family)" [disabled]="isLoading()"
-                                      class="btn btn-outline-danger btn-sm" type="button">
-                                {{ t('common.delete') }}
-                              </button>
-                            }
-                          </td>
-                        </tr>
-                      } @empty {
-                        <tr>
-                          <td class="text-muted" colspan="5">No active sessions.</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
+                  <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                      <thead>
+                      <tr>
+                        <th scope="col">{{ t('security.log.device') }}</th>
+                        <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Last used</th>
+                        <th scope="col">{{ t('common.action') }}</th>
+                      </tr>
+                      </thead>
+                      <tbody>
+                        @for (session of state?.appData?.data?.sessions; track session.family) {
+                          <tr>
+                            <td>{{ session.device }}</td>
+                            <td>{{ session.ipAddress }}</td>
+                            <td>{{ session.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                            <td>{{ session.lastUsedAt | date: 'MMM d, y, h:mm a' }}</td>
+                            <td>
+                              @if (canEditSettings && !isSelf()) {
+                                <button (click)="revokeSession(session.family)" [disabled]="isLoading()"
+                                        class="btn btn-outline-danger btn-sm" type="button">
+                                  {{ t('common.delete') }}
+                                </button>
+                              }
+                            </td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td class="text-muted" colspan="5">No active sessions.</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
@@ -231,37 +233,39 @@
                       </button>
                     }
                   </div>
-                  <table class="table table-hover mb-0">
-                    <thead>
-                    <tr>
-                      <th scope="col">Passkey</th>
-                      <th scope="col">Created</th>
-                      <th scope="col">Last used</th>
-                      <th scope="col">{{ t('common.action') }}</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                      @for (passkey of state?.appData?.data?.passkeys; track passkey.id) {
-                        <tr>
-                          <td>{{ passkey.deviceName || 'Passkey' }}</td>
-                          <td>{{ passkey.createdAt | date: 'MMM d, y' }}</td>
-                          <td>{{ passkey.lastUsedAt ? (passkey.lastUsedAt | date: 'MMM d, y, h:mm a') : 'Never' }}</td>
-                          <td>
-                            @if (canEditSettings && !isSelf()) {
-                              <button (click)="revokePasskey(passkey.id)" [disabled]="isLoading()"
-                                      class="btn btn-outline-danger btn-sm" type="button">
-                                {{ t('common.delete') }}
-                              </button>
-                            }
-                          </td>
-                        </tr>
-                      } @empty {
-                        <tr>
-                          <td class="text-muted" colspan="4">No passkeys registered.</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
+                  <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                      <thead>
+                      <tr>
+                        <th scope="col">Passkey</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Last used</th>
+                        <th scope="col">{{ t('common.action') }}</th>
+                      </tr>
+                      </thead>
+                      <tbody>
+                        @for (passkey of state?.appData?.data?.passkeys; track passkey.id) {
+                          <tr>
+                            <td>{{ passkey.deviceName || 'Passkey' }}</td>
+                            <td>{{ passkey.createdAt | date: 'MMM d, y' }}</td>
+                            <td>{{ passkey.lastUsedAt ? (passkey.lastUsedAt | date: 'MMM d, y, h:mm a') : 'Never' }}</td>
+                            <td>
+                              @if (canEditSettings && !isSelf()) {
+                                <button (click)="revokePasskey(passkey.id)" [disabled]="isLoading()"
+                                        class="btn btn-outline-danger btn-sm" type="button">
+                                  {{ t('common.delete') }}
+                                </button>
+                              }
+                            </td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td class="text-muted" colspan="4">No passkeys registered.</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
@@ -305,52 +309,54 @@
                       ({{ state?.appData?.data?.eventsTotalElements ?? 0 }} total event(s))
                     </span>
                   </h5>
-                  <table class="table table-hover">
-                    <thead>
-                    <tr>
-                      <th scope="col">{{ t('securityCenter.event') }}</th>
-                      <th scope="col">{{ t('security.log.device') }}</th>
-                      <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
-                      <th scope="col">{{ t('common.date') }}</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                      @for (event of state?.appData?.data?.events; track $index) {
-                        <tr>
-                          <td>
-                            <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
-                              <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
-                              {{ getEventDisplay(event.type).label }}
-                            </span>
-                            <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
-                          </td>
-                          <td style="font-size: 0.85rem;">{{ event.device }}</td>
-                          <td style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
-                          <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
-                        </tr>
-                      } @empty {
-                        <tr>
-                          <td class="text-center text-muted" colspan="4">{{ t('userDetails.noActivity') }}</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
+                  <div class="table-responsive">
+                    <table class="table table-hover">
+                      <thead>
+                      <tr>
+                        <th scope="col">{{ t('securityCenter.event') }}</th>
+                        <th scope="col">{{ t('security.log.device') }}</th>
+                        <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
+                        <th scope="col">{{ t('common.date') }}</th>
+                      </tr>
+                      </thead>
+                      <tbody>
+                        @for (event of state?.appData?.data?.events; track $index) {
+                          <tr>
+                            <td>
+                              <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
+                                <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
+                                {{ getEventDisplay(event.type).label }}
+                              </span>
+                              <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
+                            </td>
+                            <td style="font-size: 0.85rem;">{{ event.device }}</td>
+                            <td style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
+                            <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td class="text-center text-muted" colspan="4">{{ t('userDetails.noActivity') }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
 
                   @if ((state?.appData?.data?.eventsTotalPages ?? 0) > 1) {
-                    <nav aria-label="Activity pagination">
+                    <nav [attr.aria-label]="t('common.pageNavigation')">
                       <ul class="pagination pagination-sm justify-content-end mb-0">
                         <li [class.disabled]="currentEventPage() === 0" class="page-item">
-                          <button (click)="goToEventsPage(currentEventPage() - 1)" class="page-link">&laquo;</button>
+                          <button (click)="goToEventsPage(currentEventPage() - 1)"
+                                  [disabled]="currentEventPage() === 0"
+                                  class="page-link">&laquo;</button>
                         </li>
-                        @for (p of [].constructor(state?.appData?.data?.eventsTotalPages ?? 0); track $index; let i = $index) {
-                          <li class="page-item">
-                            <button (click)="goToEventsPage(i)"
-                                    [class.active]="i === currentEventPage()"
-                                    class="page-link">{{ i + 1 }}</button>
-                          </li>
-                        }
+                        <li class="page-item disabled">
+                          <span class="page-link">{{ t('common.pageXofY', { page: currentEventPage() + 1, total: state?.appData?.data?.eventsTotalPages ?? 1 }) }}</span>
+                        </li>
                         <li [class.disabled]="currentEventPage() === (state?.appData?.data?.eventsTotalPages ?? 1) - 1" class="page-item">
-                          <button (click)="goToEventsPage(currentEventPage() + 1)" class="page-link">&raquo;</button>
+                          <button (click)="goToEventsPage(currentEventPage() + 1)"
+                                  [disabled]="currentEventPage() === (state?.appData?.data?.eventsTotalPages ?? 1) - 1"
+                                  class="page-link">&raquo;</button>
                         </li>
                       </ul>
                     </nav>

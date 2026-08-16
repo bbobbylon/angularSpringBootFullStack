@@ -16,7 +16,6 @@ import {
 import { UserInterface } from '../interface/user.interface';
 import { Key } from '../enumeration/key.enumeration';
 import { JwtHelperService } from '@auth0/angular-jwt';
-import { HttpCacheService } from './http-cache.service';
 import { environment } from '../../environments/environment';
 
 /**
@@ -41,7 +40,6 @@ import { environment } from '../../environments/environment';
 })
 export class UserService {
   private http = inject(HttpClient);
-  private readonly httpCache = inject(HttpCacheService);
   private jwtHelper = new JwtHelperService();
   private readonly server = environment.apiUrl;
 
@@ -56,6 +54,20 @@ export class UserService {
     this.http
       .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/code/${email}/${code}`)
       .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Requests redelivery of an outstanding 2FA/step-up code ({@code POST /user/verify/resend},
+   * public). The backend always returns the same non-committal 200 (FR-AUTH-4) regardless of
+   * whether the email exists or a code was actually pending — see
+   * {@code UserController#resendVerificationCode}.
+   *
+   * @param email - the email currently mid-verification on the login screen
+   * @returns Observable emitting the backend's generic acknowledgement
+   */
+  resendCode$ = (email: string): Observable<CustomHttpResponseInterface<void>> =>
+    this.http
+      .post<CustomHttpResponseInterface<void>>(`${this.server}/user/verify/resend`, { email })
+      .pipe(catchError(this.handleError));
 
   verifyAccount$ = (key: string, type: AccountType): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
@@ -615,16 +627,17 @@ export class UserService {
   }
 
   /**
-   * Ends the user's session by clearing both JWT tokens from localStorage AND
-   * evicting the in-memory HTTP cache.
+   * Ends the user's session by clearing both JWT tokens from localStorage.
    *
-   * The cache eviction is essential for correctness and security. {@link HttpCacheService}
-   * (populated by {@code cacheInterceptor}) keys GET responses by URL and is not cleared
-   * on logout by default; the subsequent {@code /user/login} POST is in the interceptor's
-   * {@code bypassRoutes}, so it never triggers the usual mutation-based eviction either.
-   * Without this call, a different user signing in within the same SPA session (no full
-   * page reload) could be served the previous user's cached {@code /user/profile} data —
-   * a cross-session data leak that directly violates the app's zero-trust posture.
+   * <p>GET responses are cached by the browser's native HTTP cache now (backend-driven via
+   * {@code Cache-Control: private, no-cache} + ETag — see
+   * {@code HttpCacheHeadersFilter}/POST-SUBMISSION-UPGRADES.md #3), which always revalidates with
+   * the server before reusing a response, so there is no client-side cache to evict here the way
+   * {@code HttpCacheService#evictAll()} previously had to be called by hand. The one gap that
+   * revalidation alone cannot close — a same-tab, different-user ETag collision — is handled
+   * server-side instead: {@code SessionController#logout} answers with
+   * {@code Clear-Site-Data: "cache"}, which purges the browser's HTTP cache for this origin as
+   * part of the POST below, before a different user can ever sign in on the same tab.
    */
   logOut() {
     // Tell the server FIRST, while the access token still exists to authenticate the call —
@@ -647,7 +660,6 @@ export class UserService {
       });
     localStorage.removeItem(Key.TOKEN);
     localStorage.removeItem(Key.REFRESH_TOKEN);
-    this.httpCache.evictAll();
   }
 
   /**

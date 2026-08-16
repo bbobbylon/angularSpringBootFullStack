@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 
@@ -110,38 +111,38 @@ class CustomerControllerOrgScopeTest {
     @DisplayName("an org admin's customer list is restricted to their organizations")
     void orgAdminCustomerListIsScoped() {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
-        when(customerService.getCustomersForOrganizations(ORG_IDS, 0, 20)).thenReturn(new PageImpl<>(List.of(new Customer())));
+        when(customerService.getCustomersForOrganizations(ORG_IDS, 0, 20, Sort.unsorted())).thenReturn(new PageImpl<>(List.of(new Customer())));
         when(customerService.getStatsForOrganizations(ORG_IDS)).thenReturn(new Stats());
         when(customerService.getCustomerStatusBreakdownForOrganizations(ORG_IDS)).thenReturn(Map.of());
 
-        controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty());
+        controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
 
-        verify(customerService).getCustomersForOrganizations(ORG_IDS, 0, 20);
-        verify(customerService, never()).getCustomers(anyInt(), anyInt());
+        verify(customerService).getCustomersForOrganizations(ORG_IDS, 0, 20, Sort.unsorted());
+        verify(customerService, never()).getCustomers(anyInt(), anyInt(), any());
     }
 
     @Test
     @DisplayName("an org admin's search is restricted to their organizations")
     void orgAdminSearchIsScoped() {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
-        when(customerService.searchCustomersForOrganizations("ada", ORG_IDS, 0, 20)).thenReturn(Page.empty());
+        when(customerService.searchCustomersForOrganizations("ada", ORG_IDS, 0, 20, Sort.unsorted())).thenReturn(Page.empty());
 
-        controller.searchCustomer(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of("ada"), Optional.empty(), Optional.empty());
+        controller.searchCustomer(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of("ada"), Optional.empty(), Optional.empty(), Optional.empty());
 
-        verify(customerService).searchCustomersForOrganizations("ada", ORG_IDS, 0, 20);
-        verify(customerService, never()).searchCustomers(anyString(), anyInt(), anyInt());
+        verify(customerService).searchCustomersForOrganizations("ada", ORG_IDS, 0, 20, Sort.unsorted());
+        verify(customerService, never()).searchCustomers(anyString(), anyInt(), anyInt(), any());
     }
 
     @Test
     @DisplayName("an org admin's invoice list is restricted to their organizations")
     void orgAdminInvoiceListIsScoped() {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
-        when(customerService.getInvoicesForOrganizations(ORG_IDS, 0, 20)).thenReturn(new PageImpl<>(List.of(new Invoice())));
+        when(customerService.getInvoicesForOrganizations(ORG_IDS, 0, 20, Sort.unsorted())).thenReturn(new PageImpl<>(List.of(new Invoice())));
 
-        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty());
+        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
 
-        verify(customerService).getInvoicesForOrganizations(ORG_IDS, 0, 20);
-        verify(customerService, never()).getInvoices(anyInt(), anyInt());
+        verify(customerService).getInvoicesForOrganizations(ORG_IDS, 0, 20, Sort.unsorted());
+        verify(customerService, never()).getInvoices(anyInt(), anyInt(), any());
     }
 
     @Test
@@ -218,25 +219,25 @@ class CustomerControllerOrgScopeTest {
     @Test
     @DisplayName("a plain ROLE_USER remains unscoped — this closes an org-admin gap, not a per-user wall")
     void plainUserIsUnscoped() {
-        when(customerService.getCustomers(0, 20)).thenReturn(Page.empty());
+        when(customerService.getCustomers(0, 20, Sort.unsorted())).thenReturn(Page.empty());
         when(customerService.getStats()).thenReturn(new Stats());
         when(customerService.getCustomerStatusBreakdown()).thenReturn(Map.of());
 
-        controller.getCustomers(callerWithRole(ROLE_USER.name()), Optional.empty(), Optional.empty());
+        controller.getCustomers(callerWithRole(ROLE_USER.name()), Optional.empty(), Optional.empty(), Optional.empty());
 
-        verify(customerService).getCustomers(0, 20);
+        verify(customerService).getCustomers(0, 20, Sort.unsorted());
         verify(organizationService, never()).findActiveOrganizationIds(anyLong());
     }
 
     @Test
     @DisplayName("a plain admin remains unscoped and still sees system-wide invoices")
     void adminIsUnscoped() {
-        when(customerService.getInvoices(0, 20)).thenReturn(Page.empty());
+        when(customerService.getInvoices(0, 20, Sort.unsorted())).thenReturn(Page.empty());
 
-        controller.getInvoices(callerWithRole(ROLE_ADMIN.name()), Optional.empty(), Optional.empty());
+        controller.getInvoices(callerWithRole(ROLE_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
 
-        verify(customerService).getInvoices(0, 20);
-        verify(customerService, never()).getInvoicesForOrganizations(any(), anyInt(), anyInt());
+        verify(customerService).getInvoices(0, 20, Sort.unsorted());
+        verify(customerService, never()).getInvoicesForOrganizations(any(), anyInt(), anyInt(), any());
     }
 
     // ── The degenerate case ───────────────────────────────────────────────────────────────────
@@ -247,9 +248,9 @@ class CustomerControllerOrgScopeTest {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(List.of());
 
         ResponseEntity<HttpResponse> response =
-                controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(2), Optional.of(10));
+                controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(2), Optional.of(10), Optional.empty());
 
-        verify(customerService, never()).getCustomersForOrganizations(any(), anyInt(), anyInt());
+        verify(customerService, never()).getCustomersForOrganizations(any(), anyInt(), anyInt(), any());
         assertTrue(((Page<?>) dataOf(response).get("page")).isEmpty());
     }
 

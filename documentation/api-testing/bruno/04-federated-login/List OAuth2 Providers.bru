@@ -1,0 +1,17 @@
+meta {
+  name: List OAuth2 Providers
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/oauth2/providers
+  body: none
+  auth: none
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

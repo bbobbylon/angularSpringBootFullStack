@@ -1,16 +1,22 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.form.AnomalySettingsForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.SecurityOverview;
+import com.bob.angularspringbootfullstack.model.SecuritySettings;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.SecurityDashboardService;
+import com.bob.angularspringbootfullstack.service.SecuritySettingsService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -62,6 +68,8 @@ public class SecurityDashboardController {
     private final UserService userService;
     /** Resolves which organizations a scoped caller may see (FR-ORG-2). */
     private final OrganizationService organizationService;
+    /** Admin-tunable anomaly detection overrides (FUTURE-ENHANCEMENTS "Anomaly signal tuning UI"). */
+    private final SecuritySettingsService securitySettingsService;
 
     /**
      * The whole dashboard in one response: counters, the flagged-sign-in table, the login-outcome
@@ -106,6 +114,57 @@ public class SecurityDashboardController {
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
                                 "overview", overview))
                         .message("Security overview retrieved successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * The anomaly detection knobs an admin can currently see — the effective overrides on record,
+     * {@code null} where there is none. Deliberately not org-scoped: unlike the overview, these are
+     * platform-wide settings that apply to every login regardless of which organization it belongs
+     * to, so there is no "whose settings" question for {@link #resolveScope} to answer here.
+     *
+     * @param user the authenticated (admin) principal, echoed in the envelope like every other
+     *             endpoint in this application
+     * @return 200 OK with {@code user} and {@code settings}
+     */
+    @GetMapping("/anomaly-settings")
+    @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
+    public ResponseEntity<HttpResponse> getAnomalySettings(@AuthenticationPrincipal UserDTO user) {
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "settings", securitySettingsService.getSettings()))
+                        .message("Anomaly detection settings retrieved successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Sets or clears the anomaly detection overrides (FUTURE-ENHANCEMENTS "Anomaly signal tuning
+     * UI"). A full replace, not a partial patch — see {@link AnomalySettingsForm} — so a caller
+     * that wants to change only one field resends the other's current value. Takes effect on the
+     * very next login: {@code LoginRiskServiceImpl#assess} reads this table live rather than
+     * caching it, so there is nothing to invalidate here.
+     *
+     * @param user the authenticated (admin) principal; its id is stamped onto the audit columns
+     * @param form the validated override values; either field may be {@code null} to clear it
+     * @return 200 OK with {@code user} and the settings row as persisted
+     */
+    @PatchMapping("/anomaly-settings")
+    @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
+    public ResponseEntity<HttpResponse> updateAnomalySettings(@AuthenticationPrincipal UserDTO user,
+                                                               @RequestBody @Valid AnomalySettingsForm form) {
+        SecuritySettings updated = securitySettingsService.updateSettings(form.getEnabled(), form.getHistoryLimit(), user.getId());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "settings", updated))
+                        .message("Anomaly detection settings updated successfully!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

@@ -36,7 +36,6 @@ sequenceDiagram
     U->>CMP: submit → createNewInvoice(form)  :142
     CMP->>SVC: addInvoiceToCustomer$(form.customerId, { ...form, services: serviceLines })  :147
     SVC->>CTRL: POST /customer/invoice/addtocustomer/{customerId}  🔑 (id in PATH)
-    Note over CACHE: POST → cacheInterceptor.evictAll()
     CTRL->>DB: addInvoiceToCustomer(customerId, invoice)  :291
     CTRL-->>SVC: 200 { user, customers (refreshed) }
     SVC-->>CMP: form.reset({status:'PENDING'}) + serviceLines=[{name:'',price:0}] + toast  :152-156

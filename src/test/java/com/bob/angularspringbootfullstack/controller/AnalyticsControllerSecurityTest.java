@@ -149,10 +149,10 @@ class AnalyticsControllerSecurityTest {
         assertThatThrownBy(() -> controller.getSummary(caller))
                 .as("summary must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> controller.getCustomers(caller, Optional.empty(), Optional.empty()))
+        assertThatThrownBy(() -> controller.getCustomers(caller, Optional.empty(), Optional.empty(), Optional.empty()))
                 .as("customers must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> controller.getInvoices(caller, Optional.empty(), Optional.empty()))
+        assertThatThrownBy(() -> controller.getInvoices(caller, Optional.empty(), Optional.empty(), Optional.empty()))
                 .as("invoices must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
 
@@ -165,10 +165,10 @@ class AnalyticsControllerSecurityTest {
     void updateUserAuthorityIsAllowed() {
         authenticateWith("UPDATE:USER");
         when(userService.getUserByEmail(any())).thenReturn(new UserDTO());
-        when(customerService.getInvoices(anyInt(), anyInt())).thenReturn(Page.<Invoice>empty());
+        when(customerService.getInvoices(anyInt(), anyInt(), any())).thenReturn(Page.<Invoice>empty());
 
         ResponseEntity<HttpResponse> response =
-                controller.getInvoices(principal(), Optional.of(0), Optional.of(20));
+                controller.getInvoices(principal(), Optional.of(0), Optional.of(20), Optional.empty());
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
     }
@@ -178,10 +178,10 @@ class AnalyticsControllerSecurityTest {
     void updateRoleAuthorityIsAllowed() {
         authenticateWith("UPDATE:ROLE");
         when(userService.getUserByEmail(any())).thenReturn(new UserDTO());
-        when(customerService.getInvoices(anyInt(), anyInt())).thenReturn(Page.<Invoice>empty());
+        when(customerService.getInvoices(anyInt(), anyInt(), any())).thenReturn(Page.<Invoice>empty());
 
         ResponseEntity<HttpResponse> response =
-                controller.getInvoices(principal(), Optional.of(0), Optional.of(20));
+                controller.getInvoices(principal(), Optional.of(0), Optional.of(20), Optional.empty());
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
     }

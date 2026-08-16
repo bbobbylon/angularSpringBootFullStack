@@ -9,3 +9,16 @@
   flex-direction: column;
   min-height: 100vh;
 }
+
+/*
+  `main` (the [@routeTransition] host) must claim its share of the flex column on its own,
+  not derive it from its content's height. route-animations.ts pins both the :enter and :leave
+  views to `position: absolute` for the ~330ms of every route transition, which pulls them out
+  of normal flow — an unconstrained `main` measures 0px tall for that whole window, so the
+  footer's `margin-top: auto` snaps it straight up next to the navbar until the new route
+  settles back into flow. `flex: 1` makes `main` hold the leftover vertical space itself,
+  independent of what its (possibly absolutely-positioned) children currently measure.
+*/
+main {
+  flex: 1;
+}

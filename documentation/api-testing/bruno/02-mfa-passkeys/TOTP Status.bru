@@ -1,0 +1,21 @@
+meta {
+  name: TOTP Status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/user/totp/status
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

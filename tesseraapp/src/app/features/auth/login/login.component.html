@@ -240,6 +240,20 @@
             </button>
           </form>
 
+          @if (state.mfaMethod !== 'totp') {
+            <p class="sc-auth__hint">
+              Didn't get a code?
+              <button (click)="resendCode()" [disabled]="resendInFlight() || resendCooldown() > 0"
+                      class="sc-linkbtn" type="button">
+                @if (resendCooldown() > 0) {
+                  <span>Resend code ({{ resendCooldown() }}s)</span>
+                } @else {
+                  <span>Resend code</span>
+                }
+              </button>
+            </p>
+          }
+
           <div class="sc-auth__links">
             <button (click)="loginPage()" class="sc-linkbtn" type="button">
               <i class="bi bi-arrow-left"></i> Back to login

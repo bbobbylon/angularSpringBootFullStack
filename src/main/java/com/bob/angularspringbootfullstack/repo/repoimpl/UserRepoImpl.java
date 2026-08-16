@@ -98,6 +98,9 @@ import static org.apache.commons.lang3.time.DateUtils.addDays;
 @Slf4j
 public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
 
+    /** The directory's unsorted default — newest accounts first, {@code id DESC} breaking ties. */
+    private static final String DEFAULT_USER_ORDER_BY = "created_at DESC, id DESC";
+
     //HERE WE ARE ADDING SOME BEANZ
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
@@ -270,7 +273,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      */
     @Override
     public Collection<User> list(int page, int pageSize) {
-        return searchUsers("", page, pageSize);
+        return searchUsers("", page, pageSize, DEFAULT_USER_ORDER_BY);
     }
 
     /**
@@ -285,14 +288,18 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * @param searchTerm free-text filter; blank or null lists everyone
      * @param page       0-indexed page number (negative values are treated as 0)
      * @param pageSize   rows per page (bounded to 1..100)
-     * @return the matching users on the requested page, newest accounts first
+     * @param orderBy    a validated {@code "column ASC|DESC"} fragment, spliced into
+     *                   {@link com.bob.angularspringbootfullstack.query.UserQuery#SELECT_USERS_PAGED_QUERY}'s
+     *                   {@code %s} placeholder via {@link String#format} — see that field's Javadoc
+     *                   for why this is safe only because the caller already validated it
+     * @return the matching users on the requested page, in the requested order
      */
     @Override
-    public Collection<User> searchUsers(String searchTerm, int page, int pageSize) {
+    public Collection<User> searchUsers(String searchTerm, int page, int pageSize, String orderBy) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(pageSize, 1), 100);
         try {
-            return jdbcTemplate.query(SELECT_USERS_PAGED_QUERY,
+            return jdbcTemplate.query(String.format(SELECT_USERS_PAGED_QUERY, orderBy),
                     of("searchTerm", toLikePattern(searchTerm),
                             "pageSize", safeSize,
                             "offset", safePage * safeSize),
@@ -516,6 +523,21 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             log.error("Unexpected error during 2FA code verification for email '{}': {}", email, exception.getMessage(), exception);
             throw new BadCredentialsException("An unexpected error occurred while verifying the code.");
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@link #issueVerificationCode} always writes a {@code twofactorverifications} row
+     * regardless of delivery channel — even when Twilio Verify owns the actual code and
+     * {@link #verifyCode} redeems against Verify's own state instead of this table (see that
+     * method). The local row still marks "a first factor was proven and a challenge is
+     * outstanding" in every case, which is exactly what a resend needs to check.
+     */
+    @Override
+    public boolean hasPendingVerificationCode(Long userId) {
+        Integer count = jdbcTemplate.queryForObject(COUNT_PENDING_2FA_CODE_BY_USER_ID_QUERY, of("id", userId), Integer.class);
+        return count != null && count > 0;
     }
 
     /**

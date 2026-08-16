@@ -5,8 +5,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
- * Translates a forbidden request into the name of the capability the caller was missing
- * (ROADMAP §2 — "Contact your admin to do X", API level).
+ * Translates a forbidden request into the {@code MessageSource} key for the capability the
+ * caller was missing (ROADMAP §2 — "Contact your admin to do X", API level).
  *
  * <h3>The problem this solves</h3>
  * A 403 from this API said the same thing for every endpoint: <em>"You don't have enough
@@ -23,29 +23,42 @@ import java.util.List;
  * and it can be read alongside {@code SecurityConfig}'s matchers — which is the point, since the
  * two must describe the same rules to stay truthful.
  *
+ * <h3>Backend-driven i18n (FUTURE-ENHANCEMENTS.md §3.3)</h3>
+ * This class only resolves a request to a message <b>key</b> — {@code capability.assignRoles},
+ * {@code capability.deleteCustomers}, and so on, backed by {@code messages*.properties} — rather
+ * than a finished English sentence. It is a plain static utility with no Spring bean lifecycle,
+ * so it cannot itself hold a {@code MessageSource}; resolving a key to text in the caller's
+ * language is {@code CustomAccessDeniedHandler}'s job, since that class is a {@code @Component}
+ * and can inject one. Keeping the key table here and the resolution there means the request →
+ * capability mapping (the part that must stay truthful against {@code SecurityConfig}) is
+ * separate from the capability → text mapping (the part that varies by locale).
+ *
  * <h3>Non-enumeration</h3>
  * Every phrase names a <b>capability</b> and nothing else. None reveals whether a particular
  * record, account, or organization exists, which matters because a 403 is returned for
  * out-of-scope resources as well as unauthorized ones — an attacker must not be able to tell
- * "this exists but is not yours" from "you may not do this at all". The phrases are also identical
- * to the {@code deniedAction} strings the SPA's route guards use, so a user who meets the same
- * restriction at the route level and at the API level reads one consistent sentence rather than
- * two different ones.
+ * "this exists but is not yours" from "you may not do this at all". The English phrases are also
+ * identical to the {@code deniedAction} strings the SPA's route guards use, so a user who meets
+ * the same restriction at the route level and at the API level reads one consistent sentence
+ * rather than two different ones — that route-guard text is static English and not part of this
+ * i18n pass, since it never leaves the client and is not "server-generated" in the sense the
+ * roadmap item targets.
  */
 public final class CapabilityCatalog {
 
     private CapabilityCatalog() {
     }
 
-    /** Used when no rule matches — deliberately vague rather than guessing wrongly. */
-    public static final String DEFAULT_ACTION = "perform this action";
+    /** Message key used when no rule matches — deliberately vague rather than guessing wrongly. */
+    public static final String DEFAULT_ACTION_KEY = "capability.default";
 
     /**
-     * The sentence template shared by this class and the SPA's {@code adminGuard} /
-     * {@code capabilityGuard}. Changing it here without changing it there produces two subtly
-     * different messages for the same refusal.
+     * The message key for the sentence template shared by this class and the SPA's
+     * {@code adminGuard} / {@code capabilityGuard}. Its {@code messages*.properties} value uses
+     * {@code MessageFormat}'s {@code {0}} placeholder (not {@code String#format}'s {@code %s}),
+     * since it is resolved via {@code MessageSource#getMessage(key, args, locale)}.
      */
-    public static final String MESSAGE_TEMPLATE = "You don't have permission to %s — contact your administrator.";
+    public static final String MESSAGE_TEMPLATE_KEY = "capability.messageTemplate";
 
     /**
      * One path/method rule. Ordered most specific first, exactly like {@code SecurityConfig}'s
@@ -54,62 +67,54 @@ public final class CapabilityCatalog {
      *
      * @param method      the HTTP method this rule applies to, or null for any
      * @param pathPattern a path prefix, or a pattern containing {@code *} for one path segment
-     * @param action      the verb phrase to slot into {@link #MESSAGE_TEMPLATE}
+     * @param actionKey   the {@code messages*.properties} key naming the missing capability
      */
-    private record Rule(String method, String pathPattern, String action) {
+    private record Rule(String method, String pathPattern, String actionKey) {
     }
 
     private static final List<Rule> RULES = List.of(
             // Administrative surfaces — narrowest first.
-            new Rule("PATCH", "/admin/user/*/role", "assign roles"),
-            new Rule("PATCH", "/admin/user/*/settings", "change account state"),
-            new Rule("PATCH", "/admin/user/*/update", "edit other users' profiles"),
-            new Rule(null, "/admin/security", "view security monitoring"),
-            new Rule(null, "/admin/analytics", "view billing and analytics"),
-            new Rule(null, "/admin/services", "manage the services catalog"),
-            new Rule(null, "/admin/user", "manage users"),
-            new Rule(null, "/admin", "access administrative features"),
+            new Rule("PATCH", "/admin/user/*/role", "capability.assignRoles"),
+            new Rule("PATCH", "/admin/user/*/settings", "capability.changeAccountState"),
+            new Rule("PATCH", "/admin/user/*/update", "capability.editOtherUsersProfiles"),
+            new Rule("PATCH", "/admin/security/anomaly-settings", "capability.changeSecuritySettings"),
+            new Rule(null, "/admin/security", "capability.viewSecurityMonitoring"),
+            new Rule(null, "/admin/analytics", "capability.viewBillingAnalytics"),
+            new Rule(null, "/admin/services", "capability.manageServicesCatalog"),
+            new Rule(null, "/admin/user", "capability.manageUsers"),
+            new Rule(null, "/admin", "capability.accessAdministrativeFeatures"),
 
             // Business domain.
-            new Rule("DELETE", "/customer/delete", "delete customers"),
-            new Rule("DELETE", "/user/delete", "delete users"),
-            new Rule("PATCH", "/customer/invoice/update", "edit invoices"),
-            new Rule("PUT", "/customer/invoice", "edit invoices"),
-            new Rule("POST", "/customer/invoice", "create invoices"),
-            new Rule("POST", "/customer/create", "create customers"),
-            new Rule("POST", "/customer/update", "update customers"),
-            new Rule(null, "/customer/invoice", "work with invoices"),
-            new Rule(null, "/customer", "work with customers")
+            new Rule("DELETE", "/customer/delete", "capability.deleteCustomers"),
+            new Rule("DELETE", "/user/delete", "capability.deleteUsers"),
+            new Rule("PATCH", "/customer/invoice/update", "capability.editInvoices"),
+            new Rule("PUT", "/customer/invoice", "capability.editInvoices"),
+            new Rule("POST", "/customer/invoice", "capability.createInvoices"),
+            new Rule("POST", "/customer/create", "capability.createCustomers"),
+            new Rule("POST", "/customer/update", "capability.updateCustomers"),
+            new Rule(null, "/customer/invoice", "capability.workWithInvoices"),
+            new Rule(null, "/customer", "capability.workWithCustomers")
     );
 
     /**
-     * Returns the capability phrase for a forbidden request.
+     * Returns the {@code messages*.properties} key for the capability a forbidden request was
+     * missing.
      *
      * @param request the request that was refused
-     * @return a verb phrase such as {@code "assign roles"}, or {@link #DEFAULT_ACTION}
+     * @return a key such as {@code "capability.assignRoles"}, or {@link #DEFAULT_ACTION_KEY}
      */
-    public static String actionFor(HttpServletRequest request) {
-        if (request == null) return DEFAULT_ACTION;
+    public static String actionKeyFor(HttpServletRequest request) {
+        if (request == null) return DEFAULT_ACTION_KEY;
 
         String path = request.getRequestURI();
         String method = request.getMethod();
-        if (path == null) return DEFAULT_ACTION;
+        if (path == null) return DEFAULT_ACTION_KEY;
 
         for (Rule rule : RULES) {
             if (rule.method() != null && !rule.method().equalsIgnoreCase(method)) continue;
-            if (matches(path, rule.pathPattern())) return rule.action();
+            if (matches(path, rule.pathPattern())) return rule.actionKey();
         }
-        return DEFAULT_ACTION;
-    }
-
-    /**
-     * Builds the complete, client-facing refusal message for a forbidden request.
-     *
-     * @param request the request that was refused
-     * @return the message, naming the capability where one is known
-     */
-    public static String messageFor(HttpServletRequest request) {
-        return MESSAGE_TEMPLATE.formatted(actionFor(request));
+        return DEFAULT_ACTION_KEY;
     }
 
     /**

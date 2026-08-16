@@ -87,7 +87,6 @@ Tracing `GET /customer/list` after a user clicks "Customers":
 
 ```
 [Angular] CustomersComponent → CustomerService.customers$()   (HttpClient GET)
-   ├─ cacheInterceptor   — cache hit? return it, stop here (tokenInterceptor never runs)
    ├─ tokenInterceptor   — not a public route → clone with Authorization: Bearer <access_token>
    │                       (on a later 401: single-flight refresh, then replay the request)
    ▼
@@ -96,6 +95,8 @@ Tracing `GET /customer/list` after a user clicks "Customers":
    ├─ RateLimitFilter    — per-IP bucket; 429 + Retry-After when exhausted
    ├─ CustomAuthFilter   — verify signature, expiry, passwordChangedAt; set Authentication
    ├─ SecurityFilterChain— rule "GET /** → READ:USER or READ:CUSTOMER" (401/403 if it fails)
+   ├─ HttpCacheHeadersFilter — wraps the response: sets Cache-Control: private, no-cache + ETag;
+   │                           a matching If-None-Match short-circuits to 304, body discarded
    ▼
 [Spring MVC] CustomerController.getCustomers(@AuthenticationPrincipal UserDTO user, page, size)
    ▼
@@ -760,14 +761,16 @@ There is no `AppModule`. `appConfig` is passed to `bootstrapApplication()` in `m
 | Provider | What it does |
 |---|---|
 | `provideRouter(routes, withComponentInputBinding(), withPreloading(PreloadAllModules))` | Route table; binds `:id`/`:key` straight to component inputs; preloads lazy chunks after first paint |
-| `provideHttpClient(withInterceptors([cacheInterceptor, tokenInterceptor]))` | The two interceptors, **in this exact order** |
+| `provideHttpClient(withInterceptors([languageInterceptor, tokenInterceptor]))` | The two interceptors, in order |
 | `provideTransloco(…)` | Runtime i18n |
 | `provideToastr({ timeOut: 4000, positionClass: 'toast-bottom-right', preventDuplicates: true })` | Global toast defaults behind `NotificationsService` |
 | `provideAnimationsAsync()`, `provideBrowserGlobalErrorListeners()`, `IMAGE_CONFIG` | Animations, global error routing, `NgOptimizedImage` config |
 
-> **Interceptor array order is a contract, not a style choice.** `[cacheInterceptor,
-> tokenInterceptor]` means a cache hit short-circuits *before* any `Authorization` header is
-> computed.
+> **There used to be a third interceptor here, `cacheInterceptor`.** GET-response caching moved to
+> the backend (POST-SUBMISSION-UPGRADES.md #3, see §6.3) because a client-only cache could not be
+> invalidated by another user's write. `languageInterceptor` and `tokenInterceptor` never
+> short-circuit the request, so their relative order has no functional effect — see each
+> interceptor's own doc comment.
 
 **API base URL.** Every service reads `environment.apiUrl` — no hardcoded origin. Dev is
 `http://localhost:8080`; production is `''`, i.e. same-origin relative URLs, because the SPA is
@@ -807,24 +810,10 @@ controls; the backend re-derives them from the database on every request.
 
 ```
              request                              request
-HttpClient ──────────▶ cacheInterceptor ──────────▶ tokenInterceptor ─────▶ server
-                        │ bypass? evict? hit?       │ public route? attach Bearer
-                        │                           │ 401 → silent refresh + retry
-          cache HIT: of(cached) ◀── short-circuits; tokenInterceptor never runs
+HttpClient ──────────▶ languageInterceptor ──────▶ tokenInterceptor ─────▶ server
+                        │ adds Accept-Language,     │ public route? attach Bearer
+                        │ never short-circuits      │ 401 → silent refresh + retry
 ```
-
-**`cacheInterceptor`** decides in order: bypass routes (`verify`, `login`, `register`, `refresh`,
-`resetpassword`, `new/password`) pass straight through; any non-GET **or** a `download` URL calls
-`evictAll()` then forwards; a cache hit returns `of(cached)` without calling `next()`; a miss
-forwards and stores on the final response.
-
-| Aspect | Behaviour |
-|---|---|
-| Store | A plain in-memory object |
-| **Key** | The **full request URL** including query string — each page/size/search variant is distinct |
-| **TTL** | ❌ **None.** No expiry, no max size — entries live until an `evictAll()` |
-| **Invalidation** | Coarse: every non-GET mutation wipes **all** entries. One extra round-trip; guaranteed-fresh state after any write |
-| Logout | `UserService.logOut()` calls `evictAll()` — essential, because `/user/login` is a bypass route, so a same-SPA user switch would otherwise serve the previous user's cached `/user/profile` |
 
 **`tokenInterceptor`** attaches `Authorization: Bearer <token>` unless the URL matches its public
 skip list, and on a **401** performs a **single-flight** refresh: the first 401 sets a module-level
@@ -832,8 +821,30 @@ flag and calls `refreshToken$()`; concurrent 401s park on a `BehaviorSubject` an
 token arrives (no thundering herd). If the refresh itself fails, both tokens are cleared and the app
 falls through to `/login`.
 
-> **Lockstep lists.** `tokenInterceptor.publicRoutes`, `cacheInterceptor.bypassRoutes`, and the
-> backend's `PUBLIC_URLS`/`PUBLIC_ROUTES` must all stay aligned.
+**Caching is backend-driven, not an interceptor.** There used to be a third interceptor here,
+`cacheInterceptor`, backed by `HttpCacheService` — an in-memory `Record<string, HttpResponse>`
+keyed by URL with no freshness check of its own, so a write from a *different* user could never
+invalidate it; the interceptor's own eviction only fired on a mutation made by the *same* browser
+tab (POST-SUBMISSION-UPGRADES.md #3). Both are deleted. In their place, `HttpCacheHeadersFilter`
+(backend, `filter/`) sets `Cache-Control: private, no-cache` plus an ETag on data-bearing GETs, and
+the **browser's own native HTTP cache** does the rest — no Angular code participates at all. Every
+GET still makes a real network round trip (`no-cache` means "always revalidate," not "don't
+cache"): unchanged data comes back as an empty `304 Not Modified`; changed data — including a
+change written by someone else entirely — comes back with a full fresh body. See GUIDE.md §1.3's
+request trace and POST-SUBMISSION-UPGRADES.md #3 for the full rationale, including why
+`Cache-Control` is deliberately `private` (this API sits behind CloudFront, a shared cache, and
+every response here varies by caller).
+
+One consequence worth knowing: because every GET always revalidates, this does **not** deduplicate
+concurrent identical requests the way the old cache accidentally did — see
+`current-user.service.ts`'s own doc comment on why the navbar's user signal still needs to fetch
+`/user/profile` once and share it, rather than letting N navbar instances each hit the network.
+
+> **Lockstep lists.** `tokenInterceptor.publicRoutes` and the backend's `PUBLIC_URLS`/
+> `PUBLIC_ROUTES` must stay aligned. `HttpCacheHeadersFilter`'s bypass list (verify/login/register/
+> refresh/resetpassword/new-password/download substrings) is a separate, smaller list — it decides
+> what gets cache headers, not what's public — but mirrors the same auth/verification paths for the
+> same reason: a single-use code must never be served from a validated cache.
 
 ### 6.4 State: `DataState`, signals and the RxJS trio
 
@@ -886,7 +897,6 @@ prefers the server's `error.error.reason`.
 | `ThemeService` | Dark/light as a signal, mirrored to `data-bs-theme`. The pre-paint value is set by an inline script in `index.html` to avoid a flash; the service re-asserts it |
 | `LanguageService` | Active locale, mirroring `ThemeService` |
 | `NotificationsService` | Thin facade over `ngx-toastr` so the library can be swapped in one place |
-| `HttpCacheService` | The in-memory cache behind `cacheInterceptor` |
 | `CommandPaletteService` | The registry of navigable destinations with labels, icons and required authorities |
 
 ### 6.6 Internationalization
@@ -1347,6 +1357,11 @@ copy exists to give a good experience, never to be trusted as the check.
 ## 8. API reference
 
 **Base URL:** `http://localhost:8080` local · **Auth:** `Authorization: Bearer <access_token>`
+
+> **Want to actually call these instead of just reading about them?**
+> [`documentation/api-testing/`](api-testing/README.md) has a runnable cURL script, a Postman
+> collection, and a Bruno collection — all three built from this section and kept in sync with it,
+> covering all 12 controllers with the seeded demo accounts.
 
 ### 8.1 The envelope
 

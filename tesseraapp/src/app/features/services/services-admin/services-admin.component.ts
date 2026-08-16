@@ -20,9 +20,10 @@ import { TranslocoDirective } from '@jsverse/transloco';
  * (ROADMAP §2 — "Create / manage services").
  *
  * <h3>Why this is a separate page from the catalog</h3>
- * The browse page at {@code /services} reads {@code GET /customer/invoice/new}, which returns
- * <em>active</em> services only — correctly, since its job is to show what can be put on an
- * invoice. An administrator needs the opposite: the full catalog including retired entries, so
+ * The browse page at {@code /services} reads {@code GET /services/public} (via {@code
+ * ServicesCatalogService#listPublic$}), which returns <em>active</em> services only — correctly,
+ * since its job is to show what can be put on an invoice and what a logged-out visitor sees.
+ * An administrator needs the opposite: the full catalog including retired entries, so
  * they can see why something has disappeared from the invoice form and reinstate it. Bolting an
  * edit mode onto the browse page would have meant either showing users retired services or showing
  * administrators an incomplete catalog. Two audiences, two questions, two screens.

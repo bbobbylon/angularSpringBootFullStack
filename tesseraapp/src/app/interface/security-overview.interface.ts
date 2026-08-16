@@ -134,3 +134,30 @@ export interface SecurityOverviewDataInterface {
   user: UserInterface;
   overview: SecurityOverviewInterface;
 }
+
+/**
+ * The admin-tunable anomaly detection overrides (FUTURE-ENHANCEMENTS "Anomaly signal tuning UI"),
+ * as returned by {@code GET}/{@code PATCH /admin/security/anomaly-settings}.
+ *
+ * Mirrors the backend {@code SecuritySettings} model. {@code null} on either override field means
+ * "no override on record — the server is using its env-configured default", not "off" or "zero";
+ * the settings panel must render that as an explicit "using default" state rather than a blank or
+ * unchecked control, which would look like a deliberate override of false/0.
+ */
+export interface SecuritySettingsInterface {
+  id: number;
+  /** {@code null} = no override, server uses {@code app.security.anomaly.enabled}. */
+  anomalyEnabled: boolean | null;
+  /** {@code null} = no override, server uses {@code app.security.anomaly.history-limit}. */
+  anomalyHistoryLimit: number | null;
+  /** ISO timestamp of the last change, or null if this row has never been edited. */
+  updatedAt: string | null;
+  /** Id of the administrator who last changed it, or null. */
+  updatedBy: number | null;
+}
+
+/** The {@code data} block of the anomaly-settings response envelope. */
+export interface SecuritySettingsDataInterface {
+  user: UserInterface;
+  settings: SecuritySettingsInterface;
+}

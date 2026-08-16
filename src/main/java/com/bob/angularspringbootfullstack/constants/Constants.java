@@ -9,13 +9,22 @@ public class Constants {
     /**
      * URL patterns that bypass JWT authentication entirely.
      * <p>
-     * Includes registration, login, MFA verification, password reset, token refresh,
-     * profile images, and Actuator endpoints. Any path not listed here requires a
-     * valid JWT and the appropriate authority.
+     * Includes registration, login, MFA verification, password reset, and token refresh.
+     * Any path not listed here requires a valid JWT and the appropriate authority.
+     * <p>
+     * Actuator endpoints are deliberately NOT part of this list: {@code /actuator/health} and
+     * {@code /actuator/info} are permitted directly in {@code SecurityConfig} (ahead of this
+     * list, so the more specific rule wins), while every other {@code /actuator/**} path —
+     * including {@code /actuator/metrics} — requires {@code UPDATE:USER}/{@code UPDATE:ROLE},
+     * same as {@code /admin/**}. See the {@code /actuator/**} matcher in
+     * {@code SecurityConfig#securityFilterChain} for the full rationale.
      */
     public static final String[] PUBLIC_URLS =
             {"/user/login/**",
-                    "/user/verify/code/**", "/user/register/**", "/actuator/**",
+                    "/user/verify/code/**", "/user/register/**",
+                    // Resend an outstanding 2FA/step-up code (UserController#resendVerificationCode):
+                    // the caller is mid-login, same as /user/verify/code above.
+                    "/user/verify/resend/**",
                     "/user/resetpassword/**", "/user/verify/password/**",
                     "/user/new/password/**",
                     "/user/verify/account/**", "/user/refresh/token/**",
@@ -67,7 +76,15 @@ public class Constants {
      * the public controller.
      */
     public static final String[] PUBLIC_ROUTES = {
-            "/user/login", "/user/verify/code", "/user/register", "/actuator",
+            "/user/login", "/user/verify/code", "/user/verify/resend", "/user/register",
+            // Only health/info are unauthenticated (ALB + ECS health checks carry no Authorization
+            // header — see aws/setup.sh / task-definition.json). Deliberately NOT bare "/actuator":
+            // that would startsWith-match /actuator/metrics too, which SecurityConfig now gates
+            // behind UPDATE:USER/UPDATE:ROLE — skipping JWT parsing here would mean CustomAuthFilter
+            // never installs a principal for that request no matter what Bearer token is sent, making
+            // the SecurityConfig authority check unreachable and turning the gate into a permanent 403
+            // for everyone instead of an admin-only allow.
+            "/actuator/health", "/actuator/info",
             "/user/refresh/token", "/user/image", "/user/verify/account",
             "/user/verify/password", "/user/resetpassword", "/user/new/password",
             // TOTP login completion (FR-MFA-4): the caller holds no token mid-login, so the
