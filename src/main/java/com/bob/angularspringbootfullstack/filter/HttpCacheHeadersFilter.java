@@ -70,6 +70,24 @@ import java.util.Set;
  * this filter only inspects the request method/URI and the response Spring Security/the
  * controller already produced, so it is correct at any position outside the servlet chain's
  * entry point.
+ *
+ * <p><b>Scoped to the REST API namespace only — never the SPA shell.</b> Discovered 2026-08-16:
+ * wrapping a request in {@link ContentCachingResponseWrapper} and then letting it proceed into
+ * {@code WebMvcConfig}'s {@code forward:/index.html} view controller (the mechanism that serves
+ * every Angular client-side route — {@code /}, {@code /contact}, {@code /privacy}, {@code /billing},
+ * every page in the SPA) reliably comes back with a captured body of zero bytes, producing a real
+ * {@code 200} with an empty body instead of the page. Real, non-forwarded {@code @RestController}
+ * GETs (e.g. {@code /services/public}, {@code /actuator/health}) are unaffected — the wrapper only
+ * misbehaves across a servlet-level {@code RequestDispatcher.forward()}. Since this filter's whole
+ * purpose is ETag-ing the JSON {@code HttpResponse} envelope (see class Javadoc above), and the SPA
+ * shell is static HTML with its own {@code Cache-Control: no-cache, no-store} from
+ * {@code SecurityConfig}, restricting this filter to {@link #API_PREFIXES} is not a workaround —
+ * it is what the filter's Javadoc always claimed it did ("data-bearing endpoints" only). It is also
+ * self-maintaining: unlike mirroring the SPA's page list (a lockstep list this codebase has already
+ * been burned by twice, see {@code Constants.PUBLIC_URLS}/{@code PUBLIC_ROUTES}), any newly added
+ * SPA page needs no update here — it simply never matches an API prefix, and any newly added
+ * {@code @RestController} needs its namespace added to {@link #API_PREFIXES} once, the same way it
+ * already needs adding to {@code SecurityConfig}.
  */
 @Component
 @Order(100)
@@ -86,6 +104,38 @@ public class HttpCacheHeadersFilter extends OncePerRequestFilter {
     );
 
     /**
+     * URI prefixes for this app's actual REST API namespace — every {@code @RestController} in
+     * {@code controller/}. Anything outside these prefixes is SPA shell/navigation (served via
+     * {@code WebMvcConfig}'s {@code forward:/index.html}) and must never be wrapped; see the class
+     * Javadoc's "Scoped to the REST API namespace only" section for why. Matched with a
+     * path-segment boundary (see {@link #isApiRequest}), not a raw {@code startsWith}: the SPA's
+     * own plural page routes ({@code /users}, {@code /customers}) would otherwise false-positive
+     * against the singular API prefixes ({@code /user}, {@code /customer}) they textually start
+     * with, reproducing the exact empty-body bug this filter exists to avoid.
+     */
+    private static final Set<String> API_PREFIXES = Set.of(
+            "/user", "/admin", "/customer", "/services/public", "/oauth2", "/actuator"
+    );
+
+    /**
+     * Sub-paths that pass the {@link #API_PREFIXES} boundary check yet are genuinely SPA pages, not
+     * API calls — a real, if rare, collision inside a shared namespace rather than the
+     * plural-vs-singular case {@link #isApiRequest}'s boundary check already handles.
+     * {@code /customer/new} (the Angular "create customer" page) sits under the same
+     * {@code /customer/**} prefix as {@link com.bob.angularspringbootfullstack.controller.CustomerController},
+     * which happens not to define a {@code /new} endpoint of its own. {@code /oauth2/callback} (the
+     * Angular page that reads the {@code #mfa=true&email=...&phone=...} hash fragment
+     * {@code OAuth2LoginSuccessHandler} redirects to for step-up) sits under the same {@code /oauth2/**}
+     * prefix as {@link com.bob.angularspringbootfullstack.controller.FederatedAuthController} and
+     * Spring Security's own {@code /oauth2/authorization/**} filter-level redirects. Discovered
+     * 2026-08-16 as a second instance of the same empty-body bug this class's Javadoc already
+     * describes: the boundary check alone can't tell a real sub-path from a same-namespace SPA page.
+     */
+    private static final Set<String> SPA_EXCEPTIONS = Set.of(
+            "/customer/new", "/oauth2/callback"
+    );
+
+    /**
      * The {@code HttpResponse} envelope field every controller stamps fresh on every response —
      * see the class Javadoc for why it is excluded from the ETag hash. Public field name, not the
      * wire/JSON one; they're identical here since {@code HttpResponse} has no {@code @JsonProperty}
@@ -99,7 +149,8 @@ public class HttpCacheHeadersFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        if (!"GET".equalsIgnoreCase(request.getMethod()) || isBypassed(request.getRequestURI())) {
+        String uri = request.getRequestURI();
+        if (!"GET".equalsIgnoreCase(request.getMethod()) || !isApiRequest(uri) || isBypassed(uri)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -169,5 +220,13 @@ public class HttpCacheHeadersFilter extends OncePerRequestFilter {
 
     private static boolean isBypassed(String uri) {
         return BYPASS_SUBSTRINGS.stream().anyMatch(uri::contains);
+    }
+
+    private static boolean isApiRequest(String uri) {
+        if (SPA_EXCEPTIONS.stream().anyMatch(uri::equals)) {
+            return false;
+        }
+        return API_PREFIXES.stream().anyMatch(prefix ->
+                uri.equals(prefix) || uri.startsWith(prefix + "/"));
     }
 }

@@ -27,6 +27,10 @@ import static com.bob.angularspringbootfullstack.enumeration.EventType.PROVIDER_
 
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.FEDERATED_LOGIN;
@@ -83,6 +87,21 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private String uiAppUrl;
 
     /**
+     * Debounce window for {@link #sendSmsChallengeOnce}, guarding against a duplicate Twilio
+     * dispatch (and a real charge) when this handler runs twice in quick succession for the same
+     * user — e.g. a provider/proxy-level retry of the {@code /login/oauth2/code/{provider}}
+     * callback, or the caller re-attempting "Sign in with Google" after the previous attempt
+     * appeared to hang. Every {@code onAuthenticationSuccess} invocation issues a brand new
+     * OAuth2 authentication, so this cannot be keyed off anything provider-supplied (state/code are
+     * already consumed by the time this handler runs) — the local user id plus a short wall-clock
+     * window is the only signal available here.
+     */
+    private static final Duration SMS_CHALLENGE_DEBOUNCE = Duration.ofSeconds(15);
+
+    /** Per-user last-dispatch timestamp backing {@link #sendSmsChallengeOnce}. */
+    private final Map<Long, Instant> lastSmsChallengeAt = new ConcurrentHashMap<>();
+
+    /**
      * Completes a federated login per the class contract: resolve the local user,
      * enforce account state and MFA policy, then deliver tokens (or the MFA challenge)
      * to the SPA via redirect.
@@ -137,7 +156,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             // FR-MFA-2: a successful first factor (federated included) does not yield tokens
             // while MFA is enabled — send the SMS code and bounce to the SPA's MFA screen.
             if (userDTO.isUsing2FA()) {
-                userService.sendVerificationCode(userDTO);
+                sendSmsChallengeOnce(userDTO);
                 String phone = userDTO.getPhoneNumber() == null ? "" : userDTO.getPhoneNumber();
                 response.sendRedirect(uiAppUrl + "/oauth2/callback#mfa=true"
                         + "&email=" + URLEncoder.encode(userDTO.getEmail(), UTF_8)
@@ -269,6 +288,27 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             log.warn("Federated link refused for userId {} provider '{}': {}", userId, provider, exception.getMessage());
             response.sendRedirect(uiAppUrl + "/security?linkError=" + URLEncoder.encode(exception.getMessage(), UTF_8));
         }
+    }
+
+    /**
+     * Dispatches the SMS/voice 2FA challenge via {@link UserService#sendVerificationCode}, unless
+     * one was already dispatched for this exact user within {@link #SMS_CHALLENGE_DEBOUNCE} — see
+     * that field's Javadoc for why a duplicate call here is a real risk despite there being only one
+     * call site. Skipping the resend is safe either way: a code issued moments ago is still valid
+     * and still pending, so the redirect to the MFA screen below proceeds unchanged regardless of
+     * which branch runs.
+     *
+     * @param userDTO the federated user whose phone challenge is being started
+     */
+    private void sendSmsChallengeOnce(UserDTO userDTO) {
+        Instant now = Instant.now();
+        Instant previous = lastSmsChallengeAt.put(userDTO.getId(), now);
+        if (previous != null && Duration.between(previous, now).compareTo(SMS_CHALLENGE_DEBOUNCE) < 0) {
+            log.warn("Suppressed duplicate SMS 2FA dispatch for user id {} — a challenge was already sent {}ms ago",
+                    userDTO.getId(), Duration.between(previous, now).toMillis());
+            return;
+        }
+        userService.sendVerificationCode(userDTO);
     }
 
     private record FederatedProfile(String subject, String email, String firstName, String lastName, String imageUrl) {

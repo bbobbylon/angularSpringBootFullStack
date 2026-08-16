@@ -5,7 +5,7 @@ import { catchError } from 'rxjs/operators';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { environment } from '../../environments/environment';
 
-/** The body {@code POST /contact} accepts. */
+/** The body {@code POST /contact/send} accepts. */
 export interface ContactFormInterface {
   name: string;
   email: string;
@@ -14,7 +14,7 @@ export interface ContactFormInterface {
 }
 
 /**
- * HTTP service for the public Contact Us submission ({@code POST /contact}, no auth required).
+ * HTTP service for the public Contact Us submission ({@code POST /contact/send}, no auth required).
  *
  * <p>Deliberately its own tiny service rather than folded into {@link UserService}: the route is
  * unauthenticated and unrelated to the user/session lifecycle every method there assumes, mirroring
@@ -28,15 +28,18 @@ export class ContactService {
   private readonly server = environment.apiUrl;
 
   /**
-   * Submits a Contact Us form ({@code POST /contact}, public). The backend dispatches the email
-   * asynchronously and always reports success once accepted — see {@code ContactController}.
+   * Submits a Contact Us form ({@code POST /contact/send}, public). The backend dispatches the
+   * email asynchronously and always reports success once accepted — see {@code ContactController}.
+   *
+   * <p>{@code /send}, not the bare {@code /contact} the Angular route of the same name owns — see
+   * {@code ContactController}'s Javadoc for why the two must not collide.
    *
    * @param form - the visitor's name, email, subject, and message
    * @returns Observable of the API envelope (no data payload, just a confirmation message)
    */
   submit$ = (form: ContactFormInterface): Observable<CustomHttpResponseInterface<unknown>> =>
     this.http
-      .post<CustomHttpResponseInterface<unknown>>(`${this.server}/contact`, form)
+      .post<CustomHttpResponseInterface<unknown>>(`${this.server}/contact/send`, form)
       .pipe(catchError(this.handleError));
 
   /**

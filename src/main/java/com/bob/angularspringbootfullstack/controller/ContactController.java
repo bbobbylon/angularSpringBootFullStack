@@ -15,7 +15,7 @@ import static java.time.LocalTime.now;
 import static org.springframework.http.HttpStatus.OK;
 
 /**
- * Unauthenticated public Contact Us submission — {@code POST /contact}.
+ * Unauthenticated public Contact Us submission — {@code POST /contact/send}.
  *
  * <h3>Why this is its own controller</h3>
  * The same reasoning {@link PublicServicesController} documents for {@code GET /services/public}
@@ -23,10 +23,22 @@ import static org.springframework.http.HttpStatus.OK;
  * see authenticated data needs to reach, so it gets its own narrow {@code permitAll} seam rather
  * than an exception carved into a controller whose every other method is gated.
  *
+ * <p><b>Deliberately not the bare {@code /contact} path.</b> The Angular SPA also owns a
+ * client-side route at {@code /contact} (the Contact Us page itself). Spring's
+ * {@code RequestMappingHandlerMapping} claims an exact path the moment any {@code @RequestMapping}
+ * matches it, even for the wrong HTTP method — so a bare {@code @PostMapping} here would shadow the
+ * {@code WebMvcConfig} SPA-fallback {@code ViewController} that forwards unmatched GETs to
+ * {@code index.html}, and every direct GET on {@code /contact} (a refresh, a pasted link, a new tab)
+ * would 500 with {@code HttpRequestMethodNotSupportedException} instead of rendering the page. The
+ * {@code /send} suffix keeps the bare path free for the SPA while keeping this submission endpoint
+ * under the same {@code /contact} namespace a visitor would expect.
+ *
  * <p>{@code /contact} must stay in lockstep between {@code Constants.PUBLIC_URLS} (the
  * {@code SecurityFilterChain} matcher) and {@code Constants.PUBLIC_ROUTES} ({@code CustomAuthFilter}'s
  * skip list) — a route public in one but not the other breaks the moment a visitor's browser still
- * carries a stale {@code Authorization} header from an earlier session on the same machine.
+ * carries a stale {@code Authorization} header from an earlier session on the same machine. Both
+ * already cover this endpoint without change: {@code PUBLIC_URLS} carries the wildcard
+ * {@code "/contact/**"} and {@code PUBLIC_ROUTES} matches {@code "/contact"} by prefix.
  *
  * <p>Rate-limited like every other endpoint by {@code RateLimitFilter}'s global tier (not the
  * tighter auth tier — this is not a credential-guessing target) — 200 requests/minute per IP, which
@@ -47,7 +59,7 @@ public class ContactController {
      *         other {@link NotificationService} call site; a delivery failure is logged server-side
      *         only, since there is no session or account state for the visitor to check
      */
-    @PostMapping
+    @PostMapping("/send")
     public ResponseEntity<HttpResponse> submit(@RequestBody @Valid ContactForm form) {
         notificationService.sendContactMessage(form.getName(), form.getEmail(), form.getSubject(), form.getMessage());
         return ResponseEntity.ok(

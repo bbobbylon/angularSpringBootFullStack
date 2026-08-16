@@ -243,16 +243,29 @@ class SecurityConfig {
                             // making it impossible for an unauthenticated browser to ever load the
                             // login page — a chicken-and-egg 401 that only surfaces once the app is
                             // actually deployed with Angular baked in, not in local dev.
+                            // HEAD is permitted everywhere GET is below: CloudFront's default cache
+                            // key ignores HTTP method, so a single HEAD request landing on a
+                            // GET-only permitAll (from an uptime monitor, a browser preconnect probe,
+                            // or a crawler) fell through to the anyRequest().authenticated() catch-all,
+                            // got a 401, and CloudFront cached that 401 as if it were the page —
+                            // silently serving it back to every real GET visitor afterward until the
+                            // cache expired or was invalidated. Discovered 2026-08-16 when the live
+                            // site went blank for real users while a direct GET still worked fine.
                             .requestMatchers(GET, "/", "/index.html", "/favicon.ico", "/manifest.webmanifest",
                                     "/*.js", "/*.css", "/*.ico", "/*.png", "/*.svg", "/*.jpg", "/*.jpeg",
                                     "/*.webp", "/*.woff", "/*.woff2", "/*.ttf", "/*.map").permitAll()
+                            .requestMatchers(HEAD, "/", "/index.html", "/favicon.ico", "/manifest.webmanifest",
+                                    "/*.js", "/*.css", "/*.ico", "/*.png", "/*.svg", "/*.jpg", "/*.jpeg",
+                                    "/*.webp", "/*.woff", "/*.woff2", "/*.ttf", "/*.map").permitAll()
                             .requestMatchers(GET, "/assets/**").permitAll()
+                            .requestMatchers(HEAD, "/assets/**").permitAll()
                             // Angular's builder places CSS-referenced binary assets (the
                             // self-hosted IBM Plex/bootstrap-icons fonts, in this app's case) under
                             // /media/ in the build output — a separate location from /assets/ that
                             // the permit above doesn't cover, discovered when self-hosted fonts
                             // 401'd in production despite the /assets/** and /*.woff2 permits.
                             .requestMatchers(GET, "/media/**").permitAll()
+                            .requestMatchers(HEAD, "/media/**").permitAll()
                             // Direct navigation (or a hard refresh) to an Angular client-side
                             // route — e.g. typing /login in the address bar — hits Spring
                             // Security BEFORE the WebMvcConfig SPA-fallback ever gets a chance to
@@ -280,6 +293,12 @@ class SecurityConfig {
                             // for these pages still comes from those separate, still-authenticated
                             // API endpoints, so this grants no new access to anything real.
                             .requestMatchers(GET, "/login", "/verify", "/verify/**", "/resetpassword",
+                                    "/register", "/customers", "/customers/**", "/customer/new",
+                                    "/invoice/new", "/invoices", "/invoice/**", "/profile", "/security",
+                                    "/users", "/users/**", "/roles", "/billing", "/services",
+                                    "/services/manage", "/analytics", "/security-overview",
+                                    "/privacy", "/terms", "/contact", "/features").permitAll()
+                            .requestMatchers(HEAD, "/login", "/verify", "/verify/**", "/resetpassword",
                                     "/register", "/customers", "/customers/**", "/customer/new",
                                     "/invoice/new", "/invoices", "/invoice/**", "/profile", "/security",
                                     "/users", "/users/**", "/roles", "/billing", "/services",
