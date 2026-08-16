@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
  * {@link com.bob.angularspringbootfullstack.controller.UserController#login} to decide whether the
  * session may be issued straight away or must survive a step-up challenge first.
  *
- * <p><b>Never serialised to the client.</b> Unlike most DTOs in this package this one does not
+ * <p><b>Never serialized to the client.</b> Unlike most DTOs in this package this one does not
  * appear in an {@code HttpResponse} body. Telling a caller "we flagged this as a new device" would
  * hand an attacker a free oracle for probing which of their stolen credentials look familiar to
  * the system; the client only ever sees the same neutral "enter your verification code" response

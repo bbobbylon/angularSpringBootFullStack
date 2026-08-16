@@ -498,7 +498,7 @@
     "statusOverTime": "发票状态随时间变化",
     "statusOverTimeSub": "回款态势——每月已付 / 待付 / 逾期",
     "noInvoiceData": "暂无发票数据。",
-    "serviceUtilisation": "服务使用情况",
+    "serviceUtilization": "服务使用情况",
     "serviceSub": "开票频次前 10 的服务",
     "noServiceData": "暂无服务数据。",
     "customerStatus": "客户状态",

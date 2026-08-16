@@ -11,7 +11,7 @@ import java.util.Collection;
  * history, and to escalate it. What it did not give anyone was a way to <em>see</em> that
  * happening: the evidence went into the audit log and stayed there. This service is the read side
  * of that feature — it turns the {@code SUSPICIOUS_LOGIN} trail, the account-state flags, the MFA
- * enrolment columns, and the live session table into one picture of the platform's security
+ * enrollment columns, and the live session table into one picture of the platform's security
  * posture.
  *
  * <p>The service owns three decisions the repository deliberately does not: how far back to look
@@ -29,7 +29,7 @@ public interface SecurityDashboardService {
      *                        restrict to those organizations, or an <em>empty</em> collection for an
      *                        organization admin with no active memberships — who sees nothing at
      *                        all, not everything
-     * @param windowDays      how many days of history to summarise; clamped by the implementation
+     * @param windowDays      how many days of history to summarize; clamped by the implementation
      *                        to a sane range, since it arrives from a query parameter
      * @param suspiciousLoginsPage    0-based page of the flagged sign-ins table; negatives are
      *                                clamped to 0. Indexes past the end return an empty list with

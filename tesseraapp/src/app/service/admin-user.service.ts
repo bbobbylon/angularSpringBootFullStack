@@ -188,7 +188,7 @@ export class AdminUserService {
       .pipe(catchError(this.handleError));
 
   /**
-   * Normalises HTTP errors into a single Observable<never> so all callers receive a
+   * Normalizes HTTP errors into a single Observable<never> so all callers receive a
    * consistent Error instance — same contract as {@code UserService#handleError}.
    *
    * @param error - the HttpErrorResponse from Angular's HttpClient

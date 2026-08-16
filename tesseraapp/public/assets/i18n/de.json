@@ -498,7 +498,7 @@
     "statusOverTime": "Rechnungsstatus im Zeitverlauf",
     "statusOverTimeSub": "Zahlungsdynamik – BEZAHLT / OFFEN / ÜBERFÄLLIG pro Monat",
     "noInvoiceData": "Noch keine Rechnungsdaten.",
-    "serviceUtilisation": "Leistungsnutzung",
+    "serviceUtilization": "Leistungsnutzung",
     "serviceSub": "Top 10 Leistungen nach Rechnungshäufigkeit",
     "noServiceData": "Noch keine Leistungsdaten.",
     "customerStatus": "Kundenstatus",

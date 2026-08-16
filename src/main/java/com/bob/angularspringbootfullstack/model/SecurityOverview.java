@@ -64,7 +64,7 @@ public record SecurityOverview(int windowDays,
      * <h3>Why a nested record rather than flat fields</h3>
      * Four more components per table would have pushed {@link SecurityOverview} to fifteen
      * positional arguments, where a transposed pair of {@code int}s compiles happily and reports the
-     * wrong page. Grouping them keeps each table's metadata addressable as a unit — and serialises
+     * wrong page. Grouping them keeps each table's metadata addressable as a unit — and serializes
      * to a nested JSON object the Angular pager can bind to directly, instead of six loose keys the
      * template has to reassemble.
      *

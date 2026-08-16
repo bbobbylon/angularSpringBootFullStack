@@ -88,6 +88,7 @@ public final class CapabilityCatalog {
             new Rule("DELETE", "/customer/delete", "capability.deleteCustomers"),
             new Rule("DELETE", "/user/delete", "capability.deleteUsers"),
             new Rule("PATCH", "/customer/invoice/update", "capability.editInvoices"),
+            new Rule("POST", "/customer/invoice/*/email", "capability.emailInvoices"),
             new Rule("PUT", "/customer/invoice", "capability.editInvoices"),
             new Rule("POST", "/customer/invoice", "capability.createInvoices"),
             new Rule("POST", "/customer/create", "capability.createCustomers"),

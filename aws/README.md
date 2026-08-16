@@ -366,7 +366,21 @@ ACM cannot issue a certificate without proving you control the domain's DNS, so 
 
 ## Redeploy after a code change
 
-The GitHub Actions `deploy.yml` workflow handles this automatically on every push to `master`. To trigger manually:
+The GitHub Actions `deploy.yml` workflow handles this automatically on every push to `master`. A push
+to any other branch only runs `ci.yml` (build + test) — it shows green in the Actions tab but never
+touches AWS, which is a common source of "I pushed but nothing changed" confusion.
+
+**To deploy a branch other than `master`**, either:
+- Run the manual commands below locally — they build and push whatever is currently checked out
+  (`git rev-parse --short HEAD` on your current branch), so there's nothing master-specific about
+  them; or
+- GitHub → Actions → `deploy.yml` → "Run workflow" → pick your branch from the dropdown (it defaults
+  to `master`, so this must be changed explicitly).
+
+See [`RUNBOOK.md` Part D](RUNBOOK.md#part-d--redeploy-the-90-second-loop) for the day-to-day version
+of this loop with the same branch-agnostic caveat spelled out in more detail.
+
+To trigger manually:
 
 ```bash
 # 1. Push new image:

@@ -26,13 +26,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Behavioural anomaly detection for sign-ins, and the step-up escalation it triggers
+ * Behavioral anomaly detection for sign-ins, and the step-up escalation it triggers
  * (SRS FR-TPF-1).
  *
  * <h3>What it compares</h3>
  * Every completed sign-in already writes a {@code userevents} row stamped with the device string
  * and IP address ({@link com.bob.angularspringbootfullstack.listener.NewUserEventListener} +
- * {@link RequestUtils}). That existing audit trail <em>is</em> the behavioural baseline, so this
+ * {@link RequestUtils}). That existing audit trail <em>is</em> the behavioral baseline, so this
  * feature adds no new table and no new write path — it only reads history back and compares it
  * against the request in hand.
  *
@@ -47,8 +47,8 @@ import java.util.Set;
  *
  * <h3>Deliberate non-goals</h3>
  * <p>There is no cross-account correlation and no geo-IP lookup. Cross-account comparison would
- * make the risk verdict a function of other users' behaviour — a subtle enumeration channel — and
- * geo-IP would add an external dependency and a licence for marginal gain over prefix matching.
+ * make the risk verdict a function of other users' behavior — a subtle enumeration channel — and
+ * geo-IP would add an external dependency and a license for marginal gain over prefix matching.
  * The check is intentionally cheap and explainable: a grader (or an auditor) can read exactly why
  * a login was flagged.
  *
@@ -76,7 +76,7 @@ public class LoginRiskServiceImpl implements LoginRiskService {
 
     /**
      * Master switch for FR-TPF-1, and the env-driven fallback for it. Disabling it reverts login
-     * to its pre-anomaly behaviour (first factor → existing 2FA branch → tokens) without removing
+     * to its pre-anomaly behavior (first factor → existing 2FA branch → tokens) without removing
      * the code path. An admin can override this per-deployment at runtime through the
      * {@code securitysettings} table without a redeploy — see {@link #effectiveAnomalyDetectionEnabled}
      * — so this field is consulted only when no such override is on record.
@@ -229,7 +229,7 @@ public class LoginRiskServiceImpl implements LoginRiskService {
         if (octets.length == 4) {
             return String.join(".", octets[0], octets[1], octets[2]);
         }
-        return client; // Not a shape we recognise; compare the whole string rather than guess.
+        return client; // Not a shape we recognize; compare the whole string rather than guess.
     }
 
     /**

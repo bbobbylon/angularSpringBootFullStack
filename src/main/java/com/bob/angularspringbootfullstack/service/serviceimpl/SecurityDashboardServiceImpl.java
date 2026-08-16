@@ -56,7 +56,7 @@ public class SecurityDashboardServiceImpl implements SecurityDashboardService {
     private static final int MIN_WINDOW_DAYS = 1;
 
     /**
-     * Longest window the dashboard will summarise.
+     * Longest window the dashboard will summarize.
      *
      * <p>Ninety days is chosen to bound query cost, not because older events stop mattering. They
      * remain in {@code userevents} and remain readable per-account through the activity log; what

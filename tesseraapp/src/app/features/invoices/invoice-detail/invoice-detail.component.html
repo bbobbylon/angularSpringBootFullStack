@@ -25,6 +25,15 @@
                     <i class="bi bi-file-earmark-pdf-fill"></i>
                     {{ t('invoice.exportPdf') }}
                   </button>
+                  <button (click)="emailInvoice()"
+                          [disabled]="!canEditInvoice || isEmailing()"
+                          [appRequiresAuthority]="['UPDATE:CUSTOMER', 'UPDATE:USER']"
+                          class="btn btn-sm btn-outline-secondary sc-panel__action"
+                          deniedAction="email invoices"
+                          type="button">
+                    <i class="bi bi-envelope"></i>
+                    @if (isEmailing()) { <span>{{ t('invoice.sending') }}</span> } @else { <span>{{ t('invoice.emailInvoice') }}</span> }
+                  </button>
                   <button (click)="toggleEdit()"
                           [disabled]="!canEditInvoice"
                           [appRequiresAuthority]="['UPDATE:CUSTOMER', 'UPDATE:USER']"

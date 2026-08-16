@@ -5,7 +5,7 @@ package com.bob.angularspringbootfullstack.query;
  *
  * <p>Deliberately read-only and deliberately schema-free: anomaly detection needs no new table
  * because the {@code userevents} audit log already records the device and IP address of every
- * successful sign-in. This class simply reads that existing history back as the behavioural
+ * successful sign-in. This class simply reads that existing history back as the behavioral
  * baseline for one account.
  *
  * <p>Only <em>successful</em> authentications count toward the baseline. A failed attempt says

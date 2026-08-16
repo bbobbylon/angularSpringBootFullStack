@@ -112,7 +112,7 @@ export class ServicesCatalogService {
       .pipe(catchError(this.handleError));
 
   /**
-   * Normalises HTTP errors into a single Observable<never>, matching the other services.
+   * Normalizes HTTP errors into a single Observable<never>, matching the other services.
    *
    * @param error - the HttpErrorResponse from Angular's HttpClient
    * @returns Observable that immediately errors with a human-readable message

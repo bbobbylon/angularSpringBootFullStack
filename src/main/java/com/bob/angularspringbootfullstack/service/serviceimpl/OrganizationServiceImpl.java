@@ -2,6 +2,7 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.ApiException;
+import com.bob.angularspringbootfullstack.model.OrganizationSummary;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
@@ -18,7 +19,9 @@ import java.util.Map;
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_SHARED_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_USERS_SHARING_ORGANIZATIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATION_IDS_BY_USER_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_ADMIN_EMAILS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 
@@ -114,6 +117,34 @@ public class OrganizationServiceImpl implements OrganizationService {
         } catch (Exception exception) {
             log.error("Error resolving active organization ids for user {}: {}", userId, exception.getMessage(), exception);
             throw new ApiException("An error occurred while resolving your organization access. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection<OrganizationSummary> findActiveOrganizations() {
+        try {
+            return jdbcTemplate.query(SELECT_ACTIVE_ORGANIZATIONS_QUERY, Map.of(),
+                    (rs, rowNum) -> new OrganizationSummary(rs.getLong("id"), rs.getString("name")));
+        } catch (Exception exception) {
+            log.error("Error listing active organizations: {}", exception.getMessage(), exception);
+            throw new ApiException("An error occurred while resolving report digest recipients. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection<String> findOrganizationAdminEmails(Long organizationId) {
+        try {
+            return jdbcTemplate.queryForList(SELECT_ORGANIZATION_ADMIN_EMAILS_QUERY,
+                    Map.of("organizationId", organizationId), String.class);
+        } catch (Exception exception) {
+            log.error("Error resolving organization admin emails for organization {}: {}", organizationId, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while resolving report digest recipients. Please try again.");
         }
     }
 

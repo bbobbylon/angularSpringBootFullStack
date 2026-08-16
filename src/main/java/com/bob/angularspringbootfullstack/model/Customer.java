@@ -131,7 +131,7 @@ public class Customer {
      * {@code SELECT ... FROM Invoice WHERE customer = ?} <em>per row returned</em>. Observed on the
      * live ECS deployment 2026-08-02: a single customer-list request produced ~35 sequential invoice
      * queries at roughly 67&nbsp;ms per Aiven round trip — about 2.4 seconds of pure network latency
-     * before the response could be serialised.
+     * before the response could be serialized.
      *
      * <p>With {@code @BatchSize}, Hibernate collects the pending collection loads and satisfies them
      * with {@code ... WHERE customer IN (?, ?, ?, …)} — so a 35-row page costs 2 queries instead of

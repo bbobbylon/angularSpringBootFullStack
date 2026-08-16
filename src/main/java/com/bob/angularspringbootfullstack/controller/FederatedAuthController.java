@@ -69,7 +69,7 @@ public class FederatedAuthController {
      * still has to pass the "already linked to another account" refusal.
      *
      * <p>An invalid or expired ticket does not error into the user's face: it redirects into the
-     * plain login flow, which is the sensible degraded behaviour for someone who took too long on a
+     * plain login flow, which is the sensible degraded behavior for someone who took too long on a
      * consent screen.
      *
      * @param provider the registration id being connected

@@ -89,7 +89,7 @@ public final class BrowserErrorPage {
      * <p>
      * The status code is preserved exactly as the security handler intended — this changes the
      * <em>representation</em> of a 401/403, never its meaning. Styling mirrors the SPA's dark theme
-     * from {@code styles.css} and honours {@code prefers-color-scheme}: the app's own theme toggle
+     * from {@code styles.css} and honors {@code prefers-color-scheme}: the app's own theme toggle
      * stores its choice in {@code localStorage}, which this page cannot read without an inline
      * script the CSP would reject, so the OS-level preference is the closest honest approximation.
      *

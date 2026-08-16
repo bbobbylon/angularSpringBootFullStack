@@ -20,7 +20,7 @@ import { FooterComponent } from './shared/footer/footer.component';
  *
  * <p>Because there is no persistent navbar in this shell — each feature component renders
  * its own {@code <app-navbar>} — {@code AppComponent} is the only correct home for
- * app-wide behaviour like these. Change detection is left at the default strategy so
+ * app-wide behavior like these. Change detection is left at the default strategy so
  * the router-driven {@code getRouteAnimationData()} binding re-evaluates on every
  * navigation without extra plumbing.
  */

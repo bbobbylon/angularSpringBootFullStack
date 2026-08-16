@@ -498,7 +498,7 @@
     "statusOverTime": "Statut des factures dans le temps",
     "statusOverTimeSub": "Dynamique de recouvrement — PAYÉES / EN ATTENTE / EN RETARD par mois",
     "noInvoiceData": "Aucune donnée de facturation pour le moment.",
-    "serviceUtilisation": "Utilisation des services",
+    "serviceUtilization": "Utilisation des services",
     "serviceSub": "Les 10 services les plus facturés",
     "noServiceData": "Aucune donnée de service pour le moment.",
     "customerStatus": "Statut des clients",

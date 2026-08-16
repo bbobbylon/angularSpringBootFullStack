@@ -138,7 +138,7 @@ public class AdminUserController {
      * Returns one page of the user directory, optionally filtered by a free-text term
      * matched against first name, last name, and email (FR-ADMIN-1).
      *
-     * <p>The response bundles the full roles catalogue alongside the page so the admin
+     * <p>The response bundles the full roles catalog alongside the page so the admin
      * dashboard can populate its role-reassignment selectors without a second request —
      * the same convention {@link UserController} uses for the profile screen. The
      * {@code user} key carries the <i>calling administrator</i> (taken from the token
@@ -151,7 +151,7 @@ public class AdminUserController {
      * @param searchTerm     optional free-text filter; blank lists everyone
      * @param sort           optional {@code field,direction} sort (e.g. {@code "email,desc"}); unset or
      *                       unrecognized falls back to the newest-first default — see {@link #USER_SORT_FIELDS}
-     * @return 200 OK with users, pagination metadata, and the roles catalogue
+     * @return 200 OK with users, pagination metadata, and the roles catalog
      */
     @GetMapping("/list")
     public ResponseEntity<HttpResponse> listUsers(Authentication authentication,
@@ -200,7 +200,7 @@ public class AdminUserController {
      *
      * @param authentication the calling administrator's authentication
      * @param id             the target user's primary key
-     * @return 200 OK with the selected user, their paginated events, and the roles catalogue
+     * @return 200 OK with the selected user, their paginated events, and the roles catalog
      */
     @GetMapping("/{id}")
     public ResponseEntity<HttpResponse> getUser(Authentication authentication, @PathVariable Long id) {
@@ -275,7 +275,7 @@ public class AdminUserController {
      * @param authentication the calling administrator's authentication
      * @param id             the target user's primary key
      * @param roleName       the role to assign (e.g. {@code ROLE_MODERATOR})
-     * @return 200 OK with the refreshed target user and the roles catalogue
+     * @return 200 OK with the refreshed target user and the roles catalog
      */
     @PreAuthorize("hasAuthority('UPDATE:ROLE')")
     @PatchMapping("/{id}/role/{roleName}")
@@ -357,7 +357,7 @@ public class AdminUserController {
      * @param authentication the calling administrator's authentication
      * @param id             the target user's primary key (authoritative; overwrites any body id)
      * @param form           the validated profile fields to apply
-     * @return 200 OK with the refreshed target user under {@code selectedUser} and the roles catalogue
+     * @return 200 OK with the refreshed target user under {@code selectedUser} and the roles catalog
      */
     @PreAuthorize("hasAuthority('UPDATE:USER')")
     @PatchMapping("/{id}/update")
@@ -676,9 +676,9 @@ public class AdminUserController {
      * <p>Equal tiers are allowed, so an administrator can still create a peer. Only assignment
      * <em>upward</em> is refused.
      *
-     * <p>Fails closed on an unrecognised role name — see {@link RoleType#canAssign}. The denial names
+     * <p>Fails closed on an unrecognized role name — see {@link RoleType#canAssign}. The denial names
      * the requested role but no account data, so like the scope check it cannot be used to probe
-     * which users exist (NFR-SEC-7); the role catalogue is public to anyone who can reach this
+     * which users exist (NFR-SEC-7); the role catalog is public to anyone who can reach this
      * endpoint anyway, since {@code roles} is returned in the response body.
      *
      * @param authentication the calling administrator's authentication

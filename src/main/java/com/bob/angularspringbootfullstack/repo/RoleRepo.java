@@ -29,7 +29,7 @@ public interface RoleRepo<T extends Role> {
      * Returns all roles stored in the database, ordered by ID.
      * <p>
      * The result is used by the {@code GET /user/profile} endpoint to embed the
-     * full role catalogue in the profile response so the frontend can populate
+     * full role catalog in the profile response so the frontend can populate
      * the Authorization tab role selector without issuing a separate request.
      *
      * @return a collection of all {@link Role} entities

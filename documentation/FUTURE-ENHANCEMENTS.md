@@ -116,12 +116,17 @@ gets N× the attempt budget simply by being routed around. Not a bug today (one 
 the moment a second exists — which makes it a **blocker for horizontal scaling**, not merely a
 backlog item. See §6.2.
 
-### 2.5 ⬜ Turn on cost visibility
+### 2.5 ⬜ 🔧 Turn on cost visibility — infra-only, no code
 
 **Cost Explorer and billing alerts are both off** in the AWS account — console-only toggles nobody
 has flipped. There are zero SNS topics and zero CloudWatch alarms, so the first signal of a runaway
 bill would be the bill. Current steady-state spend is roughly **$57/month** (§6.6); the risk is not
 the current number but the absence of anything that would tell you it changed.
+
+**🔧 marks a manual-AWS-console item** — nothing in this repository can close it; it needs someone
+with account access to flip a toggle (here: AWS Billing console → Cost Explorer → Enable, plus a
+CloudWatch billing alarm + SNS topic), not a pull request. Called out explicitly (POST-SUBMISSION-
+UPGRADES.md #10) so it doesn't get mistaken for code-workable backlog sitting idle.
 
 ---
 
@@ -194,8 +199,8 @@ not the role catalog.
 | ⬜ **Backend-driven i18n** | Server-generated messages (validation, email bodies, capability-denied text) stay English while the UI switches language | Spring `MessageSource` + `Accept-Language`; the `CapabilityCatalog` phrases are the natural first target since they already have a message template |
 | ⬜ **Resolve `VERIFY_EMAIL_HOST`** | Reserved and unused (`UI_APP_URL` drives links today). Keep or remove deliberately — do not let it rot as ambiguous config | |
 | ✅ **DB connection: `VERIFY_IDENTITY` instead of `REQUIRED`** | Done (2026-08-08) — Aiven's per-project CA (`certs/aiven-mysql-ca.pem`, a public certificate, safe to commit) is imported into the JRE's default truststore at Docker build time (`keytool -importcert`), and `MYSQL_SSL_MODE` is now `VERIFY_IDENTITY`. Verified three ways before touching production: the cert is well-formed (`openssl x509`), the import actually lands in the built image's truststore (`keytool -list` inside the container), and — the real test — a live `mysql.exe --ssl-mode=VERIFY_IDENTITY --ssl-ca=...` connection against the actual Aiven instance succeeded (TLSv1.3). Not yet redeployed to production as of this writing — see the RUNBOOK for the redeploy step | |
-| ⬜ **Email invoices/documents as PDF attachments** | The app can already export an invoice (and other records) to PDF client-side for printing/download, but there's no way to have that PDF emailed to the customer or to yourself | Reuse `EmailServiceImpl`'s existing `multipart/alternative` + `EmailTemplate` branded-HTML pattern (2026-08-08 session confirmed this is already solid, not a placeholder) and attach the PDF via `MimeMessageHelper#addAttachment`. The PDF generation itself likely needs to move server-side (or accept a client-generated blob upload) since the current export path is frontend-only — investigate `jspdf` usage in `tesseraapp/` before assuming which side should own rendering |
-| ⬜ **Scheduled/on-demand report & metrics emails** | Admins can see stats/analytics live in the Security Center and dashboards, but there's no way to get a periodic digest (login counts, MFA enrollment %, audit summary) or a one-off "email me this view" without staying logged in | A digest email reusing `EmailTemplate`; scheduling likely wants a lightweight cron (Spring `@Scheduled`) rather than a new job-queue dependency, given this project's small-team scale. Natural pairing with `SecurityDashboardServiceImpl`'s existing tile data — render the same numbers into an email instead of a new query path |
+| ✅ **Email invoices/documents as PDF attachments** | Done (2026-08-16, POST-SUBMISSION-UPGRADES.md #7) — server-side `InvoicePdfReport` (OpenPDF) + a manual "Email Invoice" button; the client-side jsPDF "Export PDF" button was left as-is, this is a second, independent path | |
+| ✅ **Scheduled/on-demand report & metrics emails** | Done (2026-08-16, POST-SUBMISSION-UPGRADES.md #6) — new `ReportDigestService` renders the same `Stats`/`SecurityOverview` figures `SecurityDashboardServiceImpl` already computes into `EmailTemplate`; a manual "Email me this report" button and a weekly `SchedulingConfig` cron job (per-organization + system-wide) both call it, so the two routes can't drift into two implementations | |
 
 #### Favorites bar — decisions taken up front
 

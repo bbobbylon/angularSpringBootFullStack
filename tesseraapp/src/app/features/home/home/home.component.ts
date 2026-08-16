@@ -172,13 +172,13 @@ export class HomeComponent implements OnInit {
   }
 
   /**
-   * Returns a deterministic background colour for a customer's initials avatar.
+   * Returns a deterministic background color for a customer's initials avatar.
    *
-   * The colour is chosen by {@code id % avatarColors.length}, so the same customer
-   * always gets the same colour regardless of render order or page.
+   * The color is chosen by {@code id % avatarColors.length}, so the same customer
+   * always gets the same color regardless of render order or page.
    *
-   * @param id - the customer's numeric ID used to pick a colour from {@code avatarColors}
-   * @returns a CSS hex colour string (e.g. {@code '#0D8ABC'})
+   * @param id - the customer's numeric ID used to pick a color from {@code avatarColors}
+   * @returns a CSS hex color string (e.g. {@code '#0D8ABC'})
    */
   protected getAvatarColor(id: number): string {
     return '#' + this.avatarColors[id % this.avatarColors.length];

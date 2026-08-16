@@ -292,6 +292,14 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection<String> findSystemAdminEmails() {
+        return userRepo.findSystemAdminEmails();
+    }
+
+    /**
      * Looks up the user's role and converts the User entity into a UserDTO
      * with roleName and permissions populated.
      *

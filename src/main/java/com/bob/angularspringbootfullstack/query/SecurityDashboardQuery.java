@@ -5,7 +5,7 @@ package com.bob.angularspringbootfullstack.query;
  *
  * <p><b>No new storage.</b> Like {@link LoginRiskQuery}, every figure on the dashboard is read
  * back out of tables that already exist — {@code userevents} for the audit trail, {@code users}
- * for account state and MFA enrolment, {@code refreshsessions} for live sessions. FR-TPF-1 writes
+ * for account state and MFA enrollment, {@code refreshsessions} for live sessions. FR-TPF-1 writes
  * {@code SUSPICIOUS_LOGIN} rows as a side effect of detection; this class is what turns that
  * write-only trail into something an administrator can actually look at. Adding a summary table
  * would have introduced a second version of the truth that could drift from the audit log, and the

@@ -1,23 +1,28 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.Invoice;
 import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.report.CustomerReport;
+import com.bob.angularspringbootfullstack.report.InvoicePdfReport;
 import com.bob.angularspringbootfullstack.report.InvoiceReport;
 import com.bob.angularspringbootfullstack.service.CustomerService;
+import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import com.bob.angularspringbootfullstack.utils.SortUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -81,6 +86,10 @@ public class CustomerController {
      * orphaned and invisible to the scoped dashboards that are supposed to report on it.
      */
     private final OrganizationService organizationService;
+    /**
+     * Sends the PDF invoice email dispatched by {@link #emailInvoice}.
+     */
+    private final EmailService emailService;
 
     /**
      * JPA property paths the {@code /customer/list} and {@code /customer/search} endpoints may
@@ -602,6 +611,77 @@ public class CustomerController {
                 .contentType(parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .headers(headers)
                 .body(invoiceReport.exportReport());
+    }
+
+    /**
+     * Streams a single invoice as a PDF file (POST-SUBMISSION-UPGRADES.md "PDF invoice
+     * attachments"), and the server-side rendering also reused by {@link #emailInvoice} below.
+     *
+     * <p>Distinct from the invoice screen's existing "Export PDF" button, which renders
+     * client-side (jsPDF, DOM-to-canvas) and never touches this endpoint — that path stays as-is.
+     * This one exists because a server-side render is what {@link #emailInvoice} needs to attach
+     * to an outbound email, and exposing it as a direct download too avoids maintaining two PDF
+     * layouts. A draft invoice (no linked customer) still downloads; see {@link InvoicePdfReport}
+     * for why only the email path below refuses one.
+     *
+     * @param user      the authenticated user making the request
+     * @param invoiceId the ID of the invoice to render
+     * @return 200 OK with a PDF body and {@code Content-Disposition: attachment}
+     */
+    @GetMapping("/invoice/{invoiceId}/download/pdf")
+    public ResponseEntity<Resource> exportInvoicePdf(@AuthenticationPrincipal UserDTO user, @PathVariable Long invoiceId) {
+        Invoice invoice = customerService.getInvoice(invoiceId);
+        requireInScope(resolveScope(user), invoice);
+        byte[] pdfBytes = new InvoicePdfReport(invoice).exportReport();
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"invoice-" + invoice.getInvoiceNumber() + ".pdf\"");
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .headers(headers)
+                .body(new ByteArrayResource(pdfBytes));
+    }
+
+    /**
+     * Emails a PDF copy of an invoice to its owning customer — the manual "Email Invoice" button
+     * on the invoice screen (POST-SUBMISSION-UPGRADES.md "PDF invoice attachments").
+     *
+     * <p>Refused with 400 for a draft invoice (no linked customer yet — see
+     * {@link Invoice#getCustomer()}): there is no address to send it to, and linking it to a
+     * customer first via {@code PUT .../addtocustomer/{customerId}} is the existing, correct fix
+     * rather than something this endpoint should paper over.
+     *
+     * <p>Sent synchronously, unlike the account-lifecycle emails in {@link EmailService} — those
+     * are fire-and-forget by design (see {@code EmailServiceImpl}'s class Javadoc), but a manual
+     * button click is exactly the case where the caller needs to know whether the send actually
+     * succeeded rather than getting an optimistic 200 regardless.
+     *
+     * <p>Gated the same as editing the invoice ({@link #updateInvoice}) rather than a new
+     * capability: sending a customer their invoice is at least as consequential as changing it.
+     *
+     * @param user      the authenticated user making the request
+     * @param invoiceId the ID of the invoice to email
+     * @return 200 OK with the authenticated user, or 400 if the invoice has no customer yet
+     */
+    @PostMapping("/invoice/{invoiceId}/email")
+    @PreAuthorize("hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER')")
+    public ResponseEntity<HttpResponse> emailInvoice(@AuthenticationPrincipal UserDTO user, @PathVariable Long invoiceId) {
+        Invoice invoice = customerService.getInvoice(invoiceId);
+        requireInScope(resolveScope(user), invoice);
+        Customer customer = invoice.getCustomer();
+        if (customer == null) {
+            throw new ApiException("This invoice has no customer attached yet — link it to a customer before emailing it.");
+        }
+        byte[] pdfBytes = new InvoicePdfReport(invoice).exportReport();
+        emailService.sendInvoiceEmail(customer.getCustomerName(), customer.getEmail(), invoice.getInvoiceNumber(), pdfBytes);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail())))
+                        .message("Invoice emailed to " + customer.getEmail() + "!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
     }
 
     /**

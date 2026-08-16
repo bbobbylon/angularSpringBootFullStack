@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  * keeps the call sites simple while keeping the value externalized.
  *
  * <p>The startup log line is deliberate: how many proxies the application believes are in front of
- * it determines whether {@code X-Forwarded-For} is honoured at all, and a mismatch between this
+ * it determines whether {@code X-Forwarded-For} is honored at all, and a mismatch between this
  * number and the real topology is silent but consequential. Too low and genuine client addresses
  * are replaced by the load balancer's, which collapses every user into one apparent network — the
  * rate limiter then throttles all users as if they were one caller, and the anomaly detector's

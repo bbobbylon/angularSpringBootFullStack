@@ -21,7 +21,7 @@ import { environment } from '../../environments/environment';
  * Central HTTP service for all customer and invoice API calls.
  *
  * Each method returns a typed Observable wrapping the server's standard
- * {@link CustomHttpResponseInterface} envelope. Errors are normalised by
+ * {@link CustomHttpResponseInterface} envelope. Errors are normalized by
  * {@link handleError} into a single error Observable so callers can handle
  * failures uniformly via {@code catchError}.
  */
@@ -189,6 +189,22 @@ export class CustomerService {
       .patch<CustomHttpResponseInterface<CustomerInvoiceUserInterface>>(`${this.server}/customer/invoice/update/${invoiceId}`, invoice)
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
+  /**
+   * Emails a server-rendered PDF copy of an invoice to its owning customer (the "Email Invoice"
+   * button on the invoice detail screen).
+   *
+   * <p>400s if the invoice is a draft (no customer attached yet) — the backend has no address to
+   * send it to. The response carries no invoice/customer payload, only the standard envelope's
+   * {@code user}, since nothing about the invoice itself changes.
+   *
+   * @param invoiceId the ID of the invoice to email
+   * @returns Observable emitting the envelope once the send completes
+   */
+  emailInvoice$ = (invoiceId: number): Observable<CustomHttpResponseInterface<{ user: unknown }>> =>
+    this.http
+      .post<CustomHttpResponseInterface<{ user: unknown }>>(`${this.server}/customer/invoice/${invoiceId}/email`, {})
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
   downloadCustomerReport$ = (): Observable<HttpEvent<Blob>> =>
     this.http
       .get<Blob>(`${this.server}/customer/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })
@@ -248,7 +264,7 @@ export class CustomerService {
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
-   * Normalises HTTP errors into a single Observable<never> so all callers
+   * Normalizes HTTP errors into a single Observable<never> so all callers
    * receive a consistent Error instance regardless of whether the failure
    * was a client-side network event or a structured server error response.
    *

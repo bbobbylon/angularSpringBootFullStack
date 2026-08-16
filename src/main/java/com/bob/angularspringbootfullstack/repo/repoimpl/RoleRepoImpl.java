@@ -91,7 +91,7 @@ public class RoleRepoImpl implements RoleRepo<Role> {
      * Creating roles is not supported.
      *
      * <p>Unimplemented on purpose: roles are seeded by {@code schema.sql} and this application
-     * never edits the role catalogue at runtime. It throws rather than returning {@code null} so
+     * never edits the role catalog at runtime. It throws rather than returning {@code null} so
      * that a future caller fails at the call site with a message naming the real path, instead of
      * receiving a null that surfaces as an NPE somewhere unrelated.
      *
@@ -127,7 +127,7 @@ public class RoleRepoImpl implements RoleRepo<Role> {
      * Fetching a role by id is not supported.
      *
      * <p>Unimplemented on purpose: roles are seeded by {@code schema.sql} and this application
-     * never edits the role catalogue at runtime. It throws rather than returning {@code null} so
+     * never edits the role catalog at runtime. It throws rather than returning {@code null} so
      * that a future caller fails at the call site with a message naming the real path, instead of
      * receiving a null that surfaces as an NPE somewhere unrelated.
      *
@@ -143,7 +143,7 @@ public class RoleRepoImpl implements RoleRepo<Role> {
      * Updating a role is not supported.
      *
      * <p>Unimplemented on purpose: roles are seeded by {@code schema.sql} and this application
-     * never edits the role catalogue at runtime. It throws rather than returning {@code null} so
+     * never edits the role catalog at runtime. It throws rather than returning {@code null} so
      * that a future caller fails at the call site with a message naming the real path, instead of
      * receiving a null that surfaces as an NPE somewhere unrelated.
      *

@@ -17,7 +17,7 @@ package com.bob.angularspringbootfullstack.constants;
  * formatting characters (spaces, dashes, dots, parentheses) allowed between groups but not
  * required. This is a shape check, not a live-number check — it cannot know whether a
  * correctly-formatted number is actually reachable, only that it has the right number of digits
- * in the right places to become a valid E.164 US number once normalised.
+ * in the right places to become a valid E.164 US number once normalized.
  *
  * <p>Deliberately NOT enforced: North American Numbering Plan rules about which digits an area
  * code or exchange may start with. That is a real constraint but a moving one (the NANP

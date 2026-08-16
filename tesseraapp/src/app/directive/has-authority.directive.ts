@@ -2,13 +2,13 @@ import { Directive, ElementRef, inject, Input, OnInit, Renderer2, TemplateRef, V
 import { UserService } from '../service/user.service';
 
 /**
- * Normalises the several shapes an authority input may take into a flat list.
+ * Normalizes the several shapes an authority input may take into a flat list.
  *
  * Templates are allowed to write a single authority (`*appHasAuthority="'UPDATE:CUSTOMER'"`), an
  * array (`*appHasAuthority="['UPDATE:USER', 'UPDATE:CUSTOMER']"`), or a comma-separated string
  * (`*appHasAuthority="'UPDATE:USER, UPDATE:CUSTOMER'"`) — the last of which matches how the backend
  * itself stores a role's permissions in the `roles.permission` column, so a developer copying a
- * string out of `schema.sql` gets the behaviour they expect rather than a silent never-match.
+ * string out of `schema.sql` gets the behavior they expect rather than a silent never-match.
  *
  * @param value - the raw binding value
  * @returns the authorities as trimmed, non-empty strings
@@ -48,7 +48,7 @@ function toAuthorities(value: string | string[] | null | undefined): string[] {
  * never use). It is wrong when absence would be *confusing* — a form whose submit button simply
  * isn't there reads as a rendering bug. For that case use {@link RequiresAuthorityDirective},
  * which leaves the control visible but inert and explains itself on hover. Choosing between them
- * is a per-control judgement, which is why this file ships both rather than picking one globally.
+ * is a per-control judgment, which is why this file ships both rather than picking one globally.
  *
  * <h3>Not a security boundary (NFR-SEC-4)</h3>
  * The authorities are read from the `authorities` claim of the access token in `localStorage`, a

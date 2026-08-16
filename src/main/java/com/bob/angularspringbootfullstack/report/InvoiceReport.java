@@ -21,7 +21,7 @@ import java.util.stream.IntStream;
 /**
  * Generates an XLSX report of all invoices using Apache POI.
  *
- * <p>Mirrors the structure of {@link CustomerReport}: the constructor initialises
+ * <p>Mirrors the structure of {@link CustomerReport}: the constructor initializes
  * the workbook and writes column headers; {@link #exportReport()} triggers the
  * data rows and returns the finished file as an {@link InputStreamResource} so
  * Spring MVC can stream it directly to the HTTP response.
@@ -37,7 +37,7 @@ public class InvoiceReport {
     private final XSSFSheet sheet;
 
     /**
-     * Initialises the workbook and writes the header row.
+     * Initializes the workbook and writes the header row.
      *
      * @param invoices the full list of invoices to include in the report;
      *                 passed directly to {@link #generateReport()} without filtering
@@ -72,7 +72,7 @@ public class InvoiceReport {
     /**
      * Builds the data rows and returns the finished workbook as a streamable resource.
      *
-     * @return an {@link InputStreamResource} wrapping the serialised XLSX bytes,
+     * @return an {@link InputStreamResource} wrapping the serialized XLSX bytes,
      *         ready to be set as the body of a {@link org.springframework.http.ResponseEntity}
      */
     public InputStreamResource exportReport() {
@@ -80,7 +80,7 @@ public class InvoiceReport {
     }
 
     /**
-     * Writes one row per invoice and serialises the workbook to a byte array.
+     * Writes one row per invoice and serializes the workbook to a byte array.
      *
      * <p>The services list is joined as a comma-separated string. The {@code invoiceDate}
      * is formatted as {@code yyyy-MM-dd}; null dates and null customers are written as

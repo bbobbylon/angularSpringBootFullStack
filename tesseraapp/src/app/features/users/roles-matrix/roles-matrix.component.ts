@@ -13,10 +13,10 @@ import { TranslocoDirective } from '@jsverse/transloco';
  * Roles × Permissions Matrix (SRS M3, FR-RBAC-1/2).
  *
  * Renders a grid where every row is a role and every column is a permission
- * string drawn from the full roles catalogue. A filled cell means the role
+ * string drawn from the full roles catalog. A filled cell means the role
  * carries that permission; an empty cell means it does not.
  *
- * The roles catalogue (with their comma-delimited {@code permission} strings)
+ * The roles catalog (with their comma-delimited {@code permission} strings)
  * is already returned by {@code GET /user/profile}, so no new backend endpoint
  * is needed. The matrix is read-only — role and permission assignment is done
  * through the admin user-detail view (FR-ADMIN-3).
@@ -38,7 +38,7 @@ export class RolesMatrixComponent implements OnInit {
   protected readonly dataState = signal<DataState>(DataState.LOADING);
   /** The signed-in user — passed to the navbar. */
   protected readonly user = signal<UserInterface | undefined>(undefined);
-  /** The full roles catalogue as returned by the backend. */
+  /** The full roles catalog as returned by the backend. */
   protected readonly roles = signal<RolesInterface[]>([]);
 
   /**
@@ -60,7 +60,7 @@ export class RolesMatrixComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   /**
-   * Loads the roles catalogue via the profile endpoint (cheapest source that
+   * Loads the roles catalog via the profile endpoint (cheapest source that
    * already returns the full role list with permission strings).
    */
   ngOnInit(): void {
@@ -84,7 +84,7 @@ export class RolesMatrixComponent implements OnInit {
    * Whether the given role grants the given permission string.
    * Called from the template to fill each matrix cell.
    *
-   * @param role       - one row from the roles catalogue
+   * @param role       - one row from the roles catalog
    * @param permission - one column header permission string
    * @returns true when the role's permission string contains this permission
    */

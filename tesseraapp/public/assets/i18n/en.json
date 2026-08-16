@@ -197,6 +197,8 @@
   },
   "invoice": {
     "exportPdf": "Export as PDF",
+    "emailInvoice": "Email invoice",
+    "sending": "Sending…",
     "edit": "Edit invoice",
     "cancelEdit": "Cancel edit",
     "invoiceDate": "Invoice date",
@@ -485,6 +487,8 @@
   "analytics": {
     "eyebrow": "Insights",
     "title": "Analytics Hub",
+    "emailReport": "Email me this report",
+    "sendingReport": "Sending…",
     "customerGrowth": "Customer Growth (MoM)",
     "revenueGrowth": "Revenue Growth (MoM)",
     "collectionRate": "Collection Rate",
@@ -498,7 +502,7 @@
     "statusOverTime": "Invoice Status Over Time",
     "statusOverTimeSub": "Collection momentum — PAID / PENDING / OVERDUE per month",
     "noInvoiceData": "No invoice data yet.",
-    "serviceUtilisation": "Service Utilisation",
+    "serviceUtilization": "Service Utilization",
     "serviceSub": "Top 10 services by invoice frequency",
     "noServiceData": "No service data yet.",
     "customerStatus": "Customer Status",

@@ -408,6 +408,19 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection<String> findSystemAdminEmails() {
+        try {
+            return jdbcTemplate.queryForList(SELECT_SYSTEM_ADMIN_EMAILS_QUERY, of(), String.class);
+        } catch (Exception exception) {
+            log.error("Error resolving system administrator emails: {}", exception.getMessage(), exception);
+            throw new ApiException("An error occurred while resolving report digest recipients. Please try again.");
+        }
+    }
+
+    /**
      * Generates a fresh 2FA code for the given user, replaces any prior code,
      * and hands dispatch off to {@link NotificationService#sendTwoFactorCode}.
      * <p>

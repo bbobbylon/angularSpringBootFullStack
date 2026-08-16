@@ -135,7 +135,7 @@ describe('authenticationGuard', () => {
       // so such a token authenticates forever on the client. Our own TokenProvider always sets
       // exp, so this cannot arise from a token we issued — but a hand-crafted one parks the user
       // in a session the server will 401 on every request, with no client-side expiry to end it.
-      // Tightening this to require exp is a deliberate behaviour change, left for its own commit.
+      // Tightening this to require exp is a deliberate behavior change, left for its own commit.
       localStorage.setItem(Key.TOKEN, jwtWith({ claims: { authorities: ['READ:USER'] }, omitExp: true }));
 
       expect(runGuard()).toBe(true);

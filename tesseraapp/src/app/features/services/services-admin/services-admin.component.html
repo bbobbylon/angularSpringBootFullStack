@@ -120,7 +120,7 @@
                     @if (editingId() === service.id) {
                       <!-- Inline edit row. Replaces the row in place rather than opening a modal so
                            the surrounding catalog stays visible — pricing decisions are usually made
-                           by comparison with the neighbouring entries. -->
+                           by comparison with the neighboring entries. -->
                       <tr class="sc-svcadmin__editing">
                         <td colspan="5">
                           <form #editForm="ngForm" (ngSubmit)="save(service.id, editForm)">

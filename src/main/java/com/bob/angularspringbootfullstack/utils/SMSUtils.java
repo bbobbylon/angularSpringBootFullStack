@@ -59,14 +59,14 @@ public class SMSUtils {
     }
 
     /**
-     * Normalises a US phone number to E.164 ({@code +1} followed by exactly 10 digits).
+     * Normalizes a US phone number to E.164 ({@code +1} followed by exactly 10 digits).
      * <p>
      * Strips every non-digit character first, then adds the {@code 1} country code only if it
-     * isn't already there. Blindly prepending {@code "+1"} (the previous behaviour) silently
+     * isn't already there. Blindly prepending {@code "+1"} (the previous behavior) silently
      * produced an invalid, undeliverable number whenever the input already carried a leading
      * {@code 1} — e.g. {@code "18084824518"} became {@code "+118084824518"}, 13 characters
      * instead of the required 12. The Security Center's phone field
-     * (pattern {@code ^\+?[0-9. ()-]{7,25}$}) accepts both shapes, so both have to normalise the
+     * (pattern {@code ^\+?[0-9. ()-]{7,25}$}) accepts both shapes, so both have to normalize the
      * same way here.
      *
      * @param rawNumber a US phone number in any of the accepted input shapes
@@ -84,8 +84,8 @@ public class SMSUtils {
      * True only when all three Twilio settings are present and non-blank.
      * <p>
      * This is the switch that decides whether 2FA texts are really sent or merely logged, so it is
-     * the one behaviour in this class worth testing. The environment-reading form below cannot be
-     * exercised directly — the three fields are {@code static final} and initialised from
+     * the one behavior in this class worth testing. The environment-reading form below cannot be
+     * exercised directly — the three fields are {@code static final} and initialized from
      * {@link System#getenv} at class-initialisation time, which no test can rebind — so the decision
      * itself lives in the pure {@link #isConfigured(String, String, String)} overload and this method
      * only supplies the ambient values.

@@ -5,7 +5,7 @@ import { EventType } from '../enumeration/event-type.enum';
  *
  * Consumed by every surface that renders {@link UserEventsInterface} rows
  * (profile activity log, Security Center history panel, admin user-detail view)
- * so icon, label, and badge colour are defined in one place.
+ * so icon, label, and badge color are defined in one place.
  */
 export interface EventDisplay {
   /** Short human-readable label shown in the badge. */

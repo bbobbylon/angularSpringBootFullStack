@@ -407,7 +407,7 @@ a:hover { color: var(--accent-strong); }
 
 /* ===========================================================================
    8. INTERACTION RESET
-   Preserve the original non-selectable-chrome behaviour, but keep real inputs
+   Preserve the original non-selectable-chrome behavior, but keep real inputs
    and editable fields functional, and restore a pointer cursor on the
    interactive elements that the broad reset below would otherwise flatten.
    =========================================================================== */

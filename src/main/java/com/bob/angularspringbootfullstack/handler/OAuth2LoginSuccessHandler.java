@@ -246,7 +246,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
      * Security Center.
      *
      * <p>Redirects rather than issuing tokens: the user never stopped being signed in, and minting a
-     * fresh session here would be the very behaviour this branch exists to prevent. The outcome is
+     * fresh session here would be the very behavior this branch exists to prevent. The outcome is
      * reported through a query flag so the SPA can raise the right toast — including the refusal,
      * which is a normal thing to hit (connecting an identity that already belongs to someone else)
      * rather than an error state.

@@ -1569,6 +1569,8 @@ which returns **active services only**.
 | PUT | `/customer/invoice/{invoiceId}/addtocustomer/{customerId}` | Attach an **existing** draft |
 | PATCH | `/customer/invoice/update/{invoiceId}` | Edit status, dates, amounts |
 | GET | `/customer/invoice/download/report` | XLSX attachment |
+| GET | `/customer/invoice/{invoiceId}/download/pdf` | PDF attachment (server-rendered, `InvoicePdfReport`/OpenPDF — separate from the invoice screen's client-side jsPDF "Export PDF" button) |
+| POST | `/customer/invoice/{invoiceId}/email` | Emails the PDF to the invoice's customer; `400` if the invoice is still a draft (no customer attached) |
 
 `/admin/analytics/summary` · `/customers` · `/invoices` serve the admin reporting surface, gated on
 `UPDATE:USER`/`UPDATE:ROLE`.

@@ -57,6 +57,16 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.5.1</version>
         </dependency>
+        <!-- OpenPDF (POST-SUBMISSION-UPGRADES.md "PDF invoice attachments"): renders the
+             server-side invoice PDF in InvoicePdfReport, used both as a direct download and as
+             an email attachment. LGPL/MPL dual-licensed fork of iText 4 — chosen deliberately
+             over iText 5+/7, which relicensed to AGPL and is not a license this project can carry
+             as a dependency. -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>1.3.30</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>

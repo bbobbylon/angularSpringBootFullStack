@@ -27,7 +27,7 @@ export interface JwtOptions {
   claims?: Record<string, unknown>;
   /**
    * Omits the {@code exp} claim entirely. The helper library reports such a token as *not*
-   * expired, which is a behaviour worth pinning rather than discovering in production.
+   * expired, which is a behavior worth pinning rather than discovering in production.
    */
   omitExp?: boolean;
 }

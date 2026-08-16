@@ -134,7 +134,7 @@ public interface UserRepo<T extends User> {
      * <p>A code only ever becomes pending as a side effect of a successful password check in
      * {@code UserController#authenticate} (see {@link #sendVerificationCode} and
      * {@link #issueVerificationCode}), so this doubles as the gate for
-     * {@code UserService#resendVerificationCode}: resend is only honoured while this is true,
+     * {@code UserService#resendVerificationCode}: resend is only honored while this is true,
      * which stands in for re-proving the password on every click without actually requiring it.
      *
      * @param userId the account to check
@@ -221,5 +221,14 @@ public interface UserRepo<T extends User> {
      * @param image   the uploaded image file from the multipart request
      */
     void updateProfileImage(UserDTO userDTO, MultipartFile image);
+
+    /**
+     * The email addresses of every system-wide administrator ({@code ROLE_ADMIN} or
+     * {@code ROLE_APPLICATION_ADMIN}) — the recipient list for the scheduled/on-demand
+     * system-wide report digest.
+     *
+     * @return every system administrator's email, in no particular order; empty if none exist
+     */
+    Collection<String> findSystemAdminEmails();
 }
 

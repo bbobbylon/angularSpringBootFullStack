@@ -1,7 +1,7 @@
 /**
  * Shape of the user object returned by the backend's {@code UserDTO}.
  *
- * Field names must exactly match the JSON keys Jackson serialises — a mismatch
+ * Field names must exactly match the JSON keys Jackson serializes — a mismatch
  * means the field will always be {@code undefined} in Angular.  One non-obvious
  * case: Lombok generates {@code isNotLocked()} for a {@code boolean isNotLocked}
  * field, and Jackson strips the {@code is} prefix from boolean getters, so the

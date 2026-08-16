@@ -45,7 +45,7 @@ describe('tokenInterceptor', () => {
   let userService: { refreshToken$: ReturnType<typeof vi.fn> };
   /** Records every request handed downstream, in order, including retries. */
   let handled: HttpRequest<unknown>[];
-  /** Swappable behaviour for the stub handler; reassigned per scenario. */
+  /** Swappable behavior for the stub handler; reassigned per scenario. */
   let server: (request: HttpRequest<unknown>) => Observable<HttpEvent<unknown>>;
 
   /** The stub {@code HttpHandlerFn}: records the request, then defers to {@link server}. */
@@ -189,7 +189,7 @@ describe('tokenInterceptor', () => {
       expect(userService.refreshToken$).not.toHaveBeenCalled();
     });
 
-    it('still recognises a public route behind an absolute API base URL', () => {
+    it('still recognizes a public route behind an absolute API base URL', () => {
       // environment.apiUrl is absolute in some builds; segment matching must survive the scheme
       // and host rather than only working for relative paths.
       collect(intercept('http://localhost:8080/user/login'));

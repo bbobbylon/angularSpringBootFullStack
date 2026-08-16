@@ -498,7 +498,7 @@
     "statusOverTime": "Status das faturas ao longo do tempo",
     "statusOverTimeSub": "Ritmo de cobrança — PAGAS / PENDENTES / VENCIDAS por mês",
     "noInvoiceData": "Ainda não há dados de faturas.",
-    "serviceUtilisation": "Uso de serviços",
+    "serviceUtilization": "Uso de serviços",
     "serviceSub": "10 serviços mais faturados",
     "noServiceData": "Ainda não há dados de serviços.",
     "customerStatus": "Status dos clientes",

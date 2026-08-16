@@ -1,6 +1,6 @@
 # Implementation History
 
-**Version:** 2.2
+**Version:** 2.3
 **Last Updated:** 2026-08-15
 **Status:** Living archive — what was built over time, and what went wrong along the way.
 
@@ -600,6 +600,56 @@ run means it shipped," "I redeployed, so it's current," "the code change and the
 together" — compounded into one confusing failure with no single obvious cause. Verifying *at the
 infrastructure layer* (what does the running task definition actually reference?) cut through all
 three at once, where reasoning about any single layer in isolation would not have.
+
+### 4.29 The ALB serves plain HTTP, and that blocked more than it looked like — fixed in two stages, only one of which needed a domain
+
+**Symptom.** Google and Microsoft federated login both failed in production, and WebAuthn/passkeys
+were completely inert — `isWebAuthnSupported()` reported `false` regardless of what was deployed —
+while GitHub federated login worked fine the whole time. Everything worked correctly on `start.sh`
+locally.
+
+**Cause.** The app's original public origin was the ALB directly:
+`http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com`. Google and Microsoft/Entra both
+reject non-HTTPS OAuth `redirect_uri`s outright (GitHub is the outlier — it permits `http` callbacks),
+and the WebAuthn API refuses to run at all outside a secure context. A real, publicly-trusted
+certificate directly on the ALB (README.md Step 8) requires a domain you can prove ownership of,
+which didn't exist yet — so all three stayed blocked by the same root cause: no HTTPS anywhere in
+front of the app.
+
+**Fix, in two stages — only the second one needed a domain.**
+
+1. **CloudFront, free (2026-08-04).** A CloudFront distribution (`E1WWY6FHSKI84P`) was placed in
+   front of the ALB, using CloudFront's own auto-issued `*.cloudfront.net` certificate —
+   `https://d3911jyxcju4q4.cloudfront.net` is a real, publicly-trusted HTTPS origin at **zero cost**
+   and requires no domain purchase at all. This alone unblocked Google, Microsoft, and WebAuthn. One
+   more layer surfaced immediately after: the ALB itself was overwriting `X-Forwarded-Proto` back to
+   `http` on its way to the container, so Spring kept deriving an `http://` OAuth `redirect_uri` even
+   through the HTTPS front door — `FORWARD_HEADERS_STRATEGY=framework` does not help here, since it
+   honours the (wrong) header faithfully rather than second-guessing it. Fixed with a dedicated
+   `OAUTH2_REDIRECT_BASE_URL` env var that pins the redirect origin outright instead of deriving it
+   from a header the ALB doesn't preserve correctly. Full detail and the live verify command:
+   [`aws/RUNBOOK.md` Part F](../aws/RUNBOOK.md#part-f--known-limitations-right-now).
+2. **`tesseraapp.dev`, a real domain (2026-08-08).** Bought via Porkbun and attached to the same
+   CloudFront distribution as an alternate domain name, with CloudFront issuing and managing the
+   matching ACM certificate. This stage is about branding and a stable hostname, not fixing a
+   technical blocker — that was already closed by stage 1. It did require re-registering redirect
+   URIs across all three federated OAuth apps, including standing up a *third*, separate GitHub OAuth
+   App (GitHub OAuth Apps hold exactly one callback URL each, unlike Google/Microsoft's multi-URI
+   clients — `localhost`, the original CloudFront-URL app, and the current `tesseraapp.dev` app all
+   exist as distinct registrations as a result).
+
+**Where things stand.** The ALB origin itself still serves plain HTTP — that was never changed and
+does not need to be, since CloudFront is the real public entrance and terminates TLS. The raw ALB DNS
+name above still resolves directly to the origin and still works for GitHub login specifically, which
+makes it a useful way to isolate "is this a CloudFront problem or an application problem" during
+debugging — but Google, Microsoft, and WebAuthn remain deliberately blocked on it, the same as before
+stage 1, since going straight to the origin bypasses the HTTPS termination entirely.
+
+**The standing lesson.** "HTTPS in front of the app" and "a branded domain" are two separate
+upgrades, not one — CloudFront's own certificate is free and was sufficient on its own to unblock
+every HTTPS-gated feature the day it went in. Buying a domain four days later closed a cosmetic gap
+(a random `*.cloudfront.net` hostname), not a technical one; conflating the two would have meant
+sitting on three broken login providers for longer than necessary while shopping for a domain name.
 
 ---
 

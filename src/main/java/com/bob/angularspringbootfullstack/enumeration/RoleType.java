@@ -8,7 +8,7 @@ import java.util.Optional;
  *
  * <p>Each constant represents a role that can be assigned to users for role-based access control
  * (RBAC). Spring Security enforces authorization from the comma-separated permission string these
- * roles carry in the {@code roles} table; this enum is the compile-time mirror of that catalogue.
+ * roles carry in the {@code roles} table; this enum is the compile-time mirror of that catalog.
  *
  * <h3>The tier, and why it is declared here rather than read from the database</h3>
  * Every role carries a {@link #getTier() tier} — an ordinal from 1 (least privileged) to 7 (most)
@@ -81,7 +81,7 @@ public enum RoleType {
     /**
      * Resolves a role name to its constant, case-insensitively and null-safely.
      *
-     * <p>Returns an empty {@link Optional} rather than throwing for an unrecognised name, so callers
+     * <p>Returns an empty {@link Optional} rather than throwing for an unrecognized name, so callers
      * decide what an unknown role means. Every authorization caller must treat it as a denial: a
      * role this enum has never heard of has no place on the ladder, and inventing a tier for it
      * would be guessing at a security boundary.
@@ -109,11 +109,11 @@ public enum RoleType {
      * restriction that applies to themselves. That is privilege elevation by proxy, and it defeats
      * the point of scoping.
      *
-     * <p><strong>Fails closed.</strong> If either name is unrecognised, the answer is no.
+     * <p><strong>Fails closed.</strong> If either name is unrecognized, the answer is no.
      *
      * @param callerRole the assigning administrator's role name
      * @param targetRole the role name being assigned
-     * @return true only when both roles are recognised and the target does not outrank the caller
+     * @return true only when both roles are recognized and the target does not outrank the caller
      */
     public static boolean canAssign(String callerRole, String targetRole) {
         Optional<RoleType> caller = from(callerRole);
@@ -131,7 +131,7 @@ public enum RoleType {
      * {@link #ROLE_APPLICATION_ADMIN} — everyone else is scoped, keyed off the tier rather than
      * an enumerated list of "the scoped roles." Enumerating scoped roles by name is exactly the
      * shape of bug this method replaces: {@code ROLE_HELP_DESK_ADMIN} also carries
-     * {@code UPDATE:USER} and reaches these endpoints, but a check that only recognised
+     * {@code UPDATE:USER} and reaches these endpoints, but a check that only recognized
      * {@code ROLE_ORGANIZATION_ADMIN} by name let it through completely unscoped. Keying off
      * "below the unscoped tiers" instead means a future role slotted in anywhere below tier 6
      * is scoped automatically, with nothing new to remember to update here.
@@ -144,12 +144,12 @@ public enum RoleType {
 
     /**
      * {@link #isOrganizationScoped()}, resolved from a role name and fail-closed: an
-     * unrecognised role is treated as scoped (restricted), never as unscoped (global access) —
-     * the same fail-closed direction {@link #canAssign} takes for an unrecognised name.
+     * unrecognized role is treated as scoped (restricted), never as unscoped (global access) —
+     * the same fail-closed direction {@link #canAssign} takes for an unrecognized name.
      *
      * @param roleName the caller's role name; may be null or blank
-     * @return true when the role is recognised and below the unscoped tiers, or when it is not
-     *         recognised at all
+     * @return true when the role is recognized and below the unscoped tiers, or when it is not
+     *         recognized at all
      */
     public static boolean isOrganizationScoped(String roleName) {
         return from(roleName).map(RoleType::isOrganizationScoped).orElse(true);

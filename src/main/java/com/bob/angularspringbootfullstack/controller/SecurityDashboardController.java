@@ -80,7 +80,7 @@ public class SecurityDashboardController {
      *
      * @param user the authenticated (admin) principal, echoed in the envelope like every other
      *             endpoint in this application
-     * @param days how many days of history to summarise; defaults to a week and is clamped by the
+     * @param days how many days of history to summarize; defaults to a week and is clamped by the
      *             service, since it is caller-supplied input to a set of aggregate queries
      * @param suspiciousPage 0-based page of the flagged sign-ins table, defaulting to the first.
      *                       Its own parameter rather than a shared {@code page} because the two

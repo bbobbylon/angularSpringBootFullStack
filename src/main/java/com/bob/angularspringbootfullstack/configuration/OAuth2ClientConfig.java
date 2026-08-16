@@ -66,7 +66,7 @@ public class OAuth2ClientConfig {
     /**
      * Absolute public origin to build OAuth redirect URIs from, e.g.
      * {@code https://d3911jyxcju4q4.cloudfront.net}. Blank (the default) keeps the standard
-     * request-derived behaviour, which is correct for local development.
+     * request-derived behavior, which is correct for local development.
      *
      * <p><b>Why this exists.</b> Spring's default template is
      * {@code {baseUrl}/login/oauth2/code/{registrationId}}, and {@code baseUrl} is reconstructed

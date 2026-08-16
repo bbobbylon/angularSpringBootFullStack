@@ -345,7 +345,7 @@
   white-space: nowrap;
 }
 
-/* ── Service utilisation ─────────────────────────────────────────────────── */
+/* ── Service utilization ─────────────────────────────────────────────────── */
 .sc-util-list {
   padding: var(--space-3) var(--space-5) var(--space-4);
   display: flex;

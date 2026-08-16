@@ -200,7 +200,7 @@ export const routes: Routes = [
       ),
   },
   // Analytics hub (admin-only) — dual-area trend chart, acquisition bars, stacked status
-  // breakdown, service utilisation. adminGuard mirrors billing, and like billing the data
+  // breakdown, service utilization. adminGuard mirrors billing, and like billing the data
   // is fetched from the admin-gated /admin/analytics/** API (UPDATE:USER / UPDATE:ROLE
   // enforced server-side), so the guard is a usability aid, not the security boundary.
   {

@@ -20,7 +20,7 @@ import { vi } from 'vitest';
  * The subset of {@code public/assets/i18n/en.json} that the route guards read.
  *
  * <p>Duplicated here rather than imported from the real dictionary so a spec failure points at a
- * behaviour change in the guard rather than at an unrelated copy edit, and so the assertions can
+ * behavior change in the guard rather than at an unrelated copy edit, and so the assertions can
  * state the expected sentence in full — which is what a reader of the spec actually wants to see.
  */
 export const EN_STRINGS: Record<string, string> = {
@@ -77,10 +77,10 @@ export const EN_PALETTE: Record<string, string> = {
 };
 
 /**
- * A {@code TranslocoService} double that reproduces the two behaviours the guards depend on.
+ * A {@code TranslocoService} double that reproduces the two behaviors the guards depend on.
  *
  * <p>It interpolates {@code {{param}}} placeholders, and — importantly — it returns the **key
- * itself** when a translation is missing, exactly as Transloco does. That second behaviour is what
+ * itself** when a translation is missing, exactly as Transloco does. That second behavior is what
  * the guards' fallback logic tests for, so a stub returning {@code undefined} or an empty string
  * would let a broken fallback pass and ship a UI that shows users raw keys.
  *

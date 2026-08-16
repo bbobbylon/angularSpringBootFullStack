@@ -345,7 +345,7 @@ export class UserDetailsComponent implements OnInit {
    * Surfaces a mutation failure without leaving the LOADED view — the form stays
    * visible and the error arrives as a toast plus the state's error field.
    *
-   * @param error - the normalised error message from the service layer
+   * @param error - the normalized error message from the service layer
    */
   private failMutation(error: string): void {
     this.isLoading.set(false);

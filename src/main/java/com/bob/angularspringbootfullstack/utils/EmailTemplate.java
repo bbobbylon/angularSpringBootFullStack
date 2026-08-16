@@ -16,7 +16,7 @@ import java.util.List;
  * <strong>Why the markup looks dated on purpose.</strong> Email clients are not browsers. Outlook
  * renders with Word's HTML engine, Gmail strips {@code <style>} blocks and rewrites CSS, and none of
  * them can be relied on for flexbox or grid. So this class emits table-based layout with every rule
- * inline, hex colours instead of {@code rgba()} (Word drops the latter), and a "bulletproof" button
+ * inline, hex colors instead of {@code rgba()} (Word drops the latter), and a "bulletproof" button
  * built from a table cell rather than a styled anchor. Rounded corners and shadows are included but
  * treated as progressive enhancement — where they are unsupported the message degrades to squared
  * panels rather than breaking.
@@ -56,11 +56,11 @@ public final class EmailTemplate {
     private static final String MUTED = "#8a93a6";
     /** Footer / legal copy — {@code --text-faint}. */
     private static final String FAINT = "#5b6477";
-    /** Primary action colour — {@code --accent} ("electric iris"). */
+    /** Primary action color — {@code --accent} ("electric iris"). */
     private static final String ACCENT = "#6b5bff";
     /** Lighter accent used for the brand wordmark — {@code --accent-strong}. */
     private static final String ACCENT_SOFT = "#8674ff";
-    /** Warning rule colour for security callouts — {@code --danger}. */
+    /** Warning rule color for security callouts — {@code --danger}. */
     private static final String DANGER = "#fb7185";
 
     /**
@@ -246,7 +246,7 @@ public final class EmailTemplate {
         }
 
         /**
-         * Appends a security callout — a left-ruled panel in the danger colour.
+         * Appends a security callout — a left-ruled panel in the danger color.
          * <p>
          * Reserved for the "if this wasn't you" instruction. It is visually separated from the body
          * because that sentence is the only part of a security email a compromised user must not
@@ -270,8 +270,8 @@ public final class EmailTemplate {
          * <p>
          * The shell is a centred 560px card on a dark backdrop, preceded by the wordmark and
          * followed by a footer disclaiming the automated sender. {@code color-scheme: dark light}
-         * tells clients that honour it not to apply their own dark-mode colour inversion on top of
-         * an already-dark design, which is what otherwise turns the card washed-out grey in
+         * tells clients that honor it not to apply their own dark-mode color inversion on top of
+         * an already-dark design, which is what otherwise turns the card washed-out gray in
          * Apple Mail.
          *
          * @return a complete, standalone HTML document ready to be used as the {@code text/html}
@@ -290,7 +290,7 @@ public final class EmailTemplate {
                     .append("<body style=\"margin:0;padding:0;background-color:").append(BG).append(";\">");
 
             // Hidden preview text. The trailing zero-width spaces stop clients from padding the
-            // snippet with whatever markup follows, a long-standing Gmail behaviour.
+            // snippet with whatever markup follows, a long-standing Gmail behavior.
             html.append("<div style=\"display:none;max-height:0;overflow:hidden;opacity:0;")
                     .append("mso-hide:all;\">").append(preheader)
                     .append("&#8203;&#8203;&#8203;&#8203;&#8203;</div>");

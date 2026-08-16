@@ -15,6 +15,10 @@
           <a [routerLink]="['/billing']" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-cash-stack"></i> Billing Overview
           </a>
+          <button (click)="emailReport()" [disabled]="isEmailingReport()" class="btn btn-outline-secondary btn-sm" type="button">
+            <i class="bi bi-envelope"></i>
+            @if (isEmailingReport()) { <span>{{ t('analytics.sendingReport') }}</span> } @else { <span>{{ t('analytics.emailReport') }}</span> }
+          </button>
         }
         <a [routerLink]="['/customers']" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-people-fill"></i> Customers
@@ -303,11 +307,11 @@
       }
     </section>
 
-    <!-- ── Service utilisation ────────────────────────────────────────────── -->
+    <!-- ── Service utilization ────────────────────────────────────────────── -->
     <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 240ms;">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">{{ t('analytics.serviceUtilisation') }}</h2>
+          <h2 class="sc-panel__title">{{ t('analytics.serviceUtilization') }}</h2>
           <p class="sc-panel__meta">{{ t('analytics.serviceSub') }}</p>
         </div>
         <a [routerLink]="['/services']" class="btn btn-outline-secondary btn-sm sc-panel__action">

@@ -31,7 +31,7 @@ import java.util.Map;
  *
  * <p>Every implementation is expected to fail <em>closed</em> and non-fatally: a dashboard panel
  * that cannot be read should degrade to empty with a logged warning, never propagate. This is a
- * reporting screen — the correct behaviour when one query breaks is five working panels and one
+ * reporting screen — the correct behavior when one query breaks is five working panels and one
  * blank one, not a 500 that hides the other five.
  */
 public interface SecurityDashboardRepo {
@@ -104,7 +104,7 @@ public interface SecurityDashboardRepo {
     long countRestrictedAccounts(Collection<Long> organizationIds);
 
     /**
-     * Second-factor enrolment across the in-scope population.
+     * Second-factor enrollment across the in-scope population.
      *
      * @param organizationIds the scope, per the class-level convention
      * @return the adoption breakdown; all zeros when the scope contains no accounts

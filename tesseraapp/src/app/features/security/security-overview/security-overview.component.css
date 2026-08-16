@@ -2,7 +2,7 @@
    Security Overview (SRS FR-TPF-2)
 
    Built entirely on the global design tokens from styles.css, so this screen
-   follows the dark/light theme switch without a single hard-coded colour. The
+   follows the dark/light theme switch without a single hard-coded color. The
    semantic tokens do real work here: --danger, --warn and --ok already carry
    the app's meaning of "bad / watch / fine", so the dashboard inherits a
    consistent vocabulary instead of inventing a second one for security.
@@ -93,8 +93,8 @@
   flex-direction: column;
   gap: 0.35rem;
   padding: var(--space-4) var(--space-5);
-  /* The left rule is the tile's severity channel — colour alone would be the
-     only cue, which fails for a colour-blind reader; the border also changes
+  /* The left rule is the tile's severity channel — color alone would be the
+     only cue, which fails for a color-blind reader; the border also changes
      width, so the state is legible without hue. */
   border-left: 3px solid var(--hairline);
 }

@@ -30,7 +30,7 @@ import { environment } from '../../environments/environment';
  * browser console, where it persists in the devtools buffer and in any screen recording.
  *
  * Each method returns a typed Observable wrapping the server's standard
- * CustomHttpResponseInterface envelope. Errors are normalised by handleError
+ * CustomHttpResponseInterface envelope. Errors are normalized by handleError
  * into a single Error observable so callers can handle failures uniformly.
  * Token storage side-effects (reading/writing localStorage) live here rather
  * than in components so the interceptor and components share one source of truth.
@@ -663,7 +663,7 @@ export class UserService {
   }
 
   /**
-   * Normalises HTTP errors into a single Observable<never> so all callers
+   * Normalizes HTTP errors into a single Observable<never> so all callers
    * receive a consistent Error instance regardless of whether the failure
    * was a client-side network event or a structured server error response.
    *

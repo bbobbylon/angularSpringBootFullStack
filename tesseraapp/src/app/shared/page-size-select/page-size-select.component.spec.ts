@@ -100,7 +100,7 @@ describe('PageSizeSelectComponent', () => {
     expect(select().value).toBe('100');
   });
 
-  it('honours a caller-supplied option list', () => {
+  it('honors a caller-supplied option list', () => {
     fixture.componentRef.setInput('options', [5, 25]);
     fixture.detectChanges();
 

@@ -49,7 +49,7 @@ public class RoleServiceImpl implements RoleService {
     /**
      * Returns every role defined in the system by delegating to the repository.
      * <p>
-     * Called by {@code GET /user/profile} to embed the full role catalogue in the
+     * Called by {@code GET /user/profile} to embed the full role catalog in the
      * response, giving the frontend everything it needs to populate the role
      * selector in the Authorization tab without a separate network request.
      *

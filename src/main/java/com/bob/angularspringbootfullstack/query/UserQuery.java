@@ -169,4 +169,17 @@ public class UserQuery {
      */
     public static final String COUNT_USERS_QUERY =
             "SELECT COUNT(*) FROM users WHERE first_name LIKE :searchTerm OR last_name LIKE :searchTerm OR email LIKE :searchTerm";
+
+    /**
+     * Selects the email addresses of every system-wide administrator ({@code ROLE_ADMIN} or
+     * {@code ROLE_APPLICATION_ADMIN}) — the recipient list for the scheduled/on-demand
+     * system-wide report digest (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report
+     * emails"). Mirrors {@code RoleQuery#SELECT_ROLE_BY_ID_QUERY}'s join shape (users →
+     * userroles → roles). No parameters.
+     */
+    public static final String SELECT_SYSTEM_ADMIN_EMAILS_QUERY =
+            "SELECT DISTINCT u.email FROM users u " +
+            "JOIN userroles ur ON ur.user_id = u.id " +
+            "JOIN roles r ON r.id = ur.role_id " +
+            "WHERE r.name IN ('ROLE_ADMIN', 'ROLE_APPLICATION_ADMIN')";
 }

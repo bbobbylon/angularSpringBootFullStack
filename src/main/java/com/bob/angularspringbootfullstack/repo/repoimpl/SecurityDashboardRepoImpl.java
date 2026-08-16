@@ -45,7 +45,7 @@ import static com.bob.angularspringbootfullstack.query.SecurityDashboardQuery.SE
  * organization predicate or nothing. The spliced fragment is a compile-time constant; the
  * organization ids themselves are bound as a named parameter, so no request data ever reaches the
  * SQL text. The alternative of one always-present predicate (e.g. {@code OR :unscoped = TRUE})
- * would keep the SQL static but make the optimiser unable to use the {@code userorganizations}
+ * would keep the SQL static but make the optimizer unable to use the {@code userorganizations}
  * index, turning every panel into a full scan for the common unscoped case.
  *
  * <h3>2. Non-fatal reads</h3>

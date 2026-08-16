@@ -62,7 +62,7 @@ interface TrendColumn {
  *       dashboard that renders identically whether it covers the whole platform or one
  *       organization's slice invites its worst misreading — an org admin concluding all is quiet
  *       when they can only see their own corner.</li>
- *   <li>The <b>shared trend scale</b>. All three series are normalised against one maximum rather
+ *   <li>The <b>shared trend scale</b>. All three series are normalized against one maximum rather
  *       than each against its own. Independently-scaled series would draw four failures the same
  *       height as four hundred successes, which is exactly the comparison the chart exists to
  *       support.</li>
@@ -207,9 +207,9 @@ export class SecurityOverviewComponent implements OnInit {
   });
 
   /**
-   * The trend chart's columns, with bar heights normalised against a single shared maximum.
+   * The trend chart's columns, with bar heights normalized against a single shared maximum.
    *
-   * <p>One scale for all three series is the whole point. Normalising each series against its own
+   * <p>One scale for all three series is the whole point. Normalizing each series against its own
    * maximum would make the tallest failure bar and the tallest success bar the same height, which
    * reverses the comparison the chart exists to support — a reader would see "as many failures as
    * successes" in a window where failures were a rounding error.
@@ -453,7 +453,7 @@ export class SecurityOverviewComponent implements OnInit {
   /**
    * Fetches the overview for a window and folds the result into {@link pageState}.
    *
-   * @param days - how many days of history to summarise
+   * @param days - how many days of history to summarize
    */
   private load(days: number): void {
     this.securityDashboard

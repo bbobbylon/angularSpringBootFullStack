@@ -34,7 +34,7 @@ import { PAGE_SIZE_OPTIONS, PageSizeSelectComponent } from '../../../shared/page
  * already signed in, which defeats the point of a public catalog.)
  *
  * The "Create Invoice" action navigates to {@code /invoice/new}, which is where
- * organisations choose a service and customer and submit a billing request that
+ * organizations choose a service and customer and submit a billing request that
  * flows into the main billing system tracked on the Billing Overview page.
  *
  * <h3>Why the grid pages on the client</h3>

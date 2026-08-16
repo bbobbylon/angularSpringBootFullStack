@@ -10,7 +10,7 @@ import { PasskeyInterface, SessionInterface } from './security.interface';
  * shared navbar, mirroring how the customer list responses carry the viewer. The
  * directory rows live under {@code users} with flat pagination metadata (this endpoint
  * does not use Spring's {@code Page<T>} envelope; the backend computes the totals from
- * its JDBC count query). {@code roles} is the full catalogue so the list view can
+ * its JDBC count query). {@code roles} is the full catalog so the list view can
  * render role badges and the detail view's reassignment selector without extra calls.
  */
 export interface AdminUserListInterface {

@@ -45,7 +45,7 @@ export class LanguageService {
    *
    * <p>Each is labelled in its own language ("Español", not "Spanish"). A user who has landed in a
    * language they cannot read needs to find their way out, and the one string they are certain to
-   * recognise is the name of their own language — labelling the list in the *current* interface
+   * recognize is the name of their own language — labelling the list in the *current* interface
    * language would hide the exit behind the very problem it solves.
    */
   readonly available: readonly LanguageOption[] = [

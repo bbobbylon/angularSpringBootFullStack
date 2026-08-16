@@ -54,7 +54,7 @@ public class ExceptionUtils {
      *
      * <h3>Why this bridge is necessary</h3>
      * {@code ErrorDetailScrubber} is a {@code ResponseBodyAdvice}, so it only ever sees bodies
-     * serialised through a controller's message converter. {@link ExceptionUtils#writeResponse}
+     * serialized through a controller's message converter. {@link ExceptionUtils#writeResponse}
      * writes directly to the servlet output stream from inside the security filter chain — before
      * any controller is selected — so the advice is <em>structurally unable</em> to reach it. That
      * is why {@code devMessage} and the raw {@code reason} were still leaving production on the

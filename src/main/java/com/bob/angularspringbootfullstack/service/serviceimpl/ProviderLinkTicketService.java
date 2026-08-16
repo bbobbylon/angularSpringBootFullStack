@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>The obvious alternative is to have the SPA set a cookie-backed session with an authenticated
  * XHR before navigating. That works when the SPA and API share an origin, and is awkward when they
  * do not — in development they are {@code :4200} and {@code :8080}, so it drags in CORS credentials
- * and SameSite behaviour for one call. A ticket sidesteps that: it is minted over an ordinary
+ * and SameSite behavior for one call. A ticket sidesteps that: it is minted over an ordinary
  * authenticated XHR, travels in the URL of a top-level navigation, and is exchanged server-side.
  *
  * <h3>Why it is safe to put in a URL</h3>

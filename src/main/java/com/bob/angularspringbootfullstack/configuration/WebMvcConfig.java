@@ -32,14 +32,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
     /**
      * Registers a resource handler that serves profile images ({@code {email}.png})
      * from {@link #imageStoragePath} at {@code /user/profile/image/{email}.png}.
-     * The location is normalised to an absolute {@code file:} URI with a trailing
+     * The location is normalized to an absolute {@code file:} URI with a trailing
      * slash so Spring resolves child resources correctly on every OS.
      *
      * @param registry the Spring MVC resource handler registry
      */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // Normalise to forward slashes and force a trailing slash so Spring resolves
+        // Normalize to forward slashes and force a trailing slash so Spring resolves
         // child resources correctly (Path.toUri() can omit it for a not-yet-created dir).
         String base = Paths.get(imageStoragePath).toAbsolutePath().normalize().toString().replace('\\', '/');
         registry.addResourceHandler("/user/profile/image/**")

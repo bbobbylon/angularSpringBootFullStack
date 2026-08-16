@@ -2,6 +2,8 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.enumeration.VerificationType;
 import com.bob.angularspringbootfullstack.exception.ApiException;
+import com.bob.angularspringbootfullstack.model.SecurityOverview;
+import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.utils.EmailTemplate;
 import jakarta.mail.MessagingException;
@@ -9,6 +11,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.MailPreparationException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -206,6 +209,78 @@ public class EmailServiceImpl implements EmailService {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>Exceptions propagate rather than being swallowed, matching every other method here —
+     * {@code NotificationServiceImpl} owns the failure logging for whichever caller wraps this in
+     * a {@link java.util.concurrent.CompletableFuture}.
+     */
+    @Override
+    public void sendInvoiceEmail(String customerName, String customerEmail, String invoiceNumber, byte[] pdfBytes) {
+        String subject = "TesseraApp - Invoice " + invoiceNumber;
+
+        String plain = "Hello " + customerName + "\n\n"
+                + "Please find attached your invoice (" + invoiceNumber + ") from TesseraApp.\n\n"
+                + "If you have any questions about this invoice, please reply to this email.";
+
+        String html = EmailTemplate.builder()
+                .preheader("Your invoice " + invoiceNumber + " is attached as a PDF.")
+                .eyebrow("Invoice")
+                .heading("Invoice " + invoiceNumber)
+                .paragraph("Hello " + customerName + ",")
+                .paragraph("Please find attached your invoice (" + invoiceNumber + ") from TesseraApp.")
+                .note("If you have any questions about this invoice, please reply to this email.")
+                .build();
+
+        sendWithAttachment(customerEmail, subject, plain, html, "invoice-" + invoiceNumber + ".pdf", pdfBytes);
+        log.info("Invoice {} emailed to {}", invoiceNumber, customerEmail);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Exceptions propagate rather than being swallowed, matching every other method here. The
+     * scheduled caller ({@code SchedulingConfig}) and the manual caller
+     * ({@code ReportDigestServiceImpl}) both log per-recipient failures themselves so one bad
+     * address in a batch of admins does not stop the loop from reaching the rest.
+     */
+    @Override
+    public void sendReportDigestEmail(String recipientEmail, String scopeLabel, Stats stats, SecurityOverview overview) {
+        String subject = "TesseraApp - Report Digest: " + scopeLabel;
+        String totalBilled = String.format("$%,.2f", stats.getTotalBilled());
+        String mfaCoverage = overview.mfaAdoption().mfaCoveragePercent() + "%";
+
+        String plain = "Report digest: " + scopeLabel + "\n\n"
+                + "Business overview\n"
+                + "Total customers: " + stats.getTotalCustomers() + "\n"
+                + "Total invoices: " + stats.getTotalInvoices() + "\n"
+                + "Total billed: " + totalBilled + "\n\n"
+                + "Security overview (last " + overview.windowDays() + " days)\n"
+                + "Suspicious logins: " + overview.suspiciousLoginsPage().totalElements() + "\n"
+                + "Restricted accounts: " + overview.restrictedAccountsPage().totalElements() + "\n"
+                + "MFA coverage: " + mfaCoverage + "\n"
+                + "Active sessions: " + overview.activeSessions() + "\n\n"
+                + "Sign in to TesseraApp for the full interactive dashboard.";
+
+        String html = EmailTemplate.builder()
+                .preheader("Your TesseraApp report digest for " + scopeLabel)
+                .eyebrow("Report digest")
+                .heading(scopeLabel)
+                .paragraph("Here is the latest snapshot for " + scopeLabel + ".")
+                .paragraph("Business overview: " + stats.getTotalCustomers() + " customers, "
+                        + stats.getTotalInvoices() + " invoices, " + totalBilled + " billed.")
+                .paragraph("Security overview (last " + overview.windowDays() + " days): "
+                        + overview.suspiciousLoginsPage().totalElements() + " suspicious logins, "
+                        + overview.restrictedAccountsPage().totalElements() + " restricted accounts, "
+                        + mfaCoverage + " MFA coverage, " + overview.activeSessions() + " active sessions.")
+                .note("Sign in to TesseraApp for the full interactive dashboard.")
+                .build();
+
+        send(recipientEmail, subject, plain, html);
+        log.info("Report digest ({}) dispatched to {}", scopeLabel, recipientEmail);
+    }
+
+    /**
      * Builds and sends one {@code multipart/alternative} message.
      * <p>
      * {@link MimeMessageHelper#setText(String, String)} is what creates the two-part body: the
@@ -252,6 +327,42 @@ public class EmailServiceImpl implements EmailService {
             }
             helper.setSubject(subject);
             helper.setText(plain, html);
+        } catch (MessagingException | UnsupportedEncodingException e) {
+            throw new MailPreparationException("Unable to compose outbound email", e);
+        }
+        mailSender.send(message);
+    }
+
+    /**
+     * {@link #sendWithReplyTo}, plus one file attachment — used only by {@link #sendInvoiceEmail}.
+     * <p>
+     * Kept as its own method rather than adding attachment parameters to
+     * {@link #sendWithReplyTo}/{@link #send}: every other caller in this class sends exactly two
+     * body parts and no attachment, so threading an always-null attachment through their call sites
+     * would only make the common case harder to read for the sake of the one exception.
+     * {@link MimeMessageHelper}'s {@code multipart=true} constructor already builds a
+     * {@code MULTIPART_MODE_MIXED_RELATED} message, which supports an attachment alongside the
+     * {@code text/plain} + {@code text/html} alternative {@link MimeMessageHelper#setText(String, String)}
+     * produces — no different MIME mode is needed for this to work.
+     *
+     * @param to                 recipient address
+     * @param subject            subject line
+     * @param plain              the {@code text/plain} alternative
+     * @param html               the {@code text/html} alternative, as rendered by {@link EmailTemplate}
+     * @param attachmentFilename the name the attachment is saved as by the recipient's mail client
+     * @param attachmentBytes    the attachment's raw bytes
+     * @throws MailPreparationException if the message cannot be composed
+     */
+    private void sendWithAttachment(String to, String subject, String plain, String html,
+                                     String attachmentFilename, byte[] attachmentBytes) {
+        MimeMessage message = mailSender.createMimeMessage();
+        try {
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
+            helper.setTo(to);
+            helper.setFrom(FROM_ADDRESS, FROM_NAME);
+            helper.setSubject(subject);
+            helper.setText(plain, html);
+            helper.addAttachment(attachmentFilename, new ByteArrayResource(attachmentBytes));
         } catch (MessagingException | UnsupportedEncodingException e) {
             throw new MailPreparationException("Unable to compose outbound email", e);
         }

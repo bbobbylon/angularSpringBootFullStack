@@ -207,6 +207,17 @@ public interface UserService {
      * @return the total number of matching users
      */
     long countUsers(String searchTerm);
+
+    /**
+     * The email addresses of every system-wide administrator ({@code ROLE_ADMIN} or
+     * {@code ROLE_APPLICATION_ADMIN}) — the recipient list for the scheduled/on-demand system-wide
+     * report digest (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report emails"). Distinct
+     * from an organization's {@code ROLE_ORGANIZATION_ADMIN} recipients, which
+     * {@code OrganizationService#findOrganizationAdminEmails} resolves instead.
+     *
+     * @return every system administrator's email, in no particular order; empty if none exist
+     */
+    Collection<String> findSystemAdminEmails();
 }
 
 

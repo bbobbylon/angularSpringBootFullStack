@@ -8,6 +8,7 @@ import com.bob.angularspringbootfullstack.model.Invoice;
 import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
+import com.bob.angularspringbootfullstack.service.ReportDigestService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import com.bob.angularspringbootfullstack.utils.SortUtils;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,7 +39,7 @@ import static org.springframework.http.HttpStatus.OK;
  * Analytics hub ({@code /analytics}) SPA pages.
  *
  * <p><b>Why this controller exists.</b> The customer/invoice/stats data these two pages
- * visualise is served application-wide through {@link CustomerController} ({@code
+ * visualize is served application-wide through {@link CustomerController} ({@code
  * /customer/list}, {@code /customer/stats}, {@code /customer/invoice/list}) because the
  * home dashboard and the customers/invoices pages — visible to every authenticated user —
  * legitimately need it. That means those endpoints cannot be locked to admins without
@@ -92,6 +94,8 @@ public class AnalyticsController {
     private final UserService userService;
     /** Resolves which organizations a scoped caller may see (FR-ORG-2). */
     private final OrganizationService organizationService;
+    /** Builds and sends the report digest emailed by {@link #emailReport}. */
+    private final ReportDigestService reportDigestService;
 
     /** Mirrors {@code CustomerController}'s customer sort allow-list — kept as a separate
      * constant because the two controllers are not otherwise coupled and a shared field would
@@ -264,6 +268,39 @@ public class AnalyticsController {
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
                                 "invoices", invoices))
                         .message("Analytics invoices retrieved successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Emails the caller their own report digest — the "Email me this report" button on the
+     * Analytics screen (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report emails").
+     *
+     * <p>Reuses {@link #resolveScope} exactly, so the digest always covers precisely the figures
+     * this caller could already see through {@link #getSummary}: nothing wider, nothing narrower.
+     * Delegates the actual build-and-send to {@link ReportDigestService}, which the scheduled
+     * weekly digest ({@code SchedulingConfig}) also calls — this endpoint and that cron job produce
+     * identical digests, just for different recipients.
+     *
+     * <p>Sent synchronously, matching {@code CustomerController#emailInvoice}: a manual button
+     * click should tell the caller whether delivery actually succeeded rather than returning an
+     * optimistic 200 regardless.
+     *
+     * @param user the authenticated (admin) principal — both the caller whose scope is resolved
+     *             and the digest's sole recipient
+     * @return 200 OK with {@code user}, once the email has been sent
+     */
+    @PostMapping("/report/email")
+    @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
+    public ResponseEntity<HttpResponse> emailReport(@AuthenticationPrincipal UserDTO user) {
+        Collection<Long> scope = resolveScope(user);
+        reportDigestService.emailReportForCaller(user, scope);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail())))
+                        .message("Report emailed to " + user.getEmail() + "!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

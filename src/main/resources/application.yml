@@ -310,6 +310,20 @@ app:
       # a user cannot age their own baseline out by signing in repeatedly from one machine.
       history-limit: ${ANOMALY_HISTORY_LIMIT:50}
 
+# Scheduled/on-demand report digest emails (POST-SUBMISSION-UPGRADES.md), read by
+# SchedulingConfig and ReportDigestServiceImpl.
+report:
+  digest:
+    # Standard cron (second-first, Spring's format) for the weekly digest run: every active
+    # organization's admins get their org digest, then every system administrator (plus any
+    # admin-extra-recipients below) gets the system-wide digest. Default fires Monday 06:00
+    # server time. See SchedulingConfig for what one run actually sends.
+    cron: ${REPORT_DIGEST_CRON:0 0 6 * * MON}
+    # Comma-separated extra addresses to CC on the system-wide digest — e.g. a shared ops
+    # mailbox that isn't itself a ROLE_ADMIN/ROLE_APPLICATION_ADMIN account. Blank/unset
+    # (the default) sends only to the resolved system administrators.
+    admin-extra-recipients: ${REPORT_ADMIN_EXTRA_RECIPIENTS:}
+
 # AWS configuration — only required when app.image.storage-type=s3.
 # Credentials are resolved by DefaultCredentialsProvider (env vars → ~/.aws → instance/task role).
 # For ECS Fargate, attach a task role with s3:PutObject + s3:GetObject on the bucket instead

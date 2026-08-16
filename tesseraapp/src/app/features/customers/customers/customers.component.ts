@@ -228,7 +228,7 @@ export class CustomersComponent implements OnInit {
    * <p>Clicking a new column always starts ascending — a first click that flipped straight to
    * descending would be surprising, since nothing on screen indicated a prior direction to
    * reverse. Clicking the already-active column toggles, which is the conventional spreadsheet
-   * behaviour every user of a sortable table already expects.
+   * behavior every user of a sortable table already expects.
    *
    * <p>Resets to the first page for the same reason {@link changePageSize} does: a page index is
    * only meaningful relative to the current ordering, and re-sorting changes which rows occupy it.

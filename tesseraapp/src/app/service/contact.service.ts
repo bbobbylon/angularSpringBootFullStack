@@ -40,7 +40,7 @@ export class ContactService {
       .pipe(catchError(this.handleError));
 
   /**
-   * Normalises HTTP errors into a single Observable<never> so callers receive a consistent
+   * Normalizes HTTP errors into a single Observable<never> so callers receive a consistent
    * Error instance, mirroring {@code UserService#handleError}.
    *
    * @param error - the HttpErrorResponse from Angular's HttpClient

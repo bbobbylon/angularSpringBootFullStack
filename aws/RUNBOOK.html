@@ -340,7 +340,7 @@ h2:hover .anch,h3:hover .anch{opacity:1}
   <p class="lede">The linear, do-this-in-order procedure. It assumes nothing and skips no step.
   Follow it top to bottom and you get a running deployment.</p>
   <div class="meta">
-    <span class="chip">Updated 2026-08-02</span>
+    <span class="chip">Updated 2026-08-08</span>
     <span class="chip">Status: Final</span>
     <span class="chip">ECS Fargate + Aiven MySQL</span>
     <span class="chip">Spring profile: prod</span>
@@ -439,7 +439,14 @@ hasn't reached <code>master</code> yet, or working around a broken workflow.</p>
 <div class="tw"><table>
 <thead><tr><th>Thing</th><th>Value</th></tr></thead>
 <tbody>
-<tr><td>App URL</td><td><code>http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com</code></td></tr>
+<tr><td><strong>Public app URL</strong></td><td><strong><code>https://tesseraapp.dev</code></strong> — use this one. Also reachable at
+<code>https://d3911jyxcju4q4.cloudfront.net</code> (identical backend, same distribution) — but GitHub login only
+works on <code>tesseraapp.dev</code> now, see <a href="#part-f">Part F</a>. WebAuthn/passkeys and Google/Microsoft
+login work on either, since both are HTTPS.</td></tr>
+<tr><td>Domain registrar</td><td>Porkbun, <code>tesseraapp.dev</code>, registered 2026-08-08, $8.75/yr</td></tr>
+<tr><td>ACM certificate (domain)</td><td><code>us-east-1</code>, covers <code>tesseraapp.dev</code> + <code>www.tesseraapp.dev</code></td></tr>
+<tr><td>CloudFront distribution</td><td><code>E1WWY6FHSKI84P</code> (created by <code>setup-cloudfront.sh</code>; domain added per <a href="#b16">B1.6</a>)</td></tr>
+<tr><td>ALB DNS (origin behind CloudFront, plain HTTP, not the public URL)</td><td><code>http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com</code></td></tr>
 <tr><td>Region</td><td><code>us-east-1</code></td></tr>
 <tr><td>ECS cluster</td><td><code>tessera-app-cluster</code></td></tr>
 <tr><td>ECS service</td><td><code>tessera-app-service</code></td></tr>
@@ -450,7 +457,6 @@ hasn't reached <code>master</code> yet, or working around a broken workflow.</p>
 <tr><td>Spring profile</td><td><code>prod</code></td></tr>
 <tr><td>Secrets Manager prefix</td><td><code>tessera-app/</code></td></tr>
 <tr><td>CloudWatch log group</td><td><code>/ecs/tessera-app</code></td></tr>
-<tr><td>Log retention</td><td><strong>7 days</strong></td></tr>
 </tbody></table></div>
 
 <div class="note danger">
@@ -523,9 +529,9 @@ chmod +x aws/setup.sh aws/secrets-setup.sh aws/push-to-ecr.sh</pre></div>
 for building a fresh environment — a new account, a second region, a teammate's own sandbox.</p>
 
 <h3 id="b1">B1 · Run the bootstrap script</h3>
-<p><code>aws/setup.sh</code> performs all infrastructure steps — IAM roles, S3 bucket, ECR repo, Secrets Manager
-entries, CloudWatch log group + retention, ECS cluster, security groups, ALB, target group, ECS service —
-and prints your ALB DNS name at the end.</p>
+<p><code>aws/setup.sh</code> performs all nine infrastructure steps — IAM roles, S3 bucket, ECR repo, Secrets
+Manager entries, ECS cluster, security groups, ALB, target group, ECS service — and prints your ALB DNS
+name at the end.</p>
 <div class="cb" data-lang="bash"><pre>AWS_REGION=us-east-1 ./aws/setup.sh \
   --domain      tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com \
   --aiven-host  &lt;your-service&gt;.aivencloud.com \
@@ -546,20 +552,221 @@ Connection information</strong>.</li>
 </ol>
 <p>Omit <code>--aiven-password</code> and the script prompts, keeping it out of your shell history.</p>
 
-<h3 id="b2">B2 · Fill in the real secret values</h3>
+<h3 id="b15">B1.5 · Front the ALB with CloudFront (required for federated login and passkeys)</h3>
+<div class="note warn">
+<span class="lbl">⚠ Do this before registering anything with Google/GitHub/Microsoft, and before testing WebAuthn</span>
+<p>The ALB from B1 only ever serves plain <code>http://</code> — Step 8 in <code>README.md</code> (an ACM certificate +
+<code>:443</code> listener on the ALB itself) needs a domain you can prove you own, which this project does not
+have. CloudFront gives you HTTPS immediately, for free, on an AWS-issued <code>*.cloudfront.net</code> certificate,
+with no domain required.</p>
+</div>
+<div class="cb" data-lang="bash"><pre>chmod +x aws/setup-cloudfront.sh
+./aws/setup-cloudfront.sh</pre></div>
+<p>It is idempotent — re-running finds the existing distribution instead of creating a second one. It
+prints a <code>*.cloudfront.net</code> URL when done; that URL is now <strong>the</strong> public app URL for every purpose
+below (federation registration, <code>APP_DOMAIN</code>, testing in a browser). The trade-off is a random hostname
+you cannot customize — fine for a course project, not for a real product (see <code>deploy-https.sh</code> for the
+real-domain path, done in <a href="#b16">B1.6</a> below).</p>
+<p><strong>Immediately after this runs, two task-definition values must change to match</strong>, or federated login
+breaks with <code>redirect_uri=http://…</code> even though the front door is now HTTPS (see <a href="#part-f">Part F</a>
+for why: the ALB overwrites <code>X-Forwarded-Proto</code>, so Spring cannot derive the right scheme on its own):</p>
+<div class="tw"><table>
+<thead><tr><th>Variable</th><th>Set to</th></tr></thead>
+<tbody>
+<tr><td><code>APP_DOMAIN</code> (fills both <code>UI_APP_URL</code> and <code>OAUTH2_REDIRECT_BASE_URL</code>)</td><td>the CloudFront URL, e.g. <code>https://d3911jyxcju4q4.cloudfront.net</code></td></tr>
+<tr><td><code>TRUSTED_PROXY_COUNT</code></td><td><code>2</code> (CloudFront adds a hop in front of the ALB's own hop)</td></tr>
+</tbody></table></div>
+<p>Apply these via the re-register sequence in <a href="#part-d">Part D</a>, then verify:</p>
+<div class="cb" data-lang="bash"><pre>curl -si "https://&lt;your-cloudfront-domain&gt;/oauth2/authorization/github" | grep -i location
+# redirect_uri= MUST start with https://</pre></div>
+
+<h3 id="b16">B1.6 · Point a real domain at CloudFront (done — <code>tesseraapp.dev</code>, 2026-08-08)</h3>
+<p>This is the procedure actually used to attach <code>tesseraapp.dev</code> (Porkbun, $8.75/yr) to the live
+distribution — not a hypothetical, and not scripted the way B1.5 is. <code>deploy-https.sh</code> is a
+<strong>different</strong> procedure: it puts a cert directly on the <strong>ALB</strong>. This section is the CloudFront
+equivalent, and is the one to use, since CloudFront (B1.5) is this project's actual public front door.</p>
+<ol>
+<li><strong>Request an ACM certificate — must be <code>us-east-1</code>, no exceptions.</strong> CloudFront only ever reads
+certificates from that region regardless of where your ALB/ECS/everything else lives — a cert requested in
+any other region will not appear as attachable to the distribution.
+<div class="cb" data-lang="bash"><pre>aws acm request-certificate \
+  --domain-name &lt;your-domain&gt; \
+  --subject-alternative-names www.&lt;your-domain&gt; \
+  --validation-method DNS \
+  --region us-east-1 \
+  --query CertificateArn --output text</pre></div></li>
+<li><strong>Fetch the DNS validation records</strong> ACM generates (poll — they populate asynchronously, a few
+seconds after request):
+<div class="cb" data-lang="bash"><pre>aws acm describe-certificate --certificate-arn &lt;arn&gt; --region us-east-1 \
+  --query 'Certificate.DomainValidationOptions[?ValidationMethod==`DNS`].ResourceRecord' --output json</pre></div></li>
+<li><strong>Add both CNAME records at your registrar's DNS panel</strong> (Namecheap: Advanced DNS; Porkbun: DNS
+Records tab; any registrar works the same way in principle). The <strong>Host</strong> field excludes the base
+domain — enter only the part before it (e.g. <code>_abc123</code> for the apex record, <code>_def456.www</code> for the
+<code>www</code> one). Paste the <strong>Value</strong>/<strong>Answer</strong> exactly as ACM gave it, trailing dot included. TTL:
+Automatic/lowest available.</li>
+<li><strong>Wait for <code>ISSUED</code></strong> — poll <code>describe-certificate</code>'s <code>Certificate.Status</code>. Typically a few
+minutes once the records are live, occasionally up to ~30.
+<div class="cb" data-lang="bash"><pre>aws acm describe-certificate --certificate-arn &lt;arn&gt; --region us-east-1 --query 'Certificate.Status' --output text</pre></div></li>
+<li><strong>Add the domain as an Alternate Domain Name on the existing CloudFront distribution</strong>, attach the
+now-issued cert:
+<div class="cb" data-lang="bash"><pre>DIST_ID=&lt;your-distribution-id&gt;   # e.g. E1WWY6FHSKI84P
+aws cloudfront get-distribution-config --id "$DIST_ID" &gt; /tmp/cf-config.json
+ETAG=$(jq -r '.ETag' /tmp/cf-config.json)
+jq '.DistributionConfig
+    | .Aliases = {Quantity: 2, Items: ["&lt;your-domain&gt;", "www.&lt;your-domain&gt;"]}
+    | .ViewerCertificate = {
+        ACMCertificateArn: "&lt;cert-arn&gt;", SSLSupportMethod: "sni-only",
+        MinimumProtocolVersion: "TLSv1.2_2021", Certificate: "&lt;cert-arn&gt;", CertificateSource: "acm"
+      }' /tmp/cf-config.json | jq '.DistributionConfig' &gt; /tmp/cf-new-config.json
+aws cloudfront update-distribution --id "$DIST_ID" --if-match "$ETAG" \
+  --distribution-config "$(cat /tmp/cf-new-config.json)"</pre></div>
+CloudFront propagation to all edge locations takes a few minutes after this, even though the API call
+returns immediately.</li>
+<li><strong>Point the domain's DNS at CloudFront</strong>, not the ALB. Most registrars can't put a CNAME on a bare
+apex domain — use an <code>ALIAS</code>/<code>ANAME</code> record if the registrar offers one (Porkbun and Namecheap both
+do), or point <code>www</code> at CloudFront via plain CNAME and redirect the apex to <code>www</code>:
+<div class="cb" data-lang="text"><pre>ALIAS/ANAME  &lt;your-domain&gt;      →  &lt;distribution&gt;.cloudfront.net
+CNAME        www.&lt;your-domain&gt;  →  &lt;distribution&gt;.cloudfront.net</pre></div></li>
+<li><strong>Re-point the app at the new origin and restart</strong> — same two variables as the CloudFront-no-domain
+step, just pointed at the real domain now:
+<div class="cb" data-lang="bash"><pre># APP_DOMAIN = https://&lt;your-domain&gt;  (fills both UI_APP_URL and OAUTH2_REDIRECT_BASE_URL)
+# then the full re-register + force-new-deployment sequence in Part D</pre></div></li>
+<li><strong>Add the new domain's callback to every OAuth app</strong> (B2/B3) — <code>https://&lt;your-domain&gt;/login/oauth2/code/{provider}</code>.
+Google and Microsoft: add it <em>alongside</em> the CloudFront-URL entry, they accept a list. GitHub: swap the
+<em>production</em> app's one callback over, since it can only hold one.</li>
+<li><strong>Verify:</strong>
+<div class="cb" data-lang="bash"><pre>curl -sI https://&lt;your-domain&gt;/actuator/health | head -1
+curl -si "https://&lt;your-domain&gt;/oauth2/authorization/google" | grep -i location   # https:// redirect_uri</pre></div></li>
+</ol>
+
+<h3 id="b2">B2 · Create an OAuth app with each provider and register the callback URL</h3>
+<p><strong>Do this after B1.5</strong> — you need the CloudFront URL first, since it's what you register as the
+callback. All commands below assume <code>https://d3911jyxcju4q4.cloudfront.net</code>; substitute your own
+CloudFront domain if it differs.</p>
+
+<h4>Google</h4>
+<p>Requires <code>https</code> for anything but <code>localhost</code> — CloudFront is what makes this possible at all.</p>
+<ol>
+<li><a href="https://console.cloud.google.com/">console.cloud.google.com</a> → if you don't have a project yet,
+create one (top-left project dropdown → <strong>New Project</strong>, any name).</li>
+<li>Left sidebar <strong>APIs &amp; Services → Credentials</strong> → <strong>+ Create Credentials → OAuth client ID</strong>.</li>
+<li>First time through, it makes you configure the <strong>OAuth consent screen</strong> first: User type = External,
+app name = TesseraApp (or anything), your email for support/developer contact. No special scopes needed.</li>
+<li>Back on Credentials: Application type = <strong>Web application</strong>. Under <strong>Authorized redirect URIs</strong>, add
+<strong>both</strong> (Google accepts a list, so one app serves local dev and the deployed environment):
+<div class="cb" data-lang="text"><pre>http://localhost:8080/login/oauth2/code/google
+https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/google</pre></div></li>
+<li>Click <strong>Create</strong> — a popup shows the <strong>Client ID</strong> and <strong>Client Secret</strong> once. Copy both now.</li>
+</ol>
+
+<h4>Microsoft (Entra)</h4>
+<p>Requires <code>https</code> for anything but <code>localhost</code>.</p>
+<ol>
+<li><a href="https://entra.microsoft.com/">entra.microsoft.com</a> → <strong>App registrations</strong> → your app (or
+<strong>New registration</strong> if none exists yet).</li>
+<li>Left sidebar <strong>Authentication</strong> → under <strong>Platform configurations</strong>, add a <strong>Web</strong> platform if none
+exists — <strong>not</strong> SPA or mobile, that distinction matters (see below).</li>
+<li>Under that Web platform's <strong>Redirect URIs</strong>, add both:
+<div class="cb" data-lang="text"><pre>http://localhost:8080/login/oauth2/code/microsoft
+https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/microsoft</pre></div></li>
+<li>Still on the Authentication page, confirm <strong>Allow public client flows</strong> is <strong>No</strong>. If it's Yes, Entra
+treats the app as a public client and rejects the (correct) <code>client_secret_post</code> auth this app uses, with
+<code>AADSTS90023: Public clients can't send a client secret</code> — a portal setting, not a code bug; the Spring
+config is already right.</li>
+<li>Save.</li>
+<li>Client <strong>ID</strong> and <strong>tenant ID</strong> are on the app's <strong>Overview</strong> page.</li>
+<li>Client <strong>secret</strong>: <strong>Certificates &amp; secrets → Client secrets → New client secret</strong>. Copy the
+<strong>Value</strong> column immediately — it is shown once and is unrecoverable after you navigate away.
+(<em>Federated credentials</em> on that same page is workload-identity for CI/CD, unrelated to this app —
+ignore it.)</li>
+</ol>
+
+<h4>GitHub — the one with a real gotcha</h4>
+<p><strong>First, ignore "GitHub Apps" entirely</strong> — GitHub's Developer Settings has two different sections,
+<strong>GitHub Apps</strong> and <strong>OAuth Apps</strong>. This project uses Spring Security's OAuth2 Client module, which only
+speaks the classic <strong>OAuth App</strong> protocol. GitHub Apps is a different integration model
+(installation-based, used for bots/CI tools) and is not relevant here — don't create or edit anything
+there.</p>
+<p><strong>Second, a real constraint you will hit:</strong> a single GitHub OAuth App holds <strong>exactly one</strong>
+Authorization callback URL — no list, no comma-separated field, unlike Google and Microsoft above. So one
+app <strong>cannot</strong> serve both <code>localhost</code> and the deployed CloudFront URL. You need <strong>two separate OAuth
+Apps</strong>:</p>
+<ol>
+<li><strong>Settings → Developer settings → OAuth Apps → New OAuth App</strong> (or reuse an existing one you already
+have for local dev):
+  <ul>
+  <li>Homepage URL: <code>http://localhost:4200</code></li>
+  <li>Authorization callback URL: <code>http://localhost:8080/login/oauth2/code/github</code></li>
+  <li>This is your <strong>local-dev app</strong>. Keep its Client ID/Secret for your local <code>.env</code> only.</li>
+  </ul></li>
+<li><strong>New OAuth App</strong> again, a second time, for production:
+  <ul>
+  <li>Homepage URL: <code>https://d3911jyxcju4q4.cloudfront.net</code></li>
+  <li>Authorization callback URL: <code>https://d3911jyxcju4q4.cloudfront.net/login/oauth2/code/github</code></li>
+  <li>Register → copy the <strong>Client ID</strong> shown immediately → click <strong>Generate a new client secret</strong> →
+  copy it (shown once).</li>
+  <li><strong>This second app's credentials are the ones that go into AWS Secrets Manager</strong> (B3 below) — not the
+  local-dev app's.</li>
+  </ul></li>
+</ol>
+<p>If GitHub login on the deployed app ever fails with <code>redirect_uri_mismatch</code> after this, the most
+likely cause is that Secrets Manager still holds the <em>local-dev</em> app's credentials instead of the
+production app's — check which app the <code>client_id</code> in the live authorize redirect actually belongs to:</p>
+<div class="cb" data-lang="bash"><pre>curl -si "https://d3911jyxcju4q4.cloudfront.net/oauth2/authorization/github" | grep -i location</pre></div>
+
+<h3 id="b3">B3 · Fill in the real secret values</h3>
 <p><code>setup.sh</code> creates every secret with a <code>CHANGE_ME</code> placeholder so the task definition can reference a
-real ARN. <strong>Replace them before the first deploy</strong> — several are load-bearing in non-obvious ways.</p>
+real ARN. <strong>Replace them before the first deploy</strong> — several are load-bearing in non-obvious ways. Use
+the real values from B2 for the six OAuth secrets (the <em>production</em> GitHub app, not the local-dev one):</p>
 <div class="cb" data-lang="bash"><pre>R="--region us-east-1"
 aws secretsmanager update-secret $R --secret-id tessera-app/db-password           --secret-string '&lt;aiven password&gt;'
 aws secretsmanager update-secret $R --secret-id tessera-app/mail-username         --secret-string '&lt;gmail address&gt;'
 aws secretsmanager update-secret $R --secret-id tessera-app/mail-password         --secret-string '&lt;16-char gmail app password&gt;'
 aws secretsmanager update-secret $R --secret-id tessera-app/jwt-secret            --secret-string "$(openssl rand -base64 48)"
-aws secretsmanager update-secret $R --secret-id tessera-app/google-client-id      --secret-string '&lt;...&gt;'
-aws secretsmanager update-secret $R --secret-id tessera-app/google-client-secret  --secret-string '&lt;...&gt;'
-aws secretsmanager update-secret $R --secret-id tessera-app/github-client-id      --secret-string '&lt;...&gt;'
-aws secretsmanager update-secret $R --secret-id tessera-app/github-client-secret  --secret-string '&lt;...&gt;'
-aws secretsmanager update-secret $R --secret-id tessera-app/microsoft-client-id     --secret-string '&lt;...&gt;'
-aws secretsmanager update-secret $R --secret-id tessera-app/microsoft-client-secret --secret-string '&lt;...&gt;'</pre></div>
+aws secretsmanager update-secret $R --secret-id tessera-app/google-client-id      --secret-string '&lt;from B2&gt;'
+aws secretsmanager update-secret $R --secret-id tessera-app/google-client-secret  --secret-string '&lt;from B2&gt;'
+aws secretsmanager update-secret $R --secret-id tessera-app/github-client-id      --secret-string '&lt;from B2, the PRODUCTION app&gt;'
+aws secretsmanager update-secret $R --secret-id tessera-app/github-client-secret  --secret-string '&lt;from B2, the PRODUCTION app&gt;'
+aws secretsmanager update-secret $R --secret-id tessera-app/microsoft-client-id     --secret-string '&lt;from B2&gt;'
+aws secretsmanager update-secret $R --secret-id tessera-app/microsoft-client-secret --secret-string '&lt;from B2&gt;'
+
+# SMS 2FA — all three below come from console.twilio.com, not from B2 above:
+#   Account SID + Auth Token: console.twilio.com → Develop (left sidebar) → API keys &amp; tokens →
+#     "API keys and auth tokens" → Auth Tokens. Both the Account SID and the Primary Auth Token
+#     are shown there together; the token is masked behind a "View"/eye icon you click to reveal.
+#     (Account Settings → Security also surfaces the Account SID, but Auth Tokens live under
+#     Develop, not Security — confirmed 2026-08-08 against the live console.)
+#   From-number: Phone Numbers → Manage → Active Numbers → click the number you bought — copy it
+#     exactly as shown (already E.164-formatted, e.g. +18084315852). Must be A2P 10DLC (or
+#     toll-free) verified for SMS or Twilio will reject sends even with correct credentials. This
+#     number/its A2P campaign is now only the VoiceUtils fallback path (see the Verify Service SID
+#     below) — TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN are shared with Verify, so this section still
+#     has to be filled in either way.
+aws secretsmanager update-secret $R --secret-id tessera-app/twilio-sid          --secret-string '&lt;Account SID, starts with AC&gt;'
+aws secretsmanager update-secret $R --secret-id tessera-app/twilio-token        --secret-string '&lt;Auth Token&gt;'
+aws secretsmanager update-secret $R --secret-id tessera-app/twilio-from-number  --secret-string '&lt;+1XXXXXXXXXX&gt;'
+
+# ECS only resolves secrets at container START — a value change here does nothing to the
+# currently running task until you restart it:
+aws ecs update-service $R --cluster tessera-app-cluster --service tessera-app-service --force-new-deployment</pre></div>
+
+<h4>Wiring Twilio Verify into production (optional, additive)</h4>
+<div class="note tip">
+<span class="lbl">✓ Status as of 2026-08-12: fully done except the actual deploy</span>
+<p>1. ✅ Verify Service created in console.twilio.com — SID <code>VAb30518dae8f392c259a41974ae40f966</code>. Its
+Messaging Configuration was left on Twilio's default sender (the existing <code>twilio-from-number</code> was never
+attached), so it isn't riding that number's own A2P 10DLC campaign.<br>
+2. ✅ <code>TWILIO_VERIFY_SERVICE_SID</code> wired into <code>aws/task-definition.json</code> (<code>_variables</code> + env entry) and
+both secret-resolution <code>for</code> loops (<code>aws/setup.sh</code> and <code>.github/workflows/deploy.yml</code>).<br>
+3. ✅ Secret created and confirmed live in Secrets Manager:
+<code>arn:aws:secretsmanager:us-east-1:468670609216:secret:tessera-app/twilio-verify-service-sid-l71jLM</code>.<br>
+4. ⬜ <strong>Not yet redeployed</strong> at time of writing — deployed since, see the worked example in
+<a href="#part-d">Part D</a>. <code>deploy.yml</code> deploys whatever's actually on GitHub (push to <code>master</code>, or manual
+<code>workflow_dispatch</code> against a pushed ref), so nothing here reaches AWS until it's committed and pushed.
+<code>--force-new-deployment</code> alone is not enough even once pushed — this is a <em>new</em> env entry baked into a
+task definition revision, not a rotated value, so it needs a fresh <code>register-task-definition</code>, which the
+normal <code>deploy.yml</code> run performs.</p>
+</div>
 
 <p>If the values already exist in a local <code>.env</code>, copy them across without ever printing them:</p>
 <div class="cb" data-lang="bash"><pre>set -a; source .env; set +a
@@ -577,29 +784,30 @@ rejected, they are simply never sent the code they are being asked for.</p>
 <span class="lbl">Why a provider's secrets decide whether it exists</span>
 <p><code>OAuth2ClientConfig#federatedProviderCatalog</code> skips any provider with a blank client id, and the login
 screen renders exactly what <code>GET /oauth2/providers</code> returns. A provider configured in <code>.env</code> but not in
-Secrets Manager appears locally and is <em>silently absent</em> when deployed. That is precisely what happened
-with Microsoft.</p>
+Secrets Manager appears locally and is <em>silently absent</em> when deployed.</p>
 </div>
 
-<h3 id="b3">B3 · Register the callback URLs in each provider console</h3>
-<p>Register <strong>both</strong> — all three providers accept a list, so one app registration serves local and deployed use:</p>
-<div class="cb" data-lang="text"><pre>http://localhost:8080/login/oauth2/code/{provider}                                            # start.sh
-http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com/login/oauth2/code/{provider}    # AWS</pre></div>
-<ul>
-<li><strong>GitHub</strong> → Settings ▸ Developer settings ▸ OAuth Apps. Accepts <code>http</code>.
-<strong>The only provider that works on the current URL</strong> (see <a href="#part-f">Part F</a>).</li>
-<li><strong>Google</strong> → Cloud Console ▸ APIs &amp; Services ▸ Credentials. Requires <code>https</code> for anything but <code>localhost</code>.</li>
-<li><strong>Microsoft</strong> → entra.microsoft.com ▸ your app ▸ <strong>Authentication</strong>. Requires <code>https</code> outside <code>localhost</code>.
-The redirect URI must sit under the <strong>Web</strong> platform — not SPA or mobile — and <em>Allow public client flows</em>
-must be <strong>No</strong>, otherwise Entra treats the app as a public client and rejects the (correct)
-<code>client_secret_post</code> auth with <code>AADSTS90023: Public clients can't send a client secret</code>. That is a portal
-setting; the Spring config is already right.</li>
-</ul>
-<p>Client <strong>id</strong> and tenant id come from the app's <strong>Overview</strong> page. The client <strong>secret</strong> comes from
-<strong>Certificates &amp; secrets ▸ Client secrets</strong>, and you must copy the <strong>Value</strong> column, not <strong>Secret ID</strong> —
-the Value is displayed once, immediately after creation, and is unrecoverable afterwards.
-<em>Federated credentials</em> on that same page are a different feature (workload identity for CI/CD) and are not
-what this app uses.</p>
+<div class="note warn">
+<span class="lbl">⚠ A placeholder like CHANGE_ME_ACxxxxxxx passes SMSUtils.isConfigured() silently</span>
+<p>Confirmed live 2026-08-08: <code>tessera-app/twilio-sid</code> held exactly this after the local <code>.env</code> had a real
+SID for weeks. <code>isConfigured()</code> only checks that the value is non-blank, not that it's real, so a
+half-edited placeholder degrades to the same "log the code instead of sending" fallback as a wholly-blank
+value, with no error anywhere pointing at Secrets Manager specifically. If SMS 2FA silently reverts to
+console-logging in production, check the <em>shape</em> of all three Twilio secrets, not just whether they're
+set — see <code>README.md</code> → Checking secret values.</p>
+</div>
+
+<div class="note warn">
+<span class="lbl">⚠ A UUID is never a valid value here</span>
+<p>Google, GitHub, and Microsoft each assign their own client ID format (<code>NNN-xxx.apps.googleusercontent.com</code>,
+<code>Ov23li…</code>/40-hex, and a GUID respectively) — a randomly generated UUID pasted in by mistake will pass
+validation (it's a non-blank string, so the provider button renders) but fails at the provider with
+<code>invalid_client</code>, because no such app was ever registered. Every value here must come from actually
+completing B2 for that provider — there is no shortcut.</p>
+</div>
+
+<p>To check what's currently stored without exposing it in a chat, ticket, or log, see <code>README.md</code> →
+Checking secret values.</p>
 
 <!-- ================= PART C ================= -->
 <h2 id="part-c"><span class="pt">C</span>One-time application setup — the part people forget<a class="anch" href="#part-c">#</a></h2>
@@ -615,7 +823,9 @@ mysql --host=&lt;your-service&gt;.aivencloud.com --port=&lt;port&gt; --user=avna
       --ssl-ca=aiven-ca.pem --ssl-mode=REQUIRED \
       db3 &lt; src/main/resources/schema.sql</pre></div>
 <p>It is idempotent — <code>CREATE TABLE IF NOT EXISTS</code>, no <code>DROP</code>s — so re-running is safe and is the correct
-fix when a column is missing.</p>
+fix when a column is missing. As of 2026-08-07 this includes the new <code>passkeycredentials</code> table and
+<code>users.using_passkey</code> column (passkey / WebAuthn support) — no separate migration step, just re-run the
+same file.</p>
 
 <div class="note warn">
 <span class="lbl">⚠ Run the whole file, not the parts you think you need</span>
@@ -715,7 +925,10 @@ export AIVEN_PORT=&lt;port&gt;
 export AIVEN_DB=db3
 export AIVEN_USER=avnadmin
 export S3_BUCKET=tessera-app-images
-export APP_DOMAIN=http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com
+# The PUBLIC origin — the CloudFront distribution, not the ALB. It fills both UI_APP_URL and
+# OAUTH2_REDIRECT_BASE_URL in the template, so this one export covers both. Do not put the ALB
+# hostname here: OAuth redirect URIs built from it are http:// and Google and Entra reject them.
+export APP_DOMAIN=https://d3911jyxcju4q4.cloudfront.net
 
 # Resolve every secret's COMPLETE ARN — the random suffix is required. A bare name or a
 # hand-built ARN is ambiguous to ECS, which falls back to an SSM Parameter Store lookup
@@ -746,6 +959,10 @@ BAD=$(echo "$FILLED" | jq '
 | length')
 if [ "$BAD" -ne 0 ]; then
   echo "ABORT: $BAD empty value(s) after envsubst — an export is missing:"
+  echo "$FILLED" | jq '.containerDefinitions[0]
+    | {env: [.environment[]?|select(.value=="")|.name],
+       secrets: [.secrets[]?|select(.valueFrom=="")|.name],
+       logs: [.logConfiguration.options|to_entries[]|select(.value=="")|.key]}'
   exit 1
 fi
 
@@ -754,26 +971,36 @@ aws ecs register-task-definition --cli-input-json "$FILLED" --region us-east-1
 aws ecs update-service --cluster tessera-app-cluster --service tessera-app-service \
   --task-definition tessera-app --force-new-deployment --region us-east-1</pre></div>
 
-<div class="note tip">
-<span class="lbl">✓ Safer alternative — derive from the LIVE revision</span>
-<p>When you only need to add or change one value, deriving the new revision from what is <em>currently running</em>
-avoids the whole export-and-guard dance, and cannot typo a value you never touched:</p>
-<div class="cb" data-lang="bash"><pre>LIVE=$(aws ecs describe-services --cluster tessera-app-cluster --services tessera-app-service \
-        --region us-east-1 --query 'services[0].taskDefinition' --output text)
+<h4>Shortcut: derive the next revision from the live one</h4>
+<p>The sequence above rebuilds the revision <em>from the template</em>, which means every <code>export</code> has to be
+right — including <code>AIVEN_HOST</code>, <code>AIVEN_PORT</code> and the twelve secret ARNs. When you only want to change
+<strong>one or two values</strong> and the currently deployed revision is otherwise correct, it is safer to start
+from what is already running: nothing can be silently dropped, because you never re-supply it.</p>
+<div class="cb" data-lang="bash"><pre>R="--region us-east-1"
 
-aws ecs describe-task-definition --task-definition "$LIVE" --region us-east-1 \
-  --query 'taskDefinition' --output json &gt; td-live.json
+# 1. Pull the LIVE revision (whatever the service is actually running — use its own describe-services
+#    output for this, not a hardcoded number; the newest registered revision is not necessarily deployed).
+LIVE=$(aws ecs describe-services $R --cluster tessera-app-cluster --services tessera-app-service \
+        --query 'services[0].taskDefinition' --output text)
+aws ecs describe-task-definition $R --task-definition "$LIVE" \
+  --query 'taskDefinition' --output json &gt; .temp/live.json
 
-jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities,
-        .registeredAt, .registeredBy, .deregisteredAt)
-    | .containerDefinitions[0].environment |= (
-        map(select(.name != "DEBUG_REPORT")) + [{name:"DEBUG_REPORT", value:"true"}] )' \
-  td-live.json &gt; td-new.json
+# 2. Strip the server-populated read-only fields — register-task-definition rejects them — and
+#    apply the change. `.temp/` is gitignored.
+jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+        .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)
+    | .containerDefinitions[0].environment = (
+        [ .containerDefinitions[0].environment[]
+          | if   .name == "UI_APP_URL"          then .value = "https://d3911jyxcju4q4.cloudfront.net"
+            elif .name == "TRUSTED_PROXY_COUNT" then .value = "2"
+            else . end ]
+        + [ {"name":"OAUTH2_REDIRECT_BASE_URL","value":"https://d3911jyxcju4q4.cloudfront.net"} ] )' \
+  .temp/live.json &gt; .temp/next.json
 
-aws ecs register-task-definition --cli-input-json "$(cat td-new.json)" --region us-east-1</pre></div>
-<p>Diff the two before registering. Verified working 2026-08-02 — produced revision 10 from live revision 8
-with all 13 secret ARNs preserved verbatim.</p>
-</div>
+# 3. Register and roll.
+aws ecs register-task-definition $R --cli-input-json "$(cat .temp/next.json)"
+aws ecs update-service $R --cluster tessera-app-cluster --service tessera-app-service \
+  --task-definition tessera-app --force-new-deployment</pre></div>
 
 <p><strong>Adding a brand-new secret this way</strong> (rather than changing an existing value) is a different
 <code>jq</code> operation — appending to <code>.secrets</code>, not rewriting <code>.environment</code> in place. Written
@@ -783,7 +1010,7 @@ a retry after a typo never leaves two conflicting entries:</p>
 LIVE=$(aws ecs describe-services $R --cluster tessera-app-cluster --services tessera-app-service \
         --query 'services[0].taskDefinition' --output text)
 aws ecs describe-task-definition $R --task-definition "$LIVE" \
-  --query 'taskDefinition' --output json &gt; td-live.json
+  --query 'taskDefinition' --output json &gt; .temp/live.json
 
 # Create the secret itself first if it doesn't exist yet:
 #   aws secretsmanager create-secret --name tessera-app/&lt;name&gt; --secret-string '&lt;value&gt;' --region us-east-1
@@ -795,18 +1022,68 @@ jq --arg name "MY_NEW_SECRET" \
         .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)
     | .containerDefinitions[0].secrets |=
         (map(select(.name != $name)) + [{name: $name, valueFrom: $arn}])' \
-  td-live.json &gt; td-new.json
+  .temp/live.json &gt; .temp/next.json
 
 # Diff before registering — confirm exactly one line changed and nothing else moved:
-diff &lt;(jq '.containerDefinitions[0].secrets' td-live.json) &lt;(jq '.containerDefinitions[0].secrets' td-new.json)
+diff &lt;(jq '.containerDefinitions[0].secrets' .temp/live.json) &lt;(jq '.containerDefinitions[0].secrets' .temp/next.json)
 
-aws ecs register-task-definition $R --cli-input-json "$(cat td-new.json)"
+aws ecs register-task-definition $R --cli-input-json "$(cat .temp/next.json)"
 aws ecs update-service $R --cluster tessera-app-cluster --service tessera-app-service \
   --task-definition tessera-app --force-new-deployment</pre></div>
 <p>Remember to also add the new env-var name to <code>aws/task-definition.json</code>'s
 <code>_variables</code>/<code>environment</code> block and <strong>all three</strong> copies of the ARN-resolution
 <code>for</code> loop (<code>aws/setup.sh</code>, <code>.github/workflows/deploy.yml</code>, and this file's own re-register
 sequence above) — otherwise the next <em>templated</em> re-register (not this shortcut) silently drops it again.</p>
+
+<div class="note warn">
+<span class="lbl">⚠ On Git Bash, pass the JSON with "$(cat file)", not file://</span>
+<p>A native <code>aws.exe</code> resolves <code>file://</code> URIs unreliably under MSYS — the same path hazard
+<code>setup.sh</code> documents at its top — and the failure is confusing rather than obvious: you get
+<code>Error parsing parameter 'cli-input-json': Invalid JSON received</code> even though the file is perfectly
+valid JSON, because the CLI never read it. The <code>"$(cat …)"</code> form sidesteps path translation entirely.
+It is well inside Windows' command-length limit; the filled task definition is under 6 KB.</p>
+<p><strong>Also beware wrapped line continuations.</strong> If a long <code>file://…</code> path gets split across
+lines without a trailing <code>\</code>, bash runs the remainder as separate commands and you will see
+<code>No such file or directory</code> for a path fragment alongside the parsing error above. Two errors, one
+cause.</p>
+</div>
+
+<h4>Worked example — adding <code>TWILIO_VERIFY_SERVICE_SID</code> this way (run 2026-08-14)</h4>
+<p>Real run against the live service, from a machine with no way to commit/push (so going through
+<code>deploy.yml</code> wasn't an option) — confirms the shortcut works end to end and the diff really does come
+back as exactly one line:</p>
+<div class="cb" data-lang="bash"><pre>SCRATCH="/c/Users/bobby/AppData/Local/Temp/claude/.../scratchpad"   # any writable, gitignored dir
+mkdir -p "$SCRATCH"
+set -e
+
+LIVE=$(aws ecs describe-services --cluster tessera-app-cluster --services tessera-app-service \
+        --region us-east-1 --query 'services[0].taskDefinition' --output text)
+echo "Live task definition: $LIVE"                    # arn:...:task-definition/tessera-app:15
+
+aws ecs describe-task-definition --task-definition "$LIVE" --region us-east-1 \
+  --query 'taskDefinition' --output json &gt; "$SCRATCH/td-live.json"
+
+jq --arg arn "arn:aws:secretsmanager:us-east-1:468670609216:secret:tessera-app/twilio-verify-service-sid-l71jLM" \
+   'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities,
+        .registeredAt, .registeredBy, .deregisteredAt)
+    | .containerDefinitions[0].secrets |=
+        (map(select(.name != "TWILIO_VERIFY_SERVICE_SID")) + [{name:"TWILIO_VERIFY_SERVICE_SID", valueFrom:$arn}])' \
+  "$SCRATCH/td-live.json" &gt; "$SCRATCH/td-new.json"
+
+# Diff before registering — this is the step that matters. A clean run shows ONLY the new
+# secret appended; anything else in the diff means the wrong revision was pulled or a prior
+# edit is still sitting in the live task definition unaccounted for.
+diff &lt;(jq '.containerDefinitions[0].secrets' "$SCRATCH/td-live.json") \
+     &lt;(jq '.containerDefinitions[0].secrets' "$SCRATCH/td-new.json") || true</pre></div>
+<p>Confirmed clean against <code>tessera-app:15</code> — the diff showed exactly the one new
+<code>TWILIO_VERIFY_SERVICE_SID</code> entry appended, nothing else moved. That confirms the JSON is safe to
+register; it does <strong>not</strong> by itself register or roll anything. Finish it with the two commands from
+the template above (substitute <code>$SCRATCH/td-new.json</code> for <code>.temp/next.json</code>):</p>
+<div class="cb" data-lang="bash"><pre>aws ecs register-task-definition --region us-east-1 --cli-input-json "$(cat "$SCRATCH/td-new.json")"
+aws ecs update-service --cluster tessera-app-cluster --service tessera-app-service \
+  --task-definition tessera-app --force-new-deployment --region us-east-1</pre></div>
+<p>Then verify with <a href="#part-e">Part E</a> below — specifically 1b, which confirms the <em>running</em>
+revision (not just the newest registered one) actually carries the secret.</p>
 
 <p><strong>Rotating a secret's value needs no new revision</strong> — the reference is to the secret, not its contents —
 but it <em>does</em> need a task restart, because ECS resolves secrets at container start:</p>
@@ -843,18 +1120,33 @@ aws ecs describe-task-definition \
       --services tessera-app-service --query 'services[0].taskDefinition' --output text)" \
   --query "taskDefinition.containerDefinitions[0].secrets[?name=='TWILIO_VERIFY_SERVICE_SID']" \
   --output json
-#    → [] means it never reached the task definition — re-register (Part D), don't just restart.
+#    → [] means it never reached the task definition — re-register (Part D), don't just
+#      restart. A populated result with the wrong-looking ARN means the secret itself is stale.
 
-# 2. Is it up?
-curl -s http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com/actuator/health
+# 2. Is it up? Use the CloudFront URL, not the ALB — see Part F for why the ALB URL is a dead
+#    end for federated login and passkeys even when the app itself responds fine on it.
+curl -s https://d3911jyxcju4q4.cloudfront.net/actuator/health
 #    → {"status":"UP"}
 
 # 3. Which federated providers actually reached the container?
-curl -s http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com/oauth2/providers
+curl -s https://d3911jyxcju4q4.cloudfront.net/oauth2/providers
+
+# 3b. For each provider, confirm the redirect actually carries a real client_id (not CHANGE_ME,
+#     not a UUID — see B3's note on why a UUID silently passes but always fails at the provider)
+#     and an https:// redirect_uri:
+for p in google github microsoft; do
+  echo "=== $p ==="
+  curl -s -D - -o /dev/null "https://d3911jyxcju4q4.cloudfront.net/oauth2/authorization/$p" | grep -i location
+done
 
 # 4. Recent logs (startup failures, ddl-auto validation errors, the [NET] line).
 MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
   aws logs tail /ecs/tessera-app --since 10m --region us-east-1
+
+# The three lines worth grepping for on any fresh deploy:
+MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
+  aws logs tail /ecs/tessera-app --since 15m --region us-east-1 \
+  | grep -E "Started Angular|\[NET\]|Federated login providers"
 
 # 5. Is the rollout actually converging, or stuck? Right after register-task-definition +
 #    force-new-deployment, the service briefly carries BOTH the old and new revision as separate
@@ -883,7 +1175,7 @@ path introduced. On Linux/macOS the prefix is a harmless no-op.</p>
 <p>A healthy boot looks like this — check all three:</p>
 <div class="cb" data-lang="text"><pre>[NET] trusted-proxy-count=1 — the client address is read from X-Forwarded-For ...
 Federated login providers configured: [google, github, microsoft]
-Started AngularSpringBootFullStackApplication in 81.4 seconds</pre></div>
+Started AngularSpringBootFullStackApplication in 86.503 seconds</pre></div>
 <p><code>trusted-proxy-count=0</code> means the anomaly detector and rate limiter are silently degraded
 (<a href="#c3">C3</a>). A short provider list means a <code>*_CLIENT_ID</code> never reached the container
 (<a href="#b2">B2</a>). ~85s is the expected cold start, not a problem.</p>
@@ -904,35 +1196,60 @@ Started AngularSpringBootFullStackApplication in 81.4 seconds</pre></div>
 
 <!-- ================= PART F ================= -->
 <h2 id="part-f"><span class="pt">F</span>Known limitations right now<a class="anch" href="#part-f">#</a></h2>
-<p><strong>The ALB serves plain HTTP.</strong> Step 8 of <code>README.md</code> (ACM certificate + HTTPS listener) has not been
-done, because it requires a domain you can prove ownership of. Consequences:</p>
+<p><strong>The ALB still serves plain HTTP — but it is no longer the public entrance.</strong> As of August 4, 2026
+a CloudFront distribution (<code>E1WWY6FHSKI84P</code>, <code>Deployed</code>) fronts the ALB and terminates TLS on its
+auto-issued certificate, so the app's public origin is <strong><code>https://d3911jyxcju4q4.cloudfront.net</code></strong>
+(also reachable at <strong><code>https://tesseraapp.dev</code></strong> since 2026-08-08, see <a href="#b16">B1.6</a>).
+Created by <code>setup-cloudfront.sh</code> (idempotent). Step 8 of <code>README.md</code> — an ACM certificate and a
+<code>:443</code> listener on the ALB itself — is still undone, because it requires a domain you can prove
+ownership of; <code>deploy-https.sh</code> is written and ready for that day.</p>
+
+<p>The ALB remains reachable on plain <code>http://</code> — CloudFront does not close it. To force all traffic
+through CloudFront, restrict the ALB security group to the managed prefix list
+<code>com.amazonaws.global.cloudfront.origin-facing</code>.</p>
+
+<div class="note warn">
+<span class="lbl">⚠ CloudFront alone is not enough: the ALB overwrites X-Forwarded-Proto</span>
+<p>CloudFront sets it to <code>https</code>; the ALB then replaces it with its own listener protocol (<code>http</code>).
+Spring derives <code>{baseUrl}</code> — and therefore the OAuth <code>redirect_uri</code> — from that header, so it emitted
+<code>redirect_uri=http://…</code> even through the HTTPS front door, which Google and Entra reject.
+<code>FORWARD_HEADERS_STRATEGY=framework</code> does <strong>not</strong> save you; it honours the header faithfully, and the
+header is wrong. The fix is <code>OAUTH2_REDIRECT_BASE_URL</code>, which pins the redirect origin instead of
+deriving it. Verify after any change to the front door:</p>
+<div class="cb" data-lang="bash"><pre>curl -si "https://d3911jyxcju4q4.cloudfront.net/oauth2/authorization/github" | grep -i location
+# the redirect_uri= parameter MUST start with https://</pre></div>
+</div>
+
 <div class="tw"><table>
 <thead><tr><th>Affected</th><th>Effect</th></tr></thead>
 <tbody>
-<tr><td>Google federated login</td><td><span class="yn n">BLOCKED</span> — Google requires <code>https</code> on redirect URIs, excepting only <code>localhost</code></td></tr>
-<tr><td>Microsoft federated login</td><td><span class="yn n">BLOCKED</span> — same rule in Entra</td></tr>
-<tr><td>GitHub federated login</td><td><span class="yn y">WORKS</span> — GitHub permits <code>http</code> callbacks</td></tr>
-<tr><td>WebAuthn / passkeys (roadmap §3.1)</td><td><span class="yn n">BLOCKED</span> — the API requires a secure context</td></tr>
-<tr><td>HSTS</td><td>Sent but inert</td></tr>
+<tr><td>Google federated login</td><td><span class="yn y">✅ Live</span> — real credentials from a Web application OAuth client (<a href="#b2">B2</a>/<a href="#b3">B3</a>), registered for both the CloudFront URL and <code>tesseraapp.dev</code>. Verify with the 3b command in <a href="#part-e">Part E</a>; <code>client_id</code> should end in <code>.apps.googleusercontent.com</code>, never a bare UUID</td></tr>
+<tr><td>GitHub federated login</td><td><span class="yn y">✅ Live on tesseraapp.dev only.</span> Three OAuth Apps exist in total by now: <code>localhost</code> (local dev), the original CloudFront-URL production app (now orphaned — its credentials were swapped out of Secrets Manager once the domain went live, so it no longer works), and the current <code>tesseraapp.dev</code> production app, whose credentials are what's actually live. If this regresses, check which app's <code>client_id</code> the live redirect carries — see B2's GitHub section</td></tr>
+<tr><td>Microsoft federated login</td><td><span class="yn y">✅ Live</span> — credentials were already real; the blocker was the redirect URI missing from the Entra app's Web platform, now added for both the CloudFront URL and <code>tesseraapp.dev</code></td></tr>
+<tr><td>WebAuthn / passkeys</td><td><span class="yn y">✅ Live and confirmed working</span> — any HTTPS origin (CloudFront URL or <code>tesseraapp.dev</code>) is a secure context, which <code>navigator.credentials</code> requires. <strong>Still completely inert on the plain-HTTP ALB URL</strong> — <code>isWebAuthnSupported()</code> reports false there regardless of what's deployed, since <code>http://</code> (other than <code>localhost</code>) is never a secure context</td></tr>
+<tr><td>HSTS</td><td>Now meaningful over the CloudFront origin</td></tr>
 </tbody></table></div>
 
-<div class="note tip">
-<span class="lbl">✓ The cheapest fix is CloudFront, not a domain purchase</span>
-<p>A distribution in front of the ALB using its auto-issued <code>*.cloudfront.net</code> certificate gives a real,
-publicly trusted HTTPS origin <strong>for free</strong>, and <code>https://d1234abcd5678.cloudfront.net</code> <em>is</em> accepted by
-Google and Entra. The hostname is randomly assigned and cannot be customised. Afterwards: update
-<code>APP_DOMAIN</code>/<code>UI_APP_URL</code> to the new origin, re-register the task definition, add the new callback URLs in
-all three provider consoles, and set <code>TRUSTED_PROXY_COUNT=2</code> (CloudFront adds a hop).</p>
-</div>
+<p>After a front-door change, always: set <code>APP_DOMAIN</code>/<code>UI_APP_URL</code> <strong>and</strong> <code>OAUTH2_REDIRECT_BASE_URL</code>
+to the new origin, set <code>TRUSTED_PROXY_COUNT=2</code> (CloudFront adds a hop), re-register the task definition,
+force a new deployment, and add the new callback URLs in every provider console.</p>
 
 <p><strong>Security state is per-instance.</strong> The brute-force counter, the rate limiter's buckets, and
 <code>ProviderLinkTicketService</code> all live in the task's memory. Harmless at <code>desiredCount: 1</code>; a real bypass the
 moment a second task runs, because an attacker routed to the other instance gets a fresh budget. Tracked in
-<code>ROADMAP.md</code> §3.1.</p>
+<code>documentation/FUTURE-ENHANCEMENTS.md</code> §3.1.</p>
+
+<p><strong>SMS 2FA sends for real once Twilio credentials are populated in Secrets Manager</strong> (2026-08-08 —
+<code>NotificationServiceImpl.sendTwoFactorCode()</code> now calls the real <code>SMSUtils.sendSMS</code>, no longer commented
+out). If any of <code>TWILIO_ACCOUNT_SID</code> / <code>TWILIO_AUTH_TOKEN</code> / <code>TWILIO_FROM_NUMBER</code> is left as a
+placeholder, it degrades to logging the code to CloudWatch instead (see <a href="#h2s">H2</a>) — the same
+lockout risk applies in that unconfigured state: anyone without AWS access who enables SMS 2FA would be
+stuck at the code-entry screen with no self-service recovery. Verify the three secrets are real before
+pointing anyone besides yourself at SMS 2FA on a live/public demo.</p>
 
 <p><strong>A production boot against a <code>schema.sql</code>-only database with <code>ddl-auto: validate</code> has never been
 exercised end to end.</strong> Only the offline <code>JpaSchemaSyncTest</code> has run, and it catches entity/DDL drift but
-not a schema the app has never actually started against. Tracked in <code>ROADMAP.md</code> §2.3.</p>
+not a schema the app has never actually started against. Tracked in <code>FUTURE-ENHANCEMENTS.md</code> §2.3.</p>
 
 <!-- ================= PART G ================= -->
 <h2 id="part-g"><span class="pt">G</span>Clean rebuild from zero<a class="anch" href="#part-g">#</a></h2>
@@ -1030,8 +1347,12 @@ AWS_REGION=us-east-1 ./aws/setup.sh \
 # Image — Part D.
 AWS_REGION=us-east-1 ./aws/push-to-ecr.sh latest
 
-# The new ALB has a NEW DNS name. Re-run setup.sh with it as --domain so UI_APP_URL is
-# correct, then add the new callback URLs to all three provider consoles (Part B3).</pre></div>
+# The new ALB has a NEW DNS name. G1's teardown does NOT delete the CloudFront distribution
+# (it's not in that list), so it's now silently pointing at a dead origin — update it:
+#   CloudFront console → your distribution → Origins → edit the origin domain to the new ALB DNS
+# Then re-run setup.sh with the new ALB DNS as --domain so UI_APP_URL/APP_DOMAIN stay correct.
+# The apps registered with Google/Microsoft (Part B2) still work unchanged, since the CloudFront
+# URL itself did not change — GitHub needs no action either, for the same reason.</pre></div>
 <p><strong><code>schema.sql</code> and your admin-role grant (Part C) do NOT need re-running</strong> — they live in <code>db3</code>, which this
 teardown never touched. That is the whole reason for the split: <em>infrastructure is disposable, the database
 is not.</em></p>
@@ -1049,7 +1370,9 @@ That is correct for Fargate, not an oversight: a file written inside the contain
 stops, which is exactly the moment you most want to read it.</p>
 
 <div class="diagram">Spring Boot (Logback console appender)
-   │  no logback-spring.xml in the repo; no logging.file.* set anywhere
+   │  src/main/resources/logback-spring.xml (added 2026-08-15): prod/qa/stage render one
+   │  JSON object per line (LogstashEncoder); dev/local keep Boot's plain human-readable
+   │  console line unchanged. Still no logging.file.* anywhere — stdout only, either way.
    ▼
 Container stdout/stderr   (Dockerfile: ENTRYPOINT ["java","-jar","app.jar"], no redirection)
    ▼
@@ -1065,11 +1388,36 @@ CloudWatch Logs
 start at all. That is why a missing <code>AWS_REGION</code> surfaces as <code>ResourceInitializationError</code> rather than as
 silently missing logs.</p>
 
+<div class="note info">
+<span class="lbl">JSON logs, why now (2026-08-15)</span>
+<p>Every deployed event line is now one JSON object — <code>@timestamp</code>, <code>level</code>, <code>logger_name</code>,
+<code>thread_name</code>, <code>message</code>, plus <code>stack_trace</code> on exceptions — instead of one plain-text line.
+CloudWatch Logs Insights always keeps <code>@message</code> as the full raw line regardless of format, so
+<strong>every existing query on this page still works unchanged</strong> (<code>filter @message like /\[AUTH-GRANT\]|.../</code>
+still matches, because that text is still a literal substring of the line — it is just wrapped in
+<code>{"message":"..."}</code> now). What JSON actually buys is the ability to query the <em>structured</em> fields
+directly instead of pattern-matching text — see the new example in <a href="#h2s">H2</a>. Local <code>dev</code>/<code>local</code>
+runs are deliberately untouched: nobody reads a laptop console through Logs Insights, and a human scanning
+a terminal wants the old colored line, not JSON. See <code>src/main/resources/logback-spring.xml</code> for the
+profile-conditional config and <code>logstash-logback-encoder</code> in <code>pom.xml</code>.</p>
+</div>
+
 <h3 id="h2s">H2 · Reading them</h3>
 <p><strong>Live tail</strong> — the day-to-day loop:</p>
 <div class="cb" data-lang="bash"><pre>MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
   aws logs tail /ecs/tessera-app --since 15m --follow --region us-east-1</pre></div>
 <p>Run it in one window while you <code>--force-new-deployment</code> in another to watch a boot in real time.</p>
+
+<p><strong>Finding a 2FA code when Twilio/Verify is unconfigured.</strong> <code>NotificationServiceImpl.sendTwoFactorCode()</code>
+picks one of three paths, in order: Twilio Verify (SMS, falling back to a Verify voice call) when
+<code>TWILIO_VERIFY_SERVICE_SID</code> is populated; otherwise a hand-built <code>VoiceUtils</code> call when
+<code>TWILIO_ACCOUNT_SID</code>/<code>TWILIO_AUTH_TOKEN</code>/<code>TWILIO_FROM_NUMBER</code> are populated; otherwise the code is
+logged instead of anything being sent. That last case is the only one CloudWatch can help with — a Verify
+challenge's code is never known to this application at all (Twilio generates and owns it), so a user stuck
+at the code-entry screen with Verify configured has to be helped via the Twilio Console (Verify → Services →
+your service → the number's verification attempts), not this log:</p>
+<div class="cb" data-lang="bash"><pre>MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' \
+  aws logs tail /ecs/tessera-app --since 10m --region us-east-1 | grep "Twilio is not configured"</pre></div>
 
 <p><strong>Logs Insights</strong> — CloudWatch console ▸ Logs Insights. Always scope to the log group:</p>
 <div class="cb" data-lang="sql"><pre>SOURCE logGroups(namePrefix: ["/ecs/tessera-app"]) START=-3600s END=0s
@@ -1090,6 +1438,14 @@ SOURCE logGroups(namePrefix: ["/ecs/tessera-app"]) START=-3600s END=0s
 | stats count(*) as events by @logStream
 | sort events asc</pre></div>
 
+<div class="cb" data-lang="sql"><pre>-- Structured-field query (JSON logs only, i.e. any deploy after 2026-08-15): filters on the
+-- real `level` field instead of pattern-matching @message, and counts by logger — the kind of
+-- query the plain-text format could only do with a fragile regex against the whole line.
+SOURCE logGroups(namePrefix: ["/ecs/tessera-app"]) START=-3600s END=0s
+| filter level = "ERROR"
+| stats count(*) as errors by logger_name
+| sort errors desc</pre></div>
+
 <h3 id="h3s">H3 · Why you can't find the startup block</h3>
 <div class="note warn">
 <span class="lbl">⚠ sort desc can never show you a boot</span>
@@ -1107,8 +1463,8 @@ STREAM=$(MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' aws logs describe-log-streams \
 
 MSYS2_ARG_CONV_EXCL='/ecs/tessera-app' aws logs get-log-events \
   --log-group-name /ecs/tessera-app --log-stream-name "$STREAM" \
-  --start-from-head --limit 100 --region us-east-1 --output json \
-  | jq -r '.events[].message'</pre></div>
+  --start-from-head --limit 100 --region us-east-1 \
+  --query 'events[].message' --output text</pre></div>
 <p>Or in Insights, <code>sort @timestamp asc</code> with a window that contains a deploy.</p>
 
 <div class="note info">
@@ -1132,6 +1488,7 @@ Data scan, Tomcat init, HikariPool, Hibernate <code>HHH…</code> + Database inf
 <td><span class="yn y">PRESENT</span></td><td>The two boot markers worth grepping on every deploy.</td></tr>
 <tr><td><code>[AUTH-GRANT]</code> / <code>[AUTH-DENY]</code>, <code>NewUserEvent received</code>, <code>Opened refresh session family</code></td>
 <td><span class="yn y">PRESENT</span></td><td>Runtime logging, unchanged.</td></tr>
+<tr><td><code>spring.jpa.open-in-view</code> WARN</td><td><span class="yn y">PRESENT</span></td><td>—</td></tr>
 <tr><td><strong>Vite / Angular dev server</strong></td><td><span class="yn n">CANNOT EXIST</span></td>
 <td>Angular is compiled into the jar at image-build time. There is no Angular <em>process</em> in prod — Tomcat
 serves static files.</td></tr>
@@ -1272,7 +1629,7 @@ Secrets Manager at container start.</p>
 <tr><td><code>MYSQL_DATABASE</code></td><td>env</td><td><strong><code>db3</code></strong></td></tr>
 <tr><td><code>MYSQL_USERNAME</code></td><td>env</td><td><code>avnadmin</code></td></tr>
 <tr><td><code>MAIL_HOST</code> / <code>MAIL_PORT</code></td><td>env</td><td><code>smtp.gmail.com</code> / <code>587</code></td></tr>
-<tr><td><code>UI_APP_URL</code></td><td>env</td><td>the app's public origin, <strong>no trailing slash</strong> — drives email links and the prod CORS default</td></tr>
+<tr><td><code>UI_APP_URL</code></td><td>env</td><td>the app's public origin, <strong>no trailing slash</strong> — drives email links, the prod CORS default, <strong>and</strong> the WebAuthn relying-party id/origin for passkeys (host and full URL respectively). No separate config needed for passkeys to work in prod; <code>WEBAUTHN_RP_ID</code>/<code>WEBAUTHN_ORIGIN</code> exist as overrides only, for a future split-origin deployment</td></tr>
 <tr><td><code>IMAGE_STORAGE_TYPE</code></td><td>env</td><td><code>s3</code></td></tr>
 <tr><td><code>AWS_S3_BUCKET</code> / <code>AWS_REGION</code></td><td>env</td><td><code>tessera-app-images</code> / <code>us-east-1</code></td></tr>
 <tr><td><code>FORWARD_HEADERS_STRATEGY</code></td><td>env</td><td><code>framework</code> — see <a href="#c3">C3</a></td></tr>
@@ -1284,7 +1641,8 @@ Secrets Manager at container start.</p>
 <tr><td><code>JWT_SECRET</code></td><td>secret</td><td><code>openssl rand -base64 48</code></td></tr>
 <tr><td><code>MYSQL_PASSWORD</code></td><td>secret</td><td>Aiven password</td></tr>
 <tr><td><code>MAIL_USERNAME</code> / <code>MAIL_PASSWORD</code></td><td>secret</td><td>Gmail address + 16-char app password</td></tr>
-<tr><td><code>TWILIO_ACCOUNT_SID</code> / <code>_AUTH_TOKEN</code> / <code>_FROM_NUMBER</code></td><td>secret</td><td>SMS 2FA is a documented stub; placeholders are fine</td></tr>
+<tr><td><code>TWILIO_ACCOUNT_SID</code> / <code>_AUTH_TOKEN</code> / <code>_FROM_NUMBER</code></td><td>secret</td><td>Shared with Verify below; on their own (no Verify Service SID) this is the <code>VoiceUtils</code> fallback path — a spoken call once all three are populated, each incurring a Twilio cost; leave as placeholders and 2FA degrades to a logged code instead</td></tr>
+<tr><td><code>TWILIO_VERIFY_SERVICE_SID</code></td><td>secret, wired and created — <strong>live in Secrets Manager as of 2026-08-12</strong></td><td>Optional — when set, 2FA goes through Twilio Verify (SMS, falling back to a Verify voice call) instead of the <code>VoiceUtils</code> path above; A2P-10DLC-exempt for OTP traffic</td></tr>
 <tr><td><code>GOOGLE_CLIENT_ID</code> / <code>_SECRET</code></td><td>secret</td><td>omit to hide the Google button</td></tr>
 <tr><td><code>GITHUB_CLIENT_ID</code> / <code>_SECRET</code></td><td>secret</td><td>omit to hide the GitHub button</td></tr>
 <tr><td><code>MICROSOFT_CLIENT_ID</code> / <code>_SECRET</code></td><td>secret</td><td>omit to hide the Microsoft button</td></tr>
@@ -1298,9 +1656,9 @@ Irrelevant while <code>IMAGE_STORAGE_TYPE=s3</code>; set it explicitly if you ev
 </div>
 
 <footer>
-  <div><strong>Related:</strong> aws/README.md · documentation/security.md §11.1 · documentation/configuration.md ·
-  documentation/database.md · ROADMAP.md</div>
-  <div>Generated from <code>aws/RUNBOOK.md</code> — single file, no external dependencies. Rev 1.1 · 2026-08-02</div>
+  <div><strong>Related:</strong> aws/README.md · GUIDE.md §7.8 (local-vs-AWS parity table) ·
+  GUIDE.md §3 (configuration) · GUIDE.md §9 (database) · documentation/FUTURE-ENHANCEMENTS.md</div>
+  <div>Generated from <code>aws/RUNBOOK.md</code> — single file, no external dependencies. Rev 1.1 · 2026-08-08</div>
 </footer>
 </main>
 </div>

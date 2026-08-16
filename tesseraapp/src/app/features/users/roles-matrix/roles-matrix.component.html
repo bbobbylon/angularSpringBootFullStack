@@ -2,7 +2,7 @@
   Roles × Permissions Matrix (SRS M3, FR-RBAC-1/2).
 
   Columns = every unique permission string across all roles (sorted).
-  Rows    = every role in the catalogue.
+  Rows    = every role in the catalog.
   Cell    = checkmark when the role carries that permission, dash when not.
 
   Read-only. Role and permission assignment lives in the admin user-detail view.
@@ -95,7 +95,7 @@
           <i class="bi bi-info-circle me-1"></i>
           Role assignments are managed from the
           <a [routerLink]="['/users']">{{ t('nav.userDirectory') }}</a>.
-          Permission strings are defined in the backend role catalogue and enforced server-side on every request.
+          Permission strings are defined in the backend role catalog and enforced server-side on every request.
         </p>
       }
     }

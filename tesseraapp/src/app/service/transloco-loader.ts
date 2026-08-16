@@ -11,7 +11,7 @@ import { Observable } from 'rxjs';
  *
  * <h3>Why the dictionaries are fetched rather than bundled</h3>
  * This is the decision that makes a live language switcher possible at all. Angular's built-in
- * {@code @angular/localize} resolves translations at <em>compile</em> time and emits one optimised
+ * {@code @angular/localize} resolves translations at <em>compile</em> time and emits one optimized
  * bundle per language, which is excellent for a public marketing site — the visitor downloads only
  * their own language and search engines get a distinct URL per locale. It is the wrong shape for an
  * authenticated SPA with an in-app switcher, because changing language means loading a different

@@ -16,7 +16,7 @@ import java.util.List;
  * rather than every user), a different authorization rule, and a different lifecycle, so it gets
  * its own seam.
  *
- * <p>The division of labour between the two is deliberate and worth stating: {@code CustomerService}
+ * <p>The division of labor between the two is deliberate and worth stating: {@code CustomerService}
  * answers "what may I put on an invoice?" and therefore returns <em>active</em> services only,
  * while this service answers "what does our catalog contain?" and returns everything, retired
  * entries included. Neither is a superset of the other by accident.
@@ -55,7 +55,7 @@ public interface ServicesCatalogService {
      *
      * <p><b>Editing a service does not rewrite history.</b> Invoices copy a service's name and
      * price into their own line items when they are raised, so a price change here affects only
-     * invoices raised from now on. That is the correct behaviour and the reason the copy exists —
+     * invoices raised from now on. That is the correct behavior and the reason the copy exists —
      * without it, correcting a typo in a service name would silently restate every invoice ever
      * issued against it.
      *

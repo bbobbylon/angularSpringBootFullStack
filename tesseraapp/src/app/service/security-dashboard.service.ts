@@ -44,7 +44,7 @@ export class SecurityDashboardService {
    * because an administrator working down the restricted-accounts list must not have their place
    * reset because they stepped forward through flagged sign-ins in the panel above.
    *
-   * @param days - how many days of history to summarise; the server clamps this to 1–90, so an
+   * @param days - how many days of history to summarize; the server clamps this to 1–90, so an
    *               out-of-range value degrades to the nearest sane window rather than erroring
    * <p>Each table's row count is a separate parameter for the same reason, and the server clamps
    * both to 1–100 — so a value outside that range degrades to the nearest sane page instead of
@@ -106,7 +106,7 @@ export class SecurityDashboardService {
       .pipe(catchError(this.handleError));
 
   /**
-   * Normalises HTTP errors into a single Observable<never>, mirroring the other services so
+   * Normalizes HTTP errors into a single Observable<never>, mirroring the other services so
    * callers handle failures uniformly through {@code catchError}.
    *
    * @param error - the HttpErrorResponse from Angular's HttpClient

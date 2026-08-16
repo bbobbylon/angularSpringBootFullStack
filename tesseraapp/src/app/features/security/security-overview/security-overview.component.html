@@ -81,7 +81,7 @@
         <section class="sc-secops__grid sc-reveal" style="--d: 40ms;">
 
           <!-- The anomaly tile leads, and turns amber only when there is something to look at:
-               a permanently-coloured alert tile stops being read within a week. -->
+               a permanently-colored alert tile stops being read within a week. -->
           <div class="sc-panel sc-panel--flush sc-secops__tile" [class.is-alert]="suspiciousCount() > 0">
             <span class="sc-secops__tile-label eyebrow">{{ t('security.tiles.anomalous') }}</span>
             <span class="sc-secops__tile-value">{{ suspiciousCount() | number }}</span>

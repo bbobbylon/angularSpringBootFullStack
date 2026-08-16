@@ -32,7 +32,7 @@ interface TrendPoint {
   label: string;
   customers: number;
   revenue: number;
-  /** 0–100 normalised X position for the SVG viewBox. */
+  /** 0–100 normalized X position for the SVG viewBox. */
   x: number;
   /** SVG Y position for customer line (viewBox height = 60, chart from y=5 to y=55). */
   custY: number;
@@ -78,11 +78,11 @@ interface ServiceUtil {
  * Charts rendered here:
  * <ul>
  *   <li>SVG dual-area line chart — monthly customer acquisitions overlaid with
- *       monthly revenue (each series independently normalised so neither flattens
+ *       monthly revenue (each series independently normalized so neither flattens
  *       the other).</li>
  *   <li>Stacked monthly invoice-status bars — PAID / PENDING / OVERDUE per month,
  *       showing collection momentum over time.</li>
- *   <li>Service utilisation horizontal bars — which service lines generate the
+ *   <li>Service utilization horizontal bars — which service lines generate the
  *       most invoice events.</li>
  *   <li>KPI scorecards — month-over-month customer and revenue growth rates,
  *       collection rate, and pending pipeline value.</li>
@@ -110,6 +110,9 @@ export class AnalyticsComponent implements OnInit {
   readonly invoicesState = signal<GlobalStateInterface<CustomHttpResponseInterface<InvoiceListDataInterface>>>({
     dataState: DataState.LOADING,
   });
+
+  /** True while {@link emailReport} is in flight — disables the button and swaps its label. */
+  readonly isEmailingReport = signal(false);
 
   readonly user = computed<UserInterface | undefined>(
     () => this.customersState().appData?.data?.user,
@@ -384,7 +387,7 @@ export class AnalyticsComponent implements OnInit {
       .map(([label, count], i) => ({ label, count, pct: (count / total) * 100, color: colors[i % colors.length] }));
   });
 
-  // ── Service utilisation ───────────────────────────────────────────────────
+  // ── Service utilization ───────────────────────────────────────────────────
 
   readonly serviceUtil = computed<ServiceUtil[]>(() => {
     const svcMap = new Map<string, { count: number; total: number }>();
@@ -440,6 +443,32 @@ export class AnalyticsComponent implements OnInit {
 
   onChartLeave(): void {
     this.hoveredTrendIdx.set(null);
+  }
+
+  /**
+   * Emails the signed-in administrator their own report digest — the "Email me this report"
+   * button (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report emails"). Mirrors
+   * {@code InvoiceDetailComponent.emailInvoice} exactly: guarded by the in-flight signal against
+   * double-clicks, and success/failure both surface through {@link NotificationsService} rather
+   * than any local state this component would otherwise need to render.
+   */
+  protected emailReport(): void {
+    if (this.isEmailingReport()) return;
+    this.isEmailingReport.set(true);
+
+    this.analytics
+      .emailReport$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isEmailingReport.set(false);
+          this.notification.onSuccess(response.message ?? 'Report emailed.');
+        },
+        error: (error: Error) => {
+          this.isEmailingReport.set(false);
+          this.notification.onError(error.message);
+        },
+      });
   }
 
   ngOnInit(): void {

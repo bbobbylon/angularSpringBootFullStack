@@ -1,7 +1,7 @@
 # Post-Submission Upgrades
 
 **Version:** 1.0
-**Last Updated:** 2026-08-15
+**Last Updated:** 2026-08-16
 **Status:** Living — tracks work built *after* the Master's course submission.
 
 ## Overview
@@ -43,11 +43,11 @@ Tracked in the order they're being picked up.
 | 3 | Backend HTTP caching | FUTURE-ENHANCEMENTS.md §3.4 | ✅ |
 | 4 | API testing suite (Postman/Bruno/cURL) | FUTURE-ENHANCEMENTS.md §3.4 | ✅ |
 | 5 | Structured logging + metrics | FUTURE-ENHANCEMENTS.md §3.4 | ✅ |
-| 6 | Scheduled/on-demand report & metrics emails | FUTURE-ENHANCEMENTS.md §3.3 | ⬜ |
-| 7 | Email invoices/documents as PDF attachments | FUTURE-ENHANCEMENTS.md §3.3 | ⬜ |
+| 6 | Scheduled/on-demand report & metrics emails | FUTURE-ENHANCEMENTS.md §3.3 | ✅ |
+| 7 | Email invoices/documents as PDF attachments | FUTURE-ENHANCEMENTS.md §3.3 | ✅ |
 | 8 | Batch upload for customers/invoices (P2-2) | FUTURE-ENHANCEMENTS.md §3.3 | ⬜ |
 | 9 | Filter-chain integration tests | FUTURE-ENHANCEMENTS.md §5 | ⬜ |
-| 10 | Flag infra-only items needing manual/AWS action | FUTURE-ENHANCEMENTS.md | ⬜ |
+| 10 | Flag infra-only items needing manual/AWS action | FUTURE-ENHANCEMENTS.md | ✅ |
 | 11 | Admin User Directory sorting (JDBC) | FUTURE-ENHANCEMENTS.md §3.3 | ✅ |
 | 12 | Live QA pass — UI regressions found & fixed | — | ✅ |
 | — | Role CRUD | FUTURE-ENHANCEMENTS.md §3.2 | ⬜ Deferred — needs a decision on which tier may CRUD the role catalog before work starts |
@@ -343,6 +343,23 @@ attempt and confirming valid `{"@timestamp":...,"level":"INFO","logger_name":"..
 before tearing it down — the deployed CloudWatch pipeline itself can only be confirmed after an
 actual deploy, which is outside what local verification can reach.
 
+### 10. Flag infra-only items needing manual/AWS action (2026-08-15)
+
+**What/why.** The backlog mixes two fundamentally different kinds of "not done": things a pull
+request can close, and things that need someone with AWS console access to flip a toggle or click
+through a wizard. Nothing distinguished them, so an infra-only line could sit looking exactly like
+idle code-workable backlog.
+
+**How.** Audited `FUTURE-ENHANCEMENTS.md` for lines matching that shape. Found one live case: §2.5
+"Turn on cost visibility" (Cost Explorer + billing alerts, both off in the AWS account) — genuinely
+zero code involved, purely `AWS Billing console → Cost Explorer → Enable` plus a CloudWatch alarm/SNS
+topic. Marked it with a `🔧` prefix and an explicit one-line note explaining the marker, rather than
+inventing a new severity/priority scheme for one row. Everything else that looked infra-adjacent at a
+glance turned out to already be closed narrative (the ALB/CloudFront/domain HTTPS story in §6.8 is
+fully ✅ and retrospective, not open backlog) or to require real code changes alongside the AWS side
+(§2.4's move off in-heap state needs `bucket4j-redis` wiring, not just an AWS setting) — so it was
+left untagged rather than force-fit into a category it doesn't belong in.
+
 ### 11. Admin User Directory sorting — JDBC (2026-08-14)
 
 The admin User Directory (`/users`) is now sortable by clicking the Name or Email column header,
@@ -423,3 +440,87 @@ Service" links route correctly to `/services/manage`. Live-checked the demo admi
 account. No code change made; most likely explanation is landing on the read-only public `/services`
 catalog rather than `/services/manage`, though a permissions gap specific to a different, non-seed
 account was not ruled out.
+
+### 7. PDF invoice attachments (2026-08-16)
+
+**What/why.** The invoice screen's existing "Export PDF" button is entirely client-side (jsPDF,
+DOM-to-canvas) — fine for a local printout, useless as an email attachment since there's no
+server-side artifact to hand to `MimeMessageHelper`. Rather than trying to ship a browser-rendered
+blob back to the server, the fix generates the PDF server-side, mirroring the existing
+`report/InvoiceReport.java` (Apache POI/XLSX) pattern with a new `report/InvoicePdfReport.java` built
+on `com.github.librepdf:openpdf` (pinned to `1.3.30` — a permissive LGPL/MPL library, deliberately not
+iText, which is AGPL and unsuitable for a dependency shipped in the built jar). The existing
+client-side "Export PDF" button was left untouched; the new server render is a second, independent
+path that exists specifically because emailing needs bytes to attach.
+
+**How.** Two new endpoints on `CustomerController`, both reusing the existing `requireInScope()`
+org-scoping helper exactly like `getInvoice`/`exportInvoiceReport` already do:
+- `GET /customer/invoice/{invoiceId}/download/pdf` — direct download, same
+  `ResponseEntity<Resource>` shape as the existing XLSX export. No `@PreAuthorize` beyond
+  `requireInScope()`, matching the sibling read endpoints' existing pattern (neither `getInvoice` nor
+  `exportInvoiceReport` carries one either — the broader `SecurityConfig` matcher plus org-scoping is
+  the established gate for invoice reads in this controller, not a fresh gap).
+- `POST /customer/invoice/{invoiceId}/email` — `@PreAuthorize("hasAnyAuthority('UPDATE:CUSTOMER',
+  'UPDATE:USER')")`, the same authority `updateInvoice` requires, on the reasoning that emailing a
+  customer their invoice is at least as consequential as editing it. Refuses with 400 for a draft
+  invoice (no linked customer, so no address to send to) rather than silently no-op'ing.
+
+`EmailService` gained `sendInvoiceEmail(...)`, implemented via a new private `sendWithAttachment`
+helper in `EmailServiceImpl` (kept separate from the existing `send`/`sendWithReplyTo` chain so the
+three already-tested public methods' code path stays untouched) — same `EmailTemplate` branded-HTML
++ multipart pattern as every other email this app sends, plus `MimeMessageHelper#addAttachment` for
+the PDF bytes. New `capability.emailInvoices` message key added to all 6 `messages*.properties`
+locales; frontend gets a new "Email Invoice" button next to the untouched "Export PDF" one, wired to
+`customerService.emailInvoice$(invoiceId)`.
+
+**Deliberate deviation from the fire-and-forget norm.** Every other outbound email in this app
+(verification, step-up codes, security alerts) goes through `NotificationServiceImpl`'s
+`CompletableFuture.runAsync` wrapper — the caller never waits and never learns whether the send
+succeeded. `emailInvoice` calls `EmailService` synchronously instead: a manual "Email Invoice" button
+click is exactly the case where an optimistic 200 regardless of outcome would be actively misleading
+— the user needs a truthful pass/fail signal, not a toast that lies if the SMTP call fails.
+
+**Testing.** New `InvoicePdfReportTest` (non-empty `%PDF-` output for both a normal and a
+draft/no-customer invoice) and `EmailServiceImplTest` (asserts the attachment, recipient, and subject
+on a mocked `JavaMailSender`) — `./mvnw test -Dtest=InvoicePdfReportTest,EmailServiceImplTest` →
+`Tests run: 3, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
+
+### 6. Scheduled/on-demand report digest emails (2026-08-16)
+
+**What/why.** `SecurityDashboardServiceImpl` and `AnalyticsController` already render live
+business + security figures for the Security Center and Billing dashboards, but an administrator
+who wants a periodic snapshot — or a one-off "email me this view" — had to stay logged in and look.
+The fix reuses those same two data sources (`CustomerService#getStats`/`getStatsForOrganizations`
+and `SecurityDashboardService#getOverview`) rather than opening a second query path: a "digest" is
+just those figures rendered into `EmailTemplate` instead of onto a dashboard tile.
+
+**How.** New `ReportDigestService`/`ReportDigestServiceImpl` owns exactly one thing — build the
+`Stats` + `SecurityOverview` pair for one resolved scope and hand it to
+`EmailService#sendReportDigestEmail` — so the manual and scheduled routes below share one code path
+instead of two independently-maintained copies:
+- **Manual.** `POST /admin/analytics/report/email` (new `AnalyticsController#emailReport`) resolves
+  the caller's own scope via the controller's existing `resolveScope()` and emails exactly one
+  digest to the caller, synchronously — like `CustomerController#emailInvoice`, a button click is
+  exactly the case where the user needs a truthful pass/fail signal, not an async fire-and-forget.
+- **Scheduled.** New `SchedulingConfig` (`@EnableScheduling` lives here, not on the application
+  class, since nothing else in this codebase runs on a timer) fires `report.digest.cron` (default
+  Monday 06:00 server time, env `REPORT_DIGEST_CRON`) and sends one digest per active organization
+  — new `OrganizationService#findActiveOrganizations`/`findOrganizationAdminEmails`, projected
+  through the new minimal `OrganizationSummary(id, name)` record — to that organization's
+  `ROLE_ORGANIZATION_ADMIN`s, then one system-wide digest to every `ROLE_ADMIN`/
+  `ROLE_APPLICATION_ADMIN` (new `UserService#findSystemAdminEmails`) plus any addresses configured
+  in `REPORT_ADMIN_EXTRA_RECIPIENTS`. Per-recipient send failures are caught and logged inside
+  `ReportDigestServiceImpl` (not `SchedulingConfig`) so one bad address can't stop the remaining
+  organizations, or the system-wide digest that follows, from going out.
+
+Same empty-scope-means-zeros rule `AnalyticsController#resolveScope`/
+`SecurityDashboardServiceImpl#getOverview` already established for FR-ORG-2 applies here too: an
+administrator (or organization) with no active membership gets a digest showing zeros, not a
+silent fallback to the system-wide numbers.
+
+**Testing.** New `ReportDigestServiceImplTest` (manual/org/system-wide digest composition, the
+empty-scope-means-zeros branch, and per-recipient failure isolation) plus a new
+`sendReportDigestEmail_composesDigestForRecipient` case in `EmailServiceImplTest` —
+`./mvnw test -Dtest=ReportDigestServiceImplTest,EmailServiceImplTest,InvoicePdfReportTest,AnalyticsControllerSecurityTest`
+→ `Tests run: 17, Failures: 0, Errors: 0`, `BUILD SUCCESS`. Full backend regression run
+(`./mvnw test`, no filter): `Tests run: 303, Failures: 0, Errors: 0` across all 46 suites.
