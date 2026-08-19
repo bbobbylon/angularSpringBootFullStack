@@ -1,5 +1,9 @@
 # GCP Deployment (Cloud Run)
 
+**Version:** 1.1
+**Last Updated:** 2026-08-19
+**Status:** Reference — the GCP analog of [`../aws/README.md`](../aws/README.md). AWS is the live deployment; this path is built and deployable but not what production runs on.
+
 Deploy TesseraApp to **Google Cloud Run** — serverless containers, the GCP analog of the
 AWS ECS setup in [`../aws/`](../aws/). This reuses the same multi-stage [`Dockerfile`](../Dockerfile)
 (Angular compiled into the Spring Boot JAR) and, by default, the same **Aiven** MySQL database
@@ -68,9 +72,19 @@ gcloud builds submit --config gcp/cloudbuild.yaml \
 ```bash
 IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/tessera-app/tessera-app:latest"
 gcloud builds submit --tag "$IMAGE" .        # or: docker build + docker push
-gcloud run deploy tessera-app --image "$IMAGE" --region "$GCP_REGION" --source-does-not-apply
+gcloud run deploy tessera-app \
+  --image "$IMAGE" --region "$GCP_REGION" \
+  --platform managed --port 8080 --allow-unauthenticated
 ```
-(The GitHub Actions workflow and `cloudbuild.yaml` show the full `gcloud run deploy` flags — env vars + `--set-secrets`.)
+> `--image` and `--source` are mutually exclusive: passing `--image` is what makes this a
+> deploy-a-prebuilt-image call rather than a build-from-source one. `--port 8080` must match the
+> `EXPOSE`/`HEALTHCHECK` baked into the Dockerfile — see
+> [GUIDE.md §11.2](../documentation/GUIDE.md#112-the-image).
+
+This bare form deploys the image but carries **no environment variables and no secrets**, so the app
+will fail fast on the `prod` profile's first missing placeholder — by design. The GitHub Actions
+workflow and `cloudbuild.yaml` show the full flag set (`--set-env-vars` + `--set-secrets`); copy it
+from there rather than hand-assembling one.
 
 ---
 
@@ -80,9 +94,30 @@ gcloud run deploy tessera-app --image "$IMAGE" --region "$GCP_REGION" --source-d
 AWS ECS deploy does. Non-sensitive Aiven config (host/port/db/user) is passed as **env vars**; only the
 **password** lives in Secret Manager. No VPC connector is needed because Aiven is publicly reachable.
 
+
 **Later: Cloud SQL** — run `./gcp/cloudsql-setup.sh` to provision a managed MySQL instance, migrate `db3`
-into it (same `mysqldump` flow as [GUIDE.md §9.7](../documentation/GUIDE.md#9-database)),
+into it (same `mysqldump` flow as [GUIDE.md §9.7](../documentation/GUIDE.md#97-which-mysql-server)),
 and add the Cloud Run `--add-cloudsql-instances` connection. Boilerplate is included but commented off.
+
+---
+
+## ⚠ Known gap — the proxy variables are not set on this path
+
+**Cloud Run is a reverse proxy in front of your container, exactly like the ALB is on AWS** — but
+unlike `aws/task-definition.json`, **`deploy-gcp.yml` sets none of the three proxy variables today**
+(verified 2026-08-19). Deployed as-is, three controls are wrong and two of them fail *silently*:
+
+| Variable | Needs to be | Left unset (default) |
+|---|---|---|
+| `TRUSTED_PROXY_COUNT` | `1` — Cloud Run's own front end is the single hop; add one more per CDN/LB you put ahead of it | `0`. `RequestUtils.getIpAddress` returns the front end's address for **everyone**, so the rate limiter collapses every caller into one bucket and the anomaly detector's `NEW_NETWORK` signal can never fire. Step-up verification looks present and does nothing |
+| `FORWARD_HEADERS_STRATEGY` | `framework` | `none`. `{baseUrl}` in the OAuth2 redirect template resolves to the container's own address, so every federated sign-in dies on `redirect_uri_mismatch` |
+| `OAUTH2_REDIRECT_BASE_URL` | the public Cloud Run origin | unset — derived from request headers, which is only correct when nothing rewrites `X-Forwarded-Proto` |
+
+Add all three to the `--set-env-vars` list in
+[`deploy-gcp.yml`](../.github/workflows/deploy-gcp.yml) before treating this path as production-ready.
+Confirm from the boot log line `[NET] trusted-proxy-count=…`. Full rationale:
+[GUIDE.md §3.2](../documentation/GUIDE.md#32-environment-variable-reference) and
+[§7.8](../documentation/GUIDE.md#78-deployment-parity).
 
 ---
 

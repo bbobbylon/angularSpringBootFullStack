@@ -475,7 +475,7 @@
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{\n  \"name\": \"Postman Test\",\n  \"email\": \"postman.test@example.com\",\n  \"subject\": \"Smoke test\",\n  \"message\": \"Sent by the Postman collection — safe to ignore.\"\n}" },
-            "url": "{{baseUrl}}/contact",
+            "url": "{{baseUrl}}/contact/send",
             "description": "Public. Sends a REAL notification via NotificationService — think before mashing Send repeatedly."
           }
         }

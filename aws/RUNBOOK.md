@@ -1,7 +1,7 @@
 # TesseraApp — AWS Deploy Runbook
 
-**Version:** 1.1
-**Last Updated:** 2026-08-08
+**Version:** 1.2
+**Last Updated:** 2026-08-19
 **Status:** Final
 **Audience:** anyone who needs to deploy or redeploy this app to AWS without asking the person who built it.
 
@@ -70,7 +70,7 @@ The deployment is live. These are the real, current values — you do not need t
 | **Public app URL** | **`https://tesseraapp.dev`** — use this one. Also reachable at `https://d3911jyxcju4q4.cloudfront.net` (identical backend, same distribution) — but GitHub login only works on `tesseraapp.dev` now, see [Part F](#part-f--known-limitations-right-now). WebAuthn/passkeys and Google/Microsoft login work on either, since both are HTTPS. |
 | Domain registrar | Porkbun, `tesseraapp.dev`, registered 2026-08-08, $8.75/yr |
 | ACM certificate (domain) | `us-east-1`, covers `tesseraapp.dev` + `www.tesseraapp.dev` |
-| CloudFront distribution | `E1WWY6FHSKI84P` (created by [`setup-cloudfront.sh`](setup-cloudfront.sh); domain added per [B1.6](#b16-point-a-real-domain-at-cloudfront-optional--once-you-own-one)) |
+| CloudFront distribution | `E1WWY6FHSKI84P` (created by [`setup-cloudfront.sh`](setup-cloudfront.sh); domain added per [B1.6](#b16-point-a-real-domain-at-cloudfront-done--tesseraappdev-2026-08-08)) |
 | ALB DNS (origin behind CloudFront, plain HTTP, not the public URL) | `http://tessera-app-alb-1750339159.us-east-1.elb.amazonaws.com` |
 | Region | `us-east-1` |
 | ECS cluster | `tessera-app-cluster` |
@@ -437,7 +437,8 @@ Both are already in `aws/task-definition.json`. Confirm they survived into the r
 | Variable | Value | What breaks at the default |
 |---|---|---|
 | `FORWARD_HEADERS_STRATEGY` | `framework` | `{baseUrl}` in the OAuth2 redirect-uri template resolves to the container's own `http://<task-ip>:8080`. Every federated sign-in dies on `redirect_uri_mismatch` while working perfectly on localhost. |
-| `TRUSTED_PROXY_COUNT` | `1` | `X-Forwarded-For` is ignored and every user appears to be the load balancer. The rate limiter throttles the whole tenant as one caller, and the anomaly detector's `NEW_NETWORK` signal can never fire — so step-up looks present and does nothing. |
+| `OAUTH2_REDIRECT_BASE_URL` | the public `https://` origin | `framework` alone is **not enough** behind CloudFront: the ALB overwrites `X-Forwarded-Proto` with its own non-TLS listener protocol, so Spring builds `redirect_uri=http://…` and Google and Entra reject it outright (verified live 2026-08-04). This pins the origin instead of deriving it. |
+| `TRUSTED_PROXY_COUNT` | **`2`** today — CloudFront → ALB, both appending to `X-Forwarded-For`. `1` only if CloudFront is removed | `X-Forwarded-For` is ignored and every user appears to be the load balancer. The rate limiter throttles the whole tenant as one caller, and the anomaly detector's `NEW_NETWORK` signal can never fire — so step-up looks present and does nothing. Padding the number is the opposite failure: an attacker-supplied header entry becomes trusted. Confirm with the `[NET] trusted-proxy-count=` line in the boot log. |
 
 ---
 
@@ -1203,11 +1204,17 @@ Set in `aws/task-definition.json`. Plain values are in `environment`; the rest a
 | `UI_APP_URL` | env | the app's public origin, **no trailing slash** — drives email links, the prod CORS default, **and** the WebAuthn relying-party id/origin for passkeys (host and full URL respectively). No separate config needed for passkeys to work in prod; `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN` exist as overrides only, for a future split-origin deployment |
 | `IMAGE_STORAGE_TYPE` | env | `s3` |
 | `AWS_S3_BUCKET` / `AWS_REGION` | env | `tessera-app-images` / `us-east-1` |
-| `FORWARD_HEADERS_STRATEGY` | env | `framework` — see C3 |
-| `TRUSTED_PROXY_COUNT` | env | `1` — see C3 |
+| `FORWARD_HEADERS_STRATEGY` | env | `framework` — see C3. **Necessary but not sufficient** behind CloudFront: the ALB overwrites `X-Forwarded-Proto` with its own (non-TLS) listener protocol, so the derived redirect URI comes out `http://` and providers reject it. That is what the next row fixes |
+| `OAUTH2_REDIRECT_BASE_URL` | env | `${APP_DOMAIN}` — pins the OAuth redirect origin instead of deriving it from a header the app does not control. Applied to all three provider registrations so they cannot drift apart. Leave it unset locally, where the request-derived value is correct |
+| `TRUSTED_PROXY_COUNT` | env | **`2`** — see C3. CloudFront → ALB, both of which append to `X-Forwarded-For`. Drop it to `1` only if CloudFront is removed. **At `0` two security controls die silently**: every caller collapses into one rate-limit bucket, and the anomaly detector's `NEW_NETWORK` signal can never fire. Setting it *too high* is equally wrong — an attacker-supplied header entry becomes trusted. Match the real topology; confirm via the `[NET] trusted-proxy-count=` line in the boot log |
+| `MYSQL_SSL_MODE` | env *(optional)* | Unset is correct — the `prod` profile already pins `VERIFY_IDENTITY`, which authenticates the server against the Aiven CA baked into the image's truststore at build time. Only set this if you override the whole URL with `SPRING_DATASOURCE_URL`, which bypasses the profile value entirely |
+| `INTERNAL_DOMAINS` | env *(optional)* | Comma-separated email domains that read `INTERNAL` on the admin Users pages. Blank/unset means every non-federated account reads `EXTERNAL` |
+| `REPORT_DIGEST_CRON` / `REPORT_ADMIN_EXTRA_RECIPIENTS` | env *(optional)* | Weekly report digest schedule (Spring six-field cron, default Monday 06:00 **server time** — the container runs UTC) and any extra addresses CC'd on the system-wide digest. The on-demand "Email me this report" button needs neither |
+| `ANOMALY_DETECTION_ENABLED` / `ANOMALY_HISTORY_LIMIT` | env *(optional)* | Fallback defaults only — an admin edit in `/security-overview` writes a database override that wins over both, live, with no redeploy |
+| `EXPOSE_ERROR_DETAILS` | env *(optional)* | Do **not** set it here. The `prod` profile already forces `false`; setting `true` would ship internal exception text to clients |
 | `MICROSOFT_TENANT_ID` | env | `common` (not sensitive) |
 | `LOG_LEVEL_APP` / `LOG_LEVEL_SECURITY` / `LOG_LEVEL_WEB` / `LOG_LEVEL_HIBERNATE` | env | All `INFO`. Raise one to `DEBUG` to diagnose, then put it back — see [H6](#h6-turning-verbosity-up-on-a-deployed-task) |
-| `DEBUG_REPORT` | env | `false`. `true` prints the auto-configuration report at startup — see [H6](#h6-turning-verbosity-up-on-a-deployed-task) |
+| `DEBUG_REPORT` | env | Should be **`false`**. `true` prints the ~930-line auto-configuration report at startup — but Spring's debug mode also flips a selection of core loggers to `DEBUG`, **Hibernate among them**, which reopens the `org.hibernate.SQL` query-text disclosure that the prod profile's `show-sql: false` exists to close (measured: 546 statements in one 15-minute browsing window, ~390 MB/month). See [H6](#h6-turning-verbosity-up-on-a-deployed-task).<br>⚠ **The committed `task-definition.json` template currently sets `true`.** The live task was reverted to `false` in revision 11 on 2026-08-02; the template was never updated to match. Check the value before you register a new revision from it |
 | `LOG_RETENTION_DAYS` | `setup.sh` only | `7`. Not read by the app; consumed by `setup.sh` when it sets CloudWatch retention — see [H5](#h5-free-tier--the-two-things-that-actually-cost) |
 | `JWT_SECRET` | secret | `openssl rand -base64 48` |
 | `MYSQL_PASSWORD` | secret | Aiven password |

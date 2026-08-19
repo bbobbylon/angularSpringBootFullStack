@@ -1,7 +1,7 @@
 # TesseraApp — The Guide
 
-**Version:** 1.0
-**Last Updated:** 2026-08-02
+**Version:** 1.1
+**Last Updated:** 2026-08-19
 **Status:** Living — the single operational reference for this project.
 
 ## Overview
@@ -126,15 +126,15 @@ Base package `com.bob.angularspringbootfullstack`, one package per responsibilit
 | `form/` | Request bodies, `@Valid`-annotated |
 | `enumeration/` | `EventType`, `RoleType`, … |
 | `event/` + `listener/` | `NewUserEvent` → `NewUserEventListener` (the single audit sink) |
-| `exception/` | `ApiException`, two `@RestControllerAdvice` classes, `ErrorDetailScrubber` |
-| `handler/` | 401 entry point, 403 access-denied, OAuth2 success |
-| `filter/` | `RateLimitFilter`, `CustomAuthFilter` |
-| `configuration/` | `SecurityConfig`, `OAuth2ClientConfig`, `AwsS3Config`, `WebMvcConfig` |
+| `exception/` | `ApiException`, two `@RestControllerAdvice` classes (`GlobalExceptionHandler`, `HandleException`), `ErrorDetailScrubber` |
+| `handler/` | `CustomAuthenticationEntryPoint` (401), `CustomAccessDeniedHandler` (403), `OAuth2LoginSuccessHandler` |
+| `filter/` | `RateLimitFilter`, `CustomAuthFilter`, `HttpCacheHeadersFilter` (ETag/`Cache-Control` on data GETs — [§6.3](#63-interceptors-and-caching)) |
+| `configuration/` | `SecurityConfig`, `OAuth2ClientConfig`, `FederatedProviderCatalog`, `TrustedProxyConfigurer`, `JwtSecretGuard`, `SchedulingConfig` (the weekly report digest), `JacksonConfig`, `AwsS3Config`, `WebMvcConfig` |
 | `tokenprovider/` | `TokenProvider` — mint and verify |
-| `utils/` | `RequestUtils`, `TotpUtils`, `SMSUtils`, `ExceptionUtils`, `BrowserErrorPage`, `AuthDiagnosticsLogger` |
-| `constants/` | `Constants` (token lifetimes, `PUBLIC_URLS`/`PUBLIC_ROUTES`), `CapabilityCatalog` |
+| `utils/` | `RequestUtils`, `TotpUtils`, `SMSUtils`, `TwilioVerifyUtils`, `VoiceUtils`, `SortUtils`, `UserTypeResolver`, `UserUtils`, `EmailTemplate`, `ExceptionUtils`, `BrowserErrorPage`, `AuthDiagnosticsLogger` |
+| `constants/` | `Constants` (token lifetimes, `PUBLIC_URLS`/`PUBLIC_ROUTES`), `CapabilityCatalog`, `PasswordPolicy`, `PhonePolicy` ([§7.12](#712-input-validation-policies)) |
 | `seed/` | `DemoDataSeeder` — dev profile only |
-| `report/` | XLSX export |
+| `report/` | `CustomerReport` / `InvoiceReport` (XLSX, Apache POI) and `InvoicePdfReport` (PDF, OpenPDF) |
 
 ---
 
@@ -308,7 +308,9 @@ Defaults shown are the **`dev`-profile fallbacks**. Under `prod` there are **no 
 | `MYSQL_DATABASE` | Schema name | `db2` |
 | `MYSQL_USERNAME` / `MYSQL_PASSWORD` | Credentials | `root` / `password` |
 | `MYSQL_ROOT_PASSWORD` | Root password for the **Docker** container | *(required for Docker)* |
-| `SPRING_DATASOURCE_URL` | Full JDBC URL — **overrides** the assembled one | *(unset)* |
+| `MYSQL_SSL_MODE` | `sslMode` in the assembled URL | `PREFERRED` in base; `VERIFY_IDENTITY` on `prod`, `REQUIRED` on `qa`/`stage` |
+| `MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL` | `allowPublicKeyRetrieval` in the assembled URL | `true` in base; forced `false` on `prod`/`qa`/`stage` |
+| `SPRING_DATASOURCE_URL` | Full JDBC URL — **overrides** the assembled one, and therefore **bypasses both settings above**; spell `sslMode` out in it explicitly | *(unset)* |
 | `SPRING_DATASOURCE_USERNAME` / `_PASSWORD` | Override credentials | *(unset)* |
 
 **Runtime**
@@ -319,7 +321,8 @@ Defaults shown are the **`dev`-profile fallbacks**. Under `prod` there are **no 
 | `CONTAINER_PORT` | Port Spring Boot listens on | `8080` |
 | `APP_PORT` | Host port mapped to the container | `8090` |
 | `SHOW_SQL` | JPA SQL logging | `false` |
-| `LOG_LEVEL_*` / `DEBUG_REPORT` | CloudWatch log verbosity knobs | see [§11.6](#116-logging) |
+| `EXPOSE_ERROR_DETAILS` | Backs `app.error.expose-details` — whether `devMessage`/`path` reach the client | `true`; **`false` on `prod`** ([§7.7](#77-401-vs-403-and-error-handling)) |
+| `LOG_LEVEL_ROOT` / `_APP` / `_SECURITY` / `_WEB` / `_SQL` / `_HIBERNATE`, `DEBUG_REPORT` | CloudWatch log verbosity knobs | `INFO` / `false` — see [§11.6](#116-logging) |
 
 **Authentication**
 
@@ -345,8 +348,15 @@ emails send for real. The **SMS** path sends for real too once Twilio credential
 | Variable | Purpose | Dev default |
 |---|---|---|
 | `UI_APP_URL` | SPA origin — drives CORS **and** the base of email verification links | `http://localhost:4200` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated `app.cors.allowed-origin-patterns`. Set it **only** when more than one origin must be allowed — otherwise `UI_APP_URL` is the default on `prod`, so there is nothing to keep in sync | dev: the localhost/LAN pattern set; prod: `${UI_APP_URL}` |
 | `IMAGE_STORAGE_TYPE` | `local` \| `s3` | `local` |
 | `IMAGE_STORAGE_PATH` | Directory for local image storage | `~/tesseraapp/images` |
+| `AWS_REGION` | Region for the S3 client | `us-east-1` |
+| `AWS_S3_BUCKET` | Bucket for avatars — **required when `IMAGE_STORAGE_TYPE=s3`** | *(empty)* |
+
+> S3 credentials are **not** env vars here: `DefaultCredentialsProvider` resolves them (env →
+> `~/.aws` → instance/task role). On ECS Fargate, attach a task role carrying `s3:PutObject` +
+> `s3:GetObject` rather than shipping static keys.
 
 > `IMAGE_STORAGE_PATH`'s default lives in the **base** `application.yml`, not `application-dev.yml`,
 > so it applies under `prod` too — a missing value will **not** fail fast. Always set it explicitly
@@ -422,6 +432,23 @@ Redemption mirrors this on `UserRepoImpl.verifyCode`: when the user is phone-2FA
 is configured, the submitted code is checked against Twilio (`TwilioVerifyUtils.checkVerification`)
 rather than the local `twofactorverifications` table, since nothing was ever inserted there for that
 attempt.
+
+**Anomaly detection (optional).** Both have a **live database override** in the pinned-singleton
+`securitysettings` row, editable from `/security-overview`; these env values are only the fallback
+default when the override column is `NULL` ([§7.10](#710-mfa-federation-and-account-security)).
+
+| Variable | Purpose | Dev default |
+|---|---|---|
+| `ANOMALY_DETECTION_ENABLED` | Master switch — `false` reverts login to its pre-risk-engine behaviour | `true` |
+| `ANOMALY_HISTORY_LIMIT` | How many past logins per account the device/network comparison looks back over | `50` |
+
+**Report digests (optional).** Drives the weekly cron in `SchedulingConfig`; the on-demand
+`POST /admin/analytics/report/email` button needs neither variable.
+
+| Variable | Purpose | Dev default |
+|---|---|---|
+| `REPORT_DIGEST_CRON` | Spring cron (**second**-first, six fields) for the weekly run — every active organization's admins get their org digest, then every system administrator gets the system-wide one | `0 0 6 * * MON` (Monday 06:00 server time) |
+| `REPORT_ADMIN_EXTRA_RECIPIENTS` | Comma-separated extra addresses CC'd on the **system-wide** digest — e.g. a shared ops mailbox that is not itself an admin account | *(empty — only the resolved administrators)* |
 
 **User-type badge (optional, admin-only, P2-1):** `INTERNAL_DOMAINS` — comma-separated email
 domains (e.g. `lewisu.edu,tesseraapp.dev`) that read `INTERNAL` on the admin Users pages. Blank/unset
@@ -639,10 +666,10 @@ Conventions that apply to every branch:
 
 | Gate | Command | Notes |
 |---|---|---|
-| Backend tests | `./mvnw clean test` | 126 tests / 23 suites. `contextLoads` needs a live MySQL |
+| Backend tests | `./mvnw clean test` | 312 tests / 46 suites. `contextLoads` needs a live MySQL |
 | Backend package | `./mvnw package` | Builds the jar (Angular is bundled only in the Docker build) |
 | Dependency CVE scan | `./mvnw org.owasp:dependency-check-maven:check` | `failBuildOnCVSS=7`; first run downloads the NVD database |
-| Frontend tests | `npm test` | Vitest + jsdom, 87 specs |
+| Frontend tests | `npm test` | Vitest + jsdom, 90 specs / 9 files |
 | Lint / format | `npm run lint` · `npm run format` | Lint **gates in CI** |
 | Frontend build | `npm run build` | Production build with budgets |
 | End-to-end smoke | `./start.sh`, log in as `eve.admin@tessera.dev` | The fastest "does it still work" check |
@@ -789,13 +816,24 @@ sent to login before the authority check runs.
 | `login`, `register`, `resetpassword`, `verify` | 🔓 none | Auth screens |
 | `verify/account/:key`, `verify/password/:key` | 🔓 none | Email-link landings. **No `/user` prefix** — that would collide with the backend's own endpoint once SPA and API share an origin |
 | `oauth2/callback` | 🔓 none | Federated landing; tokens or an MFA handoff arrive in the fragment |
+| `privacy`, `terms` | 🔓 none | Legal pages — a hard requirement of Twilio's A2P 10DLC registration, not decoration |
+| `contact` | 🔓 none | Contact Us form → `POST /contact/send`. The SPA owns the bare `/contact` path; the API deliberately sits at `/contact/send` so a GET refresh renders the page instead of 500ing on a method mismatch |
+| `features` | 🔓 none | Marketing feature tour, reachable before sign-up |
+| `welcome-passkey` | 🔑 auth | One-time, skippable post-login passkey nudge |
 | `''`, `customers`, `customers/:id`, `invoices`, `invoice/:id/:invoiceNumber` | 🔑 auth | Dashboard and business browsing |
 | `customer/new`, `invoice/new` | 🔑 auth (+ capability gating) | Creation forms |
 | `profile`, `security` | 🔑 auth | Self-service — **plain auth, no admin guard** |
 | `services` | 🔑 auth | Catalog, all authenticated users |
 | `services/manage` | 🔑🛡 admin | Catalog administration (note: `manage`, not `admin`) |
-| `users`, `users/:id`, `roles`, `billing`, `analytics`, `security-overview` | 🔑🛡 admin | Staff surface |
+| `users`, `users/:id`, `roles`, `billing`, `analytics`, `security-overview` | 🔑🛡 admin | Staff surface (`roles` is the roles × permissions matrix) |
 | `**` | — | Redirect to `/` |
+
+> **Every client route also needs a `permitAll` matcher in `SecurityConfig`** once the SPA is served
+> from inside the jar, because security filters run *before* the MVC SPA-fallback — see
+> [§7.4](#74-authorization)'s SPA tiers. `welcome-passkey` is the one route missing from that list:
+> it is authenticated-only, so signed-in users reach it normally, but an unauthenticated hard refresh
+> gets the styled 401 page rather than the SPA's own redirect to `/login`
+> ([FUTURE-ENHANCEMENTS §3.5](FUTURE-ENHANCEMENTS.md#35-public-facing--marketing-surface)).
 
 | Guard | Allows | Denies |
 |---|---|---|
@@ -892,12 +930,19 @@ prefers the server's `error.error.reason`.
 | `UserService` | Auth, self-service, MFA, sessions, federation; the `localStorage` token side-effects and the JWT decode/expiry (memoized). `refreshToken$()` and `updatePassword$()` rewrite **both** tokens |
 | `AdminUserService` | `/admin/user/**` — kept **separate from `UserService`** so admin-on-other-user operations never share a code path with self-service |
 | `AnalyticsService` | `/admin/analytics/**` — the admin-gated reporting surface |
-| `CustomerService` | Customers, invoices, XLSX downloads |
-| `SecurityDashboardService` | `/admin/security/overview` |
+| `CustomerService` | Customers, invoices, XLSX/PDF downloads, invoice emailing |
+| `ServicesCatalogService` | `/admin/services/**` plus the public `GET /services/public` used by the marketing pages |
+| `SecurityDashboardService` | `/admin/security/overview` and the anomaly-settings overrides |
+| `CurrentUserService` | Fetches `/user/profile` **once** and shares it as a signal, so N navbar instances do not each hit the network. Exists because the backend cache always revalidates and so no longer deduplicates concurrent identical GETs — see [§6.3](#63-interceptors-and-caching) |
+| `ContactService` | `POST /contact/send` for the public Contact Us form — the one service that calls an endpoint needing no token |
 | `ThemeService` | Dark/light as a signal, mirrored to `data-bs-theme`. The pre-paint value is set by an inline script in `index.html` to avoid a flash; the service re-asserts it |
 | `LanguageService` | Active locale, mirroring `ThemeService` |
 | `NotificationsService` | Thin facade over `ngx-toastr` so the library can be swapped in one place |
 | `CommandPaletteService` | The registry of navigable destinations with labels, icons and required authorities |
+
+`transloco-loader.ts` sits in the same folder but is a Transloco `TranslocoLoader` implementation
+rather than an injectable feature service — it fetches `public/assets/i18n/{lang}.json`
+([§6.6](#66-internationalization)).
 
 ### 6.6 Internationalization
 
@@ -1029,22 +1074,52 @@ A user has exactly one role; its comma-separated `permission` string becomes
 
 | # | Matcher | Requirement |
 |---|---|---|
-| 1 | `POST /user/register`, `POST /user/login`, `/actuator/**`, `PUBLIC_URLS` | `permitAll` |
-| 2 | `DELETE /user/delete/**` | `DELETE:USER` |
-| 3 | `DELETE /customer/delete/**` | `DELETE:CUSTOMER` |
-| 4 | `PATCH /admin/user/*/role/**` | `UPDATE:ROLE` |
-| 5 | `PATCH /admin/user/*/settings` | `UPDATE:USER` |
-| 6 | `/admin/**` | `UPDATE:USER` **or** `UPDATE:ROLE` |
-| 7 | `/user/totp/**`, `/user/webauthn/**`, `/user/sessions/**` | `authenticated` (self-service) |
-| 8 | `GET /**` | `READ:USER` **or** `READ:CUSTOMER` |
-| 9 | `POST /**` | `UPDATE:USER` **or** `UPDATE:CUSTOMER` |
-| 10 | `PUT /**` | `UPDATE:USER`, `UPDATE:CUSTOMER`, **or** `UPDATE:ROLE` |
-| 11 | anything else | `authenticated` |
+| 1 | `POST /user/register`, `POST /user/login` | `permitAll` |
+| 2 | `/actuator/health`, `/actuator/health/**`, `/actuator/info` | `permitAll` |
+| 3 | `/actuator/**` (everything else, incl. `/actuator/metrics`) | `UPDATE:USER` **or** `UPDATE:ROLE` |
+| 4 | `Constants.PUBLIC_URLS` | `permitAll` |
+| 5 | `DELETE /user/delete/**` | `DELETE:USER` |
+| 6 | `DELETE /customer/delete/**` | `DELETE:CUSTOMER` |
+| 7 | `PATCH /admin/user/*/role/**` | `UPDATE:ROLE` |
+| 8 | `PATCH /admin/user/*/settings` | `UPDATE:USER` |
+| 9 | `PATCH /admin/user/*/update` | `UPDATE:USER` |
+| 10 | `/admin/**` | `UPDATE:USER` **or** `UPDATE:ROLE` |
+| 11 | `/user/totp/**`, `/user/webauthn/**`, `/user/sessions/**` | `authenticated` (self-service) |
+| 12 | `GET`/`HEAD` on the SPA shell — `/`, `/index.html`, `/favicon.ico`, `/manifest.webmanifest`, root-level `/*.js`·`/*.css`·image·font·`/*.map`, `/assets/**`, `/media/**` | `permitAll` |
+| 13 | `GET`/`HEAD` on every Angular client route — `/login`, `/verify/**`, `/resetpassword`, `/register`, `/customers/**`, `/invoices`, `/invoice/**`, `/profile`, `/security`, `/users/**`, `/roles`, `/billing`, `/services`, `/services/manage`, `/analytics`, `/security-overview`, `/privacy`, `/terms`, `/contact`, `/features` | `permitAll` |
+| 14 | `GET /**` | `READ:USER` **or** `READ:CUSTOMER` |
+| 15 | `POST /**` | `UPDATE:USER` **or** `UPDATE:CUSTOMER` |
+| 16 | `PUT /**` | `UPDATE:USER`, `UPDATE:CUSTOMER`, **or** `UPDATE:ROLE` |
+| 17 | anything else | `authenticated` |
 
-Two ordering subtleties: admin rules (4–6) precede the verb catch-alls so role reassignment truly
-demands `UPDATE:ROLE`; self-service rules (7) precede them so a `ROLE_GUEST` can still manage their
-own TOTP, passkeys, and sessions. `@EnableMethodSecurity` + `@PreAuthorize` repeat the checks at
-method level.
+Ordering subtleties, each one load-bearing:
+
+- **Rules 2–3 are a pair, and the order is the whole point.** `/actuator/**` is *not* blanket-public:
+  only `health` and `info` are, because the ALB and ECS health checks carry no `Authorization`
+  header. `/actuator/metrics` is admin-gated. The specific permit must precede the broad gate.
+- **Admin rules (7–10) precede the verb catch-alls**, so role reassignment truly demands
+  `UPDATE:ROLE` rather than being absorbed by `PATCH`/`POST /**`.
+- **Self-service rules (11) precede them**, so a `ROLE_GUEST` can still manage their own TOTP,
+  passkeys and sessions.
+- **Tiers 12–13 exist only because the SPA is served from inside the jar.** Security filters run
+  *before* MVC dispatch, so a direct navigation to `/login` reaches this chain before
+  `WebMvcConfig`'s SPA fallback can forward it to `index.html`. Without these permits, `GET /**`
+  demands `READ:USER` on the SPA's own JavaScript and no unauthenticated browser can ever load the
+  login page — a chicken-and-egg 401 that **cannot reproduce locally**, where `ng serve` never
+  touches this chain at all.
+- **`HEAD` is permitted everywhere `GET` is.** CloudFront's default cache key ignores the HTTP
+  method, so one `HEAD` from an uptime monitor or crawler falling through to
+  `anyRequest().authenticated()` got a 401 that CloudFront then cached *as the page* and served to
+  real visitors. The live site went blank this way on 2026-08-16.
+- **What makes tier 13 safe is a namespace split, not a whitelist.** The API is singular and
+  namespaced (`/user/**`, `/customer/**`, `/admin/**`); SPA routes are plural or bare
+  (`/customers`, `/services`, `/billing`). Permitting an SPA path therefore cannot expose a
+  controller, because no controller answers there. **Do not add an SPA route under `/user`,
+  `/customer` or `/admin`** — that invariant was breached exactly once, by an email-verification
+  landing page at `/user/verify/{type}/:key`, and the real `@GetMapping` won the moment there was
+  one origin, showing recipients raw JSON. It now lives at `/verify/{type}/:key`.
+
+`@EnableMethodSecurity` + `@PreAuthorize` repeat the checks at method level.
 
 ### 7.5 Roles and capabilities
 
@@ -1237,8 +1312,20 @@ BCrypt's deliberate slowness would buy nothing and would slow every login. Consu
 `UPDATE … SET used_at = NOW() … WHERE used_at IS NULL` whose **affected-row count is the verdict**,
 so two concurrent attempts can never double-spend. Plaintext is shown exactly once.
 
-> ⚠ **There is no "regenerate codes" endpoint.** A fresh batch is minted only by a (re)enrollment
-> confirmation, so replacing a depleted set today means disable-and-re-enroll.
+**Regenerating recovery codes.** `POST /user/totp/recovery-codes/regenerate` replaces the whole
+batch on demand — for the common case where the authenticator itself is fine and only the fallback
+codes have run low or leaked. It requires the same proof of possession as *disable* (a live TOTP or
+recovery code), so a hijacked session alone cannot silently rotate someone's fallbacks out from under
+them, and it audits as `RECOVERY_CODES_REGENERATED` so the trail distinguishes a rotation from a
+re-enrollment. Before this endpoint existed, a fresh batch was minted only by an enrollment
+confirmation, so replacing a depleted set meant disable-and-re-enroll.
+
+**Admin TOTP reset.** `DELETE /admin/user/{id}/totp` force-disables a managed user's authenticator —
+the recovery path for an account that has lost both its authenticator *and* every recovery code, and
+therefore has no live code to present through the self-service disable flow. Trust comes from the
+caller's `UPDATE:USER` authority instead, with the same self-target refusal, organization scope and
+audit-against-the-target convention as the passkey and session revokes. It audits as **`MFA_RESET`,
+not `TOTP_DISABLED`**, precisely so the trail separates administrator action from self-service.
 
 **Passkeys (WebAuthn, fully implemented).** Self-service enrollment under `/user/webauthn/**`
 (`PasskeyController`); login is `/user/verify/webauthn/**` (public — the caller holds no token
@@ -1318,9 +1405,16 @@ Two lists in `Constants.java` must stay in lockstep:
 > `Authorization: Bearer` header from the client makes the filter try — and fail — to parse a token
 > before the request reaches the public controller.
 
-Public surface: registration, login, SMS/TOTP/passkey login completion, account/password
-verification, password reset, token refresh, profile images, OAuth2 routes, and Actuator (`health`
-and `info` only, with `show-details: never`).
+Public surface: registration, login, SMS/TOTP/passkey login completion, verification-code resend,
+account/password verification, password reset, token refresh, profile images, OAuth2 routes, the
+public services catalog (`GET /services/public`), the Contact Us submission (`POST /contact/send`),
+and Actuator (`health` and `info` only, with `show-details: never` — every other `/actuator/**` path
+is admin-gated, see [§7.4](#74-authorization)).
+
+> The SPA's own shell and client routes are permitted separately, by the `GET`/`HEAD` tiers in
+> `SecurityConfig` rather than by these two lists — they are static-asset delivery, not API surface.
+> `/contact` appears in **both** places for different reasons: the wildcard `/contact/**` in
+> `PUBLIC_URLS` covers the API submission, and the bare `/contact` in the SPA tier covers the page.
 
 ### 7.12 Input validation policies
 
@@ -1393,6 +1487,7 @@ from a size the query never used and offer pages that do not exist.
 | POST | `/user/register` | Public | `User { firstName, lastName, email, password }` | `201 { user }` |
 | POST | `/user/login` | Public | `LoginForm { email, password }` | `{ user, access_token, refresh_token }` — **or** `{ user, challenge }` (TOTP) — **or** `{ user }` + code sent |
 | GET | `/user/verify/code/{email}/{code}` | Public | — | `{ user, access_token, refresh_token }` |
+| POST | `/user/verify/resend` | Public | `ResendCodeForm { email }` | `{ message }` — re-sends an **outstanding** 2FA/step-up code. Public because the caller is mid-login, exactly like `verify/code`. The message is deliberately non-committal ("if a code is pending…") so it cannot confirm an address exists |
 | GET | `/user/verify/account/{key}` | Public | — | `{ message }` (activates) |
 | GET | `/user/refresh/token` | Refresh token | — | rotated `{ user, access_token, refresh_token }`; `400` if the header is missing |
 | GET | `/user/resetpassword/{email}` | Public | — | `{ message }` |
@@ -1417,6 +1512,7 @@ from a size the query never used and offer pages that do not exist.
 | POST | `/user/totp/setup` | Authenticated | — | `{ secret, otpauthUri, qrCode }` |
 | POST | `/user/totp/enable` | Authenticated | `{ code }` | `{ user, recoveryCodes }` (shown once) |
 | POST | `/user/totp/disable` | Authenticated | `{ code }` | `{ user }` |
+| POST | `/user/totp/recovery-codes/regenerate` | Authenticated | `{ code }` (TOTP **or** recovery code) | `{ recoveryCodes }` — a whole fresh batch, shown once |
 | GET | `/user/totp/status` | Authenticated | — | `{ enabled, recoveryCodesRemaining }` |
 | POST | `/user/verify/totp` | Public | `{ challenge, code }` | `{ user, access_token, refresh_token }` |
 
@@ -1455,6 +1551,7 @@ its boundary.
 | DELETE | `/user/sessions` | "Log out everywhere else" |
 | POST | `/user/sessions/logout` | Ends *this* session server-side |
 | GET | `/user/sessions/providers` | `{ providers }` linked to the caller's own account |
+| POST | `/user/sessions/providers/link/{provider}` | `{ ticket, … }` — mints the single-use, five-minute, provider-bound ticket the browser then carries to `GET /oauth2/link/{provider}` ([§7.10](#710-mfa-federation-and-account-security)) |
 | DELETE | `/user/sessions/providers/{provider}` | Disconnect one — refused if it is the last sign-in method |
 
 All authenticated. `currentFamily` is the caller's own `sid`, so the SPA can badge "this device" and
@@ -1471,6 +1568,7 @@ server nothing — the session stayed live for its full five days.
 | Method | Path | Auth | Returns |
 |---|---|---|---|
 | GET | `/oauth2/providers` | Public | The configured providers, for the login buttons |
+| GET | `/oauth2/link/{provider}` | Ticket-bearing | Browser redirect that starts an **account-link** flow rather than a login; the callback attaches `(provider, subject)` to the ticket's account and issues no tokens |
 
 The dance itself is handled by Spring Security: `GET /oauth2/authorization/{provider}` starts the
 flow, `GET /login/oauth2/code/{provider}` is the callback.
@@ -1492,6 +1590,7 @@ All routes require `UPDATE:USER` **or** `UPDATE:ROLE`; the `PATCH`es are stricte
 | DELETE | `/admin/user/{id}/passkeys` | **`UPDATE:USER`** | Revoke ALL of the user's passkeys |
 | DELETE | `/admin/user/{id}/sessions/{family}` | **`UPDATE:USER`** | Revoke ONE of the user's sessions (2026-08-08) — the granular sibling of the bulk revoke below |
 | DELETE | `/admin/user/{id}/sessions` | **`UPDATE:USER`** | Revoke ALL of the user's sessions — "sign out everywhere," the containment action for a suspected compromise |
+| DELETE | `/admin/user/{id}/totp` | **`UPDATE:USER`** | Force-disable the user's authenticator — the recovery path when both the authenticator *and* every recovery code are gone. Audited as `MFA_RESET`, see [§7.10](#710-mfa-federation-and-account-security) |
 
 > `user` = the calling admin (for the navbar); `selectedUser` = the managed user. Mutations are
 > audited against the **target**. `GET /admin/user/{id}` also bundles `passkeys` (metadata only —
@@ -1517,6 +1616,15 @@ All routes require `UPDATE:USER` **or** `UPDATE:ROLE`; the `PATCH`es are stricte
 | Method | Path | Auth |
 |---|---|---|
 | GET | `/admin/security/overview?days&suspiciousPage&suspiciousSize&restrictedPage&restrictedSize` | `UPDATE:USER`/`UPDATE:ROLE` |
+| GET | `/admin/security/anomaly-settings` | `UPDATE:USER`/`UPDATE:ROLE` |
+| PATCH | `/admin/security/anomaly-settings` | `UPDATE:USER`/`UPDATE:ROLE` |
+
+**The anomaly-settings pair is a full replace, not a partial patch** — a caller changing one field
+resends the other's current value, so two admins editing concurrently cannot silently merge into a
+combination neither chose. It takes effect on the very next login, because `LoginRiskServiceImpl`
+reads the table live rather than caching it; there is nothing to invalidate. Unlike `overview` it is
+deliberately **not** org-scoped: these are platform-wide knobs applying to every login, so there is
+no "whose settings" question to answer.
 
 `days` defaults to 7 and is **clamped server-side to 1–90** — it is caller-supplied input to a set of
 aggregate queries, and an unclamped `?days=100000` is a denial of service that needs no
@@ -1544,8 +1652,11 @@ together — both present to the help desk as "I can't get in"); `mfaAdoption`; 
 | PUT | `/admin/services/update/{serviceId}` | `{ user, service }` |
 | PATCH | `/admin/services/{serviceId}/active/{active}` | Retire / reinstate |
 
-All `UPDATE:USER`/`UPDATE:ROLE`. Browsing stays on the public path (`GET /customer/invoice/new`),
-which returns **active services only**.
+All `UPDATE:USER`/`UPDATE:ROLE`. Two separate read paths return **active services only**:
+`GET /customer/invoice/new` for authenticated staff raising an invoice, and `GET /services/public`
+(`PublicServicesController`, no auth at all) for a visitor browsing the marketing pages. Both
+delegate to the same `CustomerService#getServices()` query, so there is exactly one definition of
+"what's currently for sale" rather than two that can drift.
 
 > **Retire, never delete.** There is deliberately no `DELETE`. Invoices copy a service's name and
 > price into their own line items when raised, so removing the row would not corrupt historical
@@ -1565,6 +1676,7 @@ which returns **active services only**.
 | POST | `/customer/create` · PUT `/customer/update/{customerId}` | `{ user, customer(s) }` |
 | GET | `/customer/download/report` | XLSX attachment |
 | GET | `/customer/invoice/list?page&size` · `/get/{id}` · `/new` | `{ user, … }` |
+| GET | `/customer/invoice/search?name&page&size` | One term matched against **both** the invoice number and the owning customer's name — a reader rarely knows which of the two they remember |
 | POST | `/customer/invoice/create` · `/addtocustomer/{customerId}` | `201 { user, … }` |
 | PUT | `/customer/invoice/{invoiceId}/addtocustomer/{customerId}` | Attach an **existing** draft |
 | PATCH | `/customer/invoice/update/{invoiceId}` | Edit status, dates, amounts |
@@ -1572,8 +1684,21 @@ which returns **active services only**.
 | GET | `/customer/invoice/{invoiceId}/download/pdf` | PDF attachment (server-rendered, `InvoicePdfReport`/OpenPDF — separate from the invoice screen's client-side jsPDF "Export PDF" button) |
 | POST | `/customer/invoice/{invoiceId}/email` | Emails the PDF to the invoice's customer; `400` if the invoice is still a draft (no customer attached) |
 
-`/admin/analytics/summary` · `/customers` · `/invoices` serve the admin reporting surface, gated on
-`UPDATE:USER`/`UPDATE:ROLE`.
+**Admin reporting** — all gated on `UPDATE:USER`/`UPDATE:ROLE`, all org-scoped through the same
+`resolveScope` helper so no route can see wider than another:
+
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/admin/analytics/summary` · `/customers` · `/invoices` | The paginated reporting surface |
+| GET | `/admin/analytics/invoices/all` | Every in-scope invoice, unpaginated — for client-side charting that needs the whole set |
+| POST | `/admin/analytics/report/email` | Emails the caller **their own** digest ("Email me this report"). Reuses `resolveScope` exactly, so the digest covers precisely the figures that caller could already see — nothing wider. `ReportDigestService` does the build-and-send, and the scheduled weekly digest (`SchedulingConfig`) calls the same method, so the cron job and the button cannot produce different numbers |
+
+**Public, no auth:**
+
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/services/public` | `{ services }` — the active catalog, no `user` echo (the caller may have no principal) |
+| POST | `/contact/send` | `{ message }` — a Contact Us submission. Always reports success once accepted; dispatch is async and a delivery failure is logged server-side only, since a visitor has no session in which to check |
 
 ### 8.10 Examples
 
@@ -1670,11 +1795,25 @@ and the only symptom is a broken image.
 **Ids are pinned 1–7** — see [IMPLEMENTATION-HISTORY §4.7](IMPLEMENTATION-HISTORY.md#47-seeded-role-ids-drifted-between-databases) for why.
 
 **`userevents` / `events`** — the audit log and its type catalogue, the latter guarded by a `CHECK`
-constraint (`CK_Events_Type`) over 21 values: `LOGIN_ATTEMPT`, `LOGIN_ATTEMPT_SUCCESS`,
-`LOGIN_ATTEMPT_FAILURE`, `PROFILE_UPDATE`, `PROFILE_PICTURE_UPDATE`, `ROLE_UPDATE`,
-`ACCOUNT_SETTINGS_UPDATE`, `PASSWORD_UPDATE`, `MFA_UPDATE`, `FEDERATED_LOGIN`, `TOTP_ENROLLED`,
-`TOTP_DISABLED`, `RECOVERY_CODE_USED`, `SESSION_REVOKED`, `TOKEN_REUSE_DETECTED`, `SUSPICIOUS_LOGIN`,
-`PROVIDER_LINKED`, `PROVIDER_UNLINKED`, `PASSKEY_REGISTERED`, `PASSKEY_REMOVED`, `PASSKEY_LOGIN`.
+constraint (`CK_Events_Type`). `enumeration/EventType.java` declares **23** types; the `CHECK` list
+and the seed `INSERT` currently carry **21** and **20** respectively:
+
+| Type | In `EventType` | In `CK_Events_Type` | Seeded in `events` |
+|---|:--:|:--:|:--:|
+| `LOGIN_ATTEMPT`, `LOGIN_ATTEMPT_SUCCESS`, `LOGIN_ATTEMPT_FAILURE`, `PROFILE_UPDATE`, `PROFILE_PICTURE_UPDATE`, `ROLE_UPDATE`, `ACCOUNT_SETTINGS_UPDATE`, `PASSWORD_UPDATE`, `MFA_UPDATE`, `FEDERATED_LOGIN`, `TOTP_ENROLLED`, `TOTP_DISABLED`, `RECOVERY_CODE_USED`, `SESSION_REVOKED`, `TOKEN_REUSE_DETECTED`, `SUSPICIOUS_LOGIN`, `PROVIDER_LINKED`, `PROVIDER_UNLINKED`, `PASSKEY_REGISTERED`, `PASSKEY_REMOVED` | ✅ | ✅ | ✅ |
+| `PASSKEY_LOGIN` | ✅ | ✅ | ❌ |
+| `MFA_RESET`, `RECOVERY_CODES_REGENERATED` | ✅ | ❌ | ❌ |
+
+> ⚠ **Those last three rows are live drift, not a documentation quirk.** `INSERT_EVENT_BY_USER_ID_QUERY`
+> resolves `event_id` with `(SELECT id FROM events WHERE type = :type)`, so a type absent from the
+> seeded `events` table resolves to `NULL` and the insert dies on `event_id`'s `NOT NULL`. Because
+> `NewUserEventListener` swallows audit failures by design ([§9.4](#94-audit-event-triggers)), the
+> symptom is not an error — it is a **missing audit row**. Today an admin TOTP reset (`MFA_RESET`), a
+> recovery-code rotation (`RECOVERY_CODES_REGENERATED`) and a passkey login (`PASSKEY_LOGIN`) all
+> publish an event that is silently dropped. Fixing it is the three-place procedure in
+> [§5.2](#52-recipes) — extend the `CHECK` list, add the seed `INSERT`, and re-apply `schema.sql`
+> (which rebuilds the constraint idempotently on every run for exactly this reason). Tracked in
+> [FUTURE-ENHANCEMENTS §3.1](FUTURE-ENHANCEMENTS.md#31-security--identity).
 
 **`refreshsessions`** — the stateful half of the token model. `family` is one logical session (one
 device login), stable across rotations and the unit the Security Center lists and revokes; `jti` is
@@ -1725,9 +1864,10 @@ not `@Async`, because it reads the request-scoped `HttpServletRequest`.
 ### 9.5 Reference data
 
 Seeded idempotently by `schema.sql`: the seven roles (ids pinned 1–7, permissions as in
-[§7.5](#75-roles-and-capabilities)), the 16 event types, 12 services with pinned ids, and two demo
-organizations — **Tessera** and **Acme Partners**, the second existing specifically to demonstrate
-the scope boundary.
+[§7.5](#75-roles-and-capabilities)), **20** event-type rows (against 21 in the `CHECK` and 23 in
+`EventType` — see the drift table in [§9.3](#93-key-tables)), 12 services with pinned ids, and two
+demo organizations — **Tessera** and **Acme Partners**, the second existing specifically to
+demonstrate the scope boundary.
 
 On the `dev` profile, `DemoDataSeeder` additionally inserts one user per role (password
 `TesseraDemo@1`) and sample audit events. It is idempotent and **never runs under `prod`**.
@@ -1813,23 +1953,26 @@ nothing exercises a real browser.**
 
 ### 10.1 Inventory
 
-**230 backend tests across 34 suites** and **87 frontend specs across 8 files** (backend
-re-verified 2026-08-08 via a full `mvn test` run — actual Surefire execution counts, not annotated
-method counts, since those diverge once parameterized tests are involved; only one backend class
-needs a database). The passkey feature added 4 backend suites and 0 frontend specs — the frontend
-passkey UI (Security Center card, login button, admin revoke panel) currently has **no dedicated
-spec coverage**, a real gap alongside the backend one noted below.
+**312 backend tests across 46 suites** and **90 frontend specs across 9 files** (both re-verified
+2026-08-19 via full `./mvnw clean test` and `npm test` runs — actual execution counts, not annotated
+method counts, since those diverge once parameterized and loop-generated tests are involved: the
+backend declares 240 `@Test` plus 12 `@ParameterizedTest`, and the frontend declares 85 `it(` calls.
+Everything passed except `contextLoads`, which needs a database; only that one backend class does).
+The passkey feature added 4 backend suites and 0 frontend specs — the frontend passkey UI (Security
+Center card, login button, admin revoke panel) still has **no dedicated spec coverage**, a real gap
+alongside the backend one noted below.
 
 | Suite | Tests | What it locks in |
 |---|---:|---|
 | `SessionServiceImplTest` | 4 | **Refresh rotation & replay detection** — the happy path, plus superseded/revoked replays revoking the whole family without rotating |
 | `TotpServiceImplTest` | 5 | **TOTP challenge binding** — identity comes from the challenge, never the request; a wrong code refuses *without* burning the challenge; recovery codes validate-and-consume atomically |
-| `LoginRiskServiceImplTest` | 12 | Anomaly detection, **both failure directions** — false positives matter as much as true ones |
+| `LoginRiskServiceImplTest` | 14 | Anomaly detection, **both failure directions** — false positives matter as much as true ones |
 | `SecurityDashboardServiceImplTest` | 14 | Window clamping, pagination clamping, zero-filled counters, gap-filled trend, empty scope failing closed *before* any query |
-| `AdminUserControllerOrgScopeTest` | 5 | Org scoping on **reads as well as writes**; platform admins never scope-checked; non-enumerating 403 |
-| `AnalyticsControllerOrgScopeTest` | 8 | Scoped analytics — assertions in pairs, because calling the *unscoped* variant is the bug |
+| `AdminUserControllerOrgScopeTest` | 7 | Org scoping on **reads as well as writes**; platform admins never scope-checked; non-enumerating 403 |
+| `AnalyticsControllerOrgScopeTest` | 9 | Scoped analytics — assertions in pairs, because calling the *unscoped* variant is the bug |
 | `CustomerControllerOrgScopeTest` | 14 | Same scoping extended to the shared `/customer/**` surface (2026-08-08); single-record gets checked post-fetch; caught two pre-existing bugs (`List.of(...).contains(null)` throws instead of returning false; a draft invoice 500'd via `Map.of` rejecting a null value) |
-| `AnalyticsControllerSecurityTest` | 3 | The `/admin/analytics/**` authority gate |
+| `AnalyticsControllerSecurityTest` | 5 | The `/admin/analytics/**` authority gate, digest email included |
+| `SecurityDashboardControllerSecurityTest` | 4 | The `/admin/security/**` authority gate, anomaly-settings included |
 | `RequestUtilsIpAddressTest` | 10 | `X-Forwarded-For` trust, forgery cases included |
 | `AuthDiagnosticsLoggerTest` | 9 | Console-only RBAC diagnostics stay off the client response |
 | `CapabilityCatalogTest` | 17 | 403s name the blocked capability without leaking record existence |
@@ -1845,17 +1988,32 @@ spec coverage**, a real gap alongside the backend one noted below.
 | `AdminUserControllerPasskeyTest` | 7 | Admin passkey revoke: authority gate, self-target refusal, org scoping — same three properties as session revocation |
 | `OAuth2ClientConfigPlaceholderWarningTest` | 7 | The `CHANGE_ME`-placeholder boot warning fires per-provider, never for a real-looking credential |
 | `CustomerServiceImplTest` | 5 | `createdAt` stamping, invoice numbering, not-found → `ApiException` |
-| `EventServiceImplTest` / `NewUserEventListenerTest` | 2 / 2 | Audit recording; **a failing audit write must not break login** |
+| `EventServiceImplTest` / `NewUserEventListenerTest` | 2 / 3 | Audit recording; **a failing audit write must not break login** |
+| `AdminUserControllerTotpResetTest` | 4 | Admin TOTP reset: authority gate, self-target refusal, org scoping — the same three properties as passkey and session revocation |
+| `ReportDigestServiceImplTest` | 8 | The digest emailed by the button and the weekly cron are built by one method, so the two cannot diverge; scope is honored in the figures |
+| `InvoicePdfReportTest` | 2 | Server-rendered invoice PDF (OpenPDF), distinct from the screen's client-side jsPDF export |
+| `UserServiceImplResendCodeTest` | 5 | Resending an outstanding code never reveals whether the account exists |
+| `SecuritySettingsServiceImplTest` | 3 | Anomaly-signal overrides read live, full-replace semantics |
+| `PhonePolicyTest` | 17 | The US 10-digit shape, including the near-unrestricted patterns it replaced |
+| `TwilioVerifyUtilsTest` / `VoiceUtilsTest` | 9 / 8 | The Verify-then-voice dispatch ladder and its all-or-nothing config gates |
+| `OAuth2ClientConfigRedirectUriTest` | 9 | `OAUTH2_REDIRECT_BASE_URL` pins the redirect origin across all three providers ([§3.2](#32-environment-variable-reference)) |
+| `DatasourceTlsConfigTest` | 5 | `sslMode` per profile — `VERIFY_IDENTITY` on prod, `REQUIRED` on qa/stage |
+| `HttpCacheHeadersFilterTest` / `RateLimitFilterTest` | 8 / 6 | ETag/304 revalidation and its bypass list; per-caller buckets and `Retry-After` |
+| `CustomAccessDeniedHandlerTest` | 5 | 403 representation: JSON for XHR, styled page for a navigation |
+| `EmailServiceImplTest` | 2 | Mail dispatch stays off the request path |
+| `SortUtilsTest` | 7 | Allow-listed `ORDER BY` for the JDBC admin directory — the injection seam |
 | `GlobalExceptionHandlerTest` | 4 | The envelope; a 500 never leaks its cause |
 | `JpaSchemaSyncTest` / `SqlTableCaseConsistencyTest` | 1 / 1 | Offline schema-drift and table-casing guards |
 | `AngularSpringBootFullStackApplicationTests` | 1 | `contextLoads` — needs a live MySQL |
 
-Frontend: `user.service.authority.spec.ts` (20 — exact-not-prefix authority matching, expiry beating
-a privileged claim, memo invalidation across rotation, six shapes of corrupt token that must grant
-nothing *without throwing*), `token.interceptor.spec.ts` (15 — single-flight refresh, retry replaying
-method/URL/body, parked requests failing rather than hanging), `command-palette` (12),
-`has-authority.directive` (9), `authentication.guard` (9), `admin.guard` (7), `capability.guard` (7),
-`page-size-select` (8).
+Frontend, by file: `user.service.authority.spec.ts` (**20** — exact-not-prefix authority matching,
+expiry beating a privileged claim, memo invalidation across rotation, and six loop-generated shapes
+of corrupt token that must grant nothing *without throwing*), `token.interceptor.spec.ts` (**17** —
+single-flight refresh, retry replaying method/URL/body, parked requests failing rather than hanging),
+`command-palette.component` (**12**), `has-authority.directive` (**9**), `authentication.guard`
+(**9**), `admin.guard` (**7**), `capability.guard` (**7**), `page-size-select.component` (**6**),
+`language.interceptor` (**3** — that `Accept-Language` is attached and that the interceptor never
+short-circuits).
 
 > **Five of these are true regression tests** — confirmed to fail against the pre-fix code. They
 > cover three defects found while writing them: a failed refresh left concurrently-parked requests
@@ -1871,6 +2029,12 @@ method/URL/body, parked requests failing rather than hanging), `command-palette`
 | One class / one method | `./mvnw test -Dtest=CustomerServiceImplTest[#methodName]` |
 | Everything **except** the DB-bound boot test | `./mvnw test -Dtest='!AngularSpringBootFullStackApplicationTests'` |
 | Frontend | `npm test` · `npm run lint` · `npm run format:check` |
+| One frontend file | `npm test -- --include src/app/guard/admin.guard.spec.ts` |
+
+> **Run the frontend suite through `ng test` (`npm test`), never `npx vitest` directly.** The Angular
+> `@angular/build:unit-test` builder is what generates `init-testbed.js` and calls
+> `TestBed.initTestEnvironment()`; invoking Vitest straight fails every spec with *"Need to call
+> TestBed.initTestEnvironment() first"* — a red suite that says nothing about the code.
 
 > **`contextLoads` needs a database.** There is no `src/test/resources/application*.yml` override, so
 > it connects to the dev datasource — a live local MySQL with `schema.sql` applied. If MySQL is down,
@@ -1934,7 +2098,7 @@ the federation, TOTP-enrollment, session-management and admin *flows* end to end
 |---|:--:|---|
 | `schema.sql` ↔ JPA drift | 🔄 | **Offline only.** No prod-profile `validate` boot has ever run against a `schema.sql`-only database |
 | Context wiring | 🔄 | `contextLoads` boots but asserts nothing; needs live MySQL; not hermetic |
-| Frontend HTTP cache | ❌ | The one unspecced interceptor — and its invalidation rules are exactly the logic that silently serves one user another's data |
+| Frontend passkey UI | ❌ | Security Center card, login button and admin revoke panel have no spec; the backend halves are covered |
 | Real `SecurityConfig` matchers / `CustomAuthFilter` | ❌ | Slice tests bypass the chain by design, so matcher **ordering** — the thing most likely to break — is unverified |
 | HTTP-level integration | ❌ | No `TestRestTemplate`/Testcontainers layer |
 | End-to-end | ❌ | Seams pass CI: interceptor ↔ backend, OAuth round-trip, federated link flow |
@@ -1980,7 +2144,7 @@ Stage 3  eclipse-temurin:21-jre-alpine
 
 - **All config is environment variables.** Never ship a `.env`.
 - **Use the `prod` profile** so a missing variable fails fast.
-- **Use a managed database** with `sslMode=REQUIRED` (pinned by the prod/qa/stage profiles via `MYSQL_SSL_MODE`).
+- **Use a managed database** with TLS pinned by the profile via `MYSQL_SSL_MODE` — `VERIFY_IDENTITY` on `prod` (which also authenticates the server, using the Aiven CA baked into the image's truststore) and `REQUIRED` on `qa`/`stage` ([§3.6](#36-configuration-gotchas)).
 - **Apply `schema.sql` once**, by hand, before first launch — the image never runs it.
 - **Health probe → `GET /actuator/health`** (the only health endpoint exposed; details hidden).
 - **Set `FORWARD_HEADERS_STRATEGY=framework` and `TRUSTED_PROXY_COUNT` correctly** behind any load
@@ -1991,7 +2155,7 @@ Stage 3  eclipse-temurin:21-jre-alpine
 
 - [ ] `SPRING_ACTIVE_PROFILES=prod`
 - [ ] Managed MySQL provisioned; schema created; **`schema.sql` applied**
-- [ ] `sslMode=REQUIRED` � automatic on prod/qa/stage; explicit if you set `SPRING_DATASOURCE_URL`
+- [ ] `sslMode` — automatic on prod/qa/stage (`VERIFY_IDENTITY` on prod, `REQUIRED` on qa/stage); explicit if you set `SPRING_DATASOURCE_URL`
 - [ ] Strong `JWT_SECRET` set via the platform (≥32 chars, not the placeholder)
 - [ ] Mail and any OAuth/Twilio secrets set via the platform
 - [ ] `UI_APP_URL` set to the public origin (drives CORS **and** email links)
@@ -2043,8 +2207,13 @@ with `docker run --env-file ./prod.env` → probe `/actuator/health` → verify 
 
 ### 11.6 Logging
 
-CloudWatch with **7-day retention**, driven by env vars: `LOG_LEVEL_ROOT`, `LOG_LEVEL_APP`,
-`LOG_LEVEL_SECURITY`, `LOG_LEVEL_SQL`, and `DEBUG_REPORT`.
+CloudWatch with **7-day retention**, driven by env vars, each defaulting to `INFO`:
+`LOG_LEVEL_ROOT`, `LOG_LEVEL_APP`, `LOG_LEVEL_SECURITY`, `LOG_LEVEL_WEB` (`org.springframework.web`),
+`LOG_LEVEL_SQL`, `LOG_LEVEL_HIBERNATE` (`org.hibernate`), plus the boolean `DEBUG_REPORT`.
+
+> ⚠ **`LOG_LEVEL_HIBERNATE=DEBUG` puts query text into CloudWatch even under the `prod` profile** —
+> it is a separate SLF4J path from `show-sql`, so the profile's `show-sql: false` does not contain it.
+> Treat it as a deliberate, temporary switch, not a default.
 
 > ⚠ **`show-sql: false` does not stop SQL logging.** `org.hibernate.SQL` at DEBUG is a separate SLF4J
 > path, and `DEBUG_REPORT=true` switches Hibernate to DEBUG and reopens it. Both knobs must be off.
@@ -2060,6 +2229,9 @@ real spend is Fargate; see [FUTURE-ENHANCEMENTS §6.6](FUTURE-ENHANCEMENTS.md#66
 - [IMPLEMENTATION-HISTORY.md](IMPLEMENTATION-HISTORY.md) — what was built, and the problem log
 - [PHASE-2-IMPLEMENTATION.md](PHASE-2-IMPLEMENTATION.md) — everything delivered since the Phase 1 report (Jul 11 → Aug 3, 2026), with the roadmap scorecard and requirement traceability
 - [PHASE-2-ADDITIONS.md](PHASE-2-ADDITIONS.md) — the exhaustive itemized catalog of Phase 2 additions (43 backend classes, 26 frontend files, 221 tests, infrastructure); the self-contained handoff document for deliverable production
+- [POST-SUBMISSION-UPGRADES.md](POST-SUBMISSION-UPGRADES.md) — work built *after* the course submission, and therefore out of scope for the graded deliverable; the newest features land here first
 - [FUTURE-ENHANCEMENTS.md](FUTURE-ENHANCEMENTS.md) — the backlog and the path to a product
 - [flows/](flows/README.md) — click-to-database traces of every major flow
+- [api-testing/](api-testing/README.md) — runnable cURL, Postman and Bruno collections for [§8](#8-api-reference)
 - [aws/RUNBOOK.md](../aws/RUNBOOK.md) — the linear AWS deploy procedure
+- [aws/README.md](../aws/README.md) · [gcp/README.md](../gcp/README.md) — the cloud resource references and troubleshooting logs

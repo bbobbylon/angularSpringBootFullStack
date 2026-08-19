@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.7
-**Last Updated:** 2026-08-14
+**Version:** 3.8
+**Last Updated:** 2026-08-19
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -38,12 +38,12 @@ operability**, not features.
 | Dimension | State |
 |---|---|
 | Functional scope | ✅ Complete — auth, MFA, passkeys, federation (login **and** link/unlink), real SMS 2FA, sessions (self-service **and** granular admin revoke), RBAC, org scoping, user-type classification, anomaly detection + step-up, security dashboard, business CRUD, i18n |
-| Tests | ✅ **230 backend / 87 frontend**, all green (re-verified 2026-08-08 via actual Surefire execution counts) |
+| Tests | ✅ **312 backend / 90 frontend**, all green (re-verified 2026-08-19 via actual Surefire and Vitest execution counts; the one DB-bound class, `contextLoads`, needs a live MySQL) |
 | Lint | ✅ `ng lint` clean and gating in CI |
 | Dependency audit | ✅ `npm audit --audit-level=high` exit 0; OWASP `dependency-check` wired at `failBuildOnCVSS=7` |
 | CI | ✅ Gating on lint + audit + both test suites against a MySQL service container |
 | Deployment | ✅ Live on AWS ECS Fargate; GCP Cloud Run and Azure App Service pipelines also built |
-| Docs | ✅ Consolidated to four documents (2026-08-02) |
+| Docs | ✅ Consolidated to four documents (2026-08-02), now five — `POST-SUBMISSION-UPGRADES.md` was added to keep post-course work separable from the graded deliverable. Full audit against the source re-run 2026-08-19 |
 | **Performance** | 🔄 Lighthouse round 1 done; round 2 candidates in §2.1 |
 | **Multi-instance readiness** | ⬜ The largest structural gap — see §2.4 and §6.2 |
 
@@ -83,12 +83,21 @@ opened CSP to a third party for a cosmetic asset. Measured, production build:
 | **Preload the icon woff2** | Icons pop in slightly late; discovered only after the deferred stylesheet applies | Needs a build-time hook because `outputHashing` renames the file |
 | **Confirm `jspdf`/`html2canvas` laziness** | The 427 kB `invoice-detail` chunk is the largest in the app | Already lazy; verify it loads on the export click, not on route entry |
 
-### 2.2 ✅ Remaining frontend specs
+### 2.2 🔄 Remaining frontend specs
 
-Done (2026-08-13, `ebf4f5e`) — `cache.interceptor.spec.ts` (149 lines) now covers bypass, eviction,
-and cache-hit/miss behavior for `cacheInterceptor` (`interceptor/cache.interceptor.ts`), which was
-the last unspecced interceptor and the one whose invalidation rules could silently serve one user
-another user's data.
+Done (2026-08-13, `ebf4f5e`) — `cache.interceptor.spec.ts` (149 lines) covered bypass, eviction, and
+cache-hit/miss behavior for `cacheInterceptor`, which was then the last unspecced interceptor and the
+one whose invalidation rules could silently serve one user another user's data.
+
+**Superseded (2026-08-14).** That interceptor and its spec are both **deleted**: client-side caching
+moved to the backend, because a cache living in one browser tab could never be invalidated by another
+user's write (§3.4, POST-SUBMISSION-UPGRADES.md #3). The replacement, `HttpCacheHeadersFilter`, is
+covered by 8 backend specs instead. `language.interceptor.spec.ts` now holds the "every interceptor is
+specced" line, so that property still holds — it is just enforced on a smaller set.
+
+**Still open:** the frontend **passkey UI** — the Security Center enrollment card, the login button,
+and the admin revoke panel — has no dedicated spec, while both backend halves do
+([GUIDE.md §10.5](GUIDE.md#105-known-gaps)). That is the one named frontend coverage gap left.
 
 ### 2.3 ✅ Exercise a real production boot
 
@@ -138,6 +147,7 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 
 | Enhancement | Why it is worth doing | Sketch |
 |---|---|---|
+| 🐞 **`schema.sql` is missing three audit event types — the rows are silently dropped** | **Open defect, found 2026-08-19 during the documentation audit.** `EventType` declares 23 types; `CK_Events_Type` lists 21 and the seed `INSERT INTO events` carries 20. `MFA_RESET`, `RECOVERY_CODES_REGENERATED` and `PASSKEY_LOGIN` are published by real code paths (admin TOTP reset, recovery-code rotation, passkey sign-in) but have no `events` row. `INSERT_EVENT_BY_USER_ID_QUERY` resolves `event_id` via `(SELECT id FROM events WHERE type = :type)`, so those inserts resolve `NULL` and die on the `NOT NULL` — and because `NewUserEventListener` swallows audit failures by design, **there is no error, only a missing audit row**. Three security-relevant actions are therefore unauditable today | The three-place procedure already documented in [GUIDE.md §5.2](GUIDE.md#52-recipes): extend the `CK_Events_Type` list, add the three seed `INSERT` rows with descriptions, and re-apply `schema.sql` — which rebuilds the `CHECK` idempotently on every run for exactly this case, so no manual `ALTER` is needed. Worth adding a test in the shape of `SqlTableCaseConsistencyTest`: assert every `EventType` constant appears in both `schema.sql` lists, so the next new type cannot ship half-wired |
 | ⬜ **Distributed brute-force + rate-limit + link-ticket state** | See §2.4 — the scale-out blocker | Move counters to the database or Redis; the service interfaces do not change (`bucket4j-redis` exists for exactly this) |
 | ✅ **Session revocation from the security dashboard** | Done (2026-08-08) — `GET /admin/user/{id}` now returns the target's live sessions (same `RefreshSession` shape as the Security Center, already `@JsonIgnore`-safe); `DELETE /admin/user/{id}/sessions/{family}` revokes one device, alongside the existing bulk `DELETE /admin/user/{id}/sessions`. Org-scoped, self-target-refused, audited against the target — same convention as every other admin action. Frontend: a Sessions panel on the user-detail page (`user-details.component`), per-row revoke + a bulk "sign out everywhere" button | |
 | ✅ **Admin-initiated MFA reset** | Done (2026-08-13, `ebf4f5e`) — `AdminUserController` carries the reset action, gated on staff authority and audited as `MFA_RESET`; `AdminUserControllerTotpResetTest` covers it | |
@@ -231,6 +241,8 @@ trigger), and whether there is a cap on pin count.
 
 | Enhancement | Why | Sketch |
 |---|---|---|
+| 🐞 **The GCP deploy path sets none of the three proxy variables** | **Open defect, found 2026-08-19 during the documentation audit.** `aws/task-definition.json` sets `TRUSTED_PROXY_COUNT=2`, `FORWARD_HEADERS_STRATEGY=framework` and `OAUTH2_REDIRECT_BASE_URL`; `.github/workflows/deploy-gcp.yml`'s `--set-env-vars` list sets **none** of them. Cloud Run is a proxy hop just like the ALB, so a deploy from that workflow lands with `TRUSTED_PROXY_COUNT=0` — every caller shares one rate-limit bucket, `NEW_NETWORK` can never fire, and step-up verification is present but inert — plus federated sign-in broken on `redirect_uri_mismatch`. Two of the three fail *silently*, which is what makes it worth fixing before anyone treats that path as production | Add the three variables to the `--set-env-vars` string in `deploy-gcp.yml` (and to `gcp/cloudrun-service.yaml`, which also omits them). `TRUSTED_PROXY_COUNT=1` for bare Cloud Run. Documented in [`gcp/README.md`](../gcp/README.md) meanwhile so nobody deploys it unaware |
+| ⬜ **`task-definition.json` ships `DEBUG_REPORT=true`** | Found 2026-08-19. `application.yml`'s own comment records that this was reverted to `false` in task-definition revision 11 on 2026-08-02, after measuring 546 `org.hibernate.SQL` statements in a 15-minute browsing window (~390 MB/month, ~8% of the CloudWatch free tier) — but the **committed template was never updated to match**, so registering a fresh revision from it re-enables the query-text disclosure the prod profile's `show-sql: false` exists to prevent | One-line change in `aws/task-definition.json`. Noted in the RUNBOOK appendix meanwhile |
 | ✅ **Backend HTTP caching** | Done (2026-08-14, see POST-SUBMISSION-UPGRADES.md #3) — the client-side cache (`cache.interceptor.ts` + `http-cache.service.ts`, both now deleted) could not be invalidated by a write from another user. `HttpCacheHeadersFilter` now sets `Cache-Control: private, no-cache` + an ETag on data-bearing GETs, so the browser always revalidates with the server instead of trusting a local copy; no Redis needed since the ETag is derived fresh per request. A same-day live-testing pass caught the hash including a volatile per-response timestamp field that defeated the `304` short-circuit entirely — corrected same day, see POST-SUBMISSION-UPGRADES.md #3's correction note | |
 | ✅ **Structured logging + metrics** | Done (2026-08-15, see POST-SUBMISSION-UPGRADES.md #5) — `user.events.total` Micrometer counter (tagged by `EventType`) added at `NewUserEventListener`'s single event-listener seam, exposed admin-authenticated at `/actuator/metrics`; `logback-spring.xml` added, JSON console logs (`logstash-logback-encoder`) on `prod`/`qa`/`stage`, plain console unchanged on `dev`/`local` | |
 | ✅ **HTTPS in front of the app** | Resolved via Route B (§6.8) — CloudFront terminates TLS on its auto-issued certificate, since 2026-08-04. This row previously contradicted §6.8's own conclusion; corrected 2026-08-14 to stop asserting 🔴 against a fix already documented lower in the same file | |
@@ -246,51 +258,61 @@ opposed to the product itself. None of it is started.
 | Enhancement | Why | Sketch |
 |---|---|---|
 | ✅ **Global footer** | Done (2026-08-13) — `shared/footer/footer.component`, always-mounted in `AppComponent` below the router outlet via the sticky-footer flex layout. Copyright line + one-line privacy note, Terms/Privacy links, Contact Us set apart on its own line | |
-| ✅ **Contact Us page** | Done (2026-08-13) — public `/contact` route (`ContactComponent`), `POST /contact` (`ContactController`, public, rate-limited by the global tier), forwards to the app's mailbox via `NotificationService#sendContactMessage` → `EmailServiceImpl`, reusing the existing `multipart/alternative` + `EmailTemplate` pattern exactly as sketched. Visitor's address goes on `Reply-To`, not `From` | |
+| ✅ **Contact Us page** | Done (2026-08-13) — public `/contact` route (`ContactComponent`), `POST /contact/send` (`ContactController`, public, rate-limited by the global tier — the `/send` suffix keeps the bare `/contact` path free for the SPA page, since Spring claims an exact path for *any* method match and would otherwise 500 every direct GET), forwards to the app's mailbox via `NotificationService#sendContactMessage` → `EmailServiceImpl`, reusing the existing `multipart/alternative` + `EmailTemplate` pattern exactly as sketched. Visitor's address goes on `Reply-To`, not `From` | |
 | ✅ **Public feature-preview / "product tour" pages** | Done (2026-08-13) — `/features` (`FeatureTourComponent`), static copy/icon cards describing the seven real capability areas, linked from the login screen ("See what TesseraApp can do"). Copy only, no screenshots yet — a real screenshot pass is a separate, later effort. Static, no live/authenticated components, matching the original design constraint | |
+| ⬜ **`/welcome-passkey` has no `SecurityConfig` permit** | Found 2026-08-19 during the documentation audit. Every other Angular client route appears in the `GET`/`HEAD` SPA permit tiers so a hard refresh loads the shell and the SPA decides where to send the visitor; `/welcome-passkey` does not. Signed-in users are unaffected (any role holds `READ:USER`, which the `GET /**` catch-all demands), but an unauthenticated hard refresh gets the styled 401 page instead of a redirect to `/login`. Cosmetic, and only reproducible once Angular is baked into the jar | Add `"/welcome-passkey"` to both the `GET` and the `HEAD` client-route matcher lists in `SecurityConfig`. It is plural/bare and answers on no controller, so the namespace-split invariant holds |
 
 ---
 
 ## 4. Code TODO audit
 
-**17 `TODO` comments — 7 backend, 10 frontend — across 8 distinct work items.** Re-verified by
-grepping the tree on 2026-08-02; line numbers are from that grep.
+**6 `TODO` comments — 5 backend, 1 frontend — across 4 distinct work items.** Re-verified by
+grepping the tree on 2026-08-19; line numbers are from that grep. That is down from 17 (7 backend, 10
+frontend) at the 2026-08-02 audit.
 
-None is a defect. Every one is either a deliberate stub (SMS), a cosmetic rename, or a refactor that
-works correctly today and would simply be tidier done differently.
+None is a defect. Every one is either a cosmetic rename or a refactor that works correctly today and
+would simply be tidier done differently.
 
-### Backend (7)
+### Backend (5)
 
 | Location | Intent | Notes |
 |---|---|---|
-| `InvoiceRepo.java:21` | sum-of-`totalAmount` `@Query` | §3.3 — billing currently sums client-side, so the total is only as complete as the page fetched |
-| `UserQuery.java:36` + `UserRepoImpl.java:183` | Rename the `url` column → `verification_key` | Cosmetic — it holds a bare UUID, not a URL. Needs a guarded idempotent rename |
+| `UserQuery.java:36` + `UserRepoImpl.java:187` | Rename the `url` column → `verification_key` | Cosmetic — it holds a bare UUID, not a URL. Needs a guarded idempotent rename |
 | `UserController.java:62` | `TODO(refactor-user-fetch)` — standardize the authenticated-user fetch | Refactor |
-| `UserRepoImpl.java:63` | `TODO(refactor-architecture)` — SRP violation | It is a repo, a `UserDetailsService`, **and** a business-logic holder |
+| `UserRepoImpl.java:64` | `TODO(refactor-architecture)` — SRP violation | It is a repo, a `UserDetailsService`, **and** a business-logic holder |
 | `RoleRepoImpl.java:25` | `TODO(org-roles)` — org-scoped role system | §3.2 |
 
 Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/getById` throw
 `UnsupportedOperationException` (roles are seed-only).
 
-### Frontend (10)
+### Frontend (1)
 
 | Location | Intent | Notes |
 |---|---|---|
-| `new-customer.component.ts:27, :80, :87` | Lighter user-only prefill endpoint | Currently fetches **every customer** to prefill one field |
-| `customer.service.ts:41` + `stats.component.ts:14` | `StatsComponent` self-fetch — `stats$()` is declared but unused | Refactor |
-| `navbar.component.ts:18` | Decouple user data from the `/customer/list` response | Fetch `/user/profile` independently |
-| `profile.component.ts:19` | Reactive forms for profile | Refactor |
+| `profile.component.ts:22` | Reactive forms for profile | Refactor |
 
-> **Closed since the last audit:** `cache.interceptor.ts:35` + `http-cache.service.ts:25` — both
-> files are deleted; caching moved to the backend (§3.4, POST-SUBMISSION-UPGRADES.md #3).
-> `customer.service.ts:59`'s sorting/filtering TODO is also done (POST-SUBMISSION-UPGRADES.md #1),
-> as is the admin User Directory's own sorting, added later via a JDBC-safe `ORDER BY` mechanism
-> since that domain isn't JPA (POST-SUBMISSION-UPGRADES.md #11).
-
-> **Closed since the last audit:** the "real prod domain" `TODO` in
-> `AngularSpringBootFullStackApplication.java` is **gone** — CORS origins are now read from
-> `app.cors.allowed-origin-patterns` (env `CORS_ALLOWED_ORIGINS`) per profile, so there is no
-> hardcoded domain left to replace. The remaining domain work is infrastructure only (§3.4).
+> **Closed since the 2026-08-02 audit** — eleven `TODO`s, all verified gone from the tree rather than
+> merely un-commented:
+>
+> - `InvoiceRepo.java`'s sum-of-`totalAmount` `@Query` was **deliberately not added**, and the file
+>   now carries a `NOTE` explaining why: that total already exists, computed in SQL, in
+>   `CustomerQuery.STATS_QUERY`/`STATS_BY_ORGANIZATION_QUERY`, which is what fills `Stats.totalBilled`
+>   and the dashboard's Total Billed tile. A second aggregate over the same column would create a
+>   competing source of truth for one number — the exact shape of problem this codebase has been
+>   unwinding elsewhere (two CORS configs, two exception advices).
+> - `cache.interceptor.ts:35` + `http-cache.service.ts:25` — both files are deleted; caching moved to
+>   the backend (§3.4, POST-SUBMISSION-UPGRADES.md #3).
+> - `customer.service.ts:59`'s sorting/filtering TODO is done (POST-SUBMISSION-UPGRADES.md #1), as is
+>   the admin User Directory's own sorting, added later via a JDBC-safe `ORDER BY` mechanism since
+>   that domain isn't JPA (POST-SUBMISSION-UPGRADES.md #11).
+> - `customer.service.ts:41` + `stats.component.ts:14` — the unused `stats$()` is gone.
+> - `new-customer.component.ts`'s prefill TODOs and `navbar.component.ts:18`'s coupling to the
+>   `/customer/list` response are both resolved; the navbar now reads `/user/profile` through
+>   `CurrentUserService`, which fetches once and shares the result as a signal.
+> - The "real prod domain" `TODO` in `AngularSpringBootFullStackApplication.java` is gone — CORS
+>   origins are read from `app.cors.allowed-origin-patterns` (env `CORS_ALLOWED_ORIGINS`) per profile,
+>   so there is no hardcoded domain left to replace. The remaining domain work is infrastructure only
+>   (§3.4).
 
 ---
 

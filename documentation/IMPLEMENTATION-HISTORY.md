@@ -1,7 +1,7 @@
 # Implementation History
 
-**Version:** 2.3
-**Last Updated:** 2026-08-15
+**Version:** 2.4
+**Last Updated:** 2026-08-19
 **Status:** Living archive — what was built over time, and what went wrong along the way.
 
 ## Overview
@@ -61,8 +61,8 @@ Pipelines exist for AWS (ECS Fargate — the live one), GCP (Cloud Run) and Azur
 **Where it ended up.** Live on AWS ECS Fargate at **`tesseraapp.dev`** (CloudFront in front, a real
 domain bought 2026-08-08), with **usernameless WebAuthn passkeys** and real, unstubbed **SMS 2FA**
 (Twilio, gated by an A2P 10DLC campaign — see §4.23) alongside the existing password/TOTP/federated
-paths. 230 backend and 87 frontend tests green, CI gating on lint + dependency audit + both suites,
-and six-language i18n across 26 of 28 templates.
+paths. **312 backend and 90 frontend tests green** (re-verified 2026-08-19), CI gating on lint +
+dependency audit + both suites, and six-language i18n across 26 of 28 templates.
 
 ---
 
