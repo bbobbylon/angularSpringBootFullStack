@@ -382,6 +382,20 @@
     "searchByInvoiceNumber": "按发票编号或客户搜索",
     "searchAria": "搜索发票"
   },
+  "batchImport": {
+    "button": "导入",
+    "title": "批量导入",
+    "hintCustomers": "上传客户的 CSV 或 Excel 文件。",
+    "hintInvoices": "上传发票的 CSV 或 Excel 文件。",
+    "chooseFile": "选择文件",
+    "noFileChosen": "未选择文件",
+    "upload": "上传",
+    "uploading": "正在上传…",
+    "resultSummary": "已导入 {{total}} 行中的 {{imported}} 行。",
+    "row": "行",
+    "reason": "原因",
+    "close": "关闭"
+  },
   "users": {
     "breadcrumb": "用户",
     "eyebrow": "管理",

@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.controller;
 
+import com.bob.angularspringbootfullstack.dto.BatchImportResult;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Customer;
@@ -9,6 +10,7 @@ import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.report.CustomerReport;
 import com.bob.angularspringbootfullstack.report.InvoicePdfReport;
 import com.bob.angularspringbootfullstack.report.InvoiceReport;
+import com.bob.angularspringbootfullstack.service.BatchImportService;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
@@ -28,6 +30,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -90,6 +93,11 @@ public class CustomerController {
      * Sends the PDF invoice email dispatched by {@link #emailInvoice}.
      */
     private final EmailService emailService;
+    /**
+     * Backs {@link #batchImportCustomers} and {@link #batchImportInvoices} — parses an uploaded
+     * CSV/XLSX file and persists it row by row (POST-SUBMISSION-UPGRADES.md #8).
+     */
+    private final BatchImportService batchImportService;
 
     /**
      * JPA property paths the {@code /customer/list} and {@code /customer/search} endpoints may
@@ -306,6 +314,47 @@ public class CustomerController {
     }
 
     /**
+     * Bulk-creates customers from an uploaded CSV or XLSX file (POST-SUBMISSION-UPGRADES.md #8,
+     * FUTURE-ENHANCEMENTS.md §3.3 "P2-2").
+     *
+     * <p>Partial-success by design: the response is 200 OK whenever the file itself was
+     * readable, even if every row inside it failed validation — {@code data.result} carries the
+     * per-row breakdown ({@code imported} count plus a {@code failed} list with a reason per
+     * row) for the UI to render as a report. Only a structurally bad request (unreadable file,
+     * wrong file type, more rows than {@code BatchImportServiceImpl.MAX_BATCH_ROWS}) throws
+     * before any row is attempted.
+     *
+     * <p>Every created customer is stamped with the caller's organization exactly like {@link
+     * #createCustomer} — a client-supplied organization column in the file would let an org
+     * admin file rows into an organization they don't belong to, so there is deliberately no
+     * such column in the expected schema.
+     *
+     * <p>Gated by the same {@code POST /**} catch-all as every other write here — see {@link
+     * BatchImportService#importCustomers} for the expected columns.
+     *
+     * @param user the authenticated user making the request
+     * @param file the uploaded {@code .csv} or {@code .xlsx} file, sent as {@code
+     *             multipart/form-data} under the key {@code "file"}
+     * @return 200 OK with the authenticated user and the row-by-row {@link BatchImportResult}
+     */
+    @PostMapping("/batch")
+    public ResponseEntity<HttpResponse> batchImportCustomers(@AuthenticationPrincipal UserDTO user, @RequestParam("file") MultipartFile file) {
+        Long organizationId = organizationService.findActiveOrganizationIds(user.getId()).stream()
+                .min(Long::compareTo)
+                .orElse(null);
+        BatchImportResult result = batchImportService.importCustomers(file, organizationId);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "result", result))
+                        .message(result.imported() + " of " + (result.imported() + result.failed().size()) + " rows imported")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
      * Links an existing standalone (draft) invoice to a customer.
      *
      * <p>The completion of {@code POST /invoice/create}, which raises an invoice with no owner.
@@ -394,6 +443,39 @@ public class CustomerController {
                         .message("Invoice has been created!")
                         .status(CREATED)
                         .statusCode(CREATED.value())
+                        .build());
+    }
+
+    /**
+     * Bulk-creates invoices from an uploaded CSV or XLSX file, each row linked to an existing
+     * customer by email (POST-SUBMISSION-UPGRADES.md #8, FUTURE-ENHANCEMENTS.md §3.3 "P2-2").
+     *
+     * <p>Unlike {@link #batchImportCustomers}, this endpoint creates no customers — a row whose
+     * {@code customerEmail} does not match an existing customer is rejected rather than treated
+     * as an implicit customer-creation request, the same "link to existing" contract {@link
+     * #linkInvoiceToCustomer} follows for a single invoice.
+     *
+     * <p>Organization-scoped the same way every other invoice-touching endpoint here is: a
+     * scoped caller's rows are checked against {@link #resolveScope}, so a row cannot bill an
+     * invoice to a customer outside the caller's organizations just by naming their email.
+     *
+     * @param user the authenticated user making the request
+     * @param file the uploaded {@code .csv} or {@code .xlsx} file, sent as {@code
+     *             multipart/form-data} under the key {@code "file"}
+     * @return 200 OK with the authenticated user and the row-by-row {@link BatchImportResult}
+     */
+    @PostMapping("/invoice/batch")
+    public ResponseEntity<HttpResponse> batchImportInvoices(@AuthenticationPrincipal UserDTO user, @RequestParam("file") MultipartFile file) {
+        Collection<Long> scope = resolveScope(user);
+        BatchImportResult result = batchImportService.importInvoices(file, scope);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "result", result))
+                        .message(result.imported() + " of " + (result.imported() + result.failed().size()) + " rows imported")
+                        .status(OK)
+                        .statusCode(OK.value())
                         .build());
     }
 

@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 
 /**
@@ -152,12 +153,15 @@ public interface UserService {
     void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword);
 
     /**
-     * Updates the role of a user.
+     * Updates the role of a user, optionally time-boxing the assignment.
      *
-     * @param id       The ID of the user.
-     * @param roleName The name of the new role.
+     * @param id        The ID of the user.
+     * @param roleName  The name of the new role.
+     * @param expiresAt when the assignment should expire, or {@code null} for unlimited (the
+     *                  default) — see {@link com.bob.angularspringbootfullstack.repo.RoleRepo#updateUserRole}
+     *                  for how the expiry is enforced.
      */
-    void updateUserRole(Long id, String roleName);
+    void updateUserRole(Long id, String roleName, LocalDateTime expiresAt);
 
     /**
      * Updates a user's account settings.

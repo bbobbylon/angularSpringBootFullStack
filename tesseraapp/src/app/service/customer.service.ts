@@ -15,6 +15,7 @@ import {
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { CustomerInterface } from '../interface/customer.interface';
 import { InvoiceInterface } from '../interface/invoice.interface';
+import { BatchImportDataInterface } from '../interface/batch-import.interface';
 import { environment } from '../../environments/environment';
 
 /**
@@ -204,6 +205,46 @@ export class CustomerService {
     this.http
       .post<CustomHttpResponseInterface<{ user: unknown }>>(`${this.server}/customer/invoice/${invoiceId}/email`, {})
       .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Uploads a CSV/XLSX file for bulk customer creation via POST /customer/batch
+   * (POST-SUBMISSION-UPGRADES.md #8).
+   *
+   * The file travels as {@code multipart/form-data} under the key {@code "file"} — the same
+   * key {@code UserController#updateProfileImage} uses for its own upload, so both share one
+   * convention. The response is 200 even when every row failed; callers read {@code
+   * data.result.failed} to render the per-row report rather than treating a partial failure as
+   * an HTTP error.
+   *
+   * @param file - the `.csv` or `.xlsx` file chosen by the user
+   * @returns Observable emitting a {@link BatchImportDataInterface} response containing the
+   *          authenticated user and the row-by-row import result
+   */
+  importCustomers$ = (file: File): Observable<CustomHttpResponseInterface<BatchImportDataInterface>> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http
+      .post<CustomHttpResponseInterface<BatchImportDataInterface>>(`${this.server}/customer/batch`, formData)
+      .pipe(catchError(this.handleError));
+  };
+
+  /**
+   * Uploads a CSV/XLSX file for bulk invoice creation via POST /customer/invoice/batch
+   * (POST-SUBMISSION-UPGRADES.md #8). Each row links to an existing customer by email —
+   * see {@link importCustomers$} for the shared multipart convention and partial-success
+   * response contract.
+   *
+   * @param file - the `.csv` or `.xlsx` file chosen by the user
+   * @returns Observable emitting a {@link BatchImportDataInterface} response containing the
+   *          authenticated user and the row-by-row import result
+   */
+  importInvoices$ = (file: File): Observable<CustomHttpResponseInterface<BatchImportDataInterface>> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http
+      .post<CustomHttpResponseInterface<BatchImportDataInterface>>(`${this.server}/customer/invoice/batch`, formData)
+      .pipe(catchError(this.handleError));
+  };
 
   downloadCustomerReport$ = (): Observable<HttpEvent<Blob>> =>
     this.http

@@ -226,6 +226,11 @@ class SecurityConfig {
                             .requestMatchers(PATCH, "/admin/user/*/role/**").hasAnyAuthority("UPDATE:ROLE")
                             .requestMatchers(PATCH, "/admin/user/*/settings").hasAnyAuthority("UPDATE:USER")
                             .requestMatchers(PATCH, "/admin/user/*/update").hasAnyAuthority("UPDATE:USER")
+                            // Role CRUD (RoleController) — creating/editing/deleting catalog rows, not
+                            // reassigning an existing one to a user. UPDATE:ROLE is the URL-level floor;
+                            // RoleController#requireApplicationAdmin narrows it further to exactly
+                            // ROLE_APPLICATION_ADMIN, which this authority-string matcher cannot express.
+                            .requestMatchers("/admin/role/**").hasAnyAuthority("UPDATE:ROLE")
                             .requestMatchers("/admin/**").hasAnyAuthority("UPDATE:USER", "UPDATE:ROLE")
                             // Self-service account security (FR-MFA-4 / plan.md M4-M5): managing
                             // one's OWN second factor and sessions must not require staff

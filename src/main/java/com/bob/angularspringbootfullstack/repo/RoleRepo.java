@@ -2,6 +2,7 @@ package com.bob.angularspringbootfullstack.repo;
 
 import com.bob.angularspringbootfullstack.model.Role;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 
 /**
@@ -18,10 +19,16 @@ import java.util.Collection;
  */
 public interface RoleRepo<T extends Role> {
     /**
-     * Creates a new role in the database.
+     * Creates a new role catalog row (Role CRUD).
      *
-     * @param data the role entity to create
-     * @return the created role with ID populated
+     * <p>Roles created here have no {@link com.bob.angularspringbootfullstack.enumeration.RoleType}
+     * constant until a redeploy adds one, so they exist in the catalog but cannot yet be
+     * assigned to anyone — {@link com.bob.angularspringbootfullstack.enumeration.RoleType#canAssign}
+     * fails closed on the unrecognized name. That is accepted, not a bug: see
+     * {@code FUTURE-ENHANCEMENTS.md} §3.2's Role CRUD design notes.
+     *
+     * @param data the role entity to create (id is ignored/overwritten)
+     * @return the created role with its generated ID populated
      */
     T create(T data);
 
@@ -37,26 +44,31 @@ public interface RoleRepo<T extends Role> {
     Collection<T> list();
 
     /**
-     * Retrieves a single role by ID.
+     * Retrieves a single role catalog row by its own ID (Role CRUD).
      *
      * @param id the role's unique identifier
-     * @return the role if found, null otherwise
+     * @return the role
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no role has that id
      */
     T get(Long id);
 
     /**
-     * Updates an existing role in the database.
+     * Updates an existing role's permission string (Role CRUD — edit). The name is
+     * immutable once created; see {@link #create} for why.
      *
      * @param id   the ID of the role to update
-     * @param data the updated role data
-     * @return the updated role
+     * @param data the updated role data — only {@link Role#getPermission()} is applied
+     * @return the updated role, freshly re-read from the database
      */
     T update(Long id, T data);
 
     /**
-     * Deletes a role from the database.
+     * Deletes a role from the catalog (Role CRUD).
      *
      * @param id the ID of the role to delete
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no role has that id,
+     *         or if any user currently holds it ({@code userroles.role_id} is
+     *         {@code ON DELETE RESTRICT})
      */
     void delete(Long id);
 
@@ -89,11 +101,16 @@ public interface RoleRepo<T extends Role> {
     Role getRoleByUserEmail(String email);
 
     /**
-     * Updates a user's role assignment.
+     * Updates a user's role assignment, optionally time-boxing it.
      *
-     * @param userId   the ID of the user whose role should be updated
-     * @param roleName the new role name to assign
+     * @param userId    the ID of the user whose role should be updated
+     * @param roleName  the new role name to assign
+     * @param expiresAt when this assignment should expire, or {@code null} for unlimited (the
+     *                  default). A non-null value is enforced live: the next time
+     *                  {@link #getRoleByUserId} is called for this user after that instant, it
+     *                  auto-reverts the assignment to {@code ROLE_USER} and clears this field —
+     *                  there is no separate scheduled sweep job.
      */
-    void updateUserRole(Long userId, String roleName);
+    void updateUserRole(Long userId, String roleName, LocalDateTime expiresAt);
 
 }

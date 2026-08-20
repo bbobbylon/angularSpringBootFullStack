@@ -30,6 +30,7 @@
               <button (click)="report()" class="btn btn-info btn-sm sc-panel__action" type="button">
                 <i class="bi bi-file-earmark-excel"></i> Export
               </button>
+              <app-batch-import (imported)="refresh()" kind="invoices"></app-batch-import>
             </div>
           </header>
 

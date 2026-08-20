@@ -27,6 +27,7 @@
               <a [routerLink]="['/customer/new']" class="btn btn-primary btn-sm sc-panel__action">
                 <i class="bi bi-person-plus"></i> {{ t('home.newCustomer') }}
               </a>
+              <app-batch-import (imported)="refresh()" kind="customers"></app-batch-import>
             </div>
           </header>
 

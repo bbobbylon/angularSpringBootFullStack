@@ -8,6 +8,7 @@ import org.springframework.data.repository.PagingAndSortingRepository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * CustomerRepo is the Spring Data JPA repository for {@link Customer} entities.
@@ -69,4 +70,15 @@ public interface CustomerRepo extends PagingAndSortingRepository<Customer, Long>
      */
     Page<Customer> findByCustomerNameContainingAndOrganizationIdIn(
             String customerName, Collection<Long> organizationIds, Pageable pageable);
+
+    /**
+     * Looks up a customer by their exact email address — the dedupe key
+     * {@code BatchImportServiceImpl} checks before creating a customer from an uploaded row, so
+     * re-importing the same spreadsheet twice reports "already exists" per row instead of
+     * silently duplicating every customer in it.
+     *
+     * @param email the exact email address to match
+     * @return the matching customer, if one exists
+     */
+    Optional<Customer> findByEmail(String email);
 }

@@ -1,5 +1,7 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
+import com.bob.angularspringbootfullstack.enumeration.RoleType;
+import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
 import com.bob.angularspringbootfullstack.service.RoleService;
@@ -7,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.regex.Pattern;
 
 /**
  * RoleServiceImpl provides role-related business operations.
@@ -22,6 +25,15 @@ import java.util.Collection;
 @Service
 @RequiredArgsConstructor
 public class RoleServiceImpl implements RoleService {
+
+    /**
+     * Naming convention every role catalog row must follow (Role CRUD — create), matching the
+     * shape every seeded {@link RoleType} constant already has: {@code ROLE_} followed by one or
+     * more uppercase letters/underscores. Enforced here, not at the database, since it is a
+     * business rule about what a valid role name looks like, not a storage constraint.
+     */
+    private static final Pattern ROLE_NAME_PATTERN = Pattern.compile("^ROLE_[A-Z_]+$");
+
     private final RoleRepo<Role> roleRepository;
 
     /**
@@ -57,7 +69,67 @@ public class RoleServiceImpl implements RoleService {
      */
     @Override
     public Collection<Role> getAllRoles() {
-        return roleRepository.list();
+        Collection<Role> roles = roleRepository.list();
+        // Stamped here, not in the repo: "is this name recognized" is RoleType's business rule
+        // (canAssign already fails closed on it), so the catalog's read path just reflects it.
+        roles.forEach(role -> role.setAssignable(RoleType.from(role.getName()).isPresent()));
+        return roles;
+    }
+
+    /**
+     * Validates the name/permission shape, normalizes the name to uppercase, and delegates to
+     * the repository. See {@link #ROLE_NAME_PATTERN} for the accepted name shape.
+     *
+     * @param role the role to create
+     * @return the created role with its generated id populated
+     * @throws ApiException if the name is malformed/blank or the permission string is blank
+     */
+    @Override
+    public Role createRole(Role role) {
+        String name = role.getName() == null ? "" : role.getName().trim().toUpperCase();
+        if (!ROLE_NAME_PATTERN.matcher(name).matches()) {
+            throw new ApiException("Role name must look like ROLE_SOMETHING (uppercase letters and underscores only).");
+        }
+        if (role.getPermission() == null || role.getPermission().isBlank()) {
+            throw new ApiException("Permission string is required.");
+        }
+        role.setName(name);
+        return roleRepository.create(role);
+    }
+
+    /**
+     * Validates the permission string is non-blank and delegates to the repository.
+     *
+     * @param id         the id of the role to update
+     * @param permission the new comma-delimited permission string
+     * @return the updated role
+     * @throws ApiException if the permission string is blank
+     */
+    @Override
+    public Role updateRolePermission(Long id, String permission) {
+        if (permission == null || permission.isBlank()) {
+            throw new ApiException("Permission string is required.");
+        }
+        Role patch = new Role();
+        patch.setPermission(permission);
+        return roleRepository.update(id, patch);
+    }
+
+    /**
+     * Refuses to delete any of the seven built-in {@link RoleType} roles, then delegates to the
+     * repository (which enforces the {@code ON DELETE RESTRICT} guard against a role still
+     * assigned to a user).
+     *
+     * @param id the id of the role to delete
+     * @throws ApiException if no role has that id, or it is a built-in role
+     */
+    @Override
+    public void deleteRole(Long id) {
+        Role role = roleRepository.get(id);
+        if (RoleType.from(role.getName()).isPresent()) {
+            throw new ApiException("'" + role.getName() + "' is a built-in role required by the application and cannot be deleted.");
+        }
+        roleRepository.delete(id);
     }
 }
 

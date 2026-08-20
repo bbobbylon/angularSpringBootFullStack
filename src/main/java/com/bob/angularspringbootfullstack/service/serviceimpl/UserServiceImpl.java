@@ -13,6 +13,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
@@ -211,14 +212,15 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Updates the role of a user.
+     * Updates the role of a user, optionally time-boxing the assignment.
      *
-     * @param id       the ID of the user
-     * @param roleName the name of the new role
+     * @param id        the ID of the user
+     * @param roleName  the name of the new role
+     * @param expiresAt when the assignment should expire, or {@code null} for unlimited
      */
     @Override
-    public void updateUserRole(Long id, String roleName) {
-        roleRepo.updateUserRole(id, roleName);
+    public void updateUserRole(Long id, String roleName, LocalDateTime expiresAt) {
+        roleRepo.updateUserRole(id, roleName, expiresAt);
     }
 
     /**

@@ -34,6 +34,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
@@ -275,20 +278,27 @@ public class AdminUserController {
      * @param authentication the calling administrator's authentication
      * @param id             the target user's primary key
      * @param roleName       the role to assign (e.g. {@code ROLE_MODERATOR})
+     * @param expiresAt      optional {@code YYYY-MM-DD} date (time-boxed role assignment,
+     *                       POST-SUBMISSION-UPGRADES.md); the assignment is valid through the
+     *                       end of that day and reverts to {@code ROLE_USER} automatically —
+     *                       see {@link #parseExpiresAt}. Omitted or blank means unlimited, the
+     *                       default.
      * @return 200 OK with the refreshed target user and the roles catalog
      */
     @PreAuthorize("hasAuthority('UPDATE:ROLE')")
     @PatchMapping("/{id}/role/{roleName}")
     public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication,
                                                        @PathVariable Long id,
-                                                       @PathVariable String roleName) {
+                                                       @PathVariable String roleName,
+                                                       @RequestParam(required = false) String expiresAt) {
         requireNotSelf(authentication, id, "You cannot change your own role. Ask another administrator.");
         requireOrganizationScope(authentication, id);
         requireAssignableTier(authentication, roleName);
         UserDTO target = userService.getUserById(id);
-        userService.updateUserRole(id, roleName);
+        userService.updateUserRole(id, roleName, parseExpiresAt(expiresAt));
         eventPublisher.publishEvent(new NewUserEvent(target.getEmail(), ROLE_UPDATE));
-        log.info("Admin '{}' reassigned role of user id {} to {}", getAuthenticatedUser(authentication).getEmail(), id, roleName);
+        log.info("Admin '{}' reassigned role of user id {} to {} (expiresAt={})",
+                getAuthenticatedUser(authentication).getEmail(), id, roleName, expiresAt);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -691,6 +701,31 @@ public class AdminUserController {
                     caller.getEmail(), caller.getRoleName(), roleName);
             throw new AccessDeniedException(
                     "You cannot assign a role with more privileges than your own.");
+        }
+    }
+
+    /**
+     * Parses the optional {@code expiresAt} query parameter on {@link #updateUserRole} into the
+     * instant a time-boxed role assignment expires.
+     * <p>
+     * Accepts a bare {@code YYYY-MM-DD} date — the shape an HTML date picker emits — rather than
+     * a full timestamp, and resolves it to the END of that day ({@code 23:59:59}) so the
+     * assignment stays valid through the calendar day an administrator selected, which is the
+     * intuitive reading of "expires on this date" for someone picking a date off a calendar
+     * rather than typing a precise instant.
+     *
+     * @param expiresAt a {@code YYYY-MM-DD} date string, or {@code null}/blank for unlimited
+     * @return the resolved expiry instant, or {@code null} for an unlimited assignment
+     * @throws ApiException if {@code expiresAt} is present but not a valid {@code YYYY-MM-DD} date
+     */
+    private static LocalDateTime parseExpiresAt(String expiresAt) {
+        if (expiresAt == null || expiresAt.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(expiresAt).atTime(23, 59, 59);
+        } catch (DateTimeParseException e) {
+            throw new ApiException("Invalid expiration date '" + expiresAt + "'. Use YYYY-MM-DD.");
         }
     }
 }

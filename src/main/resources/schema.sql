@@ -110,6 +110,23 @@ CREATE TABLE IF NOT EXISTS userroles
     CONSTRAINT UQ_UserRoles_User_Id UNIQUE (user_id)
 );
 
+-- Idempotent add of userroles.expires_at (POST-SUBMISSION-UPGRADES.md, time-boxed role
+-- assignment). NULL means the assignment never expires (the default for every existing row
+-- and for ordinary role reassignments); a non-NULL timestamp is enforced live by
+-- RoleRepoImpl#getRoleByUserId on every role lookup — the moment it is in the past, that
+-- method auto-reverts the user to ROLE_USER and clears this column, rather than a scheduled
+-- sweep job checking on a timer. Same information_schema guard as every other idempotent
+-- ALTER in this file, since MySQL has no ADD COLUMN IF NOT EXISTS.
+SET @add_userroles_expires_at := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE userroles ADD COLUMN expires_at TIMESTAMP NULL DEFAULT NULL AFTER role_id',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'userroles' AND COLUMN_NAME = 'expires_at');
+PREPARE add_userroles_expires_at_stmt FROM @add_userroles_expires_at;
+EXECUTE add_userroles_expires_at_stmt;
+DEALLOCATE PREPARE add_userroles_expires_at_stmt;
+
 -- ── Audit: events catalog + per-user log ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS events
 (

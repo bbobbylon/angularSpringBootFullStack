@@ -85,7 +85,7 @@ public class Constants {
             // the SecurityConfig authority check unreachable and turning the gate into a permanent 403
             // for everyone instead of an admin-only allow.
             "/actuator/health", "/actuator/info",
-            "/user/refresh/token", "/user/image", "/user/verify/account",
+            "/user/refresh/token", "/user/profile/image", "/user/image", "/user/verify/account",
             "/user/verify/password", "/user/resetpassword", "/user/new/password",
             // TOTP login completion (FR-MFA-4): the caller holds no token mid-login, so the
             // filter must not attempt to parse a (possibly stale) Bearer header here.

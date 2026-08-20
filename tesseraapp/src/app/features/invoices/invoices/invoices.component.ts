@@ -15,6 +15,7 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { InvoiceTrendComponent } from '../../../shared/charts/invoice-trend/invoice-trend.component';
 import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
+import { BatchImportComponent } from '../../../shared/batch-import/batch-import.component';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
 
@@ -33,7 +34,7 @@ import { TranslocoService } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-invoices',
-  imports: [NgClass, RouterModule, NavbarComponent, DatePipe, InvoiceTrendComponent, TranslocoDirective, PageSizeSelectComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, DatePipe, InvoiceTrendComponent, TranslocoDirective, PageSizeSelectComponent, BatchImportComponent],
   templateUrl: './invoices.component.html',
   styleUrl: './invoices.component.css',
   standalone: true,
@@ -90,6 +91,14 @@ export class InvoicesComponent implements OnInit {
   sort$ = computed(() => ({ field: this.sortField(), direction: this.sortDirection() }));
 
   /**
+   * Bumped by {@link refresh} to force a re-fetch of the current page/search/sort without
+   * changing any of them — used after a batch import adds rows the visible page should reflect.
+   * Its value is never sent to the server; only a change in it (folded into {@link query} below)
+   * matters, since that is what makes {@code toObservable(query)} emit again.
+   */
+  private refreshTick = signal(0);
+
+  /**
    * Page, size, search term and sort as one derived value — the single input to the fetch
    * pipeline.
    *
@@ -104,6 +113,7 @@ export class InvoicesComponent implements OnInit {
     size: this.pageSize(),
     term: this.currentSearchTerm(),
     sort: this.sortField() ? `${this.sortField()},${this.sortDirection()}` : undefined,
+    tick: this.refreshTick(),
   }));
   private readonly _query$ = toObservable(this.query);
   private readonly customerService = inject(CustomerService);
@@ -234,6 +244,16 @@ export class InvoicesComponent implements OnInit {
       this.sortDirection.set('asc');
     }
     this.currentPage.set(0);
+  }
+
+  /**
+   * Re-fetches the current page/search/sort combination unchanged — bumps {@link refreshTick},
+   * which is folded into {@link query} purely so a change in it triggers the same fetch pipeline
+   * every other control here drives. Bound to {@code app-batch-import}'s {@code (imported)}
+   * output so an invoice added via CSV/XLSX import shows up without a manual page reload.
+   */
+  refresh(): void {
+    this.refreshTick.update((tick) => tick + 1);
   }
 
   /**

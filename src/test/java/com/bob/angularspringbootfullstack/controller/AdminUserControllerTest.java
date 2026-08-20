@@ -188,7 +188,7 @@ class AdminUserControllerTest {
                         .principal(orgAdminAuth()))
                 .andExpect(status().isForbidden());
 
-        verify(userService, never()).updateUserRole(any(Long.class), any(String.class));
+        verify(userService, never()).updateUserRole(any(Long.class), any(String.class), any());
     }
 
     @Test
@@ -200,7 +200,7 @@ class AdminUserControllerTest {
                         .principal(orgAdminAuth()))
                 .andExpect(status().isOk());
 
-        verify(userService).updateUserRole(TARGET_ID, "ROLE_MODERATOR");
+        verify(userService).updateUserRole(TARGET_ID, "ROLE_MODERATOR", null);
     }
 
     @Test
@@ -212,7 +212,7 @@ class AdminUserControllerTest {
                         .principal(orgAdminAuth()))
                 .andExpect(status().isOk());
 
-        verify(userService).updateUserRole(TARGET_ID, "ROLE_ORGANIZATION_ADMIN");
+        verify(userService).updateUserRole(TARGET_ID, "ROLE_ORGANIZATION_ADMIN", null);
     }
 
     @Test
@@ -224,7 +224,34 @@ class AdminUserControllerTest {
                         .principal(orgAdminAuth()))
                 .andExpect(status().isForbidden());
 
-        verify(userService, never()).updateUserRole(any(Long.class), any(String.class));
+        verify(userService, never()).updateUserRole(any(Long.class), any(String.class), any());
+    }
+
+    @Test
+    @DisplayName("a YYYY-MM-DD expiresAt is parsed and threaded through to a time-boxed assignment")
+    void timeBoxedAssignmentThreadsExpiryThrough() throws Exception {
+        stubAssignmentSuccessPath();
+
+        mockMvc.perform(patch("/admin/user/{id}/role/{roleName}", TARGET_ID, "ROLE_MODERATOR")
+                        .param("expiresAt", "2026-09-01")
+                        .principal(orgAdminAuth()))
+                .andExpect(status().isOk());
+
+        verify(userService).updateUserRole(TARGET_ID, "ROLE_MODERATOR",
+                java.time.LocalDateTime.of(2026, 9, 1, 23, 59, 59));
+    }
+
+    @Test
+    @DisplayName("a malformed expiresAt is refused with a 4xx instead of a stack trace")
+    void malformedExpiresAtIsRefused() throws Exception {
+        when(organizationService.isWithinOrganizationScope(ADMIN_ID, TARGET_ID)).thenReturn(true);
+
+        mockMvc.perform(patch("/admin/user/{id}/role/{roleName}", TARGET_ID, "ROLE_MODERATOR")
+                        .param("expiresAt", "not-a-date")
+                        .principal(orgAdminAuth()))
+                .andExpect(status().is4xxClientError());
+
+        verify(userService, never()).updateUserRole(any(Long.class), any(String.class), any());
     }
 
     // ── Admin session revocation ──────────────────────────────────────────────────────────────
@@ -320,6 +347,6 @@ class AdminUserControllerTest {
                         .principal(auth))
                 .andExpect(status().isOk());
 
-        verify(userService).updateUserRole(TARGET_ID, "ROLE_ADMIN");
+        verify(userService).updateUserRole(TARGET_ID, "ROLE_ADMIN", null);
     }
 }

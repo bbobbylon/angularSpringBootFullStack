@@ -1,0 +1,62 @@
+<ng-container *transloco="let t">
+  <button (click)="toggle()" class="btn btn-outline-secondary btn-sm sc-panel__action" type="button">
+    <i class="bi bi-upload"></i> {{ t('batchImport.button') }}
+  </button>
+
+  @if (open()) {
+    <section class="sc-panel sc-panel--flush sc-reveal batch-import">
+      <div class="sc-panel__head">
+        <div>
+          <h2 class="h6 mb-1">{{ t('batchImport.title') }}</h2>
+          <p class="text-muted small mb-0">
+            {{ kind() === 'customers' ? t('batchImport.hintCustomers') : t('batchImport.hintInvoices') }}
+          </p>
+        </div>
+        <button (click)="reset()" [attr.aria-label]="t('batchImport.close')" class="btn-close" type="button"></button>
+      </div>
+
+      <div class="d-flex align-items-center gap-2 flex-wrap mt-3">
+        <label class="btn btn-outline-primary btn-sm mb-0">
+          <i class="bi bi-file-earmark-arrow-up"></i> {{ t('batchImport.chooseFile') }}
+          <input (change)="onFileSelected($event)" [disabled]="uploading()" accept=".csv,.xlsx,.xls" class="d-none" type="file" />
+        </label>
+        <span class="text-muted small">{{ selectedFile()?.name ?? t('batchImport.noFileChosen') }}</span>
+        <button (click)="upload()" [disabled]="!selectedFile() || uploading()" class="btn btn-primary btn-sm ms-auto" type="button">
+          @if (uploading()) {
+            <span aria-hidden="true" class="spinner-border spinner-border-sm"></span> {{ t('batchImport.uploading') }}
+          } @else {
+            {{ t('batchImport.upload') }}
+          }
+        </button>
+      </div>
+
+      @if (result(); as importResult) {
+        <div class="mt-3">
+          <p class="fw-medium mb-2">
+            {{ t('batchImport.resultSummary', { imported: importResult.imported, total: importResult.imported + importResult.failed.length }) }}
+          </p>
+          @if (importResult.failed.length > 0) {
+            <div class="table-responsive batch-import__failures">
+              <table class="table table-sm table-hover align-middle">
+                <thead>
+                <tr>
+                  <th scope="col">{{ t('batchImport.row') }}</th>
+                  <th scope="col">{{ t('batchImport.reason') }}</th>
+                </tr>
+                </thead>
+                <tbody>
+                  @for (failure of importResult.failed; track failure.row) {
+                    <tr>
+                      <td class="mono">{{ failure.row }}</td>
+                      <td class="text-muted">{{ failure.reason }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      }
+    </section>
+  }
+</ng-container>

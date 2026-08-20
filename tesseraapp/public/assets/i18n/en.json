@@ -384,6 +384,20 @@
     "searchByInvoiceNumber": "Search by invoice # or customer",
     "searchAria": "Search invoices"
   },
+  "batchImport": {
+    "button": "Import",
+    "title": "Batch import",
+    "hintCustomers": "Upload a CSV or Excel file of customers.",
+    "hintInvoices": "Upload a CSV or Excel file of invoices.",
+    "chooseFile": "Choose file",
+    "noFileChosen": "No file chosen",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "resultSummary": "Imported {{imported}} of {{total}} rows.",
+    "row": "Row",
+    "reason": "Reason",
+    "close": "Close"
+  },
   "users": {
     "breadcrumb": "Users",
     "eyebrow": "Administration",

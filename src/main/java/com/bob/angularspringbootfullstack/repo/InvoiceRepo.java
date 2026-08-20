@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * InvoiceRepo is the Spring Data JPA repository for {@link Invoice} entities.
@@ -95,4 +96,15 @@ public interface InvoiceRepo extends PagingAndSortingRepository<Invoice, Long>, 
             + "OR LOWER(i.customer.customerName) LIKE LOWER(CONCAT('%', :term, '%')))")
     Page<Invoice> searchByInvoiceNumberOrCustomerNameAndOrganizationIdIn(
             @Param("term") String term, @Param("organizationIds") Collection<Long> organizationIds, Pageable pageable);
+
+    /**
+     * Looks up an invoice by its exact invoice number — the dedupe key
+     * {@code BatchImportServiceImpl} checks for a row that supplies its own invoice number,
+     * so re-importing a spreadsheet that already carried one doesn't raise a second invoice
+     * under the same reference.
+     *
+     * @param invoiceNumber the exact invoice number to match
+     * @return the matching invoice, if one exists
+     */
+    Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
 }

@@ -818,7 +818,7 @@ select,
   line-height: 1.1;
 }
 .sc-head__sub { margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--fs-lg); }
-.sc-head__actions { display: inline-flex; align-items: center; gap: var(--space-3); flex: none; }
+.sc-head__actions { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); flex: none; }
 
 /* ---- Elevated glass panel ---- */
 .sc-panel {

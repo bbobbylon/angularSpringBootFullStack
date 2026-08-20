@@ -116,6 +116,14 @@
             <artifactId>commons-lang3</artifactId>
             <version>3.18.0</version>
         </dependency>
+        <!-- Batch upload (FUTURE-ENHANCEMENTS.md §3.3 "P2-2"): CSV parsing for
+             POST /customer/batch and /customer/invoice/batch. XLSX parsing reuses the
+             poi-ooxml dependency already declared above for the existing report exports. -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>1.14.1</version>
+        </dependency>
         <dependency>
             <groupId>com.twilio.sdk</groupId>
             <artifactId>twilio</artifactId>
@@ -134,6 +142,22 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Boot 4.0 split TestRestTemplate out of spring-boot-test into its own module
+             (SecurityFilterChainIntegrationTest: real HTTP calls through the actual
+             SecurityFilterChain, POST-SUBMISSION-UPGRADES.md #9) — no longer transitive
+             via spring-boot-starter-test. TestRestTemplate itself wraps a RestTemplateBuilder,
+             which Boot 4.0 also split out (spring-boot-restclient) rather than bundling it —
+             the app has no other RestTemplate/RestClient usage, so both are test-scoped only. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-resttestclient</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-restclient</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

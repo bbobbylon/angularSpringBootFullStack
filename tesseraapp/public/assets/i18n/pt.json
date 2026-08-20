@@ -382,6 +382,20 @@
     "searchByInvoiceNumber": "Pesquisar por n.º da fatura ou cliente",
     "searchAria": "Pesquisar faturas"
   },
+  "batchImport": {
+    "button": "Importar",
+    "title": "Importação em lote",
+    "hintCustomers": "Envie um arquivo CSV ou Excel de clientes.",
+    "hintInvoices": "Envie um arquivo CSV ou Excel de faturas.",
+    "chooseFile": "Escolher arquivo",
+    "noFileChosen": "Nenhum arquivo escolhido",
+    "upload": "Enviar",
+    "uploading": "Enviando…",
+    "resultSummary": "{{imported}} de {{total}} linhas importadas.",
+    "row": "Linha",
+    "reason": "Motivo",
+    "close": "Fechar"
+  },
   "users": {
     "breadcrumb": "Usuários",
     "eyebrow": "Administração",
