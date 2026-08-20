@@ -32,7 +32,11 @@
     "back": "Volver",
     "description": "Descripción",
     "price": "Precio",
-    "amount": "Importe"
+    "amount": "Importe",
+    "pageXofY": "Página {{page}} de {{total}}",
+    "nTotal": "{{count}} en total",
+    "acrossNPages": "en {{count}} páginas",
+    "viewAll": "Ver todo"
   },
   "nav": {
     "customers": "Clientes",
@@ -45,9 +49,10 @@
     "serviceCatalog": "Catálogo de servicios",
     "newServiceInvoice": "Nueva factura de servicio",
     "manageServices": "Gestionar servicios",
+    "newService": "Nuevo Servicio",
     "admin": "Administración",
     "userDirectory": "Directorio de usuarios",
-    "assignRoles": "Asignar roles",
+    "insights": "Informes",
     "rolesPermissions": "Roles y permisos",
     "securityOverview": "Panel de seguridad",
     "billingOverview": "Resumen de facturación",
@@ -147,6 +152,21 @@
       "passwordOnly": "Solo contraseña",
       "federatedSignIns": "Inicios de sesión federados",
       "recoveryCodesUsed": "Códigos de recuperación usados"
+    },
+    "settings": {
+      "title": "Configuración de detección de anomalías",
+      "subtitle": "Los cambios se aplican en el siguiente inicio de sesión — no requiere una nueva implementación.",
+      "enabledLabel": "Detección de anomalías",
+      "useDefault": "Usar valor predeterminado del servidor",
+      "enabled": "Activada",
+      "disabled": "Desactivada",
+      "historyLimitLabel": "Ventana de historial de inicios de sesión",
+      "historyLimitHint": "Cuántos de los inicios de sesión recientes de la cuenta se usan para comparar uno nuevo.",
+      "historyLimitPlaceholder": "Valor predeterminado del servidor",
+      "clearOverride": "Usar valor predeterminado",
+      "save": "Guardar cambios",
+      "saving": "Guardando…",
+      "unsavedChanges": "Cambios sin guardar"
     }
   },
   "servicesAdmin": {
@@ -164,8 +184,10 @@
     "description": "Descripción",
     "basePrice": "Precio base",
     "noDescription": "Sin descripción.",
-    "emptyTitle": "El catálogo está vacío.",
-    "emptyHint": "Añade tu primer servicio para que pueda seleccionarse en las nuevas facturas.",
+    "emptyTitle": "No se han encontrado servicios",
+    "emptyHint": "Prueba con otro término de búsqueda o añade tu primer servicio.",
+    "searchByName": "Buscar por nombre o descripción",
+    "searchAria": "Buscar en el catálogo de servicios",
     "editNote": "Editar un servicio no modifica las facturas ya emitidas: conservan el nombre y el precio registrados en su momento.",
     "summary": {
       "offered": "en oferta",
@@ -209,8 +231,11 @@
     "catalogValue": "Valor del catálogo",
     "createInvoice": "Crear factura",
     "emptyTitle": "No hay servicios en el catálogo",
-    "emptyHint": "El catálogo de servicios está vacío. Añade servicios desde el panel de administración.",
-    "manageCatalog": "Gestionar catálogo"
+    "emptyHint": "Todavía no se ha publicado ningún servicio. Cuando se publiquen, aparecerán aquí listos para añadirse a una factura.",
+    "emptyHintAdmin": "Publica tu primer servicio para que pueda seleccionarse en las nuevas facturas.",
+    "manageCatalog": "Gestionar catálogo",
+    "noResultsTitle": "No se han encontrado servicios",
+    "noResultsHint": "Prueba con otro término de búsqueda."
   },
   "securityCenter": {
     "eyebrow": "Cuenta",
@@ -226,6 +251,8 @@
     "codesLow": "Quedan pocos: vuelve a registrarte para obtener un juego nuevo",
     "disableCodeLabel": "Código de la app o de recuperación",
     "disableAuthenticator": "Desactivar la aplicación",
+    "regenerateCodes": "Regenerar códigos de recuperación",
+    "regenerateConfirm": "Regenerar",
     "enrollTitle": "Configura tu aplicación de autenticación",
     "enrollHint": "Escanea el código QR y luego introduce el código de 6 dígitos que muestra tu aplicación.",
     "codeFromApp": "Código de tu aplicación",
@@ -349,9 +376,25 @@
     "title": "Facturas",
     "invoiceNumber": "N.º de factura",
     "service": "Servicio",
-    "emptyTitle": "Todavía no hay facturas",
-    "emptyHint": "Las facturas que crees aparecerán aquí con su estado y sus totales.",
-    "loading": "Cargando facturas…"
+    "emptyTitle": "No se han encontrado facturas",
+    "emptyHint": "Prueba con otro término de búsqueda o crea una nueva factura.",
+    "loading": "Cargando facturas…",
+    "searchByInvoiceNumber": "Buscar por n.º de factura o cliente",
+    "searchAria": "Buscar facturas"
+  },
+  "batchImport": {
+    "button": "Importar",
+    "title": "Importación por lotes",
+    "hintCustomers": "Sube un archivo CSV o Excel de clientes.",
+    "hintInvoices": "Sube un archivo CSV o Excel de facturas.",
+    "chooseFile": "Elegir archivo",
+    "noFileChosen": "Ningún archivo seleccionado",
+    "upload": "Subir",
+    "uploading": "Subiendo…",
+    "resultSummary": "Se importaron {{imported}} de {{total}} filas.",
+    "row": "Fila",
+    "reason": "Motivo",
+    "close": "Cerrar"
   },
   "users": {
     "breadcrumb": "Usuarios",
@@ -439,7 +482,17 @@
     "eyebrow": "Control de acceso",
     "title": "Roles × Permisos",
     "loading": "Cargando el catálogo de roles…",
-    "error": "No se pudo cargar el catálogo de roles. Actualiza la página."
+    "error": "No se pudo cargar el catálogo de roles. Actualiza la página.",
+    "notYetAssignableHint": "Creado, pero ninguna versión de la aplicación reconoce aún este nombre de rol — no se puede asignar a un usuario hasta que una nueva implementación lo incluya.",
+    "catalogTitle": "Gestión del catálogo de roles",
+    "newRoleName": "Nombre del nuevo rol",
+    "newRolePermission": "Permisos",
+    "createRole": "Crear rol",
+    "createRoleHint": "El nombre debe tener el formato ROLE_ALGO. El nuevo rol se crea pero no puede asignarse a ningún usuario hasta que una futura implementación lo reconozca.",
+    "role": "Rol",
+    "permissions": "Permisos",
+    "builtIn": "Integrado",
+    "builtInHint": "Los roles integrados no se pueden eliminar."
   },
   "charts": {
     "customerAnalytics": "Análisis de clientes",
@@ -469,7 +522,7 @@
     "statusOverTime": "Estado de las facturas en el tiempo",
     "statusOverTimeSub": "Ritmo de cobro: PAGADAS / PENDIENTES / VENCIDAS por mes",
     "noInvoiceData": "Todavía no hay datos de facturas.",
-    "serviceUtilisation": "Uso de servicios",
+    "serviceUtilization": "Uso de servicios",
     "serviceSub": "Los 10 servicios más facturados",
     "noServiceData": "Todavía no hay datos de servicios.",
     "customerStatus": "Estado de los clientes",
@@ -499,8 +552,16 @@
     "assignedRole": "Rol asignado",
     "updateRole": "Actualizar rol",
     "updateState": "Actualizar estado",
+    "revokeSessions": "Cerrar sesión en todas partes",
+    "revokeSessionsTitle": "Sesiones activas",
+    "revokeSessionsHint": "Finaliza todas las sesiones iniciadas en esta cuenta. Bloquear no basta: una sesión abierta sigue funcionando hasta que caduque su token.",
     "noActivity": "No hay actividad registrada.",
-    "loading": "Cargando cuenta…"
+    "loading": "Cargando cuenta…",
+    "expires": "Caduca",
+    "roleExpiresOn": "Esta asignación de rol caduca el {{date}}",
+    "notYetAssignable": "aún no asignable",
+    "expiresOn": "Caduca el",
+    "expiresHint": "Opcional. Déjalo en blanco para una asignación ilimitada; el rol vuelve automáticamente al rol de usuario predeterminado al final del día seleccionado."
   },
   "newCustomer": {
     "saveCustomer": "Guardar cliente",
@@ -521,11 +582,16 @@
     "settingsUpdated": "Ajustes actualizados correctamente",
     "totpEnabled": "Aplicación de autenticación activada",
     "totpDisabled": "Aplicación de autenticación desactivada",
+    "recoveryCodesRegenerated": "Códigos de recuperación regenerados",
     "smsUpdated": "Ajuste de verificación por SMS actualizado",
     "phoneSaved": "Número de teléfono guardado: la verificación por SMS ya está activada",
     "sessionRevoked": "Sesión revocada",
     "otherSessionsRevoked": "Se ha cerrado la sesión en los demás dispositivos",
-    "providerDisconnected": "Proveedor desconectado"
+    "providerDisconnected": "Proveedor desconectado",
+    "providerLinked": "Se ha conectado {{provider}} a tu cuenta",
+    "passkeyAdded": "Clave de acceso añadida",
+    "passkeyRemoved": "Clave de acceso eliminada",
+    "passkeyCancelled": "Configuración de la clave de acceso cancelada"
   },
   "palette": {
     "sectionNavigate": "Navegar",
@@ -558,6 +624,8 @@
     "securityOverviewHint": "Admin · anomalías y cobertura MFA",
     "manageServices": "Gestionar servicios",
     "manageServicesHint": "Admin · CRUD del catálogo",
+    "newService": "Nuevo Servicio",
+    "newServiceHint": "Admin · agregar oferta al catálogo",
     "toggleTheme": "Cambiar tema",
     "toggleThemeHint": "Alternar oscuro / claro",
     "logout": "Cerrar sesión",

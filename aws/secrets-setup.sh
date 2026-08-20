@@ -63,6 +63,8 @@ create_secret "google-client-id"     "CHANGE_ME.apps.googleusercontent.com"
 create_secret "google-client-secret" "CHANGE_ME_google_secret"
 create_secret "github-client-id"     "CHANGE_ME_github_oauth_client_id"
 create_secret "github-client-secret" "CHANGE_ME_github_oauth_secret"
+create_secret "microsoft-client-id"     "CHANGE_ME_entra_application_client_id"
+create_secret "microsoft-client-secret" "CHANGE_ME_entra_client_secret_value"
 
 echo ""
 echo "✓ All secrets created in ${REGION}."

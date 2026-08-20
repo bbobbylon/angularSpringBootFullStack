@@ -1,0 +1,15 @@
+<footer class="sc-footer">
+  <div class="container sc-footer__inner">
+    <div class="sc-footer__about">
+      <span class="sc-footer__copy">© {{ year }} TesseraApp. All rights reserved.</span>
+      <span class="sc-footer__privacy-note">
+        We only use your data to run your account — see our Privacy Policy for details.
+      </span>
+    </div>
+    <nav class="sc-footer__legal" aria-label="Legal">
+      <a [routerLink]="['/terms']" rel="noopener" target="_blank">Terms &amp; Conditions</a>
+      <a [routerLink]="['/privacy']" rel="noopener" target="_blank">Privacy Policy</a>
+    </nav>
+    <a [routerLink]="['/contact']" class="sc-footer__contact" rel="noopener" target="_blank">Contact Us</a>
+  </div>
+</footer>

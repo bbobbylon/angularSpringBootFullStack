@@ -1,4 +1,4 @@
-<app-navbar [user]="user()"></app-navbar>
+<app-navbar></app-navbar>
 
 <main *transloco="let t" class="sc-secops">
   <div class="container">
@@ -81,7 +81,7 @@
         <section class="sc-secops__grid sc-reveal" style="--d: 40ms;">
 
           <!-- The anomaly tile leads, and turns amber only when there is something to look at:
-               a permanently-coloured alert tile stops being read within a week. -->
+               a permanently-colored alert tile stops being read within a week. -->
           <div class="sc-panel sc-panel--flush sc-secops__tile" [class.is-alert]="suspiciousCount() > 0">
             <span class="sc-secops__tile-label eyebrow">{{ t('security.tiles.anomalous') }}</span>
             <span class="sc-secops__tile-value">{{ suspiciousCount() | number }}</span>
@@ -102,12 +102,24 @@
             </span>
           </div>
 
+          <!-- Headline reads the SERVER's total, not the loaded array. Once the list below is paged,
+               restrictedAccounts() holds one page, so counting it would under-report the tile the
+               moment there is more than one page — the summary would quietly contradict its table.
+               The locked/not-enabled split is still computed client-side from the loaded rows, so it
+               is only shown while the whole set is on screen; beyond that it would describe the
+               current page while sitting under a total, which is worse than not breaking it down. -->
           <div class="sc-panel sc-panel--flush sc-secops__tile" [class.is-alert]="lockedCount() > 0">
             <span class="sc-secops__tile-label eyebrow">{{ t('security.tiles.restricted') }}</span>
-            <span class="sc-secops__tile-value">{{ restrictedAccounts().length | number }}</span>
-            <span class="sc-secops__tile-note">
-              {{ lockedCount() }} locked · {{ disabledCount() }} not enabled
-            </span>
+            <span class="sc-secops__tile-value">{{ restrictedPageInfo().totalElements | number }}</span>
+            @if (!showRestrictedPager()) {
+              <span class="sc-secops__tile-note">
+                {{ lockedCount() }} locked · {{ disabledCount() }} not enabled
+              </span>
+            } @else {
+              <span class="sc-secops__tile-note">
+                {{ t('common.acrossNPages', { count: restrictedPageInfo().totalPages }) }}
+              </span>
+            }
           </div>
 
           <div class="sc-panel sc-panel--flush sc-secops__tile">
@@ -249,6 +261,45 @@
                 </tbody>
               </table>
             </div>
+
+            <!-- Prev/next plus a position readout — the same pager shape used across every
+                 paginated table in the app (Customers, Users, Invoices, etc.), since a
+                 numbered-button-per-page pager overflows on narrow viewports and is unusable
+                 for logs that can reach hundreds of pages. The total is spelled out because
+                 it is the number that resolves "is this all of them?" -->
+            @if (showSuspiciousFoot()) {
+              <div class="sc-panel__foot d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <app-page-size-select (sizeSelected)="changeSuspiciousSize($event)"
+                                        [size]="suspiciousSize()"></app-page-size-select>
+                  <span class="text-muted small mono">
+                    {{ t('common.pageXofY', { page: suspiciousPageInfo().page + 1, total: suspiciousPageInfo().totalPages }) }}
+                    · {{ t('common.nTotal', { count: suspiciousPageInfo().totalElements }) }}
+                  </span>
+                </div>
+                @if (showSuspiciousPager()) {
+                  <nav [attr.aria-label]="t('common.pageNavigation')">
+                    <ul class="pagination pagination-sm mb-0">
+                      <li class="page-item" [class.disabled]="suspiciousPageInfo().page === 0">
+                        <button type="button" class="page-link"
+                                [disabled]="suspiciousPageInfo().page === 0"
+                                (click)="goToSuspiciousPage(suspiciousPageInfo().page - 1)">
+                          &laquo; {{ t('common.prev') }}
+                        </button>
+                      </li>
+                      <li class="page-item"
+                          [class.disabled]="suspiciousPageInfo().page >= suspiciousPageInfo().totalPages - 1">
+                        <button type="button" class="page-link"
+                                [disabled]="suspiciousPageInfo().page >= suspiciousPageInfo().totalPages - 1"
+                                (click)="goToSuspiciousPage(suspiciousPageInfo().page + 1)">
+                          {{ t('common.next') }} &raquo;
+                        </button>
+                      </li>
+                    </ul>
+                  </nav>
+                }
+              </div>
+            }
           }
         </section>
 
@@ -294,6 +345,40 @@
                   </li>
                 }
               </ul>
+
+              @if (showRestrictedFoot()) {
+                <div class="sc-panel__foot d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <app-page-size-select (sizeSelected)="changeRestrictedSize($event)"
+                                          [size]="restrictedSize()"></app-page-size-select>
+                    <span class="text-muted small mono">
+                      {{ t('common.pageXofY', { page: restrictedPageInfo().page + 1, total: restrictedPageInfo().totalPages }) }}
+                      · {{ t('common.nTotal', { count: restrictedPageInfo().totalElements }) }}
+                    </span>
+                  </div>
+                  @if (showRestrictedPager()) {
+                    <nav [attr.aria-label]="t('common.pageNavigation')">
+                      <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item" [class.disabled]="restrictedPageInfo().page === 0">
+                          <button type="button" class="page-link"
+                                  [disabled]="restrictedPageInfo().page === 0"
+                                  (click)="goToRestrictedPage(restrictedPageInfo().page - 1)">
+                            &laquo; {{ t('common.prev') }}
+                          </button>
+                        </li>
+                        <li class="page-item"
+                            [class.disabled]="restrictedPageInfo().page >= restrictedPageInfo().totalPages - 1">
+                          <button type="button" class="page-link"
+                                  [disabled]="restrictedPageInfo().page >= restrictedPageInfo().totalPages - 1"
+                                  (click)="goToRestrictedPage(restrictedPageInfo().page + 1)">
+                            {{ t('common.next') }} &raquo;
+                          </button>
+                        </li>
+                      </ul>
+                    </nav>
+                  }
+                </div>
+              }
             }
           </section>
 
@@ -348,6 +433,74 @@
             }
           </section>
         </div>
+
+        <!-- ── Anomaly signal tuning (FUTURE-ENHANCEMENTS "Anomaly signal tuning UI") ───────── -->
+        @if (savedSettings(); as saved) {
+          <section class="sc-panel sc-secops__panel sc-reveal" style="--d: 180ms;">
+            <div class="sc-secops__panel-head">
+              <div>
+                <h2 class="sc-secops__panel-title">{{ t('security.settings.title') }}</h2>
+                <p class="sc-secops__panel-sub">{{ t('security.settings.subtitle') }}</p>
+              </div>
+            </div>
+
+            <div class="row g-4">
+              <div class="col-md-6">
+                <span class="form-label d-block">{{ t('security.settings.enabledLabel') }}</span>
+                <div aria-label="Anomaly detection override" class="btn-group" role="group">
+                  <button (click)="selectEnabledDraft(null)"
+                          [class.active]="enabledDraft() === null"
+                          class="btn btn-sm btn-outline-secondary" type="button">
+                    {{ t('security.settings.useDefault') }}
+                  </button>
+                  <button (click)="selectEnabledDraft(true)"
+                          [class.active]="enabledDraft() === true"
+                          class="btn btn-sm btn-outline-secondary" type="button">
+                    {{ t('security.settings.enabled') }}
+                  </button>
+                  <button (click)="selectEnabledDraft(false)"
+                          [class.active]="enabledDraft() === false"
+                          class="btn btn-sm btn-outline-secondary" type="button">
+                    {{ t('security.settings.disabled') }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label" for="history-limit-input">{{ t('security.settings.historyLimitLabel') }}</label>
+                <div class="input-group input-group-sm">
+                  <input #historyLimitInput
+                         (change)="onHistoryLimitInput(historyLimitInput.value)"
+                         [attr.placeholder]="t('security.settings.historyLimitPlaceholder')"
+                         [value]="historyLimitDraft() ?? ''"
+                         class="form-control" id="history-limit-input" max="500" min="1" type="number" />
+                  <button (click)="clearHistoryLimitDraft()" class="btn btn-outline-secondary" type="button">
+                    {{ t('security.settings.clearOverride') }}
+                  </button>
+                </div>
+                <p class="form-text mb-0">{{ t('security.settings.historyLimitHint') }}</p>
+              </div>
+            </div>
+
+            <div class="sc-panel__foot d-flex align-items-center gap-3">
+              <button (click)="saveAnomalySettings()"
+                      [disabled]="!settingsDirty() || settingsSaving()"
+                      class="btn btn-sm btn-primary" type="button">
+                @if (settingsSaving()) {
+                  {{ t('security.settings.saving') }}
+                } @else {
+                  {{ t('security.settings.save') }}
+                }
+              </button>
+              @if (settingsDirty() && !settingsSaving()) {
+                <span class="text-muted small">{{ t('security.settings.unsavedChanges') }}</span>
+              }
+              @if (saved.updatedAt) {
+                <span class="text-muted small ms-auto">{{ saved.updatedAt | date: 'MMM d, HH:mm' }}</span>
+              }
+            </div>
+          </section>
+        }
       }
     }
   </div>

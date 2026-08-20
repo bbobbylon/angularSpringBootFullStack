@@ -3,6 +3,8 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 import com.bob.angularspringbootfullstack.enumeration.VerificationType;
 import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.NotificationService;
+import com.bob.angularspringbootfullstack.utils.TwilioVerifyUtils;
+import com.bob.angularspringbootfullstack.utils.VoiceUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,9 +17,10 @@ import static com.bob.angularspringbootfullstack.enumeration.VerificationType.PA
 /**
  * Default {@link NotificationService} that fans dispatch out to channel-specific
  * collaborators. Email goes through {@link EmailService} (Spring's
- * {@code JavaMailSender}); SMS would go through
- * {@link com.bob.angularspringbootfullstack.utils.SMSUtils} but is currently
- * stubbed with a log line to avoid Twilio charges during development.
+ * {@code JavaMailSender}); the 2FA code goes through {@link VoiceUtils} as a spoken
+ * call rather than SMS (see {@link #sendTwoFactorCode} for why), which sends for
+ * real once Twilio credentials are configured and otherwise degrades to a log
+ * line so the flow stays completable in dev/CI without a Twilio account.
  * <p>
  * All sends run on {@link CompletableFuture#runAsync(Runnable)}'s common
  * {@code ForkJoinPool} so the HTTP thread that triggered the operation
@@ -47,20 +50,54 @@ public class NotificationServiceImpl implements NotificationService {
         dispatchVerificationEmail(firstName, email, verificationURL, PASSWORD);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p><b>Twilio Verify when configured, the local-code voice path otherwise.</b> An earlier
+     * version of this method always dispatched over {@link VoiceUtils}, bypassing SMS entirely:
+     * Twilio's Messaging API returns success the instant <em>Twilio</em> accepts a message, not once
+     * a carrier delivers it, so a message blocked by a pending US A2P 10DLC campaign registration was
+     * silently dropped downstream with no exception ever thrown to catch — confirmed against this
+     * account's own billing, which was charged for "dispatched" texts that never arrived. Twilio
+     * Verify sidesteps that entire problem rather than working around it: Twilio's own A2P 10DLC
+     * compliance docs carry an explicit exception for OTP-only traffic sent through Verify, so SMS
+     * delivery works today without waiting on this account's campaign review. See
+     * {@link TwilioVerifyUtils} for why that exemption holds and what Verify takes over.
+     * <p>
+     * When {@link TwilioVerifyUtils#isConfigured()}, the {@code code} parameter is ignored — Twilio
+     * generates and owns the code for this path — and delivery goes through
+     * {@link TwilioVerifyUtils#startVerification}: {@code "sms"} first, and only on that call
+     * throwing (not merely "accepted", since Verify still can't promise carrier delivery any more
+     * than raw Messaging can) do we retry on {@code "call"}, which is the "keep voice as a fallback"
+     * requirement — now a second Verify call instead of a second integration. When Verify isn't
+     * configured (no {@code TWILIO_VERIFY_SERVICE_SID}, e.g. dev/CI), this falls back unchanged to
+     * the locally-generated {@code code} read aloud via {@link VoiceUtils}.
+     */
     @Override
     public void sendTwoFactorCode(String firstName, String phoneNumber, String code) {
-        CompletableFuture.runAsync(() -> {
-            // TODO: enable SMS sending when ready (Twilio messages incur cost).
-            // SMSUtils.sendSMS(phoneNumber,
-            //     "Hi " + firstName + ", your 2FA code is: " + code + ". It expires in 24 hours.");
-            log.info("2FA code dispatch requested for phone {} (SMS send disabled to avoid Twilio charges). Code: {}",
-                    phoneNumber, code);
-        }).exceptionally(throwable -> {
-            log.error("Failed to dispatch 2FA code to phone {}: {}",
-                    phoneNumber, throwable.getMessage(), throwable);
-            return null;
-        });
+        if (TwilioVerifyUtils.isConfigured()) {
+            CompletableFuture.runAsync(() -> {
+                        try {
+                            TwilioVerifyUtils.startVerification(phoneNumber, "sms");
+                        } catch (Exception smsFailure) {
+                            log.warn("Twilio Verify SMS challenge failed for {}, falling back to a voice call: {}",
+                                    phoneNumber, smsFailure.getMessage());
+                            TwilioVerifyUtils.startVerification(phoneNumber, "call");
+                        }
+                    })
+                    .exceptionally(throwable -> {
+                        log.error("Failed to dispatch 2FA code via Twilio Verify (sms and call) to phone {}: {}",
+                                phoneNumber, throwable.getMessage(), throwable);
+                        return null;
+                    });
+            return;
+        }
+        CompletableFuture.runAsync(() -> VoiceUtils.sendVerificationCall(phoneNumber, firstName, code))
+                .exceptionally(throwable -> {
+                    log.error("Failed to dispatch 2FA code via voice call to phone {}: {}",
+                            phoneNumber, throwable.getMessage(), throwable);
+                    return null;
+                });
     }
 
     /**
@@ -101,6 +138,20 @@ public class NotificationServiceImpl implements NotificationService {
                 .exceptionally(throwable -> {
                     log.error("Failed to send the security alert email to {}: {}",
                             email, throwable.getMessage(), throwable);
+                    return null;
+                });
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void sendContactMessage(String name, String email, String subject, String message) {
+        CompletableFuture
+                .runAsync(() -> emailService.sendContactMessage(name, email, subject, message))
+                .exceptionally(throwable -> {
+                    log.error("Failed to forward Contact Us submission from {} <{}>: {}",
+                            name, email, throwable.getMessage(), throwable);
                     return null;
                 });
     }

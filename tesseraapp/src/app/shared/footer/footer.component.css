@@ -1,0 +1,63 @@
+/*
+  Global footer. Uses the same shared design tokens as the rest of the app (surface/hairline/text
+  scales from styles.css) so it re-skins automatically with the dark/light theme toggle.
+*/
+
+.sc-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--hairline, rgba(255, 255, 255, 0.08));
+  background: var(--surface-1, transparent);
+}
+
+/*
+  Three stacked rows, centered: (1) copyright + a one-line privacy note, (2) the legal links,
+  (3) Contact Us set apart on its own line below them, since it is a different kind of link
+  (an action, not a document) rather than a third item in the legal nav.
+*/
+.sc-footer__inner {
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.6rem;
+  font-size: var(--fs-sm, 0.82rem);
+  color: var(--text-muted);
+}
+
+.sc-footer__about {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.sc-footer__privacy-note {
+  font-size: var(--fs-xs, 0.75rem);
+  opacity: 0.85;
+}
+
+.sc-footer__legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.25rem;
+}
+
+.sc-footer__legal a,
+.sc-footer__contact {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.sc-footer__legal a:hover,
+.sc-footer__legal a:focus-visible,
+.sc-footer__contact:hover,
+.sc-footer__contact:focus-visible {
+  color: var(--text-strong, var(--text));
+  text-decoration: underline;
+}
+
+.sc-footer__contact {
+  font-weight: 600;
+}

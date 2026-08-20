@@ -2,7 +2,12 @@
 
 How TesseraApp is put together — the tiers, the backend's layered design, the request lifecycle, the two persistence strategies, the event-driven audit, and the Angular frontend — plus the directory map and the design decisions behind it.
 
-> **See also:** [security.md](security.md) (auth internals) · [database.md](database.md) (data model) · [api-reference.md](api-reference.md) (endpoints) · [configuration.md](configuration.md) (settings).
+> **Superseded — kept for reference.** This guide is the pre-consolidation copy: it was moved out of
+> `documentation/` in `4c6fb12`, and the 2026-08-02 consolidation then folded its sibling guides into
+> a single document. The current, maintained architecture reference is
+> **[GUIDE.md §1](../documentation/GUIDE.md#1-architecture)** — where the two disagree, GUIDE.md wins.
+>
+> **See also:** [Security model](../documentation/GUIDE.md#7-security-model) (auth internals) · [Database](../documentation/GUIDE.md#9-database) (data model) · [API reference](../documentation/GUIDE.md#8-api-reference) (endpoints) · [Configuration](../documentation/GUIDE.md#3-configuration) (settings).
 
 ---
 
@@ -119,7 +124,7 @@ Errors funnel through `GlobalExceptionHandler` (and `ExceptionUtils` for filter-
 
 ## 4. Backend: two persistence strategies
 
-A deliberate split (detailed in [database.md](database.md)):
+A deliberate split (detailed in [GUIDE.md §9](../documentation/GUIDE.md#9-database)):
 
 | | Identity / auth domain | Business domain |
 |--|------------------------|-----------------|
@@ -133,7 +138,7 @@ The identity layer favors explicit, auditable SQL (it underpins security); the C
 
 ## 5. Backend: cross-cutting concerns
 
-**Authentication & authorization** — a stateless JWT core with stateful refresh sessions; permission-based RBAC. Fully covered in [security.md](security.md).
+**Authentication & authorization** — a stateless JWT core with stateful refresh sessions; permission-based RBAC. Fully covered in [GUIDE.md §7](../documentation/GUIDE.md#7-security-model).
 
 **Event-driven audit.** Controllers publish a `NewUserEvent` via Spring's `ApplicationEventPublisher`; `NewUserEventListener` consumes it and writes a `userevents` row through `EventService`. This decouples "something happened" from "record it," so audit logging never clutters the main request path:
 
@@ -144,7 +149,7 @@ Controller ── publishEvent(NewUserEvent(email, LOGIN_ATTEMPT_SUCCESS))
               NewUserEventListener ──▶ EventService ──▶ userevents table
 ```
 
-**Configuration & profiles** — env-var driven, `dev`/`prod` profiles. See [configuration.md](configuration.md).
+**Configuration & profiles** — env-var driven, `dev`/`prod` profiles. See [GUIDE.md §3](../documentation/GUIDE.md#3-configuration).
 
 **Reporting** — `report/*` builds XLSX exports with Apache POI for customers and invoices.
 
@@ -190,7 +195,7 @@ Tokens live in `localStorage` (keyed by the `Key` enum). The `adminGuard` is a *
 | **Docker** (`ENV=docker`) | compiled into the JAR | JAR in a container on `:8080` (mapped to `:8090`) | MySQL container | http://localhost:8090 |
 | **Cloud** | in the image | container on App Service / Cloud Run | managed MySQL (Aiven/RDS/Cloud SQL) | platform URL |
 
-The multi-stage `Dockerfile` builds Angular → bakes it into the Spring Boot JAR → runs on a slim JRE. See [deployment.md](deployment.md).
+The multi-stage `Dockerfile` builds Angular → bakes it into the Spring Boot JAR → runs on a slim JRE. See [GUIDE.md §11](../documentation/GUIDE.md#11-deployment).
 
 ---
 
@@ -241,5 +246,5 @@ tesseraapp/src/app/
 | **JdbcTemplate for identity, JPA for business** | Explicit, auditable SQL where security lives; mapping convenience for CRUD | Two persistence idioms to learn |
 | **Permission strings on one role per user** | Simple, readable RBAC that's easy to reason about | No multi-role users without a model change |
 | **Event-driven audit** | Keeps logging off the request hot path | Indirection when tracing "who wrote this row" |
-| **`schema.sql` over a migration tool** | Predictable, idempotent, no migration-state machine to desync | No automatic versioning/rollback (a prior Flyway setup was removed for exactly this reason — see [database.md §13](database.md#13-conventions-gotchas--history)) |
+| **`schema.sql` over a migration tool** | Predictable, idempotent, no migration-state machine to desync | No automatic versioning/rollback (a prior Flyway setup was removed for exactly this reason — see [GUIDE.md §9.6](../documentation/GUIDE.md#96-schema-evolution)) |
 | **Frontend guards as UX, backend as the boundary** | Defense in depth; the API never trusts the client | Authorization rules expressed in two places (kept in lockstep) |

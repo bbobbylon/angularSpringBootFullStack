@@ -21,8 +21,8 @@
 #   AWS_REGION                — e.g. us-east-1
 #   AWS_ACCOUNT_ID            — 12-digit account number
 #   ECR_REPOSITORY            — ECR repo name, e.g. tessera-app
-#   ECS_CLUSTER               — ECS cluster name, e.g. tessera-app-cluster
-#   ECS_SERVICE               — ECS service name, e.g. tessera-app-service
+#   ECS_CLUSTER               — PROD ECS cluster name, e.g. tessera-app-cluster
+#   ECS_SERVICE               — PROD ECS service name, e.g. tessera-app-service
 #   AIVEN_HOST                — Aiven MySQL hostname
 #   AIVEN_PORT                — Aiven MySQL port
 #   AIVEN_DB                  — Aiven database name
@@ -30,7 +30,8 @@
 #   S3_BUCKET                 — S3 bucket for profile images
 #   APP_DOMAIN                — Public app URL, e.g. https://app.tessera.example.com
 #
-# Optional (for environment-specific ECS clusters):
+# Required only if you dispatch to that environment (the deploy fails fast without them,
+# rather than falling back to the prod cluster):
 #   QA_ECS_CLUSTER, QA_ECS_SERVICE
 #   STAGE_ECS_CLUSTER, STAGE_ECS_SERVICE
 # ──────────────────────────────────────────────────────────────────────────────
@@ -49,9 +50,18 @@ on:
         options: [qa, stage, prod]
 
 jobs:
+  # Run the full CI suite before anything is built or shipped. deploy.yml and ci.yml
+  # both trigger on a push to master, so without this gate they run concurrently and a
+  # commit with failing tests reaches ECR before CI has finished going red.
+  verify:
+    name: Verify (CI)
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   build-and-push:
     name: Build Docker image → ECR
     runs-on: ubuntu-latest
+    needs: verify
     # Only deploy from master (auto-trigger) or on manual dispatch
     if: github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
 
@@ -108,6 +118,39 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Resolve which cluster/service this run targets. Previously the deploy steps read
+      # ECS_CLUSTER/ECS_SERVICE unconditionally, so dispatching the "qa" or "stage" option
+      # rolled the image straight into the PRODUCTION service — the environment input
+      # changed only the Spring profile, not the destination.
+      #
+      # Fails closed rather than defaulting to prod: a missing QA_ECS_CLUSTER should stop
+      # the deploy, not silently redirect it at the one cluster that must not be touched.
+      - name: Resolve target cluster and service
+        id: target
+        env:
+          QA_ECS_CLUSTER: ${{ secrets.QA_ECS_CLUSTER }}
+          QA_ECS_SERVICE: ${{ secrets.QA_ECS_SERVICE }}
+          STAGE_ECS_CLUSTER: ${{ secrets.STAGE_ECS_CLUSTER }}
+          STAGE_ECS_SERVICE: ${{ secrets.STAGE_ECS_SERVICE }}
+          PROD_ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          PROD_ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENV" in
+            qa)    cluster="$QA_ECS_CLUSTER";    service="$QA_ECS_SERVICE"    ;;
+            stage) cluster="$STAGE_ECS_CLUSTER"; service="$STAGE_ECS_SERVICE" ;;
+            prod)  cluster="$PROD_ECS_CLUSTER";  service="$PROD_ECS_SERVICE"  ;;
+            *)     echo "::error::Unknown environment '$TARGET_ENV'"; exit 1   ;;
+          esac
+          if [ -z "$cluster" ] || [ -z "$service" ]; then
+            echo "::error::No ECS cluster/service configured for '$TARGET_ENV'. Set the"
+            echo "::error::matching repository secrets before deploying to this environment."
+            exit 1
+          fi
+          echo "cluster=$cluster" >> "$GITHUB_OUTPUT"
+          echo "service=$service" >> "$GITHUB_OUTPUT"
+          echo "Deploying $TARGET_ENV → cluster '$cluster', service '$service'"
+
       - name: Fill task-definition template
         # envsubst replaces all ${VAR} tokens in the template with values from
         # GitHub Secrets. The filled file is ephemeral — it exists only inside
@@ -123,7 +166,27 @@ jobs:
           S3_BUCKET:      ${{ secrets.S3_BUCKET }}
           APP_DOMAIN:     ${{ secrets.APP_DOMAIN }}
         run: |
-          envsubst < aws/task-definition.json > aws/task-definition.filled.json
+          # Resolve each secret's COMPLETE ARN (random suffix included) dynamically. ECS's
+          # `valueFrom` needs the full ARN — a bare name or hand-built ARN missing the suffix
+          # is ambiguous and ECS defaults to an SSM Parameter Store lookup instead of Secrets
+          # Manager, which then fails with AccessDeniedException (see aws/README.md Troubleshooting).
+          for s in JWT_SECRET:jwt-secret DB_PASSWORD:db-password MAIL_USERNAME:mail-username \
+                   MAIL_PASSWORD:mail-password TWILIO_SID:twilio-sid TWILIO_TOKEN:twilio-token \
+                   TWILIO_FROM_NUMBER:twilio-from-number TWILIO_VERIFY_SERVICE_SID:twilio-verify-service-sid \
+                   GOOGLE_CLIENT_ID:google-client-id \
+                   GOOGLE_CLIENT_SECRET:google-client-secret GITHUB_CLIENT_ID:github-client-id \
+                   GITHUB_CLIENT_SECRET:github-client-secret; do
+            var_name="${s%%:*}_ARN"
+            secret_name="${s##*:}"
+            arn=$(aws secretsmanager describe-secret --secret-id "tessera-app/${secret_name}" \
+                    --query ARN --output text --region "$AWS_REGION")
+            export "${var_name}=${arn}"
+          done
+
+          # Strip the _comment/_variables documentation keys — the render/deploy
+          # actions below call register-task-definition under the hood, which
+          # validates strictly and rejects any key outside its known schema.
+          envsubst < aws/task-definition.json | jq 'del(._comment, ._variables)' > aws/task-definition.filled.json
           echo "==> Filled task definition (secrets redacted):"
           cat aws/task-definition.filled.json | grep -v -E '"valueFrom"|"password"|"secret"' || true
 
@@ -142,6 +205,6 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ secrets.ECS_SERVICE }}
-          cluster: ${{ secrets.ECS_CLUSTER }}
+          service: ${{ steps.target.outputs.service }}
+          cluster: ${{ steps.target.outputs.cluster }}
           wait-for-service-stability: true

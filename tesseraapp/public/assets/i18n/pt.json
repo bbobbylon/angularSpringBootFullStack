@@ -32,7 +32,11 @@
     "back": "Voltar",
     "description": "Descrição",
     "price": "Preço",
-    "amount": "Valor"
+    "amount": "Valor",
+    "pageXofY": "Página {{page}} de {{total}}",
+    "nTotal": "{{count}} no total",
+    "acrossNPages": "em {{count}} páginas",
+    "viewAll": "Ver tudo"
   },
   "nav": {
     "customers": "Clientes",
@@ -45,9 +49,10 @@
     "serviceCatalog": "Catálogo de serviços",
     "newServiceInvoice": "Nova fatura de serviço",
     "manageServices": "Gerenciar serviços",
+    "newService": "Novo Serviço",
     "admin": "Administração",
     "userDirectory": "Diretório de usuários",
-    "assignRoles": "Atribuir funções",
+    "insights": "Relatórios",
     "rolesPermissions": "Funções e permissões",
     "securityOverview": "Painel de segurança",
     "billingOverview": "Visão geral do faturamento",
@@ -147,6 +152,21 @@
       "passwordOnly": "Somente senha",
       "federatedSignIns": "Logins federados",
       "recoveryCodesUsed": "Códigos de recuperação usados"
+    },
+    "settings": {
+      "title": "Configurações de detecção de anomalias",
+      "subtitle": "As alterações têm efeito já no próximo login — sem necessidade de novo deploy.",
+      "enabledLabel": "Detecção de anomalias",
+      "useDefault": "Usar padrão do servidor",
+      "enabled": "Ativada",
+      "disabled": "Desativada",
+      "historyLimitLabel": "Janela de histórico de login",
+      "historyLimitHint": "Quantos dos logins recentes da conta são usados para comparar com um novo login.",
+      "historyLimitPlaceholder": "Padrão do servidor",
+      "clearOverride": "Usar padrão",
+      "save": "Salvar alterações",
+      "saving": "Salvando…",
+      "unsavedChanges": "Alterações não salvas"
     }
   },
   "servicesAdmin": {
@@ -164,8 +184,10 @@
     "description": "Descrição",
     "basePrice": "Preço base",
     "noDescription": "Nenhuma descrição fornecida.",
-    "emptyTitle": "O catálogo está vazio.",
-    "emptyHint": "Adicione seu primeiro serviço para que ele possa ser selecionado em novas faturas.",
+    "emptyTitle": "Nenhum serviço encontrado",
+    "emptyHint": "Tente outro termo de pesquisa ou adicione seu primeiro serviço.",
+    "searchByName": "Pesquisar por nome ou descrição",
+    "searchAria": "Pesquisar no catálogo de serviços",
     "editNote": "Editar um serviço não altera faturas já emitidas — elas mantêm o nome e o preço registrados na época.",
     "summary": {
       "offered": "oferecidos",
@@ -209,8 +231,11 @@
     "catalogValue": "Valor do catálogo",
     "createInvoice": "Criar fatura",
     "emptyTitle": "Nenhum serviço no catálogo",
-    "emptyHint": "O catálogo de serviços está vazio. Adicione serviços pelo painel de administração.",
-    "manageCatalog": "Gerenciar catálogo"
+    "emptyHint": "Ainda não há serviços publicados. Assim que houver, eles aparecerão aqui prontos para serem adicionados a uma fatura.",
+    "emptyHintAdmin": "Publique o seu primeiro serviço para que ele possa ser selecionado em novas faturas.",
+    "manageCatalog": "Gerenciar catálogo",
+    "noResultsTitle": "Nenhum serviço encontrado",
+    "noResultsHint": "Tente outro termo de pesquisa."
   },
   "securityCenter": {
     "eyebrow": "Conta",
@@ -226,6 +251,8 @@
     "codesLow": "Quase acabando — registre-se novamente para obter um novo conjunto",
     "disableCodeLabel": "Código do aplicativo ou de recuperação",
     "disableAuthenticator": "Desativar autenticador",
+    "regenerateCodes": "Gerar novos códigos de recuperação",
+    "regenerateConfirm": "Gerar novamente",
     "enrollTitle": "Configure seu autenticador",
     "enrollHint": "Escaneie o QR code e informe o código de 6 dígitos exibido pelo seu aplicativo.",
     "codeFromApp": "Código do seu aplicativo",
@@ -349,9 +376,25 @@
     "title": "Faturas",
     "invoiceNumber": "N.º da fatura",
     "service": "Serviço",
-    "emptyTitle": "Ainda não há faturas",
-    "emptyHint": "As faturas que você criar aparecerão aqui com seu status e totais.",
-    "loading": "Carregando faturas…"
+    "emptyTitle": "Nenhuma fatura encontrada",
+    "emptyHint": "Tente outro termo de pesquisa ou crie uma nova fatura.",
+    "loading": "Carregando faturas…",
+    "searchByInvoiceNumber": "Pesquisar por n.º da fatura ou cliente",
+    "searchAria": "Pesquisar faturas"
+  },
+  "batchImport": {
+    "button": "Importar",
+    "title": "Importação em lote",
+    "hintCustomers": "Envie um arquivo CSV ou Excel de clientes.",
+    "hintInvoices": "Envie um arquivo CSV ou Excel de faturas.",
+    "chooseFile": "Escolher arquivo",
+    "noFileChosen": "Nenhum arquivo escolhido",
+    "upload": "Enviar",
+    "uploading": "Enviando…",
+    "resultSummary": "{{imported}} de {{total}} linhas importadas.",
+    "row": "Linha",
+    "reason": "Motivo",
+    "close": "Fechar"
   },
   "users": {
     "breadcrumb": "Usuários",
@@ -439,7 +482,17 @@
     "eyebrow": "Controle de acesso",
     "title": "Funções × Permissões",
     "loading": "Carregando o catálogo de funções…",
-    "error": "Não foi possível carregar o catálogo de funções. Atualize a página."
+    "error": "Não foi possível carregar o catálogo de funções. Atualize a página.",
+    "notYetAssignableHint": "Criada, mas nenhuma versão da aplicação reconhece ainda este nome de função — não pode ser atribuída a um usuário até que uma nova implantação a inclua.",
+    "catalogTitle": "Gerenciamento do catálogo de funções",
+    "newRoleName": "Nome da nova função",
+    "newRolePermission": "Permissões",
+    "createRole": "Criar função",
+    "createRoleHint": "O nome deve seguir o padrão ROLE_ALGO. A nova função é criada, mas não pode ser atribuída a nenhum usuário até que uma implantação futura a reconheça.",
+    "role": "Função",
+    "permissions": "Permissões",
+    "builtIn": "Integrada",
+    "builtInHint": "Funções integradas não podem ser excluídas."
   },
   "charts": {
     "customerAnalytics": "Análise de clientes",
@@ -469,7 +522,7 @@
     "statusOverTime": "Status das faturas ao longo do tempo",
     "statusOverTimeSub": "Ritmo de cobrança — PAGAS / PENDENTES / VENCIDAS por mês",
     "noInvoiceData": "Ainda não há dados de faturas.",
-    "serviceUtilisation": "Uso de serviços",
+    "serviceUtilization": "Uso de serviços",
     "serviceSub": "10 serviços mais faturados",
     "noServiceData": "Ainda não há dados de serviços.",
     "customerStatus": "Status dos clientes",
@@ -499,8 +552,16 @@
     "assignedRole": "Função atribuída",
     "updateRole": "Atualizar função",
     "updateState": "Atualizar situação",
+    "revokeSessions": "Encerrar sessões em todos os dispositivos",
+    "revokeSessionsTitle": "Sessões ativas",
+    "revokeSessionsHint": "Encerra todas as sessões abertas nesta conta. Bloquear não basta — uma sessão aberta continua a funcionar até o token expirar.",
     "noActivity": "Nenhuma atividade registrada.",
-    "loading": "Carregando conta…"
+    "loading": "Carregando conta…",
+    "expires": "Expira",
+    "roleExpiresOn": "Esta atribuição de função expira em {{date}}",
+    "notYetAssignable": "ainda não atribuível",
+    "expiresOn": "Expira em",
+    "expiresHint": "Opcional. Deixe em branco para uma atribuição sem limite; a função reverte automaticamente para a função padrão de usuário no final do dia selecionado."
   },
   "newCustomer": {
     "saveCustomer": "Salvar cliente",
@@ -521,11 +582,16 @@
     "settingsUpdated": "Configurações atualizadas com sucesso",
     "totpEnabled": "Aplicativo autenticador ativado",
     "totpDisabled": "Aplicativo autenticador desativado",
+    "recoveryCodesRegenerated": "Códigos de recuperação gerados novamente",
     "smsUpdated": "Configuração de verificação por SMS atualizada",
     "phoneSaved": "Número de telefone salvo — a verificação por SMS está ativa",
     "sessionRevoked": "Sessão revogada",
     "otherSessionsRevoked": "Desconectado das outras sessões",
-    "providerDisconnected": "Provedor desconectado"
+    "providerDisconnected": "Provedor desconectado",
+    "providerLinked": "{{provider}} foi conectado à sua conta",
+    "passkeyAdded": "Chave de acesso adicionada",
+    "passkeyRemoved": "Chave de acesso removida",
+    "passkeyCancelled": "Configuração da chave de acesso cancelada"
   },
   "palette": {
     "sectionNavigate": "Navegar",
@@ -558,6 +624,8 @@
     "securityOverviewHint": "Admin · anomalias e cobertura de MFA",
     "manageServices": "Gerenciar serviços",
     "manageServicesHint": "Admin · CRUD do catálogo",
+    "newService": "Novo Serviço",
+    "newServiceHint": "Admin · adicionar oferta ao catálogo",
     "toggleTheme": "Alternar tema",
     "toggleThemeHint": "Alternar escuro / claro",
     "logout": "Sair",

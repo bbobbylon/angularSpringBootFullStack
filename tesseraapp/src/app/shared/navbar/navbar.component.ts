@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject, Input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { UserService } from '../../service/user.service';
-import { UserInterface } from '../../interface/user.interface';
+import { CurrentUserService } from '../../service/current-user.service';
 import { NgOptimizedImage } from '@angular/common';
 import { ThemeService } from '../../service/theme.service';
 import { LanguageService } from '../../service/language.service';
@@ -11,18 +11,22 @@ import { TranslocoDirective } from '@jsverse/transloco';
 /**
  * Top navigation bar component.
  *
- * Receives the authenticated user via {@code @Input} from the parent and displays
- * their name and avatar. Provides a logout action that clears tokens and
- * navigates to the login screen.
+ * <p>Reads the authenticated user from {@link CurrentUserService} and displays their name and
+ * avatar. Provides a logout action that clears tokens, drops the cached identity, and navigates to
+ * the login screen.
  *
- * TODO: Decouple user data from the customer list response. Currently the parent (HomeComponent)
- *  passes the user down from {@code data.user} inside the {@code GET /customer/list} response.
- *  Instead, inject {@link UserService} here and call {@code userService.profile$()} on init
- *  so the navbar fetches the user independently from {@code GET /user/profile} ({@code data.user}).
- *  This removes the dependency on the customer list endpoint having loaded before the navbar
- *  can display user info, and keeps user identity concerns out of the customer list response.
- *  When making this change: remove {@code @Input() user}, restore {@code ngOnInit},
- *  and remove the {@code [user]} binding from every parent template.
+ * <h3>Why the user is no longer an {@code @Input}</h3>
+ * The navbar used to be handed its user by whichever feature component hosted it, sourced from the
+ * {@code GET /customer/list} response — so the name could not render until a page of customers had
+ * loaded, and seventeen templates had to thread identity down purely on the navbar's behalf.
+ *
+ * <p>It now reads a shared signal instead. The service is asked to {@code load()} here rather than
+ * in each host, because the navbar is the component that actually needs the value; hosts that want
+ * the user for their own reasons still fetch it themselves.
+ *
+ * <p>Note the deliberate split: identity for *display* comes from {@link CurrentUserService}, while
+ * every authority check below goes through {@link UserService#hasAnyAuthority} against the live
+ * token. A cached profile would keep granting a capability after a role change.
  */
 @Component({
   selector: 'app-navbar',
@@ -33,15 +37,28 @@ import { TranslocoDirective } from '@jsverse/transloco';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NavbarComponent {
-  /** The authenticated user passed down from the parent; controls avatar and name display. */
-  @Input() user: UserInterface | undefined;
+  private readonly currentUser = inject(CurrentUserService);
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
+
+  /**
+   * The authenticated user, for the avatar and name.
+   *
+   * <p>`undefined` until the first load resolves, which the template already handles — the same
+   * branch that covers an account with no picture renders the initials block.
+   */
+  protected readonly user = this.currentUser.user;
   private readonly themeService = inject(ThemeService);
   private readonly languageService = inject(LanguageService);
   private readonly paletteService = inject(CommandPaletteService);
 
-  /** The languages on offer, for the navbar selector (ROADMAP §2 — i18n). */
+  constructor() {
+    // Asked for here rather than in each host: the navbar is what needs the value, and the service
+    // is idempotent, so mounting a second navbar costs nothing.
+    this.currentUser.load();
+  }
+
+  /** The languages on offer, for the navbar selector (i18n). */
   protected readonly languages = this.languageService.available;
 
   /** The active language code, so the selector can mark the current choice. */
@@ -163,8 +180,13 @@ export class NavbarComponent {
   /**
    * Clears both JWT tokens from localStorage and navigates to the login screen,
    * effectively ending the user's session.
+   *
+   * <p>The cached identity is dropped alongside the tokens for the same reason
+   * {@code UserService.logOut()} evicts the HTTP cache: without it, the next account to sign in on
+   * this tab would see the previous user's name and avatar until something refetched.
    */
   protected logOut(): void {
+    this.currentUser.clear();
     this.userService.logOut();
     this.router.navigate(['/login']);
   }

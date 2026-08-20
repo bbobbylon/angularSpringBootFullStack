@@ -31,7 +31,7 @@ import { deniedMessageFor } from './admin.guard';
  * demand exactly what the endpoint behind it demands and nothing stricter, or the UI starts
  * refusing requests the server would have allowed.
  *
- * <h3>Behaviour on denial</h3>
+ * <h3>Behavior on denial</h3>
  * Identical to `adminGuard` by design: a named, non-enumerating toast ("You don't have permission
  * to <em>create customers</em> — contact your administrator.") followed by a bounce home. Users
  * should not be able to tell which of the two guards stopped them; a difference in wording or

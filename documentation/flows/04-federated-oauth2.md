@@ -13,7 +13,7 @@
 > from whichever creds are present); with none set, `GET /oauth2/providers` returns `[]` and no buttons
 > appear. Step-by-step for **GitHub, Google, and Microsoft** — including the exact callback URL to register
 > (`http://localhost:8080/login/oauth2/code/{provider}`) — is in
-> **[configuration.md → Federated login](../configuration.md#federated-login-oauth2--oidc--optional)**.
+> **[GUIDE.md §3.4 → Federated login](../GUIDE.md#3-configuration)**.
 > The UI is automatic: `LoginComponent` fetches the provider list on load and renders one button each
 > (`login.component.html:126-141`), so no frontend change is needed to add a provider.
 

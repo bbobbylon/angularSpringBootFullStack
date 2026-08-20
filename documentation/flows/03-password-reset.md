@@ -7,7 +7,7 @@
 | Stage | Route / component | Endpoint |
 | --- | --- | --- |
 | 1 · Request a link | `/resetpassword` → `ResetPasswordComponent` | `GET /user/resetpassword/{email}` |
-| 2 · Open the link | `/user/verify/password/:key` → `VerifyComponent` | `GET /user/verify/password/{key}` |
+| 2 · Open the link | `/verify/password/:key` → `VerifyComponent` | `GET /user/verify/password/{key}` |
 | 3 · Set new password | same `VerifyComponent` (password branch) | `PUT /user/new/password` |
 
 ---
@@ -34,14 +34,14 @@ sequenceDiagram
     SVC->>CTRL: GET /user/resetpassword/{email}  🔓 public
     CTRL->>SRV: userService.resetPassword(email)  :536
     SRV->>DB: SELECT user by email → DELETE old reset rows → INSERT reset row (+expiry)
-    SRV->>EMAIL: email {uiAppUrl}/user/verify/password/{key}
+    SRV->>EMAIL: email {uiAppUrl}/verify/password/{key}
     CTRL-->>RP: 200 { message: "Email sent to reset password…" }
     RP->>RP: form.reset() + resetPasswordSuccess=true ("check inbox")  :50-52
     end
 
     rect rgb(245,255,245)
     Note over U,DB: Stage 2 — open the emailed link
-    U->>VC: open /user/verify/password/{key}
+    U->>VC: open /verify/password/{key}
     VC->>VC: ngOnInit → getAccountType('password')  :62,68
     VC->>SVC: verifyAccount$(key, 'password')  :69 / user.service.ts:44
     SVC->>CTRL: GET /user/verify/password/{key}  🔓 public
@@ -106,7 +106,7 @@ on submit transitioning to the `account` success card.
 > ("Email sent to reset password…", `UserController.java:540`). Whether the flow is *fully*
 > enumeration-safe depends on `userService.resetPassword` not throwing differently for an unknown
 > email — the project's stated policy is to never reveal account existence
-> ([security.md](../security.md)). If an unknown email surfaces an error here, that's the spot to
+> ([GUIDE.md §7](../GUIDE.md#7-security-model)). If an unknown email surfaces an error here, that's the spot to
 > make it return the same generic success.
 
 ---

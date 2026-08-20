@@ -289,6 +289,18 @@ export class CommandPaletteComponent {
         { id: 'analytics', label: t('palette.analytics'), hint: t('palette.analyticsHint'), icon: 'bi-bar-chart-line-fill', section: navigate, run: go('/analytics') },
         { id: 'security-overview', label: t('palette.securityOverview'), hint: t('palette.securityOverviewHint'), icon: 'bi-shield-exclamation', section: navigate, run: go('/security-overview') },
         { id: 'manage-services', label: t('palette.manageServices'), hint: t('palette.manageServicesHint'), icon: 'bi-sliders', section: navigate, run: go('/services/manage') },
+        {
+          id: 'new-service',
+          label: t('palette.newService'),
+          hint: t('palette.newServiceHint'),
+          icon: 'bi-plus-circle',
+          section: navigate,
+          // /services/manage has no dedicated create route (the form is an inline toggle over the
+          // list, unlike /invoice/new and /customer/new) — the ?new query param opens it directly.
+          run: () => {
+            void this.router.navigate(['/services/manage'], { queryParams: { new: true } });
+          },
+        },
       );
     }
 

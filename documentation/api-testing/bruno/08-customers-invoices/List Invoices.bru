@@ -1,0 +1,26 @@
+meta {
+  name: List Invoices
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/customer/invoice/list?page=0&size=10
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+params:query {
+  page: 0
+  size: 10
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

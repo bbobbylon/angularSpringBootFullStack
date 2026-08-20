@@ -15,7 +15,7 @@ import { translocoStub } from '../../testing/transloco-stub';
  * <p>Every member of the component is {@code protected} (the template is its only intended
  * caller), so these specs deliberately drive it the way a user does — dispatching real
  * keyboard events at {@code document} and asserting on rendered DOM — rather than reaching
- * past the encapsulation. That also makes them resilient: they describe behaviour, not the
+ * past the encapsulation. That also makes them resilient: they describe behavior, not the
  * component's internal signal names.
  *
  * <p>The app is zoneless (Angular 21 default; note the absence of {@code zone.js}), so a

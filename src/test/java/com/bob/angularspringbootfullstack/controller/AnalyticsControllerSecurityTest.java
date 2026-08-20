@@ -5,6 +5,7 @@ import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.Invoice;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
+import com.bob.angularspringbootfullstack.service.ReportDigestService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,8 +32,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -93,10 +96,20 @@ class AnalyticsControllerSecurityTest {
             return mock(OrganizationService.class);
         }
 
+        /**
+         * Builds and sends the digest for {@code POST /admin/analytics/report/email}. This suite
+         * never calls that endpoint, so the mock is here only to satisfy the constructor.
+         */
+        @Bean
+        ReportDigestService reportDigestService() {
+            return mock(ReportDigestService.class);
+        }
+
         @Bean
         AnalyticsController analyticsController(CustomerService customerService, UserService userService,
-                                                OrganizationService organizationService) {
-            return new AnalyticsController(customerService, userService, organizationService);
+                                                OrganizationService organizationService,
+                                                ReportDigestService reportDigestService) {
+            return new AnalyticsController(customerService, userService, organizationService, reportDigestService);
         }
     }
 
@@ -106,6 +119,8 @@ class AnalyticsControllerSecurityTest {
     private CustomerService customerService;
     @Autowired
     private UserService userService;
+    @Autowired
+    private ReportDigestService reportDigestService;
 
     /** The principal the endpoints embed in their envelope; identity is irrelevant to the authority check. */
     private static UserDTO principal() {
@@ -123,7 +138,7 @@ class AnalyticsControllerSecurityTest {
      */
     @BeforeEach
     void resetMocks() {
-        reset(customerService, userService);
+        reset(customerService, userService, reportDigestService);
     }
 
     /** Installs an authenticated context carrying exactly the supplied authorities. */
@@ -149,10 +164,10 @@ class AnalyticsControllerSecurityTest {
         assertThatThrownBy(() -> controller.getSummary(caller))
                 .as("summary must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> controller.getCustomers(caller, Optional.empty(), Optional.empty()))
+        assertThatThrownBy(() -> controller.getCustomers(caller, Optional.empty(), Optional.empty(), Optional.empty()))
                 .as("customers must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> controller.getInvoices(caller, Optional.empty(), Optional.empty()))
+        assertThatThrownBy(() -> controller.getInvoices(caller, Optional.empty(), Optional.empty(), Optional.empty()))
                 .as("invoices must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
 
@@ -165,10 +180,10 @@ class AnalyticsControllerSecurityTest {
     void updateUserAuthorityIsAllowed() {
         authenticateWith("UPDATE:USER");
         when(userService.getUserByEmail(any())).thenReturn(new UserDTO());
-        when(customerService.getInvoices(anyInt(), anyInt())).thenReturn(Page.<Invoice>empty());
+        when(customerService.getInvoices(anyInt(), anyInt(), any())).thenReturn(Page.<Invoice>empty());
 
         ResponseEntity<HttpResponse> response =
-                controller.getInvoices(principal(), Optional.of(0), Optional.of(20));
+                controller.getInvoices(principal(), Optional.of(0), Optional.of(20), Optional.empty());
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
     }
@@ -178,11 +193,37 @@ class AnalyticsControllerSecurityTest {
     void updateRoleAuthorityIsAllowed() {
         authenticateWith("UPDATE:ROLE");
         when(userService.getUserByEmail(any())).thenReturn(new UserDTO());
-        when(customerService.getInvoices(anyInt(), anyInt())).thenReturn(Page.<Invoice>empty());
+        when(customerService.getInvoices(anyInt(), anyInt(), any())).thenReturn(Page.<Invoice>empty());
 
         ResponseEntity<HttpResponse> response =
-                controller.getInvoices(principal(), Optional.of(0), Optional.of(20));
+                controller.getInvoices(principal(), Optional.of(0), Optional.of(20), Optional.empty());
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("emailReport (the manual 'Email me this report' action) requires an admin authority")
+    void emailReportRequiresAdminAuthority() {
+        authenticateWith("READ:USER", "READ:CUSTOMER");
+        UserDTO caller = principal();
+
+        assertThatThrownBy(() -> controller.emailReport(caller))
+                .as("emailReport must require an admin authority")
+                .isInstanceOf(AccessDeniedException.class);
+
+        // Denied before the method body runs, so no digest is ever built or sent.
+        verifyNoInteractions(reportDigestService);
+    }
+
+    @Test
+    @DisplayName("an admin with UPDATE:USER can email their own report digest")
+    void emailReport_updateUserAuthorityIsAllowed() {
+        authenticateWith("UPDATE:USER");
+        when(userService.getUserByEmail(any())).thenReturn(new UserDTO());
+
+        ResponseEntity<HttpResponse> response = controller.emailReport(principal());
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        verify(reportDigestService).emailReportForCaller(eq(principal()), any());
     }
 }

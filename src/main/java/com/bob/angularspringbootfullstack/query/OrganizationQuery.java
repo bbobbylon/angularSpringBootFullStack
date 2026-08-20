@@ -54,7 +54,7 @@ public class OrganizationQuery {
             "JOIN userorganizations b ON b.user_id = u.id AND b.active = TRUE " +
             "JOIN userorganizations a ON a.organization_id = b.organization_id AND a.user_id = :adminId AND a.active = TRUE " +
             "WHERE (u.first_name LIKE :searchTerm OR u.last_name LIKE :searchTerm OR u.email LIKE :searchTerm) " +
-            "ORDER BY u.created_at DESC, u.id DESC LIMIT :pageSize OFFSET :offset";
+            "ORDER BY %s LIMIT :pageSize OFFSET :offset";
 
     /**
      * Counts the rows {@link #SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY} would
@@ -66,4 +66,25 @@ public class OrganizationQuery {
             "JOIN userorganizations b ON b.user_id = u.id AND b.active = TRUE " +
             "JOIN userorganizations a ON a.organization_id = b.organization_id AND a.user_id = :adminId AND a.active = TRUE " +
             "WHERE (u.first_name LIKE :searchTerm OR u.last_name LIKE :searchTerm OR u.email LIKE :searchTerm)";
+
+    /**
+     * Lists every active organization's id and name — the iteration set the scheduled report
+     * digest walks to send each organization its own org-scoped digest
+     * (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report emails"). No parameters.
+     */
+    public static final String SELECT_ACTIVE_ORGANIZATIONS_QUERY =
+            "SELECT id, name FROM organizations WHERE status = 'ACTIVE' ORDER BY name";
+
+    /**
+     * Selects the email addresses of every {@code ROLE_ORGANIZATION_ADMIN} user holding an
+     * ACTIVE membership in one organization — the recipient list for that organization's report
+     * digest. Mirrors {@link UserQuery#SELECT_SYSTEM_ADMIN_EMAILS_QUERY}'s join shape, plus the
+     * membership join every other query in this class uses. Parameter: organizationId.
+     */
+    public static final String SELECT_ORGANIZATION_ADMIN_EMAILS_QUERY =
+            "SELECT DISTINCT u.email FROM users u " +
+            "JOIN userroles ur ON ur.user_id = u.id " +
+            "JOIN roles r ON r.id = ur.role_id " +
+            "JOIN userorganizations uo ON uo.user_id = u.id AND uo.active = TRUE " +
+            "WHERE r.name = 'ROLE_ORGANIZATION_ADMIN' AND uo.organization_id = :organizationId";
 }

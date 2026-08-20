@@ -1,0 +1,28 @@
+meta {
+  name: Update Invoice
+  type: http
+  seq: 9
+}
+
+patch {
+  url: {{baseUrl}}/customer/invoice/update/{{invoiceId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "PAID"
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

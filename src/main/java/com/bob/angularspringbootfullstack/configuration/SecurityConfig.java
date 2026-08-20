@@ -103,6 +103,25 @@ class SecurityConfig {
     private String uiAppUrl;
 
     /**
+     * Comma-separated origin patterns the browser may call this API from.
+     *
+     * <p>Read from configuration rather than hardcoded because the correct answer differs in every
+     * environment, and baking a list into the jar means a rebuild to change it — and, worse, that
+     * the production jar ships whatever placeholder was convenient during development.
+     *
+     * <p>This bean is the <b>single</b> definition of the application's CORS policy. It used to
+     * have a rival: a servlet-level {@code CorsFilter} in the application class built its own
+     * {@link CorsConfiguration} from this same property, while this class hardcoded a different
+     * list — including a {@code angularsecureapp.org} origin that no longer exists anywhere. Since
+     * the security filter chain is what answers preflights, the hardcoded list silently won and the
+     * configurable one was decorative. That divergence was invisible because the deployed shape
+     * serves the SPA and the API from one origin, so almost nothing is genuinely cross-origin; it
+     * would have surfaced the moment a second client appeared. The filter now consumes this bean.
+     */
+    @Value("${app.cors.allowed-origin-patterns}")
+    private String allowedOriginPatterns;
+
+    /**
      * Builds the application's SecurityFilterChain.
      * <p>
      * Disables CSRF (stateless JWT API doesn't need it) and HTTP Basic, enables
@@ -141,9 +160,19 @@ class SecurityConfig {
                             // img-src includes https: to allow S3-hosted profile images when
                             // IMAGE_STORAGE_TYPE=s3. Adjust connect-src when adding third-party
                             // analytics or error-reporting endpoints.
+                            //
+                            // The sha256 hash in script-src allow-lists ONE specific inline
+                            // script: index.html's tiny theme-flash-prevention snippet (reads
+                            // localStorage before first paint so there's no dark/light flash).
+                            // It's the exact hash Chrome's own CSP violation reports for that
+                            // script's content — NOT a blanket 'unsafe-inline' — so any other
+                            // inline script (or a change to this one's contents, which changes
+                            // its hash) stays blocked. If that script is ever edited, recompute
+                            // the hash (the browser console error reports the new one directly)
+                            // and update it here.
                             .contentSecurityPolicy(csp -> csp.policyDirectives(
                                     "default-src 'self'; " +
-                                    "script-src 'self'; " +
+                                    "script-src 'self' 'sha256-+tarR50wdDg867HQDss7r1ZcpsJqINIeko9y0srSPCw='; " +
                                     "style-src 'self' 'unsafe-inline'; " +
                                     "img-src 'self' data: blob: https:; " +
                                     "font-src 'self'; " +
@@ -172,7 +201,18 @@ class SecurityConfig {
                     .authorizeHttpRequests(auth -> auth
                             .requestMatchers(POST, "/user/register").permitAll()
                             .requestMatchers(POST, "/user/login").permitAll()
-                            .requestMatchers("/actuator/**").permitAll()
+                            // /actuator/health and /actuator/info stay unauthenticated: the ALB target
+                            // group (aws/setup.sh) and the ECS container health check (task-definition.json)
+                            // both hit /actuator/health with no Authorization header, and a health check that
+                            // requires a JWT can never pass. Everything else under /actuator/** — notably
+                            // /actuator/metrics, which NewUserEventListener's user.events.total counter now
+                            // populates with per-EventType counts (login failures, suspicious logins, token
+                            // reuse…) — is operational data, not something an unauthenticated caller should
+                            // read, so it requires the same staff-grade authority /admin/** does. This matcher
+                            // MUST precede the broad one below, since Spring evaluates top-down and the first
+                            // match wins.
+                            .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                            .requestMatchers("/actuator/**").hasAnyAuthority("UPDATE:USER", "UPDATE:ROLE")
                             .requestMatchers(PUBLIC_URLS).permitAll()
                             .requestMatchers(DELETE, "/user/delete/**").hasAnyAuthority("DELETE:USER")
                             .requestMatchers(DELETE, "/customer/delete/**").hasAnyAuthority("DELETE:CUSTOMER")
@@ -186,6 +226,11 @@ class SecurityConfig {
                             .requestMatchers(PATCH, "/admin/user/*/role/**").hasAnyAuthority("UPDATE:ROLE")
                             .requestMatchers(PATCH, "/admin/user/*/settings").hasAnyAuthority("UPDATE:USER")
                             .requestMatchers(PATCH, "/admin/user/*/update").hasAnyAuthority("UPDATE:USER")
+                            // Role CRUD (RoleController) — creating/editing/deleting catalog rows, not
+                            // reassigning an existing one to a user. UPDATE:ROLE is the URL-level floor;
+                            // RoleController#requireApplicationAdmin narrows it further to exactly
+                            // ROLE_APPLICATION_ADMIN, which this authority-string matcher cannot express.
+                            .requestMatchers("/admin/role/**").hasAnyAuthority("UPDATE:ROLE")
                             .requestMatchers("/admin/**").hasAnyAuthority("UPDATE:USER", "UPDATE:ROLE")
                             // Self-service account security (FR-MFA-4 / plan.md M4-M5): managing
                             // one's OWN second factor and sessions must not require staff
@@ -193,7 +238,77 @@ class SecurityConfig {
                             // below (which demand UPDATE:USER / READ:USER). Authentication alone
                             // suffices; every handler scopes its work to the token's principal.
                             .requestMatchers("/user/totp/**").authenticated()
+                            .requestMatchers("/user/webauthn/**").authenticated()
                             .requestMatchers("/user/sessions/**").authenticated()
+                            // The Angular SPA is compiled into this jar's static resources (see
+                            // Dockerfile) and served from this SAME origin in Docker/prod — unlike
+                            // local dev, where Angular runs on its own dev server (port 4200) and
+                            // never touches this filter chain at all. Without this permit, the broad
+                            // GET/** rule below demands READ:USER on the SPA's own index.html/JS/CSS,
+                            // making it impossible for an unauthenticated browser to ever load the
+                            // login page — a chicken-and-egg 401 that only surfaces once the app is
+                            // actually deployed with Angular baked in, not in local dev.
+                            // HEAD is permitted everywhere GET is below: CloudFront's default cache
+                            // key ignores HTTP method, so a single HEAD request landing on a
+                            // GET-only permitAll (from an uptime monitor, a browser preconnect probe,
+                            // or a crawler) fell through to the anyRequest().authenticated() catch-all,
+                            // got a 401, and CloudFront cached that 401 as if it were the page —
+                            // silently serving it back to every real GET visitor afterward until the
+                            // cache expired or was invalidated. Discovered 2026-08-16 when the live
+                            // site went blank for real users while a direct GET still worked fine.
+                            .requestMatchers(GET, "/", "/index.html", "/favicon.ico", "/manifest.webmanifest",
+                                    "/*.js", "/*.css", "/*.ico", "/*.png", "/*.svg", "/*.jpg", "/*.jpeg",
+                                    "/*.webp", "/*.woff", "/*.woff2", "/*.ttf", "/*.map").permitAll()
+                            .requestMatchers(HEAD, "/", "/index.html", "/favicon.ico", "/manifest.webmanifest",
+                                    "/*.js", "/*.css", "/*.ico", "/*.png", "/*.svg", "/*.jpg", "/*.jpeg",
+                                    "/*.webp", "/*.woff", "/*.woff2", "/*.ttf", "/*.map").permitAll()
+                            .requestMatchers(GET, "/assets/**").permitAll()
+                            .requestMatchers(HEAD, "/assets/**").permitAll()
+                            // Angular's builder places CSS-referenced binary assets (the
+                            // self-hosted IBM Plex/bootstrap-icons fonts, in this app's case) under
+                            // /media/ in the build output — a separate location from /assets/ that
+                            // the permit above doesn't cover, discovered when self-hosted fonts
+                            // 401'd in production despite the /assets/** and /*.woff2 permits.
+                            .requestMatchers(GET, "/media/**").permitAll()
+                            .requestMatchers(HEAD, "/media/**").permitAll()
+                            // Direct navigation (or a hard refresh) to an Angular client-side
+                            // route — e.g. typing /login in the address bar — hits Spring
+                            // Security BEFORE the WebMvcConfig SPA-fallback ever gets a chance to
+                            // forward it to index.html, since security filters run ahead of MVC
+                            // dispatch. Every path here is a real entry in app.routes.ts.
+                            //
+                            // The invariant that makes this safe is a NAMESPACE SPLIT: the API is
+                            // entirely singular/namespaced (/user/**, /customer/**, /admin/**),
+                            // while SPA routes are plural or bare (/customers, /services, /billing).
+                            // Permitting a path here therefore cannot expose a controller, because
+                            // no controller answers on these paths — Spring MVC finds no handler and
+                            // WebMvcConfig forwards to index.html.
+                            //
+                            // That invariant had exactly one breach, and it was load-bearing:
+                            // the email-verification landing page was routed at
+                            // /user/verify/{type}/:key in Angular, byte-for-byte the same URL as
+                            // UserController#verifyAccount. In split-origin dev the SPA answered it;
+                            // once Angular is baked into this jar there is one origin, the real
+                            // @GetMapping wins, and the recipient of an activation email is shown
+                            // the raw JSON envelope. It now lives at /verify/{type}/:key — hence
+                            // "/verify/**" below — and the split holds everywhere. Do not add an SPA
+                            // route under /user, /customer, or /admin.
+                            //
+                            // This permits loading the SPA shell only — the actual protected DATA
+                            // for these pages still comes from those separate, still-authenticated
+                            // API endpoints, so this grants no new access to anything real.
+                            .requestMatchers(GET, "/login", "/verify", "/verify/**", "/resetpassword",
+                                    "/register", "/customers", "/customers/**", "/customer/new",
+                                    "/invoice/new", "/invoices", "/invoice/**", "/profile", "/security",
+                                    "/users", "/users/**", "/roles", "/billing", "/services",
+                                    "/services/manage", "/analytics", "/security-overview",
+                                    "/privacy", "/terms", "/contact", "/features").permitAll()
+                            .requestMatchers(HEAD, "/login", "/verify", "/verify/**", "/resetpassword",
+                                    "/register", "/customers", "/customers/**", "/customer/new",
+                                    "/invoice/new", "/invoices", "/invoice/**", "/profile", "/security",
+                                    "/users", "/users/**", "/roles", "/billing", "/services",
+                                    "/services/manage", "/analytics", "/security-overview",
+                                    "/privacy", "/terms", "/contact", "/features").permitAll()
                             .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
                             .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
                             .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")
@@ -255,11 +370,17 @@ class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         var corsConfiguration = new CorsConfiguration();
         corsConfiguration.setAllowCredentials(true);
-        corsConfiguration.setAllowedOrigins(List.of(
-                "http://localhost:4200",
-                "http://localhost:3000",
-                "https://angularsecureapp.org"
-        ));
+        // setAllowedOriginPATTERNS, not setAllowedOrigins: with allowCredentials(true) the CORS
+        // spec forbids the "*" wildcard, and Spring enforces that by refusing to start if
+        // setAllowedOrigins contains one. Patterns are the supported way to express "any host on my
+        // LAN" — Spring matches the request's Origin against them and echoes back that exact
+        // origin, which is spec-compliant. Exact origins (the prod case) are written literally and
+        // still match exactly.
+        corsConfiguration.setAllowedOriginPatterns(
+                Arrays.stream(allowedOriginPatterns.split(","))
+                        .map(String::trim)
+                        .filter(pattern -> !pattern.isEmpty())
+                        .toList());
         corsConfiguration.setAllowedHeaders(Arrays.asList(
                 "Origin",
                 "Access-Control-Allow-Origin",

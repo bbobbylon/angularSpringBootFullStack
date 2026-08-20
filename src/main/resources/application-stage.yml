@@ -13,6 +13,11 @@ SPRING_ACTIVE_PROFILES: stage
 
 MYSQL_PORT: 3306
 
+# Mirrors production: encrypted DB transport is mandatory, and a server that cannot do TLS fails
+# the connection rather than silently downgrading. See application.yml's datasource block.
+MYSQL_SSL_MODE: REQUIRED
+MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL: false
+
 MAIL_HOST: smtp.gmail.com
 MAIL_PORT: 587
 

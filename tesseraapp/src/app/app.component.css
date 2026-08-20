@@ -1,0 +1,31 @@
+/*
+  Sticky-footer layout: app-root becomes the flex column, and app-footer's `margin-top: auto`
+  (see footer.component.css) consumes whatever vertical space the page content didn't use,
+  pushing the footer to the bottom of the viewport on short pages without needing every feature
+  component to opt into a min-height itself.
+*/
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/*
+  `.anim-host` (the [@.disabled] wrapper around <main>, see app.component.html) must not be a
+  normal block box: a flex item's `flex` property only takes effect on a *direct* child of the
+  flex container, and .anim-host — not <main> — is the direct child of :host here. Without this,
+  .anim-host defaults to `flex: 0 1 auto` and shrinks to whatever <main> currently measures, so
+  any screen that's short on first paint (an empty loading state, a still-fetching dashboard, or
+  route-animations.ts pinning the :enter/:leave views to `position: absolute` for the ~330ms of
+  every route transition) lets the footer's `margin-top: auto` snap it up toward the navbar —
+  then shove it back down once real content lands. `display: contents` removes .anim-host's own
+  box from the layout tree entirely, promoting <main> to be the flex item :host actually sees, so
+  `main { flex: 1 }` below can do its job independent of what .anim-host's children measure.
+*/
+.anim-host {
+  display: contents;
+}
+
+main {
+  flex: 1;
+}

@@ -16,6 +16,11 @@ on:
     branches: ["**"]
   pull_request:
     branches: [master]
+  # Callable from deploy.yml / deploy-gcp.yml so a deployment runs these exact checks
+  # first, rather than racing them. Without this the two workflows both trigger on a
+  # push to master and run concurrently — a commit whose tests are failing gets built,
+  # pushed and rolled out while CI is still on its way to red.
+  workflow_call:
 
 jobs:
   backend:
@@ -106,6 +111,14 @@ jobs:
       # Angular workspace produces a steady trickle of them, and a gate that is red for
       # reasons nobody can act on gets ignored, which costs more than it catches.
       #
+      # --omit=dev scopes the gate to what actually ships in the built app. As of 2026-08-09,
+      # @angular/cli and @angular/build carry their own high-severity devDependency advisories
+      # (an @modelcontextprotocol/sdk chain and an undici chain, respectively) with no fix on a
+      # stable release line — only Angular 22 prereleases resolve them. Those tools run at
+      # build time on a CI runner and are never part of the deployed image, so gating the
+      # deploy on them blocks real ships over a risk class that isn't present in production;
+      # they still show up in a full `npm audit` run for visibility, just don't fail the build.
+      #
       # NOTE: this step could not be verified on the author's Windows machine — `npm audit`
       # there fails with "invalid json response body ... audit endpoint returned an error",
       # because npm receives a gzipped advisory response it does not decode. That is a local
@@ -114,7 +127,7 @@ jobs:
       # ever does flake here, prefer `continue-on-error: true` over deleting the step, so
       # advisories stay visible even when the endpoint misbehaves.
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
 
       # Lint now GATES. It could not before: the workspace carried 12 standing errors (10 of them
       # real accessibility defects — labels with no control association, click handlers with no

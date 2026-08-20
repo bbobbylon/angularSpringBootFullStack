@@ -1,5 +1,5 @@
 @if (profileState(); as state) {
-  <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+  <app-navbar></app-navbar>
   <main class="sc-page" *transloco="let t">
     <div class="container">
       <nav aria-label="breadcrumb">
@@ -159,8 +159,9 @@
                     <label for="phoneNumber">{{ t('profile.phone') }}</label>
                     <input [disabled]="isLoading()"
                            [ngModel]="state?.appData?.data?.user?.phoneNumber" class="form-control" id="phoneNumber"
-                           name="phoneNumber"
-                           type="text">
+                           name="phoneNumber" [pattern]="PHONE_PATTERN"
+                           type="tel">
+                    <small class="text-muted">{{ PHONE_HINT }}</small>
                   </div>
                 </div>
                 <div class="col-md-6">
@@ -223,9 +224,11 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label for="newPassword">{{ t('profile.newPassword') }}</label>
-                    <input [disabled]="isLoading()" class="form-control" id="newPassword" minlength="5"
+                    <input [disabled]="isLoading()" class="form-control" id="newPassword"
+                           [minlength]="PASSWORD_MIN_LENGTH" [pattern]="PASSWORD_PATTERN"
                            name="newPassword"
                            ngModel required type="password">
+                    <small class="text-muted">{{ PASSWORD_HINT }}</small>
                   </div>
                 </div>
                 <div class="col-md-6">
@@ -391,48 +394,49 @@
               <div class="card-body">
                 <h5 class="card-title">{{ t('profile.accountActivities') }}</h5>
                 <h6 class="card-subtitle mb-2 text-muted">{{ t('profile.activitiesHint') }}</h6>
-                <table class="table table-hover">
-                  <thead>
-                  <tr>
-                    <th scope="col">{{ t('securityCenter.event') }}</th>
-                    <th scope="col">{{ t('security.log.device') }}</th>
-                    <th scope="col">IP Address</th>
-                    <th scope="col">Date</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                    @for (event of state?.appData?.data?.events; track $index) {
-                      <tr>
-                        <td>
-                          <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
-                            <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
-                            {{ getEventDisplay(event.type).label }}
-                          </span>
-                          <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
-                        </td>
-                        <td style="font-size: 0.85rem;">{{ event.device }}</td>
-                        <td style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
-                        <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
+                <div class="table-responsive">
+                  <table class="table table-hover">
+                    <thead>
+                    <tr>
+                      <th scope="col">{{ t('securityCenter.event') }}</th>
+                      <th scope="col">{{ t('security.log.device') }}</th>
+                      <th scope="col">IP Address</th>
+                      <th scope="col">Date</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                      @for (event of state?.appData?.data?.events; track $index) {
+                        <tr>
+                          <td>
+                            <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
+                              <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
+                              {{ getEventDisplay(event.type).label }}
+                            </span>
+                            <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
+                          </td>
+                          <td style="font-size: 0.85rem;">{{ event.device }}</td>
+                          <td style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
+                          <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
                 @if (eventsTotalPages() > 1) {
-                  <nav aria-label="Activity log pagination">
+                  <nav [attr.aria-label]="t('common.pageNavigation')">
                     <ul class="pagination justify-content-end mb-0">
                       <li [ngClass]="currentEventPage() === 0 ? 'disabled' : ''" class="page-item">
-                        <button (click)="goToEventsPage(currentEventPage() - 1)" class="page-link">&laquo; Prev</button>
+                        <button (click)="goToEventsPage(currentEventPage() - 1)"
+                                [disabled]="currentEventPage() === 0"
+                                class="page-link">&laquo; {{ t('common.prev') }}</button>
                       </li>
-                      @for (p of [].constructor(eventsTotalPages()); track $index; let i = $index) {
-                        <li class="page-item">
-                          <button (click)="goToEventsPage(i)"
-                                  [ngClass]="i === currentEventPage() ? 'active' : ''"
-                                  class="page-link">{{ i + 1 }}
-                          </button>
-                        </li>
-                      }
+                      <li class="page-item disabled">
+                        <span class="page-link">{{ t('common.pageXofY', { page: currentEventPage() + 1, total: eventsTotalPages() }) }}</span>
+                      </li>
                       <li [ngClass]="currentEventPage() === eventsTotalPages() - 1 ? 'disabled' : ''" class="page-item">
-                        <button (click)="goToEventsPage(currentEventPage() + 1)" class="page-link">Next &raquo;</button>
+                        <button (click)="goToEventsPage(currentEventPage() + 1)"
+                                [disabled]="currentEventPage() === eventsTotalPages() - 1"
+                                class="page-link">{{ t('common.next') }} &raquo;</button>
                       </li>
                     </ul>
                   </nav>

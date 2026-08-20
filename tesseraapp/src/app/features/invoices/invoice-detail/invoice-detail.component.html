@@ -1,7 +1,7 @@
 @if (invoiceState(); as state) {
   @switch (state.dataState) {
     @case (DataState.LOADED) {
-      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <app-navbar></app-navbar>
       <main *transloco="let t" class="sc-page">
         <div class="container">
           <nav aria-label="breadcrumb">
@@ -24,6 +24,15 @@
                   <button (click)="exportAsPDF()" class="btn btn-sm btn-primary sc-panel__action" type="button">
                     <i class="bi bi-file-earmark-pdf-fill"></i>
                     {{ t('invoice.exportPdf') }}
+                  </button>
+                  <button (click)="emailInvoice()"
+                          [disabled]="!canEditInvoice || isEmailing()"
+                          [appRequiresAuthority]="['UPDATE:CUSTOMER', 'UPDATE:USER']"
+                          class="btn btn-sm btn-outline-secondary sc-panel__action"
+                          deniedAction="email invoices"
+                          type="button">
+                    <i class="bi bi-envelope"></i>
+                    @if (isEmailing()) { <span>{{ t('invoice.sending') }}</span> } @else { <span>{{ t('invoice.emailInvoice') }}</span> }
                   </button>
                   <button (click)="toggleEdit()"
                           [disabled]="!canEditInvoice"
@@ -181,17 +190,17 @@
                     <p class="text-center">
                       <span class="m-r-10">
                         <i class="bi bi-globe"></i>
-                        tesseraapp.com
+                        tesseraapp.dev
                       </span>
                       <br />
                       <span class="m-r-10">
                         <i class="bi bi-telephone-fill"></i>
-                        Telephone:(123) 456-7890
+                        Telephone: +1 (808) 431-5852
                       </span>
                       <br />
                       <span class="m-r-10">
                         <i class="bi bi-envelope-fill"></i>
-                        Email: billing&#64;tesseraapp.com
+                        Email: bobsangularemail&#64;gmail.com
                       </span>
                     </p>
                   </div>

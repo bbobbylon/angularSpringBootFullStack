@@ -116,10 +116,14 @@
 
             <div class="sc-field">
               <label class="form-label" for="password">{{ t('auth.password') }}</label>
-              <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
-              <input id="password" name="password" ngModel required minlength="4" type="password"
-                     autocomplete="new-password" [placeholder]="t('register.passwordPlaceholder')"
-                     [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+              <div class="sc-field__control">
+                <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
+                <input id="password" name="password" ngModel required [minlength]="PASSWORD_MIN_LENGTH"
+                       [pattern]="PASSWORD_PATTERN" type="password"
+                       autocomplete="new-password" [placeholder]="t('register.passwordPlaceholder')"
+                       [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+              </div>
+              <small class="text-muted">{{ PASSWORD_HINT }}</small>
             </div>
 
             <button
@@ -149,7 +153,7 @@
         <div class="sc-auth__form sc-reveal" style="--d: 80ms">
           <a class="sc-auth__brand sc-auth__brand--compact" routerLink="/login">
             <span class="sc-auth__brand-mark"><i class="bi bi-shield-lock-fill"></i></span>
-            <span class="sc-auth__brand-text">Secure<span class="text-accent">Capita</span></span>
+            <span class="sc-auth__brand-text">Tessera<span class="text-accent">App</span></span>
           </a>
 
           <div class="sc-auth__success">

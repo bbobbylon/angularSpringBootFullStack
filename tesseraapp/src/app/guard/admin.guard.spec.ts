@@ -55,7 +55,7 @@ describe('adminGuard', () => {
   /** The guard ignores router state; a bare stub keeps the call sites readable. */
   const state = {} as RouterStateSnapshot;
 
-  /** Invokes the guard inside an injection context and normalises the (never-async) result. */
+  /** Invokes the guard inside an injection context and normalizes the (never-async) result. */
   const runGuard = (deniedAction?: string, deniedActionKey?: string): boolean | UrlTree =>
     TestBed.runInInjectionContext(() => adminGuard(routeWith(deniedAction, deniedActionKey), state)) as boolean | UrlTree;
 

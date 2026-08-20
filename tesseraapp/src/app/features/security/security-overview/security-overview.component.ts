@@ -12,12 +12,15 @@ import { CustomHttpResponseInterface } from '../../../interface/customhttprespon
 import {
   LoginOutcomeTrendPointInterface,
   MfaAdoptionInterface,
+  PageInfoInterface,
   RestrictedAccountInterface,
   SecurityOverviewDataInterface,
+  SecuritySettingsInterface,
   SuspiciousLoginInterface,
 } from '../../../interface/security-overview.interface';
 import { UserInterface } from '../../../interface/user.interface';
-import { TranslocoDirective } from '@jsverse/transloco';
+import { PAGE_SIZE_OPTIONS, PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 
 /** One plotted day of the login-outcome trend, with SVG coordinates pre-computed. */
 interface TrendColumn {
@@ -59,7 +62,7 @@ interface TrendColumn {
  *       dashboard that renders identically whether it covers the whole platform or one
  *       organization's slice invites its worst misreading — an org admin concluding all is quiet
  *       when they can only see their own corner.</li>
- *   <li>The <b>shared trend scale</b>. All three series are normalised against one maximum rather
+ *   <li>The <b>shared trend scale</b>. All three series are normalized against one maximum rather
  *       than each against its own. Independently-scaled series would draw four failures the same
  *       height as four hundred successes, which is exactly the comparison the chart exists to
  *       support.</li>
@@ -72,7 +75,7 @@ interface TrendColumn {
 @Component({
   selector: 'app-security-overview',
   standalone: true,
-  imports: [NavbarComponent, RouterLink, DecimalPipe, DatePipe, TranslocoDirective],
+  imports: [NavbarComponent, RouterLink, DecimalPipe, DatePipe, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './security-overview.component.html',
   styleUrl: './security-overview.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -83,6 +86,7 @@ export class SecurityOverviewComponent implements OnInit {
   private readonly securityDashboard = inject(SecurityDashboardService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly transloco = inject(TranslocoService);
 
   /** The windows offered in the selector — a week, a month, a quarter. */
   protected readonly windowOptions = [7, 30, 90];
@@ -106,6 +110,60 @@ export class SecurityOverviewComponent implements OnInit {
   protected readonly suspiciousLogins = computed<SuspiciousLoginInterface[]>(() => this.overview()?.suspiciousLogins ?? []);
 
   protected readonly restrictedAccounts = computed<RestrictedAccountInterface[]>(() => this.overview()?.restrictedAccounts ?? []);
+
+  // ── Pagination ────────────────────────────────────────────────────────────────────────────
+  // The two tables page INDEPENDENTLY. A single shared index would mean stepping through flagged
+  // sign-ins silently reset the restricted-accounts list an administrator was working down — the
+  // two panels answer unrelated questions and are read at unrelated rates.
+
+  /** 0-based page of the flagged sign-ins table. */
+  private readonly suspiciousPage = signal(0);
+
+  /** 0-based page of the locked/disabled accounts table. */
+  private readonly restrictedPage = signal(0);
+
+  // Row counts are per-table for the same reason the page indexes are. Fifty matches the server's
+  // DEFAULT_LIST_SIZE, so the first load is identical to what this screen has always shown.
+
+  /** Rows per page of the flagged sign-ins table; the server clamps this to 1–100. */
+  protected readonly suspiciousSize = signal(50);
+
+  /** Rows per page of the locked/disabled accounts table; the server clamps this to 1–100. */
+  protected readonly restrictedSize = signal(50);
+
+  /** Server-reported metadata for the flagged sign-ins table; zeroed until the first response. */
+  protected readonly suspiciousPageInfo = computed<PageInfoInterface>(
+    () => this.overview()?.suspiciousLoginsPage ?? { page: 0, size: 0, totalElements: 0, totalPages: 0 },
+  );
+
+  /** Server-reported metadata for the restricted accounts table. */
+  protected readonly restrictedPageInfo = computed<PageInfoInterface>(
+    () => this.overview()?.restrictedAccountsPage ?? { page: 0, size: 0, totalElements: 0, totalPages: 0 },
+  );
+
+  /**
+   * Whether each pager is worth rendering at all.
+   *
+   * <p>Hidden below two pages on purpose. A pager showing a lone "1" is visually indistinguishable
+   * from a table that has no pagination, which leaves the reader unsure whether they are seeing
+   * everything — the exact ambiguity this work exists to remove. Absent controls plus a visible
+   * total says "this is all of it" unambiguously.
+   */
+  protected readonly showSuspiciousPager = computed(() => this.suspiciousPageInfo().totalPages > 1);
+  protected readonly showRestrictedPager = computed(() => this.restrictedPageInfo().totalPages > 1);
+
+  /**
+   * Whether each table's footer — position readout, size selector, prev/next — should render.
+   *
+   * <p>Keyed to the row total rather than the page count, which is what keeps the size selector
+   * from deleting itself. Gating the footer on {@link showSuspiciousPager} would mean that choosing
+   * 100 rows for a 60-row table collapses it to one page, hides the footer, and takes away the only
+   * control that could restore a smaller size. Asking instead whether any offered size could
+   * produce a second page means the footer outlives its own effect. The prev/next nav inside is
+   * still gated on the page count, so the "lone 1" it was protecting against never appears.
+   */
+  protected readonly showSuspiciousFoot = computed(() => this.suspiciousPageInfo().totalElements > PAGE_SIZE_OPTIONS[0]);
+  protected readonly showRestrictedFoot = computed(() => this.restrictedPageInfo().totalElements > PAGE_SIZE_OPTIONS[0]);
 
   protected readonly mfa = computed<MfaAdoptionInterface>(
     () => this.overview()?.mfaAdoption ?? { totalUsers: 0, totpUsers: 0, smsUsers: 0, singleFactorUsers: 0, mfaCoveragePercent: 0 },
@@ -149,9 +207,9 @@ export class SecurityOverviewComponent implements OnInit {
   });
 
   /**
-   * The trend chart's columns, with bar heights normalised against a single shared maximum.
+   * The trend chart's columns, with bar heights normalized against a single shared maximum.
    *
-   * <p>One scale for all three series is the whole point. Normalising each series against its own
+   * <p>One scale for all three series is the whole point. Normalizing each series against its own
    * maximum would make the tallest failure bar and the tallest success bar the same height, which
    * reverses the comparison the chart exists to support — a reader would see "as many failures as
    * successes" in a window where failures were a rounding error.
@@ -209,7 +267,168 @@ export class SecurityOverviewComponent implements OnInit {
   /** Accounts held back by verification rather than by a lockout. */
   protected readonly disabledCount = computed(() => this.restrictedAccounts().filter((account) => !account.enabled).length);
 
+  // ── Anomaly signal tuning (FUTURE-ENHANCEMENTS "Anomaly signal tuning UI") ─────────────────
+  // A separate request and a separate state signal from the overview above: the settings panel
+  // is admin configuration, not a reporting figure, and must not be re-fetched (or accidentally
+  // reset) every time the reporting window or a table page changes.
+
+  /** The settings row as last confirmed by the server — the baseline {@link isDirty} compares against. */
+  protected readonly savedSettings = signal<SecuritySettingsInterface | null>(null);
+
+  /**
+   * The enabled-override the admin is currently editing: {@code null} means "use the server
+   * default", matching the API's own null-means-no-override contract so there is nothing to
+   * translate between the draft and the request body.
+   */
+  protected readonly enabledDraft = signal<boolean | null>(null);
+
+  /** The history-limit override the admin is currently editing; {@code null} means "use the default". */
+  protected readonly historyLimitDraft = signal<number | null>(null);
+
+  protected readonly settingsSaving = signal(false);
+
+  /**
+   * Whether the draft differs from what the server last confirmed — gates the Save button so a
+   * click with nothing changed cannot fire a pointless request, and lets the template show an
+   * "unsaved changes" hint.
+   */
+  protected readonly settingsDirty = computed(() => {
+    const saved = this.savedSettings();
+    if (!saved) return false;
+    return saved.anomalyEnabled !== this.enabledDraft() || saved.anomalyHistoryLimit !== this.historyLimitDraft();
+  });
+
   ngOnInit(): void {
+    this.load(this.selectedWindow());
+    this.loadAnomalySettings();
+  }
+
+  /** Fetches the current anomaly detection overrides and resets the draft to match. */
+  private loadAnomalySettings(): void {
+    this.securityDashboard
+      .anomalySettings$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          const settings = response.data?.settings;
+          if (!settings) return;
+          this.savedSettings.set(settings);
+          this.enabledDraft.set(settings.anomalyEnabled);
+          this.historyLimitDraft.set(settings.anomalyHistoryLimit);
+        },
+        error: (error: string) => this.notification.onError(error),
+      });
+  }
+
+  /**
+   * Sets the enabled-override draft. Called from a three-way button group (default / enabled /
+   * disabled) rather than a checkbox, since "unset" is a genuine third state here, not the
+   * absence of a boolean.
+   *
+   * @param value - null for "use the server default", otherwise the override to stage
+   */
+  protected selectEnabledDraft(value: boolean | null): void {
+    this.enabledDraft.set(value);
+  }
+
+  /**
+   * Reads the history-limit number input and stages it as the draft override; an empty field
+   * clears the override back to null ("use the default") rather than coercing to 0, which would
+   * be a real (and nonsensical) override value.
+   *
+   * @param raw - the input element's string value
+   */
+  protected onHistoryLimitInput(raw: string): void {
+    const trimmed = raw.trim();
+    this.historyLimitDraft.set(trimmed === '' ? null : Number(trimmed));
+  }
+
+  /** Clears the history-limit draft back to "use the server default". */
+  protected clearHistoryLimitDraft(): void {
+    this.historyLimitDraft.set(null);
+  }
+
+  /** Persists the draft and refreshes {@link savedSettings} so {@link settingsDirty} clears. */
+  protected saveAnomalySettings(): void {
+    if (!this.settingsDirty() || this.settingsSaving()) return;
+    this.settingsSaving.set(true);
+    this.securityDashboard
+      .updateAnomalySettings$(this.enabledDraft(), this.historyLimitDraft())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          const settings = response.data?.settings;
+          this.settingsSaving.set(false);
+          if (!settings) return;
+          this.savedSettings.set(settings);
+          this.enabledDraft.set(settings.anomalyEnabled);
+          this.historyLimitDraft.set(settings.anomalyHistoryLimit);
+          this.notification.onSuccess(this.transloco.translate('toasts.settingsUpdated'));
+        },
+        error: (error: string) => {
+          this.notification.onError(error);
+          this.settingsSaving.set(false);
+        },
+      });
+  }
+
+  /**
+   * Moves the flagged sign-ins table to a page and re-fetches.
+   *
+   * <p>Clamped to the reported range here rather than relying on the server, so a disabled control
+   * that is somehow activated cannot fire a pointless request.
+   *
+   * @param page - the target 0-based page index
+   */
+  protected goToSuspiciousPage(page: number): void {
+    const last = Math.max(this.suspiciousPageInfo().totalPages - 1, 0);
+    const target = Math.min(Math.max(page, 0), last);
+    if (target === this.suspiciousPage()) return;
+    this.suspiciousPage.set(target);
+    this.load(this.selectedWindow());
+  }
+
+  /**
+   * Moves the restricted accounts table to a page and re-fetches.
+   *
+   * @param page - the target 0-based page index
+   */
+  protected goToRestrictedPage(page: number): void {
+    const last = Math.max(this.restrictedPageInfo().totalPages - 1, 0);
+    const target = Math.min(Math.max(page, 0), last);
+    if (target === this.restrictedPage()) return;
+    this.restrictedPage.set(target);
+    this.load(this.selectedWindow());
+  }
+
+  /**
+   * Resizes the flagged sign-ins table and re-reads it from the first page.
+   *
+   * <p>Only this table is touched. The restricted-accounts list keeps both its size and its place,
+   * which is the same independence the two page indexes already have — an administrator scanning
+   * flagged sign-ins in hundreds should not thereby resize the lockout list a colleague's ticket is
+   * about.
+   *
+   * @param size - the new row count; the server clamps it to 1–100 and reports back what it used
+   */
+  protected changeSuspiciousSize(size: number): void {
+    if (size === this.suspiciousSize()) return;
+    this.suspiciousSize.set(size);
+    // Page 3 of a 10-row listing is past the end of a 100-row one. Unlike the client-side tables,
+    // this one would fetch that page from the server before discovering it is empty.
+    this.suspiciousPage.set(0);
+    this.load(this.selectedWindow());
+  }
+
+  /**
+   * Resizes the locked/disabled accounts table and re-reads it from the first page.
+   *
+   * @param size - the new row count; the server clamps it to 1–100 and reports back what it used
+   */
+  protected changeRestrictedSize(size: number): void {
+    if (size === this.restrictedSize()) return;
+    this.restrictedSize.set(size);
+    this.restrictedPage.set(0);
     this.load(this.selectedWindow());
   }
 
@@ -224,17 +443,21 @@ export class SecurityOverviewComponent implements OnInit {
   protected selectWindow(days: number): void {
     if (days === this.selectedWindow()) return;
     this.selectedWindow.set(days);
+    // Both pagers reset: a different window is a different result set, so page 3 of the old window
+    // has no meaningful counterpart in the new one and would likely land past the end.
+    this.suspiciousPage.set(0);
+    this.restrictedPage.set(0);
     this.load(days);
   }
 
   /**
    * Fetches the overview for a window and folds the result into {@link pageState}.
    *
-   * @param days - how many days of history to summarise
+   * @param days - how many days of history to summarize
    */
   private load(days: number): void {
     this.securityDashboard
-      .overview$(days)
+      .overview$(days, this.suspiciousPage(), this.suspiciousSize(), this.restrictedPage(), this.restrictedSize())
       .pipe(
         map((response) => ({ dataState: DataState.LOADED, appData: response })),
         startWith({ dataState: DataState.LOADING }),

@@ -14,6 +14,10 @@
 #          --add-cloudsql-instances $PROJECT_ID:$REGION:$INSTANCE \
 #          --set-env-vars SPRING_DATASOURCE_URL="jdbc:mysql:///${DB_NAME}?cloudSqlInstance=${PROJECT_ID}:${REGION}:${INSTANCE}&socketFactory=com.google.cloud.sql.mysql.SocketFactory&useSSL=false"
 #      (add the `com.google.cloud.sql:mysql-socket-factory-connector-j-8` dependency to pom.xml).
+#      NOTE the `useSSL=false` above is CORRECT here and is the one place it should stay — the
+#      Cloud SQL socket factory establishes its own authenticated, encrypted tunnel, so asking
+#      Connector/J to negotiate TLS on top of it is redundant and fails. Everywhere else in this
+#      repo uses `sslMode` (REQUIRED when deployed); do not "fix" this line to match them.
 #
 # Required env: GCP_PROJECT_ID   Optional: GCP_REGION, CLOUDSQL_INSTANCE, CLOUDSQL_DB, CLOUDSQL_USER
 set -euo pipefail

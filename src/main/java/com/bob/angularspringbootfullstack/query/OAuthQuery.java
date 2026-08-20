@@ -86,9 +86,9 @@ public class OAuthQuery {
      * verified the email, so the in-house email-verification step is redundant), and the
      * provider's avatar is used when present ({@code COALESCE} falls back to the column
      * default for providers that do not supply one).
-     * Parameters: firstName, lastName, email, imageUrl (nullable).
+     * Parameters: firstName, lastName, email, imageUrl (nullable), origin (e.g. "FEDERATED_GOOGLE").
      */
     public static final String INSERT_FEDERATED_USER_QUERY =
-            "INSERT INTO users (first_name, last_name, email, enabled, image_url) " +
-            "VALUES (:firstName, :lastName, :email, TRUE, COALESCE(:imageUrl, DEFAULT(image_url)))";
+            "INSERT INTO users (first_name, last_name, email, enabled, image_url, origin) " +
+            "VALUES (:firstName, :lastName, :email, TRUE, COALESCE(:imageUrl, DEFAULT(image_url)), :origin)";
 }

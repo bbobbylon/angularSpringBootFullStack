@@ -12,6 +12,7 @@ import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import com.bob.angularspringbootfullstack.service.ImageStorageService;
 import com.bob.angularspringbootfullstack.service.NotificationService;
+import com.bob.angularspringbootfullstack.utils.TwilioVerifyUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
@@ -96,6 +97,9 @@ import static org.apache.commons.lang3.time.DateUtils.addDays;
 @RequiredArgsConstructor
 @Slf4j
 public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
+
+    /** The directory's unsorted default — newest accounts first, {@code id DESC} breaking ties. */
+    private static final String DEFAULT_USER_ORDER_BY = "created_at DESC, id DESC";
 
     //HERE WE ARE ADDING SOME BEANZ
 
@@ -231,8 +235,16 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * {@code key} is what gets persisted (in the {@code url} column) and later matched on, while
      * this method merely wraps that key in the configured frontend origin ({@link #uiAppUrl}) to
      * produce something clickable. The link resolves to the Angular {@code VerifyComponent}
-     * (route {@code /user/verify/{type}/{key}}), which reads the {@code key} back off the path and
-     * calls the backend to verify it.
+     * (route {@code /verify/{type}/{key}}), which reads the {@code key} back off the path and calls
+     * the backend's {@code GET /user/verify/{type}/{key}} endpoint to actually verify it.
+     * <p>
+     * The emitted path deliberately omits the {@code /user} prefix the backend endpoint carries.
+     * With Angular on its own dev server the two live on different origins and either spelling
+     * works, but in Docker/prod the SPA is baked into this jar and the browser hits the <em>same</em>
+     * origin as the API — so a link to {@code /user/verify/account/<uuid>} is dispatched to
+     * {@code UserController#verifyAccount} and the recipient is shown the raw JSON envelope instead
+     * of the verification screen. Keeping user-facing routes in the SPA's bare namespace and the API
+     * under {@code /user/**} is what makes one link behave identically in both topologies.
      * <p>
      * Because the persisted key no longer contains the host, changing {@link #uiAppUrl} re-points
      * future emails <em>without</em> invalidating any pending verification rows — the lookup matches
@@ -242,12 +254,12 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * @param key  the bare UUID identifying this verification instance (also the DB lookup key)
      * @param type the verification type segment ({@code account} or {@code password})
      * @return the absolute frontend verification URL, e.g.
-     *         {@code http://localhost:4200/user/verify/account/<uuid>}
+     *         {@code http://localhost:4200/verify/account/<uuid>}
      */
     private String getVerificationURL(String key, String type) {
-        // Tolerate a trailing slash on the configured origin so we never emit "//user/verify".
+        // Tolerate a trailing slash on the configured origin so we never emit "//verify".
         String base = uiAppUrl.endsWith("/") ? uiAppUrl.substring(0, uiAppUrl.length() - 1) : uiAppUrl;
-        return base + "/user/verify/" + type + "/" + key;
+        return base + "/verify/" + type + "/" + key;
     }
 
     /**
@@ -261,7 +273,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      */
     @Override
     public Collection<User> list(int page, int pageSize) {
-        return searchUsers("", page, pageSize);
+        return searchUsers("", page, pageSize, DEFAULT_USER_ORDER_BY);
     }
 
     /**
@@ -276,14 +288,18 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * @param searchTerm free-text filter; blank or null lists everyone
      * @param page       0-indexed page number (negative values are treated as 0)
      * @param pageSize   rows per page (bounded to 1..100)
-     * @return the matching users on the requested page, newest accounts first
+     * @param orderBy    a validated {@code "column ASC|DESC"} fragment, spliced into
+     *                   {@link com.bob.angularspringbootfullstack.query.UserQuery#SELECT_USERS_PAGED_QUERY}'s
+     *                   {@code %s} placeholder via {@link String#format} — see that field's Javadoc
+     *                   for why this is safe only because the caller already validated it
+     * @return the matching users on the requested page, in the requested order
      */
     @Override
-    public Collection<User> searchUsers(String searchTerm, int page, int pageSize) {
+    public Collection<User> searchUsers(String searchTerm, int page, int pageSize, String orderBy) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(pageSize, 1), 100);
         try {
-            return jdbcTemplate.query(SELECT_USERS_PAGED_QUERY,
+            return jdbcTemplate.query(String.format(SELECT_USERS_PAGED_QUERY, orderBy),
                     of("searchTerm", toLikePattern(searchTerm),
                             "pageSize", safeSize,
                             "offset", safePage * safeSize),
@@ -392,6 +408,19 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection<String> findSystemAdminEmails() {
+        try {
+            return jdbcTemplate.queryForList(SELECT_SYSTEM_ADMIN_EMAILS_QUERY, of(), String.class);
+        } catch (Exception exception) {
+            log.error("Error resolving system administrator emails: {}", exception.getMessage(), exception);
+            throw new ApiException("An error occurred while resolving report digest recipients. Please try again.");
+        }
+    }
+
+    /**
      * Generates a fresh 2FA code for the given user, replaces any prior code,
      * and hands dispatch off to {@link NotificationService#sendTwoFactorCode}.
      * <p>
@@ -455,15 +484,42 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * Verifies that a 2FA code exists, is not expired, and belongs to the given email.
      *
      * <p>If the code is valid, the verification row is deleted (single-use).
+     *
+     * <p><b>Two redemption paths, one endpoint.</b> {@code GET /user/verify/code/{email}/{code}}
+     * stays the single entry point described on
+     * {@link com.bob.angularspringbootfullstack.repo.UserRepo#issueVerificationCode}, but the code
+     * it redeems no longer always lives in {@code twofactorverifications}: when the user is enrolled
+     * in phone-based 2FA ({@link User#isUsing2FA()}) and {@link TwilioVerifyUtils#isConfigured()},
+     * {@code NotificationServiceImpl#sendTwoFactorCode} dispatched the code through Twilio Verify,
+     * which owns it entirely — nothing was ever inserted locally for that attempt, so this delegates
+     * the check to {@link TwilioVerifyUtils#checkVerification} instead of querying this table. Every
+     * other case (the FR-TPF-1 email step-up code, and phone 2FA when Verify isn't configured) still
+     * redeems against the local table exactly as before.
      */
     @Override
     public User verifyCode(String email, String code) {
+        User userByEmail;
+        try {
+            userByEmail = jdbcTemplate.queryForObject(SELECT_USER_BY_EMAIL_QUERY, of("email", email), new UserRowMapper());
+        } catch (EmptyResultDataAccessException e) {
+            log.error("The User is not found in our database: {}", email);
+            throw new UsernameNotFoundException("User not found in our database: " + email);
+        }
+
+        if (userByEmail.isUsing2FA() && TwilioVerifyUtils.isConfigured()) {
+            log.info("User with email '{}' is attempting to use 2FA/MFA: verifying code via Twilio Verify.", email);
+            if (TwilioVerifyUtils.checkVerification(userByEmail.getPhoneNumber(), code)) {
+                return userByEmail;
+            }
+            log.error("Invalid 2FA code verification attempt for email: {}", email);
+            throw new BadCredentialsException("Code is not valid. Please try again!");
+        }
+
         if (isVerificationCodeExpired(code))
             throw new ApiException("This code has expired. Please request a new code to verify your account.");
         try {
             log.info("User with email '{}' is attempting to use 2FA/MFA: verifying code.", email);
             User userByCode = jdbcTemplate.queryForObject(SELECT_USER_BY_USER_CODE_QUERY, of("code", code), new UserRowMapper());
-            User userByEmail = jdbcTemplate.queryForObject(SELECT_USER_BY_EMAIL_QUERY, of("email", email), new UserRowMapper());
             if (userByCode.getEmail().equalsIgnoreCase(userByEmail.getEmail())) {
                 jdbcTemplate.update(DELETE_2FA_CODE_BY_CODE_QUERY, of("code", code));
                 return userByCode;
@@ -480,6 +536,21 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             log.error("Unexpected error during 2FA code verification for email '{}': {}", email, exception.getMessage(), exception);
             throw new BadCredentialsException("An unexpected error occurred while verifying the code.");
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@link #issueVerificationCode} always writes a {@code twofactorverifications} row
+     * regardless of delivery channel — even when Twilio Verify owns the actual code and
+     * {@link #verifyCode} redeems against Verify's own state instead of this table (see that
+     * method). The local row still marks "a first factor was proven and a challenge is
+     * outstanding" in every case, which is exactly what a resend needs to check.
+     */
+    @Override
+    public boolean hasPendingVerificationCode(Long userId) {
+        Integer count = jdbcTemplate.queryForObject(COUNT_PENDING_2FA_CODE_BY_USER_ID_QUERY, of("id", userId), Integer.class);
+        return count != null && count > 0;
     }
 
     /**

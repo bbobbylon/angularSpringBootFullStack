@@ -1,4 +1,4 @@
-<app-navbar [user]="user()"></app-navbar>
+<app-navbar></app-navbar>
 
 <main *transloco="let t" class="sc-catalog">
   <div class="container">
@@ -13,6 +13,12 @@
         </p>
       </div>
       <div class="sc-catalog__actions">
+        <label class="sc-search">
+          <i class="bi bi-search"></i>
+          <input #catalogSearchForm (input)="onCatalogSearch(catalogSearchForm.value)"
+                 class="form-control form-control-sm" id="publicCatalogSearch"
+                 [placeholder]="t('servicesAdmin.searchByName')" type="text" [attr.aria-label]="t('servicesAdmin.searchAria')" />
+        </label>
         @if (isAdmin) {
           <a [routerLink]="['/billing']" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-graph-up-arrow"></i> {{ t('nav.billingOverview') }}
@@ -45,7 +51,7 @@
 
     <!-- ── Service grid ─────────────────────────────────────────────────── -->
     @if (pageState().dataState === DataState.LOADED) {
-      @if (services().length) {
+      @if (filteredServices().length) {
         <div class="sc-catalog-summary sc-reveal" style="--d: 40ms;">
           <span class="sc-catalog-summary__count">
             <strong>{{ services().length }}</strong> {{ t('servicesCatalog.servicesAvailable') }}
@@ -57,7 +63,7 @@
         </div>
 
         <div class="sc-svc-grid sc-reveal" style="--d: 80ms;">
-          @for (svc of services(); track svc.id) {
+          @for (svc of pagedServices(); track svc.id) {
             <article class="sc-svc-card">
               <div class="sc-svc-card__icon">
                 <i class="bi bi-grid-1x2-fill"></i>
@@ -79,11 +85,67 @@
             </article>
           }
         </div>
+
+        <!-- Gated on the service COUNT, not the page count: at 100 cards/page a 30-service catalog
+             is one page, and a totalPages gate would hide the size selector that is the only way
+             back to 10. Prev/next inside still hides below two pages. -->
+        @if (showCatalogFoot()) {
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <app-page-size-select (sizeSelected)="changeCatalogPageSize($event)"
+                                    [size]="catalogPageSize()"></app-page-size-select>
+              <span class="text-muted small">
+                {{ t('common.pageXofY', { page: safeCatalogPage() + 1, total: catalogTotalPages() }) }}
+                · {{ t('common.nTotal', { count: filteredServices().length }) }}
+              </span>
+            </div>
+            @if (showCatalogPager()) {
+              <nav [attr.aria-label]="t('common.pageNavigation')">
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item" [class.disabled]="safeCatalogPage() === 0">
+                    <button type="button" class="page-link" [disabled]="safeCatalogPage() === 0"
+                            (click)="goToCatalogPage(safeCatalogPage() - 1)">
+                      &laquo; {{ t('common.prev') }}
+                    </button>
+                  </li>
+                  <li class="page-item" [class.disabled]="safeCatalogPage() >= catalogTotalPages() - 1">
+                    <button type="button" class="page-link"
+                            [disabled]="safeCatalogPage() >= catalogTotalPages() - 1"
+                            (click)="goToCatalogPage(safeCatalogPage() + 1)">
+                      {{ t('common.next') }} &raquo;
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+            }
+          </div>
+        }
+      } @else if (services().length) {
+        <!-- A non-empty catalog with zero search matches — distinct from the true empty state
+             below, which is about there being nothing in the catalog at all rather than nothing
+             matching this search. -->
+        <div class="sc-empty sc-reveal">
+          <span class="sc-empty__icon"><i class="bi bi-search"></i></span>
+          <p class="sc-empty__title">{{ t('servicesCatalog.noResultsTitle') }}</p>
+          <p class="sc-empty__hint">{{ t('servicesCatalog.noResultsHint') }}</p>
+        </div>
       } @else {
+        <!-- Empty state. The hint is audience-dependent: this is the MARKETPLACE view that every
+             signed-in user sees, so the default copy must not instruct a ROLE_USER to go and add
+             services somewhere they have no access to. Only a caller who can actually manage the
+             catalog is shown the call to action, and they get a link rather than a description of
+             where to navigate. -->
         <div class="sc-empty sc-reveal">
           <span class="sc-empty__icon"><i class="bi bi-grid-3x3"></i></span>
           <p class="sc-empty__title">{{ t('servicesCatalog.emptyTitle') }}</p>
-          <p class="sc-empty__hint">{{ t('servicesCatalog.emptyHint') }}</p>
+          @if (isAdmin) {
+            <p class="sc-empty__hint">{{ t('servicesCatalog.emptyHintAdmin') }}</p>
+            <a [routerLink]="['/services/manage']" class="btn btn-primary btn-sm mt-2">
+              <i class="bi bi-gear"></i> {{ t('servicesCatalog.manageCatalog') }}
+            </a>
+          } @else {
+            <p class="sc-empty__hint">{{ t('servicesCatalog.emptyHint') }}</p>
+          }
         </div>
       }
     }

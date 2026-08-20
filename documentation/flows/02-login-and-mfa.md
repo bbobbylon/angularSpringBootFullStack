@@ -37,7 +37,6 @@ sequenceDiagram
     participant DOM as login.component.html
     participant CMP as LoginComponent.ts
     participant SVC as UserService
-    participant CACHE as cacheInterceptor
     participant TOK as tokenInterceptor
     participant SEC as SecurityConfig
     participant CTRL as UserController
@@ -52,9 +51,7 @@ sequenceDiagram
     CMP->>CMP: loginState.set({ LOADING })  :190
     Note over DOM: button shows spinner "Verifying…"<br/>inputs disabled (DataState.LOADING)
     CMP->>SVC: login$(email, password)  :191 / user.service.ts:76
-    SVC->>CACHE: POST /user/login
-    Note over CACHE: 'login' ∈ bypassRoutes → no cache  :47
-    CACHE->>TOK: forward
+    SVC->>TOK: POST /user/login
     Note over TOK: 'login' ∈ publicRoutes → 🔓 NO Authorization header  :49
     TOK->>SEC: POST /user/login
     Note over SEC: matcher #2 permitAll  :138
@@ -111,8 +108,10 @@ brand-new login immediately shows up in the Security Center device list
 ## B · SMS-MFA branch (`user.using2FA`)
 
 When the authenticated user has SMS 2FA on, `UserController.login` calls `sendVerificationCode`
-(`:628, 713`) which sends the code (Twilio — stubbed in dev) and returns the user **without
-tokens**. The component reacts (`login.component.ts:206-215`):
+(`:628, 713`) which sends the code via Twilio (`SMSUtils`) and returns the user **without
+tokens**. Real send when Twilio credentials are configured; degrades to logging the code to the
+server console when they're placeholders/unset, which is what makes dev/CI work without a Twilio
+account. The component reacts (`login.component.ts:206-215`):
 
 ```mermaid
 sequenceDiagram

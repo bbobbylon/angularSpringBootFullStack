@@ -102,10 +102,35 @@ public interface TotpService {
 
     /**
      * Counts the user's remaining unused recovery codes so the Account Security Center
-     * can prompt regeneration-by-re-enrollment when the supply runs low.
+     * can prompt regeneration when the supply runs low.
      *
      * @param userId the authenticated user's id
      * @return how many recovery codes remain usable
      */
     long countUnusedRecoveryCodes(Long userId);
+
+    /**
+     * Replaces the user's entire recovery-code batch on demand, without disabling and
+     * re-enrolling the authenticator. Requires the same proof of possession as
+     * {@link #disableTotp} — a live TOTP code or an unused recovery code — for the same
+     * reason: a hijacked browser session alone must not be able to invalidate the
+     * legitimate holder's existing codes and walk away with a fresh set only it saw.
+     *
+     * @param userId the authenticated user's id
+     * @param code   a live TOTP code or an unused (about-to-be-replaced) recovery code
+     * @return the new plaintext recovery codes for one-time display
+     */
+    List<String> regenerateRecoveryCodes(Long userId, String code);
+
+    /**
+     * Force-disables TOTP for a managed user, with no code check at all — the administrative
+     * escape hatch for the one account state {@link #disableTotp} cannot reach: an account that
+     * has lost both its authenticator and every recovery code has no live code to present, so the
+     * self-service path is unconditionally unavailable to it. Trust here comes from the caller's
+     * {@code UPDATE:USER} authority (enforced by the controller), not from proof of possession —
+     * this method must never be reachable from a self-service endpoint.
+     *
+     * @param userId the managed user's id
+     */
+    void adminResetTotp(Long userId);
 }

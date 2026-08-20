@@ -10,6 +10,7 @@ import { CustomerService } from '../../../service/customer.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../../constants/password-policy';
 
 /**
  * Verification landing view for account and password reset links.
@@ -30,6 +31,10 @@ import { TranslocoDirective } from '@jsverse/transloco';
 export class VerifyComponent implements OnInit {
   /** Exposes the `DataState` enum to the template for asynchronous data handling. */
   readonly DataState = DataState;
+  /** Password requirements — mirrors the backend's `PasswordPolicy` exactly; see that constant's doc. */
+  protected readonly PASSWORD_MIN_LENGTH = PASSWORD_MIN_LENGTH;
+  protected readonly PASSWORD_PATTERN = PASSWORD_PATTERN;
+  protected readonly PASSWORD_HINT = PASSWORD_HINT;
   /**
    * Drives the template's loading/success/error rendering. Single writable signal,
    * mutated from both the route-param subscription (initial verification) and the
@@ -64,9 +69,7 @@ export class VerifyComponent implements OnInit {
     this.activatedRoute.paramMap
       .pipe(
         switchMap((params: ParamMap) => {
-          // console.log(this.activatedRoute);
-          //TODO implement a better way to determine which URL we are on, instead of using window.location.href
-          const type: AccountType = this.getAccountType(window.location.href);
+          const type: AccountType = this.resolveAccountType();
           return this.userService.verifyAccount$(params.get(this.ACCOUNT_KEY)!, type).pipe(
             map((response) => {
               // console.log(response);
@@ -156,7 +159,20 @@ export class VerifyComponent implements OnInit {
       });
   }
 
-  private getAccountType(url: string): AccountType {
-    return url.includes('password') ? 'password' : 'account';
+  /**
+   * Resolves which of the two verification flows this navigation represents.
+   *
+   * Reads the static `verificationType` declared on the route in `app.routes.ts`, falling back to
+   * sniffing the URL for the substring "password". The declared value is preferred because the
+   * fallback is a hidden dependency on how the path is spelled — and those paths just changed
+   * (`/user/verify/...` → `/verify/...`) to stop colliding with the backend's own
+   * `GET /user/verify/{type}/{key}` endpoint when both are served from one origin. The fallback
+   * stays for the bare `/verify` route, which carries no data payload.
+   *
+   * @returns 'password' for the reset flow, 'account' for activation
+   */
+  private resolveAccountType(): AccountType {
+    const declared = this.activatedRoute.snapshot.data['verificationType'] as AccountType | undefined;
+    return declared ?? (window.location.href.includes('password') ? 'password' : 'account');
   }
 }

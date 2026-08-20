@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Structured logging (POST-SUBMISSION-UPGRADES.md "Structured logging + metrics").
+
+  Before this file existed, Spring Boot fell back to its own built-in logback config (base.xml),
+  which is exactly what the "dev,local" branch below reproduces: a human-readable, ANSI-coloured
+  console line. That is fine at a terminal but useless in CloudWatch, where every event already
+  arrives as one opaque text blob per line — finding "every ERROR from AuthDiagnosticsLogger in
+  the last hour" means substring-matching @message with a regex (see aws/RUNBOOK.md Part H's
+  existing Logs Insights examples) instead of filtering a real field. The "prod,qa,stage" branch
+  switches those three deployed profiles to one JSON object per line (via logstash-logback-encoder's
+  LogstashEncoder), so level, logger_name, thread_name, and message become first-class fields Logs
+  Insights can `fields`/`filter`/`stats` on directly. dev/local are deliberately left alone — nobody
+  reads a local console through Logs Insights, and JSON is strictly harder for a human to scan.
+
+  IMPORTANT — this file must never hardcode a <logger name="..." level=".../> for any package this
+  app already controls via logging.level.* in application.yml (com.bob.angularspringbootfullstack,
+  org.springframework.security, org.springframework.web, org.hibernate, nl.basjes.parse.useragent —
+  the LOG_LEVEL_APP / LOG_LEVEL_SECURITY / LOG_LEVEL_WEB / LOG_LEVEL_HIBERNATE env-var knobs RUNBOOK
+  Part H documents). Spring Boot applies logging.level.* from the Environment AFTER this file is
+  parsed (LoggingApplicationListener runs on ApplicationPreparedEvent, after LogbackLoggingSystem has
+  already loaded whatever config file it found), and that later step always wins for any logger it
+  names — but only because nothing here contests it. Setting a <root level="INFO"> is safe precisely
+  because no env var overrides root; it only reproduces the level Boot's own base.xml already used by
+  default, in both branches, so behaviour is unchanged from before this file existed.
+-->
+<configuration>
+
+    <!-- MUST be unconditional and load first: defines CONSOLE_LOG_PATTERN and friends as
+         Logback context properties. console-appender.xml (included below, inside the
+         dev/local branch) also includes this itself, but only AFTER Joran has already
+         entered the springProfile conditional — in practice that left CONSOLE_LOG_PATTERN
+         unresolved at the point the appender's <pattern> was evaluated, so every dev console
+         line printed the literal text "CONSOLE_LOG_PATTERN_IS_UNDEFINED" instead of the real
+         pattern (reproduced against both `mvn test` and a real `spring-boot:run` boot before
+         this fix). Loading it here, before any <springProfile> branch, is the fix Spring
+         Boot's own docs recommend for exactly this failure mode. Re-including it inside
+         console-appender.xml afterwards is harmless — Logback tolerates redefining a
+         property to the same value. -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProfile name="dev,local">
+        <!-- Boot's own default console appender: same ANSI-coloured, human-readable line every
+             developer already sees today. Pulls in defaults.xml itself (CONSOLE_LOG_PATTERN,
+             colour conversion rules), so nothing else needs including here. -->
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod,qa,stage">
+        <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <!-- Still written to stdout — the Dockerfile has no file redirection either way, and
+                 the ECS awslogs driver only ever reads stdout/stderr (see RUNBOOK Part H1's
+                 pipeline diagram). Only the encoding on that same stream changes, from a plain
+                 line to one JSON object. Default field set (no customisation needed): @timestamp,
+                 @version, message, logger_name, thread_name, level, level_value, plus MDC entries
+                 as top-level fields and stack_trace on exceptions. -->
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE"/>
+        </root>
+    </springProfile>
+
+</configuration>

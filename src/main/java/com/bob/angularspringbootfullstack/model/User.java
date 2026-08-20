@@ -58,6 +58,15 @@ public class User {
      * authenticator instead of the SMS code path ({@code isUsing2FA}).
      */
     private boolean usingTotp;
+    /**
+     * Whether the user has at least one registered passkey (WebAuthn credential). Denormalized
+     * from the {@code passkeycredentials} table onto {@code users.using_passkey} — kept in
+     * lockstep by {@code PasskeyServiceImpl} — so row mapping and DTO exposure need no join.
+     * Unlike {@link #usingTotp}, this is not consulted during login (passkey sign-in is
+     * usernameless/discoverable, so the server never checks it per-account before offering the
+     * option); it exists purely for the Security Center and admin user-detail displays.
+     */
+    private boolean usingPasskey;
     private LocalDateTime createdAt;
     /**
      * Timestamp of the most recent password change.
@@ -69,4 +78,14 @@ public class User {
      * Null for users who have never changed their password.
      */
     private LocalDateTime passwordChangedAt;
+    /**
+     * How this account was created — an immutable fact stamped once, never updated. {@code null}
+     * for ordinary password registration; {@code "FEDERATED_" + provider} (e.g.
+     * {@code "FEDERATED_GOOGLE"}) for an account {@code FederatedIdentityServiceImpl} created on
+     * first contact from that provider. Deliberately untouched when an existing password account
+     * later links a federated identity via the Security Center — that changes what the account can
+     * sign in with, not how it was born. See {@code utils.UserTypeResolver} for how this becomes
+     * the admin-facing INTERNAL/EXTERNAL/FEDERATED badge.
+     */
+    private String origin;
 }

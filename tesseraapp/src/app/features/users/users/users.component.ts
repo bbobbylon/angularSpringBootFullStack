@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
-import { NgClass, NgOptimizedImage } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { NgClass, NgOptimizedImage, SlicePipe } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { combineLatest, debounceTime, map, of, startWith, Subject, switchMap } from 'rxjs';
+import { debounceTime, map, of, startWith, Subject, switchMap } from 'rxjs';
 import { catchError, filter } from 'rxjs/operators';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
@@ -10,8 +10,8 @@ import { GlobalStateInterface } from '../../../interface/global-state.interface'
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { AdminUserListInterface } from '../../../interface/admin.interface';
 import { AdminUserService } from '../../../service/admin-user.service';
-import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { NotificationsService } from '../../../service/notifications-service';
+import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
@@ -30,7 +30,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-users',
-  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, TranslocoDirective],
+  imports: [NgClass, RouterModule, NavbarComponent, NgOptimizedImage, SlicePipe, TranslocoDirective, PageSizeSelectComponent],
   templateUrl: './users.component.html',
   styleUrl: './users.component.css',
   standalone: true,
@@ -55,8 +55,48 @@ export class UsersComponent implements OnInit {
   /** The active (debounced) search term; empty string lists the full directory. */
   private currentSearchTerm = signal('');
 
-  private readonly _currentPageObs$ = toObservable(this.currentPage);
-  private readonly _currentSearchTermObs$ = toObservable(this.currentSearchTerm);
+  /**
+   * Rows fetched per page. Changing it resets {@link currentPage} — see {@link changePageSize}.
+   *
+   * <p>Ten matches {@code AdminUserController.DEFAULT_PAGE_SIZE} and NFR-PERF-3's stated default.
+   * The backend clamps whatever arrives to 1–100 ({@code UserRepoImpl}), so the largest offered
+   * option is exactly the server's ceiling rather than a number it would silently reduce.
+   */
+  private pageSize = signal(10);
+
+  /** Read-only view of the row count, for the template's size selector. */
+  pageSize$ = this.pageSize.asReadonly();
+
+  /**
+   * The column currently sorted on, or {@code null} for the server's default (newest-first) order.
+   * Only fields in the backend's {@code AdminUserController#USER_SORT_FIELDS} allow-list have any
+   * effect — an unrecognized field is silently treated as unsorted, so this never needs to mirror
+   * that list. Mirrors {@code CustomersComponent#sortField}.
+   */
+  private sortField = signal<string | null>(null);
+
+  /** Direction for {@link sortField}. Meaningless while {@link sortField} is {@code null}. */
+  private sortDirection = signal<'asc' | 'desc'>('asc');
+
+  /** Read-only view of the active sort, for the template to render the column indicator. */
+  sort$ = computed(() => ({ field: this.sortField(), direction: this.sortDirection() }));
+
+  /**
+   * Page, size, search term and sort as one derived value — the single input to the fetch pipeline.
+   *
+   * <p>Replaces a {@code combineLatest} over two {@code toObservable} bridges. Both writers that
+   * touch two signals at once — {@link changePageSize} and the debounced search subscription, each
+   * of which also resets the page index — used to make it emit twice in one flush and issue two
+   * requests for a single user action. {@code switchMap} hid that by cancelling one; the directory
+   * endpoint still served both.
+   */
+  private readonly query = computed(() => ({
+    page: this.currentPage(),
+    size: this.pageSize(),
+    term: this.currentSearchTerm(),
+    sort: this.sortField() ? `${this.sortField()},${this.sortDirection()}` : undefined,
+  }));
+  private readonly _query$ = toObservable(this.query);
 
   private readonly adminUserService = inject(AdminUserService);
   private readonly destroyRef = inject(DestroyRef);
@@ -75,10 +115,10 @@ export class UsersComponent implements OnInit {
   private readonly avatarColors = ['0D8ABC', '2ECC71', 'E74C3C', '9B59B6', 'F39C12', '1ABC9C', 'E67E22'];
 
   /**
-   * Wires the state signal to react to page and search-term changes.
+   * Wires the state signal to react to page, row-count and search-term changes.
    *
-   * {@code combineLatest} re-fetches when either input emits; {@code switchMap}
-   * cancels in-flight requests so stale responses never overwrite newer results;
+   * All three ride in {@link query}, so one fetch fires per change however many of them moved;
+   * {@code switchMap} cancels in-flight requests so stale responses never overwrite newer results;
    * {@code startWith(LOADING)} flips the template to its loading branch on each fetch.
    */
   ngOnInit(): void {
@@ -93,9 +133,9 @@ export class UsersComponent implements OnInit {
         this.currentPage.set(0);
       });
 
-    const users$ = combineLatest([this._currentPageObs$, this._currentSearchTermObs$]).pipe(
-      switchMap(([page, term]) =>
-        this.adminUserService.users$(page, term).pipe(
+    const users$ = this._query$.pipe(
+      switchMap(({ page, size, term, sort }) =>
+        this.adminUserService.users$(page, term, size, sort).pipe(
           map((response) => ({ dataState: DataState.LOADED, appData: response })),
           startWith({ dataState: DataState.LOADING }),
           catchError((error: string) => {
@@ -138,6 +178,20 @@ export class UsersComponent implements OnInit {
   }
 
   /**
+   * Changes how many users are listed per page and returns to the first page.
+   *
+   * <p>The reset keeps the request answerable: page 6 of a 10-row directory is past the end of a
+   * 100-row one, and the pager would offer no route back from the empty table that results. Any
+   * active search term is preserved, since {@link query} carries it separately.
+   *
+   * @param size - the new row count, one of the selector's offered values
+   */
+  changePageSize(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(0);
+  }
+
+  /**
    * Returns a deterministic fallback avatar color for the given user ID.
    *
    * @param id - the user's numeric ID used to index into the color pool
@@ -145,5 +199,37 @@ export class UsersComponent implements OnInit {
    */
   protected getAvatarColor(id: number): string {
     return '#' + this.avatarColors[id % this.avatarColors.length];
+  }
+
+  /**
+   * Sorts by the given column, toggling direction on repeated clicks of the same header.
+   * Mirrors {@code CustomersComponent#toggleSort} — see that method for the rationale behind
+   * always starting a new column ascending and resetting to page 0 on every re-sort.
+   *
+   * @param field - a field from the backend's {@code USER_SORT_FIELDS} allow-list
+   */
+  toggleSort(field: string): void {
+    if (this.sortField() === field) {
+      this.sortDirection.update((current) => (current === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortField.set(field);
+      this.sortDirection.set('asc');
+    }
+    this.currentPage.set(0);
+  }
+
+  /**
+   * Bootstrap Icons class for a sortable column header: a neutral up/down glyph when this column
+   * is not the active sort, or a direction-specific arrow when it is.
+   *
+   * @param field - the field name the column sorts by
+   * @returns a single `bi-*` class name for use in `[ngClass]`
+   */
+  protected sortIconClass(field: string): string {
+    const active = this.sort$();
+    if (active.field !== field) {
+      return 'bi-arrow-down-up';
+    }
+    return active.direction === 'asc' ? 'bi-sort-down' : 'bi-sort-up';
   }
 }

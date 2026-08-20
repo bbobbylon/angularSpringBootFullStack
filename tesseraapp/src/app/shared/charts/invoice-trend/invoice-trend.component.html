@@ -8,7 +8,7 @@
       @if (state().dataState === DataState.LOADING) {
         <span class="sc-trend-panel__loading">{{ t('common.loading') }}</span>
       } @else if (invoiceTotal() > 0) {
-        <span class="sc-trend-panel__count">{{ invoiceTotal() }} invoices analysed</span>
+        <span class="sc-trend-panel__count">{{ invoiceTotal() }} invoices analyzed</span>
       }
     </div>
     <i class="bi sc-trend-panel__chevron"

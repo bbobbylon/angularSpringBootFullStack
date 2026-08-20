@@ -32,7 +32,11 @@
     "back": "返回",
     "description": "描述",
     "price": "价格",
-    "amount": "金额"
+    "amount": "金额",
+    "pageXofY": "第 {{page}} 页，共 {{total}} 页",
+    "nTotal": "共 {{count}} 条",
+    "acrossNPages": "分布在 {{count}} 页",
+    "viewAll": "查看全部"
   },
   "nav": {
     "customers": "客户",
@@ -45,9 +49,10 @@
     "serviceCatalog": "服务目录",
     "newServiceInvoice": "新建服务发票",
     "manageServices": "管理服务",
+    "newService": "新增服务",
     "admin": "管理",
     "userDirectory": "用户目录",
-    "assignRoles": "分配角色",
+    "insights": "报表",
     "rolesPermissions": "角色与权限",
     "securityOverview": "安全总览",
     "billingOverview": "账单总览",
@@ -147,6 +152,21 @@
       "passwordOnly": "仅密码",
       "federatedSignIns": "联合登录",
       "recoveryCodesUsed": "已使用的恢复码"
+    },
+    "settings": {
+      "title": "异常检测设置",
+      "subtitle": "更改将在下一次登录时立即生效——无需重新部署。",
+      "enabledLabel": "异常检测",
+      "useDefault": "使用服务器默认值",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "historyLimitLabel": "登录历史窗口",
+      "historyLimitHint": "新登录会与该账户最近的多少次登录进行比对。",
+      "historyLimitPlaceholder": "服务器默认值",
+      "clearOverride": "使用默认值",
+      "save": "保存更改",
+      "saving": "保存中…",
+      "unsavedChanges": "有未保存的更改"
     }
   },
   "servicesAdmin": {
@@ -164,8 +184,10 @@
     "description": "描述",
     "basePrice": "基准价格",
     "noDescription": "未提供描述。",
-    "emptyTitle": "目录为空。",
-    "emptyHint": "添加第一项服务，即可在新建发票时选择它。",
+    "emptyTitle": "未找到服务",
+    "emptyHint": "请尝试其他搜索词，或添加第一项服务。",
+    "searchByName": "按名称或描述搜索",
+    "searchAria": "搜索服务目录",
     "editNote": "编辑服务不会改动已开具的发票——它们保留开具当时记录的名称和价格。",
     "summary": {
       "offered": "提供中",
@@ -209,8 +231,11 @@
     "catalogValue": "目录总值",
     "createInvoice": "创建发票",
     "emptyTitle": "目录中暂无服务",
-    "emptyHint": "服务目录为空。请从管理面板添加服务。",
-    "manageCatalog": "管理目录"
+    "emptyHint": "尚未发布任何服务。发布后将在此处显示，可直接添加到发票中。",
+    "emptyHintAdmin": "发布您的第一个服务，使其可在新发票中选择。",
+    "manageCatalog": "管理目录",
+    "noResultsTitle": "未找到服务",
+    "noResultsHint": "请尝试其他搜索词。"
   },
   "securityCenter": {
     "eyebrow": "账户",
@@ -226,6 +251,8 @@
     "codesLow": "余量不足——请重新注册以获取新的一组",
     "disableCodeLabel": "验证器或恢复码",
     "disableAuthenticator": "停用身份验证器",
+    "regenerateCodes": "重新生成恢复代码",
+    "regenerateConfirm": "重新生成",
     "enrollTitle": "设置您的身份验证器",
     "enrollHint": "扫描二维码，然后输入应用显示的 6 位验证码进行确认。",
     "codeFromApp": "应用中的验证码",
@@ -349,9 +376,25 @@
     "title": "发票",
     "invoiceNumber": "发票编号",
     "service": "服务",
-    "emptyTitle": "暂无发票",
-    "emptyHint": "您创建的发票会连同状态和金额显示在这里。",
-    "loading": "正在加载发票…"
+    "emptyTitle": "未找到发票",
+    "emptyHint": "请尝试其他搜索词，或创建一张新发票。",
+    "loading": "正在加载发票…",
+    "searchByInvoiceNumber": "按发票编号或客户搜索",
+    "searchAria": "搜索发票"
+  },
+  "batchImport": {
+    "button": "导入",
+    "title": "批量导入",
+    "hintCustomers": "上传客户的 CSV 或 Excel 文件。",
+    "hintInvoices": "上传发票的 CSV 或 Excel 文件。",
+    "chooseFile": "选择文件",
+    "noFileChosen": "未选择文件",
+    "upload": "上传",
+    "uploading": "正在上传…",
+    "resultSummary": "已导入 {{total}} 行中的 {{imported}} 行。",
+    "row": "行",
+    "reason": "原因",
+    "close": "关闭"
   },
   "users": {
     "breadcrumb": "用户",
@@ -439,7 +482,17 @@
     "eyebrow": "访问控制",
     "title": "角色 × 权限",
     "loading": "正在加载角色目录…",
-    "error": "无法加载角色目录，请刷新页面。"
+    "error": "无法加载角色目录，请刷新页面。",
+    "notYetAssignableHint": "已创建，但目前的应用版本尚未识别此角色名称——在重新部署添加该角色之前，无法分配给任何用户。",
+    "catalogTitle": "角色目录管理",
+    "newRoleName": "新角色名称",
+    "newRolePermission": "权限",
+    "createRole": "创建角色",
+    "createRoleHint": "名称格式须为 ROLE_XXX。新角色创建后暂不可分配给任何用户，直到未来某次部署识别该角色为止。",
+    "role": "角色",
+    "permissions": "权限",
+    "builtIn": "内置",
+    "builtInHint": "内置角色无法删除。"
   },
   "charts": {
     "customerAnalytics": "客户分析",
@@ -469,7 +522,7 @@
     "statusOverTime": "发票状态随时间变化",
     "statusOverTimeSub": "回款态势——每月已付 / 待付 / 逾期",
     "noInvoiceData": "暂无发票数据。",
-    "serviceUtilisation": "服务使用情况",
+    "serviceUtilization": "服务使用情况",
     "serviceSub": "开票频次前 10 的服务",
     "noServiceData": "暂无服务数据。",
     "customerStatus": "客户状态",
@@ -499,8 +552,16 @@
     "assignedRole": "已分配角色",
     "updateRole": "更新角色",
     "updateState": "更新状态",
+    "revokeSessions": "登出所有设备",
+    "revokeSessionsTitle": "活动会话",
+    "revokeSessionsHint": "结束该账户所有已登录的会话。仅锁定并不够——已打开的会话在其令牌过期前仍然有效。",
     "noActivity": "暂无活动记录。",
-    "loading": "正在加载账户…"
+    "loading": "正在加载账户…",
+    "expires": "到期",
+    "roleExpiresOn": "此角色分配将于 {{date}} 到期",
+    "notYetAssignable": "尚不可分配",
+    "expiresOn": "到期日",
+    "expiresHint": "可选。留空表示无限期分配；角色将在所选日期结束时自动恢复为默认用户角色。"
   },
   "newCustomer": {
     "saveCustomer": "保存客户",
@@ -521,11 +582,16 @@
     "settingsUpdated": "设置已更新",
     "totpEnabled": "身份验证器应用已启用",
     "totpDisabled": "身份验证器应用已停用",
+    "recoveryCodesRegenerated": "恢复代码已重新生成",
     "smsUpdated": "短信验证设置已更新",
     "phoneSaved": "手机号码已保存——短信验证现已启用",
     "sessionRevoked": "会话已撤销",
     "otherSessionsRevoked": "已退出其他会话",
-    "providerDisconnected": "提供方已断开连接"
+    "providerDisconnected": "提供方已断开连接",
+    "providerLinked": "已将 {{provider}} 连接到您的账户",
+    "passkeyAdded": "通行密钥已添加",
+    "passkeyRemoved": "通行密钥已移除",
+    "passkeyCancelled": "已取消设置通行密钥"
   },
   "palette": {
     "sectionNavigate": "导航",
@@ -558,6 +624,8 @@
     "securityOverviewHint": "管理 · 异常与 MFA 覆盖",
     "manageServices": "管理服务",
     "manageServicesHint": "管理 · 目录增删改查",
+    "newService": "新增服务",
+    "newServiceHint": "管理 · 添加目录项目",
     "toggleTheme": "切换主题",
     "toggleThemeHint": "切换深色 / 浅色",
     "logout": "退出登录",

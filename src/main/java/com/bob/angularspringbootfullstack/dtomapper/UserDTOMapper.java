@@ -49,6 +49,7 @@ public class UserDTOMapper {
         BeanUtils.copyProperties(user, userDTO);
         userDTO.setRoleName(role.getName());
         userDTO.setPermissions(role.getPermission());
+        userDTO.setRoleExpiresAt(role.getExpiresAt());
         return userDTO;
     }
 

@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { NgClass, NgOptimizedImage } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { combineLatest, debounceTime, map, of, startWith, Subject, switchMap } from 'rxjs';
+import { debounceTime, map, of, startWith, Subject, switchMap } from 'rxjs';
 import { catchError, filter } from 'rxjs/operators';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { DataState } from '../../../enumeration/datastate.enum';
@@ -9,10 +9,11 @@ import { GlobalStateInterface } from '../../../interface/global-state.interface'
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { CustomerListDataInterface } from '../../../interface/appstates.interface';
 import { CustomerService } from '../../../service/customer.service';
-import { ExtractArrayValuePipe } from '../../../pipe/extract-array-value.pipe';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { CustomerTrendComponent } from '../../../shared/charts/customer-trend/customer-trend.component';
+import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
+import { BatchImportComponent } from '../../../shared/batch-import/batch-import.component';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /**
@@ -25,7 +26,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-customers',
-  imports: [NgClass, RouterModule, NavbarComponent, ExtractArrayValuePipe, NgOptimizedImage, CustomerTrendComponent, TranslocoDirective],
+  imports: [NgClass, RouterModule, NavbarComponent, NgOptimizedImage, CustomerTrendComponent, TranslocoDirective, PageSizeSelectComponent, BatchImportComponent],
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.css',
   standalone: true,
@@ -72,8 +73,59 @@ export class CustomersComponent implements OnInit {
    * {@code /customer/list}. A non-empty string routes to {@code /customer/search}.
    */
   private currentSearchTerm = signal('');
-  private readonly _currentPageObs$ = toObservable(this.currentPage);
-  private readonly _currentSearchTermObs$ = toObservable(this.currentSearchTerm);
+
+  /**
+   * Rows fetched per page. Changing it resets {@link currentPage} — see {@link changePageSize}.
+   *
+   * <p>Twenty is what this screen has always requested (it was {@code CustomerService}'s default
+   * argument); it is now stated here because the value is a user preference rather than a
+   * service-layer fallback.
+   */
+  private pageSize = signal(20);
+
+  /** Read-only view of the row count, for the template's size selector. */
+  pageSize$ = this.pageSize.asReadonly();
+
+  /**
+   * The column currently sorted on, or {@code null} for the server's default (insertion) order.
+   * Only fields in the backend's {@code CUSTOMER_SORT_FIELDS} allow-list have any effect — an
+   * unrecognized field is silently treated as unsorted, so this never needs to mirror that list.
+   */
+  private sortField = signal<string | null>(null);
+
+  /** Direction for {@link sortField}. Meaningless while {@link sortField} is {@code null}. */
+  private sortDirection = signal<'asc' | 'desc'>('asc');
+
+  /** Read-only view of the active sort, for the template to render the column indicator. */
+  sort$ = computed(() => ({ field: this.sortField(), direction: this.sortDirection() }));
+
+  /**
+   * Bumped by {@link refresh} to force a re-fetch of the current page/search/sort without
+   * changing any of them — used after a batch import adds rows the visible page should reflect.
+   * Its value is never sent to the server; only a change in it (folded into {@link query} below)
+   * matters, since that is what makes {@code toObservable(query)} emit again.
+   */
+  private refreshTick = signal(0);
+
+  /**
+   * Page, size, search term and sort as one derived value — the single input to the fetch
+   * pipeline.
+   *
+   * <p>This replaced a {@code combineLatest} over separate {@code toObservable} bridges. Because
+   * each bridge runs its own effect, the two places that legitimately write two signals at once —
+   * {@link changePageSize} and the debounced search subscription, both of which reset the page
+   * index — made {@code combineLatest} emit twice in a single flush and issue two requests.
+   * {@code switchMap} cancelled one, so nothing looked broken, but the server answered both.
+   * Deriving a single value collapses that to one emission regardless of how many inputs moved.
+   */
+  private readonly query = computed(() => ({
+    page: this.currentPage(),
+    size: this.pageSize(),
+    term: this.currentSearchTerm(),
+    sort: this.sortField() ? `${this.sortField()},${this.sortDirection()}` : undefined,
+    tick: this.refreshTick(),
+  }));
+  private readonly _query$ = toObservable(this.query);
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly notification = inject(NotificationsService);
@@ -93,10 +145,10 @@ export class CustomersComponent implements OnInit {
   private readonly avatarColors = ['0D8ABC', '2ECC71', 'E74C3C', '9B59B6', 'F39C12', '1ABC9C', 'E67E22'];
 
   /**
-   * Wires {@link customersState$} to react to changes in both page index and search term.
+   * Wires {@link customersState} to react to changes in page index, row count or search term.
    *
-   * {@link combineLatest} ensures a new fetch fires whenever either subject emits.
-   * {@link switchMap} cancels any in-flight request when a new emission arrives,
+   * All three travel together in {@link query}, so one fetch fires per change no matter how many
+   * of them moved. {@link switchMap} cancels any in-flight request when a new emission arrives,
    * preventing stale responses from overwriting newer results.
    */
   ngOnInit(): void {
@@ -111,9 +163,9 @@ export class CustomersComponent implements OnInit {
         this.currentPage.set(0);
       });
 
-    const customers$ = combineLatest([this._currentPageObs$, this._currentSearchTermObs$]).pipe(
-      switchMap(([page, name]) =>
-        (name ? this.customerService.searchCustomers$(name, page) : this.customerService.customers$(page)).pipe(
+    const customers$ = this._query$.pipe(
+      switchMap(({ page, size, term, sort }) =>
+        (term ? this.customerService.searchCustomers$(term, page, size, sort) : this.customerService.customers$(page, size, sort)).pipe(
           map((response) => {
             return { dataState: DataState.LOADED, appData: response };
           }),
@@ -162,6 +214,58 @@ export class CustomersComponent implements OnInit {
   }
 
   /**
+   * Changes how many customers are fetched per page and returns to the first page.
+   *
+   * <p>The reset is the whole reason this is a method rather than a two-way binding on the
+   * selector. Page indexes are only meaningful relative to a row count: someone reading page 6 of a
+   * 10-row listing who switches to 100 rows is asking for rows 500–599 of a list that may now be
+   * five pages long, and would land on an empty table with no indication of why. Returning to the
+   * first page is the only interpretation that always has an answer.
+   *
+   * <p>The active search term is preserved — {@link query} carries it independently, so widening
+   * the page size while filtering does not silently drop the filter.
+   *
+   * @param size - the new row count, one of the selector's offered values
+   */
+  changePageSize(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(0);
+  }
+
+  /**
+   * Sorts by the given column, toggling direction on repeated clicks of the same header.
+   *
+   * <p>Clicking a new column always starts ascending — a first click that flipped straight to
+   * descending would be surprising, since nothing on screen indicated a prior direction to
+   * reverse. Clicking the already-active column toggles, which is the conventional spreadsheet
+   * behavior every user of a sortable table already expects.
+   *
+   * <p>Resets to the first page for the same reason {@link changePageSize} does: a page index is
+   * only meaningful relative to the current ordering, and re-sorting changes which rows occupy it.
+   *
+   * @param field - a JPA property path from the backend's {@code CUSTOMER_SORT_FIELDS} allow-list
+   */
+  toggleSort(field: string): void {
+    if (this.sortField() === field) {
+      this.sortDirection.update((current) => (current === 'asc' ? 'desc' : 'asc'));
+    } else {
+      this.sortField.set(field);
+      this.sortDirection.set('asc');
+    }
+    this.currentPage.set(0);
+  }
+
+  /**
+   * Re-fetches the current page/search/sort combination unchanged — bumps {@link refreshTick},
+   * which is folded into {@link query} purely so a change in it triggers the same fetch pipeline
+   * every other control here drives. Bound to {@code app-batch-import}'s {@code (imported)}
+   * output so a customer added via CSV/XLSX import shows up without a manual page reload.
+   */
+  refresh(): void {
+    this.refreshTick.update((tick) => tick + 1);
+  }
+
+  /**
    * Returns a deterministic local fallback image path for the given customer ID.
    *
    * Uses modulo arithmetic against {@link localDefaultImages} so that each customer
@@ -172,5 +276,20 @@ export class CustomersComponent implements OnInit {
    */
   protected getAvatarColor(id: number): string {
     return '#' + this.avatarColors[id % this.avatarColors.length];
+  }
+
+  /**
+   * Bootstrap Icons class for a sortable column header: a neutral up/down glyph when this column
+   * is not the active sort, or a direction-specific arrow when it is.
+   *
+   * @param field - the JPA property path the column sorts by
+   * @returns a single `bi-*` class name for use in `[ngClass]`
+   */
+  protected sortIconClass(field: string): string {
+    const active = this.sort$();
+    if (active.field !== field) {
+      return 'bi-arrow-down-up';
+    }
+    return active.direction === 'asc' ? 'bi-sort-down' : 'bi-sort-up';
   }
 }

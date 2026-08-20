@@ -144,6 +144,32 @@ public class TotpController {
     }
 
     /**
+     * Replaces the signed-in user's entire recovery-code batch on demand — the standalone
+     * counterpart to disable-then-re-enroll, for the common case where the authenticator
+     * itself is fine and only the fallback codes have run low or leaked. Requires the same
+     * proof of possession as {@link #disableTotp} (enforced by the service). Publishes a
+     * RECOVERY_CODES_REGENERATED audit event.
+     *
+     * @param authentication the current Spring Security authentication
+     * @param form           the validated body carrying a TOTP or recovery code
+     * @return 200 OK with the fresh plaintext {@code recoveryCodes}
+     */
+    @PostMapping("/totp/recovery-codes/regenerate")
+    public ResponseEntity<HttpResponse> regenerateRecoveryCodes(Authentication authentication, @RequestBody @Valid TotpCodeForm form) {
+        UserDTO userDTO = getAuthenticatedUser(authentication);
+        List<String> recoveryCodes = totpService.regenerateRecoveryCodes(userDTO.getId(), form.getCode());
+        eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), RECOVERY_CODES_REGENERATED));
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("recoveryCodes", recoveryCodes))
+                        .message("Recovery codes regenerated! Store them somewhere safe — they will not be shown again.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
      * Reports the signed-in user's TOTP state for the Account Security Center:
      * whether an authenticator is active and how many recovery codes remain unused
      * (so the UI can prompt re-enrollment when the supply runs low).

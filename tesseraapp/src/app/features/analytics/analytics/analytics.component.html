@@ -1,4 +1,4 @@
-<app-navbar [user]="user()"></app-navbar>
+<app-navbar></app-navbar>
 
 <main *transloco="let t" class="sc-analytics">
   <div class="container">
@@ -15,6 +15,10 @@
           <a [routerLink]="['/billing']" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-cash-stack"></i> Billing Overview
           </a>
+          <button (click)="emailReport()" [disabled]="isEmailingReport()" class="btn btn-outline-secondary btn-sm" type="button">
+            <i class="bi bi-envelope"></i>
+            @if (isEmailingReport()) { <span>{{ t('analytics.sendingReport') }}</span> } @else { <span>{{ t('analytics.emailReport') }}</span> }
+          </button>
         }
         <a [routerLink]="['/customers']" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-people-fill"></i> Customers
@@ -133,12 +137,24 @@
                       fill="none" stroke="var(--accent-strong)"
                       stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round" />
 
-            <!-- Dots at each data point -->
+            <!-- Dots at each data point.
+                 Drawn as ZERO-LENGTH PATHS with a round linecap, not <circle r="…">, because this
+                 svg uses preserveAspectRatio="none" so the viewBox (100x60) is stretched to the
+                 element box (100% x 180px) with DIFFERENT x and y scales — roughly 9x horizontally
+                 against 3x vertically on a full-width panel. Any shape defined in user units is
+                 distorted by that, so a circle rendered as a visibly horizontal oval.
+                 A zero-length subpath ("l0,0") stroked with stroke-linecap="round" paints a disc
+                 whose diameter is the STROKE WIDTH, and vector-effect="non-scaling-stroke" resolves
+                 stroke width in screen pixels after the transform — so the dot stays perfectly
+                 round at any container width. Same technique the grid lines already use to keep a
+                 constant hairline (.sc-grid-h). -->
             @for (pt of trendPoints(); track pt.label; let i = $index) {
-              <circle [attr.cx]="pt.x" [attr.cy]="pt.revY" r="1.2"
-                      fill="var(--ok)" class="sc-chart-dot" />
-              <circle [attr.cx]="pt.x" [attr.cy]="pt.custY" r="1.2"
-                      fill="var(--accent-strong)" class="sc-chart-dot" />
+              <path [attr.d]="'M' + pt.x + ',' + pt.revY + 'l0,0'"
+                    stroke="var(--ok)" stroke-linecap="round"
+                    vector-effect="non-scaling-stroke" class="sc-chart-dot" />
+              <path [attr.d]="'M' + pt.x + ',' + pt.custY + 'l0,0'"
+                    stroke="var(--accent-strong)" stroke-linecap="round"
+                    vector-effect="non-scaling-stroke" class="sc-chart-dot" />
             }
           </svg>
 
@@ -291,11 +307,11 @@
       }
     </section>
 
-    <!-- ── Service utilisation ────────────────────────────────────────────── -->
+    <!-- ── Service utilization ────────────────────────────────────────────── -->
     <section class="sc-panel sc-panel--flush sc-reveal" style="--d: 240ms;">
       <div class="sc-panel__head">
         <div>
-          <h2 class="sc-panel__title">{{ t('analytics.serviceUtilisation') }}</h2>
+          <h2 class="sc-panel__title">{{ t('analytics.serviceUtilization') }}</h2>
           <p class="sc-panel__meta">{{ t('analytics.serviceSub') }}</p>
         </div>
         <a [routerLink]="['/services']" class="btn btn-outline-secondary btn-sm sc-panel__action">

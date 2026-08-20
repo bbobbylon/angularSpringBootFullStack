@@ -61,15 +61,13 @@ sequenceDiagram
     actor U as User
     participant CMP as HomeComponent
     participant SVC as CustomerService
-    participant CACHE as cacheInterceptor
     participant CTRL as CustomerController
     participant RPT as CustomerReport (Apache POI)
     U->>CMP: click "Download report" → report()  :94
     CMP->>SVC: downloadCustomerReport$()  :97 / customer.service.ts:156
     Note over SVC: responseType:'blob', observe:'events', reportProgress:true
-    SVC->>CACHE: GET /customer/download/report
-    Note over CACHE: url includes 'download' → NOT cached, just forwarded  cache.interceptor.ts:63
-    CACHE->>CTRL: exportReport()  🔑  :313
+    SVC->>CTRL: GET /customer/download/report → exportReport()  🔑  :313
+    Note over CTRL: url includes 'download' → HttpCacheHeadersFilter bypass, no Cache-Control/ETag
     CTRL->>RPT: build workbook from getCustomers() (unpaginated)  :316-318
     CTRL-->>SVC: 200 application/vnd.ms-excel<br/>Content-Disposition: attachment<br/>File-Name: customer_report.xlsx  :319-325
     loop streaming
@@ -82,8 +80,8 @@ sequenceDiagram
 Three spine details converge here:
 1. **`File-Name` is readable** only because CORS **exposes** it (`SecurityConfig.java:233`) — without
    that, the browser would strip the header.
-2. **Not cached** — `cacheInterceptor` skips any URL containing `download` so a large blob never sits
-   in the in-memory cache (`cache.interceptor.ts:63`).
+2. **Not cached** — `HttpCacheHeadersFilter` skips any URL containing `download`, so a large blob
+   never gets `Cache-Control`/`ETag` and the browser never buffers it as a candidate for reuse.
 3. **Progress** — `reportProgress:true` + `observe:'events'` make `HttpClient` emit
    `DownloadProgress` events; `reportProgress()` maps them to a `%` signal and the final `Response`
    event to `saveAs` (file-saver) (`home.component.ts:183-200`). The invoice report

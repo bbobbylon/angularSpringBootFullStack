@@ -10,6 +10,32 @@
             type="button"><span class="navbar-toggler-icon"></span></button>
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
       <!--
+        Command palette trigger. The ⌘/Ctrl+K hotkey has been there since M7, but a shortcut with
+        no visible affordance is one only its author knows about — this is what teaches it. Styled
+        as a search field rather than a button because that is what it behaves like, and the key
+        hint sits inside so the shortcut is learned in passing.
+
+        Placed here, at the START of the bar beside the wordmark, rather than in the right-hand
+        cluster where it began. Over there it was the fourth control in a row of four (profile,
+        language, theme) and had to shrink-wrap its own label to fit; here it can hold a real field
+        width, which is what makes it read as something you type into. It is also simply where a
+        search affordance is expected. `ms-auto` on the nav list below is what pushes the
+        destinations to the far edge, so the two groups sit at opposite ends with the gap between
+        them doing the separating.
+
+        Its own `*transloco` scope: the sibling <ul> owns the one below, and a structural directive
+        cannot cover subtrees outside the element it sits on.
+      -->
+      <div *transloco="let t" class="sc-navbar-search my-2 my-lg-0 ms-lg-4">
+        <button (click)="openCommandPalette()" class="sc-cmdk-trigger" type="button"
+                [attr.aria-label]="t('nav.commandPalette')" [title]="t('nav.commandPalette')">
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <span class="sc-cmdk-trigger__text">{{ t('nav.search') }}</span>
+          <kbd class="sc-cmdk-trigger__kbd">{{ isMac ? '⌘' : 'Ctrl' }} K</kbd>
+        </button>
+      </div>
+
+      <!--
         One Transloco scope for the whole nav. `*transloco="let t"` binds a translate function for
         this subtree and re-renders it when the language changes — which is what makes the switcher
         instantaneous rather than requiring a reload. A single scope at the top costs one directive
@@ -69,6 +95,12 @@
               <li><a [routerLink]="['/services', 'manage']" class="dropdown-item">
                 <i class="bi bi-sliders"></i>{{ t('nav.manageServices') }}</a>
               </li>
+              <!-- Same destination as Manage Services, plus ?new so the create form opens
+                   immediately — mirrors New Customer / New Invoice being one click away rather
+                   than a click into the list followed by a click on "Add". -->
+              <li><a [routerLink]="['/services', 'manage']" [queryParams]="{ new: true }" class="dropdown-item">
+                <i class="bi bi-plus-circle"></i>{{ t('nav.newService') }}</a>
+              </li>
             }
             @if (canCreateRecords) {
               <li><a [routerLink]="['/invoice/new']" class="dropdown-item">
@@ -91,13 +123,11 @@
               <li><a [routerLink]="['/users']" class="dropdown-item">
                 <i class="bi bi-people-fill"></i>{{ t('nav.userDirectory') }}</a>
               </li>
-              @if (isSuperAdmin) {
-                <!-- Role assignment shortcut — super-admin only.
-                     Org admins can view users but cannot reassign roles across orgs. -->
-                <li><a [routerLink]="['/users']" class="dropdown-item">
-                  <i class="bi bi-person-badge-fill"></i>{{ t('nav.assignRoles') }}</a>
-                </li>
-              }
+              <!-- NOTE: an "Assign Roles" entry used to sit here, gated on isSuperAdmin. It was
+                   removed because it pointed at ['/users'] — the exact same route as User Directory
+                   above. Two labels for one destination is not a shortcut, it is a menu that lies
+                   about how many places it can take you. Role assignment happens inside the user
+                   directory, on the row for the user being changed. -->
               <!-- Permissions matrix — which authorities belong to which role -->
               <li><a [routerLink]="['/roles']" class="dropdown-item">
                 <i class="bi bi-grid-3x3-gap-fill"></i>{{ t('nav.rolesPermissions') }}</a>
@@ -110,10 +140,28 @@
               <li><a [routerLink]="['/security-overview']" class="dropdown-item">
                 <i class="bi bi-shield-exclamation"></i>{{ t('nav.securityOverview') }}</a>
               </li>
-              <li><hr class="dropdown-divider"></li>
+            </ul>
+          </li>
+
+          <!--
+            Insights — business reporting, split out of the Admin menu.
+
+            Same guard, different subject. Billing and Analytics are gated on staff authority, but
+            they are not *administration*: nothing in them changes an account, a role, or a
+            permission. Filing them under a menu named after user management meant looking for
+            revenue figures inside the place you go to reset somebody's access. Admin now holds
+            three entries about people and security; this holds two about the business. Two menus
+            of three read faster than one of six, and neither needs a divider to explain itself.
+          -->
+          <li class="nav-item dropdown">
+            <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
+               id="navbarDropdownInsights" role="button">
+              <i class="bi bi-graph-up-arrow"></i>{{ t('nav.insights') }}
+            </a>
+            <ul aria-labelledby="navbarDropdownInsights" class="dropdown-menu dropdown-menu-end">
               <!-- Billing overview — revenue analytics for the current scope -->
               <li><a [routerLink]="['/billing']" class="dropdown-item">
-                <i class="bi bi-graph-up-arrow"></i>{{ t('nav.billingOverview') }}</a>
+                <i class="bi bi-cash-coin"></i>{{ t('nav.billingOverview') }}</a>
               </li>
               <!-- Analytics hub — full trend charts and cross-cutting stats -->
               <li><a [routerLink]="['/analytics']" class="dropdown-item">
@@ -127,7 +175,7 @@
         <li class="nav-item dropdown">
           <a aria-expanded="false" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#"
              id="navbarDropdownProfile" role="button">
-            @if (user; as u) {
+            @if (user(); as u) {
               @if (u.imageUrl && !avatarFailed()) {
                 <div class="sc-nav-avatar">
                   <img (error)="onAvatarError()" [alt]="u.firstName" [ngSrc]="u.imageUrl"
@@ -143,7 +191,7 @@
             }
           </a>
           <ul aria-labelledby="navbarDropdownProfile" class="dropdown-menu dropdown-menu-end">
-            @if (user; as u) {
+            @if (user(); as u) {
               <li><a [routerLink]="['/profile']" class="dropdown-item">
                 <i class="bi bi-person-circle"></i>{{ u.firstName }} {{ u.lastName }}</a>
               </li>
@@ -159,27 +207,12 @@
         </li>
 
         <!--
-          Command palette trigger. The ⌘/Ctrl+K hotkey has been there since M7, but a shortcut with
-          no visible affordance is one only its author knows about — this is what teaches it. Styled
-          as a search field rather than a button because that is what it behaves like, and the key
-          hint sits inside so the shortcut is learned in passing.
-        -->
-        <li class="nav-item d-flex align-items-center ms-lg-2">
-          <button (click)="openCommandPalette()" class="sc-cmdk-trigger" type="button"
-                  [attr.aria-label]="t('nav.commandPalette')" [title]="t('nav.commandPalette')">
-            <i class="bi bi-search" aria-hidden="true"></i>
-            <span class="sc-cmdk-trigger__text">{{ t('nav.search') }}</span>
-            <kbd class="sc-cmdk-trigger__kbd">{{ isMac ? '⌘' : 'Ctrl' }} K</kbd>
-          </button>
-        </li>
-
-        <!--
           Language selector (ROADMAP §2 — i18n). Sits beside the theme toggle because the two are
           the same kind of control: a personal display preference that takes effect immediately and
           is remembered across sessions.
 
           Each option is labelled in its OWN language ("Español", never "Spanish"). A user stranded
-          in a language they cannot read needs an exit they can recognise, and labelling the list in
+          in a language they cannot read needs an exit they can recognize, and labelling the list in
           the current interface language would hide that exit behind the very problem it solves.
         -->
         <li class="nav-item dropdown d-flex align-items-center ms-lg-2">

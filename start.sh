@@ -31,7 +31,12 @@
 #    ./start.sh
 # ═══════════════════════════════════════════════════════════════════
 ENV=local
-DB=aiven   # native | local | aiven
+# native = the MySQL already installed on this host (db2). This is the default ON PURPOSE:
+# DB=aiven pointed local development at db3 — the SAME database the deployed ECS task serves —
+# so every local experiment, seeder run and hand-edit was mutating production data. Switch to
+# aiven only when you deliberately need to inspect or repair the deployed database, and switch
+# back afterwards. See ROADMAP.md §5.
+DB=native   # native | local | aiven
 
 # Serve the Angular dev server on ALL network interfaces instead of localhost only
 # (true | false), so you can open the app from a phone or tablet on the same wifi.
@@ -174,7 +179,11 @@ start_local() {
     log "MySQL is ready."
   else
     log "DB=aiven — overriding datasource to Aiven cloud MySQL (skipping local Docker container)."
-    export SPRING_DATASOURCE_URL="jdbc:mysql://${AIVEN_DB_HOST}:${AIVEN_DB_PORT}/${AIVEN_DB_NAME}?useSSL=true&requireSSL=true"
+    # sslMode=REQUIRED, not the legacy useSSL=true&requireSSL=true pair: Connector/J 8.0.13+
+    # replaced those with the single sslMode enum, and the old pair is honoured only while
+    # sslMode is absent. Same value the deployed profiles pin — this leg crosses the public
+    # internet to Aiven exactly like production does, so it gets the same guarantee.
+    export SPRING_DATASOURCE_URL="jdbc:mysql://${AIVEN_DB_HOST}:${AIVEN_DB_PORT}/${AIVEN_DB_NAME}?sslMode=REQUIRED"
     export SPRING_DATASOURCE_USERNAME="${AIVEN_DB_USERNAME}"
     export SPRING_DATASOURCE_PASSWORD="${AIVEN_DB_PASSWORD}"
   fi
@@ -200,7 +209,7 @@ start_local() {
   # ── Spring Boot ──────────────────────────────────────────────────
   log "Starting Spring Boot on port $LOCAL_BACKEND_PORT (dev profile)..."
   cd "$SCRIPT_DIR"
-  mvn spring-boot:run --no-transfer-progress &
+  ./mvnw spring-boot:run --no-transfer-progress &
   SPRING_PID=$!
 
   # ── Ready banner ─────────────────────────────────────────────────

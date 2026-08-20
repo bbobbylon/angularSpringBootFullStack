@@ -31,7 +31,7 @@ import java.util.Map;
  *
  * <p>Every implementation is expected to fail <em>closed</em> and non-fatally: a dashboard panel
  * that cannot be read should degrade to empty with a logged warning, never propagate. This is a
- * reporting screen — the correct behaviour when one query breaks is five working panels and one
+ * reporting screen — the correct behavior when one query breaks is five working panels and one
  * blank one, not a 500 that hides the other five.
  */
 public interface SecurityDashboardRepo {
@@ -53,7 +53,22 @@ public interface SecurityDashboardRepo {
      * @param organizationIds the scope, per the class-level convention
      * @return the flagged sign-ins, newest first, empty when there are none
      */
-    List<SuspiciousLoginEntry> findRecentSuspiciousLogins(LocalDateTime since, int limit, Collection<Long> organizationIds);
+    List<SuspiciousLoginEntry> findRecentSuspiciousLogins(LocalDateTime since, int page, int size, Collection<Long> organizationIds);
+
+    /**
+     * Total flagged sign-ins in the window, for the pager.
+     *
+     * <p>Paired with {@link #findRecentSuspiciousLogins} so the dashboard can distinguish "this is
+     * all of them" from "this is the first page" — a distinction the old bare-{@code LIMIT} form
+     * could not express, and the one that matters most on an audit table.
+     *
+     * @param since           the oldest event timestamp to include; must match the value passed to
+     *                        {@link #findRecentSuspiciousLogins}, or the pager will disagree with
+     *                        the rows it is paging
+     * @param organizationIds the scope, per the class-level convention
+     * @return the total row count, 0 when there are none or the read fails
+     */
+    long countRecentSuspiciousLogins(LocalDateTime since, Collection<Long> organizationIds);
 
     /**
      * Per-day, per-type login outcome counts in long format, for the trend chart.
@@ -74,10 +89,22 @@ public interface SecurityDashboardRepo {
      * @param organizationIds the scope, per the class-level convention
      * @return the restricted accounts, empty when every account is in good standing
      */
-    List<RestrictedAccount> findRestrictedAccounts(int limit, Collection<Long> organizationIds);
+    List<RestrictedAccount> findRestrictedAccounts(int page, int size, Collection<Long> organizationIds);
 
     /**
-     * Second-factor enrolment across the in-scope population.
+     * Total accounts currently locked out or disabled, for the pager.
+     *
+     * <p>Same contract as {@link #countRecentSuspiciousLogins}: an administrator triaging "I can't
+     * sign in" needs to know whether the account they are looking for is absent or merely off the
+     * end of the page.
+     *
+     * @param organizationIds the scope, per the class-level convention
+     * @return the total row count, 0 when there are none or the read fails
+     */
+    long countRestrictedAccounts(Collection<Long> organizationIds);
+
+    /**
+     * Second-factor enrollment across the in-scope population.
      *
      * @param organizationIds the scope, per the class-level convention
      * @return the adoption breakdown; all zeros when the scope contains no accounts

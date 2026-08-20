@@ -6,10 +6,18 @@ import com.bob.angularspringbootfullstack.repo.RoleRepo;
 import com.bob.angularspringbootfullstack.rowmapper.RoleRowMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.BadSqlGrammarException;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.query.RoleQuery.*;
@@ -88,19 +96,35 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
-     * Creating roles is not supported.
+     * Inserts a new role catalog row (Role CRUD — create).
+     * <p>
+     * The generated id is recovered through a {@link GeneratedKeyHolder}, the same pattern
+     * every other {@code *RepoImpl#create} in this codebase uses. {@code roles.name} carries a
+     * unique constraint, so a name collision surfaces as {@link DuplicateKeyException} and is
+     * translated into a client-facing {@link ApiException} rather than a raw SQL error.
      *
-     * <p>Unimplemented on purpose: roles are seeded by {@code schema.sql} and this application
-     * never edits the role catalogue at runtime. It throws rather than returning {@code null} so
-     * that a future caller fails at the call site with a message naming the real path, instead of
-     * receiving a null that surfaces as an NPE somewhere unrelated.
-     *
-     * @param data the role to create
-     * @throws UnsupportedOperationException always
+     * @param data the role to create; {@code name} and {@code permission} are read, {@code id}
+     *             is ignored and overwritten with the generated key
+     * @return {@code data}, mutated in place with its generated id
+     * @throws ApiException if the name is already taken, or any other database error occurs
      */
     @Override
     public Role create(Role data) {
-        throw new UnsupportedOperationException("Roles are seeded via schema.sql; role CRUD is not implemented.");
+        log.info("Creating role '{}'", data.getName());
+        try {
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("name", data.getName())
+                    .addValue("permission", data.getPermission());
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            jdbcTemplate.update(INSERT_ROLE_QUERY, params, keyHolder);
+            data.setId(requireNonNull(keyHolder.getKey()).longValue());
+            return data;
+        } catch (DuplicateKeyException e) {
+            throw new ApiException("A role named '" + data.getName() + "' already exists.");
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
+        }
     }
 
     /**
@@ -124,46 +148,85 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Fetching a role by id is not supported.
-     *
-     * <p>Unimplemented on purpose: roles are seeded by {@code schema.sql} and this application
-     * never edits the role catalogue at runtime. It throws rather than returning {@code null} so
-     * that a future caller fails at the call site with a message naming the real path, instead of
-     * receiving a null that surfaces as an NPE somewhere unrelated.
+     * Fetches a single role catalog row by its own id (Role CRUD). For "what role does this
+     * user hold", use {@link #getRoleByUserId(Long)} instead — that is a different query
+     * joining through {@code userroles}, not this one.
      *
      * @param id the role id
-     * @throws UnsupportedOperationException always
+     * @return the role
+     * @throws ApiException if no role has that id, or any other database error occurs
      */
     @Override
     public Role get(Long id) {
-        throw new UnsupportedOperationException("Use getRoleByUserId(Long) — the only role lookup this application performs.");
+        try {
+            return jdbcTemplate.queryForObject(SELECT_ROLE_QUERY, of("id", id), new RoleRowMapper());
+        } catch (EmptyResultDataAccessException e) {
+            throw new ApiException("Role not found.");
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
+        }
     }
 
     /**
-     * Updating a role is not supported.
-     *
-     * <p>Unimplemented on purpose: roles are seeded by {@code schema.sql} and this application
-     * never edits the role catalogue at runtime. It throws rather than returning {@code null} so
-     * that a future caller fails at the call site with a message naming the real path, instead of
-     * receiving a null that surfaces as an NPE somewhere unrelated.
+     * Updates a role's permission string (Role CRUD — edit). The name is deliberately not
+     * touched — see {@link RoleQuery#UPDATE_ROLE_PERMISSION_QUERY}'s Javadoc for why renaming
+     * would strand the {@link com.bob.angularspringbootfullstack.enumeration.RoleType} tier
+     * ladder.
      *
      * @param id   the id of the role to update
-     * @param data the new role data
-     * @throws UnsupportedOperationException always
+     * @param data the new role data; only {@link Role#getPermission()} is applied
+     * @return the role, freshly re-read from the database after the update
+     * @throws ApiException if no role has that id, or any other database error occurs
      */
     @Override
     public Role update(Long id, Role data) {
-        throw new UnsupportedOperationException("Roles are seeded via schema.sql; role CRUD is not implemented.");
+        log.info("Updating permission for role id {}", id);
+        try {
+            int rows = jdbcTemplate.update(UPDATE_ROLE_PERMISSION_QUERY, of("id", id, "permission", data.getPermission()));
+            if (rows == 0) {
+                throw new ApiException("Role not found.");
+            }
+            return get(id);
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
+        }
     }
 
     /**
-     * Not yet implemented; no-op.
+     * Deletes a role from the catalog (Role CRUD — delete).
+     * <p>
+     * {@code userroles.role_id} carries {@code ON DELETE RESTRICT}
+     * ({@code schema.sql}), so the database itself refuses to delete a role any user currently
+     * holds; that surfaces here as {@link DataIntegrityViolationException} and is translated
+     * into a client-facing {@link ApiException} rather than a raw SQL error reaching the
+     * frontend. Whether a role is one of the seven built-in {@link
+     * com.bob.angularspringbootfullstack.enumeration.RoleType} constants is a business rule, not
+     * a data-access concern, so that guard lives in {@code RoleServiceImpl#deleteRole}, one layer
+     * up — this method deletes whatever id it is given.
      *
      * @param id the id of the role to delete
+     * @throws ApiException if no role has that id, or if any user currently holds it
      */
     @Override
     public void delete(Long id) {
-
+        log.info("Deleting role id {}", id);
+        try {
+            int rows = jdbcTemplate.update(DELETE_ROLE_QUERY, of("id", id));
+            if (rows == 0) {
+                throw new ApiException("Role not found.");
+            }
+        } catch (DataIntegrityViolationException e) {
+            throw new ApiException("This role is still assigned to at least one user and cannot be deleted.");
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("WE DON'T KNOW WHAT KIND, BUT SOME KIND OF ERROR HAS OCCURRED. SORRY!");
+        }
     }
 
     /**
@@ -197,9 +260,18 @@ public class RoleRepoImpl implements RoleRepo<Role> {
      * Retrieves the role assigned to a user by their user ID.
      * Queries the database using a join between users, user_roles, and role tables
      * to fetch the role information for a specific user.
+     * <p>
+     * Enforces time-boxed role assignment (POST-SUBMISSION-UPGRADES.md) <b>live, on every
+     * call</b>: if {@code userroles.expires_at} for this user is in the past, the assignment is
+     * auto-reverted to {@code ROLE_USER} (expiry cleared) before returning — there is no
+     * separate scheduled sweep job. This is the single choke point every role lookup in the
+     * application goes through (login, token refresh, profile fetch, OAuth2/passkey/TOTP
+     * completion all call this, directly or via {@code UserRepoImpl#loadUserByUsername}), so
+     * enforcing it here covers all of them at once, the same way {@code PUBLIC_URLS}/{@code
+     * PUBLIC_ROUTES} are each a single list rather than duplicated per call site.
      *
      * @param userId the ID of the user whose role should be retrieved
-     * @return the Role object containing id, name, and permissions
+     * @return the Role object containing id, name, permissions, and (if time-boxed) expiresAt
      * @throws ApiException if the user has no role assigned, or any database operation fails
      */
     @Override
@@ -214,9 +286,23 @@ public class RoleRepoImpl implements RoleRepo<Role> {
         // paths below stay WARN/ERROR. Enable DEBUG on this class to trace casing if it ever recurs.
         log.debug("[ROLE-CASING] getRoleByUserId(userId={}) — executing: {}", userId, SELECT_ROLE_BY_ID_QUERY);
         try {
-            Role role = jdbcTemplate.queryForObject(SELECT_ROLE_BY_ID_QUERY, of("id", userId), new RoleRowMapper());
+            Role role = jdbcTemplate.queryForObject(SELECT_ROLE_BY_ID_QUERY, of("id", userId), (rs, rowNum) -> {
+                Role mapped = new RoleRowMapper().mapRow(rs, rowNum);
+                Timestamp expiresAt = rs.getTimestamp("expires_at");
+                if (expiresAt != null) {
+                    mapped.setExpiresAt(expiresAt.toLocalDateTime());
+                }
+                return mapped;
+            });
             log.debug("[ROLE-CASING] SUCCESS — 'JOIN Users' RESOLVED on this database. userId={} -> role='{}' (id={}).",
                     userId, role != null ? role.getName() : null, role != null ? role.getId() : null);
+
+            if (role != null && role.getExpiresAt() != null && !role.getExpiresAt().isAfter(LocalDateTime.now())) {
+                log.info("Time-boxed role assignment for userId={} (role={}) expired at {} — reverting to {}.",
+                        userId, role.getName(), role.getExpiresAt(), ROLE_USER.name());
+                updateUserRole(userId, ROLE_USER.name(), null);
+                return getRoleByUserId(userId);
+            }
             return role;
 
         } catch (EmptyResultDataAccessException e) {
@@ -248,23 +334,33 @@ public class RoleRepoImpl implements RoleRepo<Role> {
     }
 
     /**
-     * Reassigns the given user to a new role by name.
+     * Reassigns the given user to a new role by name, optionally time-boxing it.
      * <p>
      * Looks up the target role by name using
      * {@link com.bob.angularspringbootfullstack.query.RoleQuery#SELECT_ROLE_BY_NAME_QUERY},
      * then updates the {@code userroles} junction table entry for the user with
      * {@link com.bob.angularspringbootfullstack.query.RoleQuery#UPDATE_USER_ROLE_QUERY}.
+     * <p>
+     * Uses a {@link MapSqlParameterSource} rather than this class's usual {@code Map.of(...)}
+     * static import: {@code expiresAt} is legitimately {@code null} for the common,
+     * unlimited-assignment case, and {@code Map.of} throws {@link NullPointerException} on a
+     * null value.
      *
-     * @param userId   the ID of the user whose role should change
-     * @param roleName the name of the new role (e.g. "ROLE_ADMIN")
+     * @param userId    the ID of the user whose role should change
+     * @param roleName  the name of the new role (e.g. "ROLE_ADMIN")
+     * @param expiresAt when the assignment should expire, or {@code null} for unlimited
      * @throws ApiException if the role name is not found, or if any database error occurs
      */
     @Override
-    public void updateUserRole(Long userId, String roleName) {
-        log.info("Updating role to user with ID {}", userId);
+    public void updateUserRole(Long userId, String roleName, LocalDateTime expiresAt) {
+        log.info("Updating role for user id {} to {} (expiresAt={})", userId, roleName, expiresAt);
         try {
             Role role = jdbcTemplate.queryForObject(SELECT_ROLE_BY_NAME_QUERY, of("name", roleName), new RoleRowMapper());
-            jdbcTemplate.update(UPDATE_USER_ROLE_QUERY, of("userId", userId, "roleId", role.getId()));
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("userId", userId)
+                    .addValue("roleId", requireNonNull(role).getId())
+                    .addValue("expiresAt", expiresAt);
+            jdbcTemplate.update(UPDATE_USER_ROLE_QUERY, params);
         } catch (EmptyResultDataAccessException e) {
             throw new ApiException("Can't find role via name " + roleName);
         } catch (Exception e) {

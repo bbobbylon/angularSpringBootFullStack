@@ -3,10 +3,13 @@ package com.bob.angularspringbootfullstack.handler;
 import com.bob.angularspringbootfullstack.constants.CapabilityCatalog;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.utils.AuthDiagnosticsLogger;
+import com.bob.angularspringbootfullstack.utils.BrowserErrorPage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.context.MessageSource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -14,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Locale;
 
 import static java.time.LocalTime.now;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
@@ -27,9 +31,17 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
  * status that means the user is authenticated but not authorized.
  * This custom implementation returns a JSON response instead of the default error page,
  * providing consistency with our API's response format.
+ * <p>
+ * {@code messageSource} backs backend-driven i18n (FUTURE-ENHANCEMENTS.md §3.3): the 403 body's
+ * {@code reason} is resolved from {@code messages*.properties} via {@link CapabilityCatalog}'s
+ * key rather than a hardcoded English sentence, so the SPA's language switcher is honored on the
+ * server as well as the client for this one shared surface.
  */
 @Component
+@RequiredArgsConstructor
 public class CustomAccessDeniedHandler implements AccessDeniedHandler {
+
+    private final MessageSource messageSource;
     /**
      * Handles authorization failures by returning a custom 403 response.
      * <p>
@@ -63,7 +75,7 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
         // level). The previous message — "You don't have enough permission to access this
         // resource!" — was identical for every endpoint, so a user who could not save a customer
         // and a user who could not reassign a role were told the same thing and neither learned
-        // what to ask for. CapabilityCatalog derives the phrase from the request's method and
+        // what to ask for. CapabilityCatalog derives the message key from the request's method and
         // path, because this handler runs inside the filter chain, before any controller method
         // has been selected, and so has nothing else to go on.
         //
@@ -72,13 +84,35 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
         // resources, and "this exists but is not yours" must stay indistinguishable from "you may
         // not do this".
         //
+        // Locale comes from HttpServletRequest#getLocale() — the Servlet API's own Accept-Language
+        // parser — rather than LocaleContextHolder, because this handler runs inside the Spring
+        // Security filter chain, before DispatcherServlet's LocaleResolver would ever populate
+        // that holder for this request.
+        //
         // Note this body is written straight to the output stream rather than returned from a
         // controller, so ErrorDetailScrubber's ResponseBodyAdvice does not see it. The message
         // therefore survives in production — correctly, since it is deliberate user-facing text
         // rather than the incidental exception detail that advice exists to strip.
+        Locale locale = request.getLocale();
+        String actionText = messageSource.getMessage(CapabilityCatalog.actionKeyFor(request), null, locale);
+        String reason = messageSource.getMessage(CapabilityCatalog.MESSAGE_TEMPLATE_KEY, new Object[]{actionText}, locale);
+
+        // Same 403, different presentation, when a human navigated here instead of the SPA calling
+        // us — see CustomAuthenticationEntryPoint for the full rationale. The capability phrase is
+        // reused verbatim, so both representations say exactly the same thing and neither reveals
+        // whether the underlying record exists.
+        if (BrowserErrorPage.isBrowserNavigation(request)) {
+            BrowserErrorPage.write(response, FORBIDDEN.value(),
+                    "403 · Forbidden",
+                    "You don't have access to this",
+                    reason,
+                    "/", "Back to dashboard");
+            return;
+        }
+
         HttpResponse httpResponse = HttpResponse.builder()
                 .timeStamp(now().toString())
-                .reason(CapabilityCatalog.messageFor(request))
+                .reason(reason)
                 .status(FORBIDDEN)
                 .statusCode(FORBIDDEN.value())
                 .build();

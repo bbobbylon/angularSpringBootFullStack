@@ -26,7 +26,7 @@ import static java.util.Map.of;
  * that took logins down when the {@code userevents.detail} column drifted (see
  * {@link com.bob.angularspringbootfullstack.listener.NewUserEventListener}, hardened for the same
  * reason). An empty history reads as "no baseline", which the service treats as not-risky, so the
- * degraded behaviour is "sign-in proceeds without the extra check" and never "nobody can log in".
+ * degraded behavior is "sign-in proceeds without the extra check" and never "nobody can log in".
  * The failure is logged at WARN so the degradation is visible rather than silent.
  */
 @Repository

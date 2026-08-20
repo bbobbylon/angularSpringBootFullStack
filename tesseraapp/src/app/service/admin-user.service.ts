@@ -6,6 +6,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { AdminUserDetailInterface, AdminUserListInterface } from '../interface/admin.interface';
+import { RoleCatalogInterface } from '../interface/roles.interface';
 import { environment } from '../../environments/environment';
 
 /**
@@ -17,9 +18,10 @@ import { environment } from '../../environments/environment';
  * administrative operations on OTHER users never share a code path; that separation
  * is part of how the app closes the FR-RBAC-4 self-role-elevation gap.
  *
- * Mutations here are PATCH requests, so {@code cacheInterceptor} evicts its whole GET
- * cache on each one — the directory and detail views always refetch fresh state after
- * a role or account-state change.
+ * Mutations here are PATCH requests. GET responses on the directory/detail views carry
+ * {@code Cache-Control: private, no-cache} + an ETag (backend-driven, see
+ * {@code HttpCacheHeadersFilter}), so the browser always revalidates with the server on the next
+ * fetch — a role or account-state change is visible immediately without any explicit eviction.
  */
 @Injectable({
   providedIn: 'root',
@@ -35,12 +37,15 @@ export class AdminUserService {
    * @param page       - 0-based page index
    * @param searchTerm - free-text filter; empty string lists everyone
    * @param size       - rows per page (backend default and cap apply)
+   * @param sort       - optional `field,direction` (e.g. `"email,desc"`); unset or a field outside
+   *                     the backend's allow-list (`AdminUserController#USER_SORT_FIELDS`) falls
+   *                     back to the default newest-first order
    * @returns Observable of the API envelope carrying users, paging metadata, and roles
    */
-  users$ = (page = 0, searchTerm = '', size = 10): Observable<CustomHttpResponseInterface<AdminUserListInterface>> =>
+  users$ = (page = 0, searchTerm = '', size = 10, sort?: string): Observable<CustomHttpResponseInterface<AdminUserListInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<AdminUserListInterface>>(
-        `${this.server}/admin/user/list?page=${page}&size=${size}&searchTerm=${encodeURIComponent(searchTerm)}`,
+        `${this.server}/admin/user/list?page=${page}&size=${size}&searchTerm=${encodeURIComponent(searchTerm)}${sort ? `&sort=${encodeURIComponent(sort)}` : ''}`,
       )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
@@ -61,13 +66,19 @@ export class AdminUserService {
    * {@code UPDATE:ROLE} authority and rejects self-targeting, and records the change
    * as an audit event on the target user.
    *
-   * @param id       - the managed user's primary key
-   * @param roleName - the role to assign (e.g. {@code 'ROLE_MODERATOR'})
+   * @param id        - the managed user's primary key
+   * @param roleName  - the role to assign (e.g. {@code 'ROLE_MODERATOR'})
+   * @param expiresAt - optional {@code YYYY-MM-DD} date the assignment auto-reverts to
+   *                    {@code ROLE_USER} at (end of that calendar day); omitted for an
+   *                    unlimited assignment
    * @returns Observable of the API envelope carrying the refreshed selectedUser
    */
-  updateUserRole$ = (id: number, roleName: string): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+  updateUserRole$ = (id: number, roleName: string, expiresAt?: string): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
     this.http
-      .patch<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/role/${roleName}`, {})
+      .patch<CustomHttpResponseInterface<AdminUserDetailInterface>>(
+        `${this.server}/admin/user/${id}/role/${roleName}${expiresAt ? `?expiresAt=${encodeURIComponent(expiresAt)}` : ''}`,
+        {},
+      )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
@@ -105,7 +116,127 @@ export class AdminUserService {
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
-   * Normalises HTTP errors into a single Observable<never> so all callers receive a
+   * Signs a managed user out of every device
+   * ({@code DELETE /admin/user/:id/sessions}, requires UPDATE:USER).
+   *
+   * <p>This is the containment action, and it is distinct from locking the account. Locking stops
+   * the <em>next</em> sign-in; it does nothing to sessions already open, because access tokens are
+   * verified by signature alone and the holder's refresh token keeps minting new ones for five
+   * days. Revoking the refresh families is what actually ends an intrusion — so on a suspected
+   * compromise an administrator normally does both.
+   *
+   * <p>Organization-scoped and self-target-refused server-side; an administrator ending their own
+   * sessions does it from their Security Center, which can spare the current device.
+   *
+   * @param id - the managed user's primary key
+   * @returns Observable of the API envelope carrying the refreshed {@code selectedUser}
+   */
+  revokeSessions$ = (id: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/sessions`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Revokes ONE of a managed user's sessions, leaving their other devices signed in
+   * ({@code DELETE /admin/user/:id/sessions/:family}, requires UPDATE:USER) — the granular
+   * sibling of {@link revokeSessions$}, which ends all of them at once.
+   *
+   * @param id     - the managed user's primary key
+   * @param family - the session (family) to revoke
+   * @returns Observable of the API envelope carrying the refreshed selectedUser and remaining sessions
+   */
+  revokeSession$ = (id: number, family: string): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/sessions/${family}`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Revokes one of a managed user's passkeys — the admin "help reset" action for a lost or
+   * compromised device ({@code DELETE /admin/user/:id/passkeys/:credentialId}, requires
+   * UPDATE:USER). There is no "regenerate": a passkey's private key never leaves its
+   * authenticator, so this forces the user to enroll a fresh one (or fall back to
+   * password/TOTP) on their next sign-in.
+   *
+   * @param id           - the managed user's primary key
+   * @param credentialId - the credential's database id (never the WebAuthn credential id itself)
+   * @returns Observable of the API envelope carrying the refreshed selectedUser and passkey list
+   */
+  revokePasskey$ = (id: number, credentialId: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/passkeys/${credentialId}`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Revokes ALL of a managed user's passkeys in one action
+   * ({@code DELETE /admin/user/:id/passkeys}, requires UPDATE:USER) — the bulk form of
+   * {@link revokePasskey$}, for an account where every enrolled device is suspect.
+   *
+   * @param id - the managed user's primary key
+   * @returns Observable of the API envelope carrying the refreshed selectedUser and (empty) passkey list
+   */
+  revokeAllPasskeys$ = (id: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/passkeys`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Force-disables a managed user's authenticator MFA ({@code DELETE /admin/user/:id/totp},
+   * requires UPDATE:USER) — the admin recovery path for an account that has lost both its
+   * authenticator and every recovery code, and so has no live code to present through the
+   * self-service disable flow at all. Unlike {@link revokePasskey$}, there is nothing to pick —
+   * one action, the whole authenticator state, gone.
+   *
+   * @param id - the managed user's primary key
+   * @returns Observable of the API envelope carrying the refreshed selectedUser (usingTotp now false)
+   */
+  resetTotp$ = (id: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/totp`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Creates a new role catalog row ({@code POST /admin/role}). Gated server-side to exactly
+   * {@code ROLE_APPLICATION_ADMIN} — see {@code RoleController}'s Javadoc for why this is
+   * tighter than every other {@code /admin/**} mutation. The created role has no {@code RoleType}
+   * constant until a redeploy adds one, so it comes back with {@code assignable: false}.
+   *
+   * @param name       - the new role's name; must match {@code ^ROLE_[A-Z_]+$} (backend normalizes case)
+   * @param permission - comma-delimited permission string (e.g. {@code 'READ:CUSTOMER,UPDATE:CUSTOMER'})
+   * @returns Observable of the API envelope carrying the created role and the refreshed catalog
+   */
+  createRole$ = (name: string, permission: string): Observable<CustomHttpResponseInterface<RoleCatalogInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<RoleCatalogInterface>>(`${this.server}/admin/role`, { name, permission })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Updates an existing role's permission string ({@code PATCH /admin/role/:id}). The role name
+   * is immutable — see {@code RolePermissionForm}'s Javadoc for why.
+   *
+   * @param id         - the role's database primary key
+   * @param permission - the replacement comma-delimited permission string
+   * @returns Observable of the API envelope carrying the updated role and the refreshed catalog
+   */
+  updateRolePermission$ = (id: number, permission: string): Observable<CustomHttpResponseInterface<RoleCatalogInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<RoleCatalogInterface>>(`${this.server}/admin/role/${id}`, { permission })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Deletes a role from the catalog ({@code DELETE /admin/role/:id}). Refused server-side for
+   * any of the seven built-in {@code RoleType} roles, and for a role any user currently holds
+   * (the {@code userroles.role_id} foreign key is {@code ON DELETE RESTRICT}).
+   *
+   * @param id - the role's database primary key
+   * @returns Observable of the API envelope carrying the refreshed catalog
+   */
+  deleteRole$ = (id: number): Observable<CustomHttpResponseInterface<RoleCatalogInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<RoleCatalogInterface>>(`${this.server}/admin/role/${id}`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Normalizes HTTP errors into a single Observable<never> so all callers receive a
    * consistent Error instance — same contract as {@code UserService#handleError}.
    *
    * @param error - the HttpErrorResponse from Angular's HttpClient

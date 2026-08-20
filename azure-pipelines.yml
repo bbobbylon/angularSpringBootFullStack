@@ -15,7 +15,7 @@
 #    Note the server hostname, create a database named "tesseraapp"
 #
 # 4. Add App Service Application Settings (Portal > App Service > Configuration):
-#    SPRING_DATASOURCE_URL      = jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/defaultdb?useSSL=true&requireSSL=true
+#    SPRING_DATASOURCE_URL      = jdbc:mysql://bobbylonsdb-bobbylon.a.aivencloud.com:11275/defaultdb?sslMode=REQUIRED
 #    SPRING_DATASOURCE_USERNAME = avnadmin
 #    SPRING_DATASOURCE_PASSWORD = <your-password>
 #

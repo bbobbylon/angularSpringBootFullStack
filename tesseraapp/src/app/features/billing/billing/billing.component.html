@@ -1,4 +1,4 @@
-<app-navbar [user]="user()"></app-navbar>
+<app-navbar></app-navbar>
 
 <main class="sc-billing" *transloco="let t">
   <div class="container">
@@ -184,7 +184,7 @@
           <p class="sc-panel__meta">{{ t('billing.latest6') }}</p>
         </div>
         <a [routerLink]="['/invoices']" class="btn btn-outline-secondary btn-sm sc-panel__action">
-          View all <i class="bi bi-arrow-right"></i>
+          {{ t('common.viewAll') }} <i class="bi bi-arrow-right"></i>
         </a>
       </div>
 

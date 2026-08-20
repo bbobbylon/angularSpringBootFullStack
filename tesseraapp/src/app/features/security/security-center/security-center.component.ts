@@ -3,18 +3,21 @@ import { DatePipe } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { switchMap } from 'rxjs';
+import { firstValueFrom, switchMap } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { UserService } from '../../../service/user.service';
 import { ProviderLinkInterface } from '../../../interface/security.interface';
 import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
+import { environment } from '../../../../environments/environment';
 import { UserInterface } from '../../../interface/user.interface';
-import { SessionInterface, TotpSetupInterface } from '../../../interface/security.interface';
+import { PasskeyInterface, SessionInterface, TotpSetupInterface } from '../../../interface/security.interface';
 import { UserEventsInterface } from '../../../interface/user-events.interface';
 import { getEventDisplay } from '../../../utils/event-display.utils';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
+import { isWebAuthnSupported, startRegistration } from '../../../utils/webauthn.utils';
+import { PHONE_PATTERN } from '../../../constants/phone-policy';
 
 /**
  * Account Security Center (plan.md M4 creates this surface; M5 populates it).
@@ -41,6 +44,8 @@ import { TranslocoService } from '@jsverse/transloco';
 export class SecurityCenterComponent implements OnInit {
   /** Template access to the DataState enum for asynchronous rendering. */
   readonly DataState = DataState;
+  /** Phone number shape — mirrors the backend's `PhonePolicy` exactly; see that constant's doc. */
+  protected readonly PHONE_PATTERN = PHONE_PATTERN;
   /** Page-level load state (driven by the initial profile fetch). */
   protected readonly dataState = signal<DataState>(DataState.LOADING);
   /** The signed-in user — drives the navbar and the MFA badges. */
@@ -56,8 +61,20 @@ export class SecurityCenterComponent implements OnInit {
   protected readonly setup = signal<TotpSetupInterface | undefined>(undefined);
   /** Plaintext recovery codes — held only while the 'codes' step is on screen. */
   protected readonly recoveryCodes = signal<string[]>([]);
+  /** Whether the inline "regenerate recovery codes" code-entry form is showing. */
+  protected readonly regenerateOpen = signal(false);
   /** Live sessions for the devices panel. */
   protected readonly sessions = signal<SessionInterface[]>([]);
+
+  /** Registered passkeys for the Passkeys panel. */
+  protected readonly passkeys = signal<PasskeyInterface[]>([]);
+  /** Whether this browser supports WebAuthn at all — hides the panel entirely when false. */
+  protected readonly webauthnSupported = isWebAuthnSupported();
+  /** Whether the inline "name this passkey" form is showing. */
+  protected readonly passkeyAddOpen = signal(false);
+  /** True while a registration ceremony is in flight — distinct from {@link isLoading} so the
+   *  rest of the page (sessions, MFA) stays interactive while the platform prompt is open. */
+  protected readonly passkeyAdding = signal(false);
 
   /** Identity providers currently connected to this account (ROADMAP §1.4). */
   protected readonly connectedProviders = signal<ProviderLinkInterface[]>([]);
@@ -111,6 +128,7 @@ export class SecurityCenterComponent implements OnInit {
    */
   ngOnInit(): void {
     this.loadConnectedProviders();
+    this.reportLinkOutcome();
     this.userService
       .profile$()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -126,6 +144,9 @@ export class SecurityCenterComponent implements OnInit {
       });
     this.refreshTotpStatus();
     this.refreshSessions();
+    if (this.webauthnSupported) {
+      this.refreshPasskeys();
+    }
     this.loadEvents(0);
   }
 
@@ -217,6 +238,40 @@ export class SecurityCenterComponent implements OnInit {
       });
   }
 
+  /** Toggles the inline regenerate-recovery-codes form without touching any other panel state. */
+  protected toggleRegenerateForm(): void {
+    this.regenerateOpen.update((open) => !open);
+  }
+
+  /**
+   * Replaces the entire recovery-code batch on demand. The backend demands the same proof
+   * of possession as {@link disableTotp} (a live TOTP or recovery code), so this reuses the
+   * same 'codes' reveal step {@link confirmEnrollment} lands on — the new codes are shown
+   * exactly the same way whether they came from first enrollment or a regeneration.
+   */
+  protected regenerateRecoveryCodes(regenerateForm: NgForm): void {
+    this.isLoading.set(true);
+    this.userService
+      .regenerateRecoveryCodes$(regenerateForm.value.code)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.recoveryCodes.set(response.data?.recoveryCodes ?? []);
+          this.enrollStep.set('codes');
+          this.regenerateOpen.set(false);
+          this.isLoading.set(false);
+          this.notification.onSuccess(this.transloco.translate('toasts.recoveryCodesRegenerated'));
+          this.refreshTotpStatus();
+          regenerateForm.reset();
+        },
+        error: (error: string) => {
+          this.notification.onError(error);
+          this.isLoading.set(false);
+          regenerateForm.reset();
+        },
+      });
+  }
+
   /**
    * Flips the SMS second factor (the pre-M4 MFA), relocated here from the Profile
    * page so all second-factor management lives on one surface.
@@ -300,6 +355,80 @@ export class SecurityCenterComponent implements OnInit {
           this.notification.onError(error);
           this.isLoading.set(false);
         },
+      });
+  }
+
+  /** Opens the inline "name this passkey" form. */
+  protected openAddPasskey(): void {
+    this.passkeyAddOpen.set(true);
+  }
+
+  /** Abandons the add-passkey prompt without starting a ceremony. */
+  protected cancelAddPasskey(nameForm: NgForm): void {
+    this.passkeyAddOpen.set(false);
+    nameForm.resetForm();
+  }
+
+  /**
+   * Runs the full registration ceremony: fetches creation options, prompts the platform
+   * authenticator via {@link startRegistration}, then posts the result for verification.
+   *
+   * <p>A cancelled or dismissed platform prompt (the most common "failure") throws a DOMException
+   * from {@code navigator.credentials.create()} rather than reaching the backend at all — caught
+   * here and shown as a quiet notice rather than a hard error, since the user did nothing wrong.
+   */
+  protected async addPasskey(nameForm: NgForm): Promise<void> {
+    const deviceName = (nameForm.value.deviceName as string) || 'Passkey';
+    this.passkeyAdding.set(true);
+    try {
+      const options = await firstValueFrom(this.userService.webauthnEnrollOptions$());
+      const credential = await startRegistration(options.data!.publicKey as PublicKeyCredentialCreationOptionsJSON);
+      const response = await firstValueFrom(this.userService.webauthnEnrollComplete$(deviceName, credential));
+      this.passkeys.set(response.data?.passkeys ?? []);
+      this.user.set(response.data?.user ?? this.user());
+      this.passkeyAddOpen.set(false);
+      nameForm.resetForm();
+      this.notification.onSuccess(this.transloco.translate('toasts.passkeyAdded'));
+    } catch (error) {
+      if (error instanceof DOMException) {
+        // The user cancelled the platform prompt — not an error worth alarming about.
+        this.notification.onError(this.transloco.translate('toasts.passkeyCancelled'));
+      } else {
+        this.notification.onError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      this.passkeyAdding.set(false);
+    }
+  }
+
+  /** Removes one of the caller's own passkeys; the refreshed list comes back in the same response. */
+  protected removePasskey(id: number): void {
+    this.isLoading.set(true);
+    this.userService
+      .webauthnDelete$(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.passkeys.set(response.data?.passkeys ?? []);
+          this.isLoading.set(false);
+          this.notification.onSuccess(this.transloco.translate('toasts.passkeyRemoved'));
+        },
+        error: (error: string) => {
+          this.notification.onError(error);
+          this.isLoading.set(false);
+        },
+      });
+  }
+
+  /** Re-pulls the registered passkey list. */
+  private refreshPasskeys(): void {
+    this.userService
+      .webauthnList$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.passkeys.set(response.data?.passkeys ?? []),
+        // Status is decoration; a failure must not block the page.
+        error: () => this.passkeys.set([]),
       });
   }
 
@@ -406,6 +535,28 @@ export class SecurityCenterComponent implements OnInit {
    * provider list, and this panel should then simply show nothing rather than an error — federated
    * login being unconfigured is a normal state, not a fault.
    */
+  /**
+   * Reports the outcome of a link handshake and cleans the flag out of the URL.
+   *
+   * <p>The backend redirects back here with {@code ?linked=} or {@code ?linkError=} because a link
+   * completes in the browser's address bar, not in an XHR response. The flag is stripped afterwards
+   * so a refresh does not replay the toast, and so the URL the user might bookmark or share carries
+   * no leftover state.
+   */
+  private reportLinkOutcome(): void {
+    const params = new URLSearchParams(window.location.search);
+    const linked = params.get('linked');
+    const linkError = params.get('linkError');
+    if (!linked && !linkError) return;
+
+    if (linked) {
+      this.notification.onSuccess(this.transloco.translate('toasts.providerLinked', { provider: linked }));
+    } else if (linkError) {
+      this.notification.onError(linkError);
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
   private loadConnectedProviders(): void {
     this.userService
       .connectedProviders$()
@@ -425,17 +576,35 @@ export class SecurityCenterComponent implements OnInit {
   }
 
   /**
-   * Starts the OAuth2 flow to connect an additional provider.
+   * Connects an additional identity provider to *this* account.
    *
-   * <p>Reuses the ordinary login initiation: signing in with a provider whose subject is unknown
-   * but whose email matches this account is exactly what links it (the find-or-create convergence
-   * step). There is no separate "link" endpoint to maintain, and no second code path that could
-   * diverge from the one login already exercises.
+   * <p>Mints a single-use link ticket first, then navigates to the backend's link entry point.
+   * Previously this called {@code initiateFederatedLogin} directly, which ran an ordinary federated
+   * sign-in: the callback resolved an account from the provider identity and issued tokens for it,
+   * so connecting an identity whose email differed from this account silently switched the session
+   * to a different user. The ticket is what tells the callback "attach this to me" instead of
+   * "log me in as whoever this is".
    *
    * @param provider - the registration id to connect
    */
   protected connectProvider(provider: string): void {
-    this.userService.initiateFederatedLogin(provider);
+    if (this.isLoading()) return;
+    this.isLoading.set(true);
+
+    this.userService
+      .startProviderLink$(provider)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          // A full-page navigation, not an XHR: the OAuth2 Authorization Code flow is a chain of
+          // browser redirects, so the whole window has to travel.
+          window.location.assign(`${environment.apiUrl}${response.data!.linkUrl}`);
+        },
+        error: (error: Error) => {
+          this.isLoading.set(false);
+          this.notification.onError(error.message);
+        },
+      });
   }
 
   /**

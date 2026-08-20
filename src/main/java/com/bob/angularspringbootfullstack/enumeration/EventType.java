@@ -78,6 +78,24 @@ public enum EventType {
      */
     RECOVERY_CODE_USED("You signed in using a single-use recovery code :)"),
     /**
+     * Fired when the user replaces their entire recovery-code batch on demand (after
+     * proving possession with a live TOTP or recovery code), without disabling and
+     * re-enrolling the authenticator. All previously issued codes are invalidated —
+     * security-relevant for the same reason TOTP_DISABLED is: it changes what can get
+     * back into the account.
+     */
+    RECOVERY_CODES_REGENERATED("You regenerated your recovery codes :)"),
+    /**
+     * Fired when an administrator force-disables a managed user's authenticator MFA
+     * ({@code TotpService#adminResetTotp}) — the escape hatch for an account that has lost both
+     * its authenticator and every recovery code and so has no live code to present through the
+     * self-service {@code TOTP_DISABLED} path. Deliberately its own event, not a reuse of
+     * TOTP_DISABLED, so the audit trail shows this was administrator-initiated rather than
+     * self-service — the same reason PASSKEY_REMOVED is distinct from a user's own passkey
+     * management.
+     */
+    MFA_RESET("An administrator reset your authenticator MFA :)"),
+    /**
      * Fired when the user revokes one of their active sessions (or all other sessions
      * via "log out everywhere") from the Account Security Center (plan.md M5). The
      * revoked family can no longer refresh; its in-flight access token simply ages out
@@ -101,7 +119,42 @@ public enum EventType {
      * dashboard distinguish "caught and handled with an authenticator" from "caught and fell back
      * to an emailed code".
      */
-    SUSPICIOUS_LOGIN("We noticed a sign-in that didn't match your usual device or location, so we asked for extra verification :|");
+    SUSPICIOUS_LOGIN("We noticed a sign-in that didn't match your usual device or location, so we asked for extra verification :|"),
+    /**
+     * Fired when the user connects an identity provider to their account from the Security
+     * Center (ROADMAP §1.4). Audited separately from {@link #PROFILE_UPDATE} because adding a
+     * sign-in method is a credential change, not a profile edit — it belongs in the same class
+     * of events as enrolling a second factor, and a user reviewing their activity log needs to
+     * be able to spot one they did not perform.
+     */
+    PROVIDER_LINKED("You connected an identity provider to your account :)"),
+    /**
+     * Fired when the user disconnects an identity provider. Recorded for the same reason as
+     * {@link #PROVIDER_LINKED}: removing a way into the account is as security-relevant as
+     * adding one.
+     */
+    PROVIDER_UNLINKED("You disconnected an identity provider from your account :|"),
+    /**
+     * Fired when the user completes registering a new passkey (WebAuthn credential) from the
+     * Account Security Center. Distinct from {@link #MFA_UPDATE}/{@link #TOTP_ENROLLED} because a
+     * passkey is a standalone sign-in credential, not a second factor stacked on a password.
+     */
+    PASSKEY_REGISTERED("You registered a new passkey for signing in :)"),
+    /**
+     * Fired when a passkey is deleted — either by the account owner from the Security Center, or
+     * by an administrator revoking a lost/compromised credential (SRS FR-ADMIN). There is no
+     * "reset" for a passkey: the private key never leaves the authenticator, so revocation is the
+     * only lever anyone (including an admin) has.
+     */
+    PASSKEY_REMOVED("You removed a passkey from your account :|"),
+    /**
+     * Fired when a sign-in completes via a passkey (usernameless WebAuthn assertion) instead of
+     * {@link #LOGIN_ATTEMPT_SUCCESS}, mirroring {@link #FEDERATED_LOGIN}'s reasoning: the audit
+     * trail should record WHICH authentication method was used, and a passkey is phishing-resistant
+     * and device-bound enough that it is not stacked with risk-based step-up (see
+     * {@code PasskeyController#verifyWebAuthn}).
+     */
+    PASSKEY_LOGIN("You signed in with a passkey :)");
 
     /**
      * -- GETTER --

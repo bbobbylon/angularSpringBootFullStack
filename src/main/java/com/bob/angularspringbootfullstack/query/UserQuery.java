@@ -74,6 +74,12 @@ public class UserQuery {
      * Returns whether a 2FA code is expired. Parameter: code.
      */
     public static final String CHECK_2FA_CODE_EXPIRE_DATE = "SELECT expiration_date < NOW() AS is_expired FROM twofactorverifications WHERE code = :code";
+    /**
+     * Counts non-expired 2FA/step-up verification rows for a user. Parameter: id (user_id).
+     * Used to gate {@code resendVerificationCode} so it only ever redelivers a code that a real
+     * password check already minted, rather than becoming a way to mint one from an email alone.
+     */
+    public static final String COUNT_PENDING_2FA_CODE_BY_USER_ID_QUERY = "SELECT COUNT(*) FROM twofactorverifications WHERE user_id = :id AND expiration_date > NOW()";
 
     /**
      * Deletes any existing password reset verification rows for a user. Parameter: userId.
@@ -143,12 +149,18 @@ public class UserQuery {
      * email. Callers pass {@code searchTerm} already wrapped in SQL wildcards
      * ({@code %term%}); an unfiltered listing passes {@code %%}, which matches every row,
      * so one query serves both the plain list and the search.
-     * Newest accounts first so recent registrations surface at the top.
+     * <p>
+     * The {@code %s} is an {@code ORDER BY} fragment spliced in with {@link String#format},
+     * not a named parameter — a bind parameter can carry a value but never a column identifier.
+     * It is always the output of {@code SortUtils#resolveSqlOrderBy}, which validates the
+     * client-requested field against an allow-list before this ever runs, so nothing
+     * request-controlled reaches the format call. Defaults to {@code created_at DESC, id DESC}
+     * (newest accounts first) when the caller passes no sort.
      * Parameters: searchTerm, pageSize, offset.
      */
     public static final String SELECT_USERS_PAGED_QUERY =
             "SELECT * FROM users WHERE first_name LIKE :searchTerm OR last_name LIKE :searchTerm OR email LIKE :searchTerm " +
-            "ORDER BY created_at DESC, id DESC LIMIT :pageSize OFFSET :offset";
+            "ORDER BY %s LIMIT :pageSize OFFSET :offset";
 
     /**
      * Counts the rows the paged directory query above would match, so the admin UI can
@@ -157,4 +169,17 @@ public class UserQuery {
      */
     public static final String COUNT_USERS_QUERY =
             "SELECT COUNT(*) FROM users WHERE first_name LIKE :searchTerm OR last_name LIKE :searchTerm OR email LIKE :searchTerm";
+
+    /**
+     * Selects the email addresses of every system-wide administrator ({@code ROLE_ADMIN} or
+     * {@code ROLE_APPLICATION_ADMIN}) — the recipient list for the scheduled/on-demand
+     * system-wide report digest (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report
+     * emails"). Mirrors {@code RoleQuery#SELECT_ROLE_BY_ID_QUERY}'s join shape (users →
+     * userroles → roles). No parameters.
+     */
+    public static final String SELECT_SYSTEM_ADMIN_EMAILS_QUERY =
+            "SELECT DISTINCT u.email FROM users u " +
+            "JOIN userroles ur ON ur.user_id = u.id " +
+            "JOIN roles r ON r.id = ur.role_id " +
+            "WHERE r.name IN ('ROLE_ADMIN', 'ROLE_APPLICATION_ADMIN')";
 }

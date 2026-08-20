@@ -11,8 +11,15 @@ export interface LanguageOption {
   short: string;
 }
 
-/** localStorage key under which the user's chosen language is persisted. */
-const STORAGE_KEY = 'sc-lang';
+/**
+ * localStorage key under which the user's chosen language is persisted.
+ *
+ * Exported so {@code language.interceptor.ts} can read the active language straight out of
+ * storage — mirroring how {@code token.interceptor.ts} reads {@link Key.TOKEN} directly rather
+ * than injecting a wrapping service — without duplicating the key as a second string literal
+ * that could drift from this one.
+ */
+export const LANGUAGE_STORAGE_KEY = 'sc-lang';
 
 /**
  * Owns the application's active language, mirroring {@code ThemeService} in shape and intent.
@@ -38,7 +45,7 @@ export class LanguageService {
    *
    * <p>Each is labelled in its own language ("Español", not "Spanish"). A user who has landed in a
    * language they cannot read needs to find their way out, and the one string they are certain to
-   * recognise is the name of their own language — labelling the list in the *current* interface
+   * recognize is the name of their own language — labelling the list in the *current* interface
    * language would hide the exit behind the very problem it solves.
    */
   readonly available: readonly LanguageOption[] = [
@@ -77,7 +84,7 @@ export class LanguageService {
 
     if (!persist) return;
     try {
-      localStorage.setItem(STORAGE_KEY, code);
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, code);
     } catch {
       /* Storage may be unavailable (private mode); the in-memory signal still works. */
     }
@@ -105,7 +112,7 @@ export class LanguageService {
    */
   private readInitial(): string {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
       if (saved && this.available.some((option) => option.code === saved)) return saved;
 
       const browser = (navigator.language ?? 'en').split('-')[0].toLowerCase();

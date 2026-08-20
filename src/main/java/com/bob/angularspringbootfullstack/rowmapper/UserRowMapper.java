@@ -64,12 +64,14 @@ public class UserRowMapper implements RowMapper<User> {
                 .createdAt(resultSet.getTimestamp("created_at").toLocalDateTime())
                 .isUsing2FA(resultSet.getBoolean("using_mfa"))
                 .usingTotp(resultSet.getBoolean("using_totp"))
+                .usingPasskey(resultSet.getBoolean("using_passkey"))
                 .phoneNumber(resultSet.getString("phone"))
                 .imageUrl(resultSet.getString("image_url"))
                 .address(resultSet.getString("address"))
                 .passwordChangedAt(resultSet.getTimestamp("password_changed_at") != null
                         ? resultSet.getTimestamp("password_changed_at").toLocalDateTime()
                         : null)
+                .origin(resultSet.getString("origin"))
                 .build();
 
     }

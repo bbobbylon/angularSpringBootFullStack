@@ -5,7 +5,7 @@
   cards. Two panels — Multi-factor authentication (TOTP wizard + SMS toggle) and
   Sessions & devices (the stateful half of the hybrid token model made visible).
 -->
-<app-navbar [user]="user()"></app-navbar>
+<app-navbar></app-navbar>
 <main *transloco="let t" class="sc-page">
   <div class="container">
     <nav aria-label="breadcrumb">
@@ -139,7 +139,31 @@
                         {{ t('securityCenter.disableAuthenticator') }}
                       </button>
                     </div>
+                    <div class="col-auto">
+                      <button (click)="toggleRegenerateForm()" [disabled]="isLoading()"
+                              class="btn btn-outline-secondary btn-sm" type="button">
+                        {{ t('securityCenter.regenerateCodes') }}
+                      </button>
+                    </div>
                   </form>
+
+                  <!-- Regenerate recovery codes: same proof-of-possession requirement as disable,
+                       since a hijacked session must not be able to invalidate the real codes and
+                       walk away with a fresh set only it saw. -->
+                  @if (regenerateOpen()) {
+                    <form #regenerateForm="ngForm" (ngSubmit)="regenerateRecoveryCodes(regenerateForm)" class="row g-2 align-items-end mt-2">
+                      <div class="col-auto">
+                        <label class="form-label mb-1" for="regenerateCode">{{ t('securityCenter.disableCodeLabel') }}</label>
+                        <input [disabled]="isLoading()" autocomplete="one-time-code" class="form-control form-control-sm"
+                               id="regenerateCode" name="code" ngModel placeholder="123456" required type="text">
+                      </div>
+                      <div class="col-auto">
+                        <button [disabled]="regenerateForm.invalid || isLoading()" class="btn btn-outline-primary btn-sm" type="submit">
+                          {{ t('securityCenter.regenerateConfirm') }}
+                        </button>
+                      </div>
+                    </form>
+                  }
                 }
               }
 
@@ -240,12 +264,29 @@
                   <div class="col-12 col-sm-auto flex-grow-1" style="max-width: 320px;">
                     <input id="smsPhoneNumber" name="phoneNumber" ngModel required
                            type="tel" inputmode="tel" autocomplete="tel"
-                           pattern="^\+?[0-9. ()-]{7,25}$"
-                           placeholder="+1 555 010 1234"
+                           [pattern]="PHONE_PATTERN"
+                           placeholder="(808) 482-4518"
                            [disabled]="isLoading()"
                            class="form-control form-control-sm" />
                     <small class="text-muted">{{ t('securityCenter.phoneHint') }}</small>
                   </div>
+                </div>
+
+                <!-- Explicit SMS consent — required so enabling SMS 2FA is an affirmative
+                     opt-in, not implied by entering a phone number. See /terms#sms. -->
+                <div class="form-check mt-2">
+                  <input id="smsConsent" name="smsConsent" ngModel required type="checkbox"
+                         [disabled]="isLoading()" class="form-check-input" />
+                  <label class="form-check-label small" for="smsConsent">
+                    I agree to receive text messages from TesseraApp containing my two-factor
+                    authentication codes. Message frequency varies with sign-in activity; message
+                    and data rates may apply. Reply STOP to opt out. See our
+                    <a href="/terms#sms" target="_blank" rel="noopener">Messaging Terms</a> and
+                    <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+                  </label>
+                </div>
+
+                <div class="row g-2 align-items-start mt-1">
                   <div class="col-auto">
                     <button [disabled]="isLoading() || phoneForm.invalid" class="btn btn-primary btn-sm" type="submit">
                       {{ isLoading() ? t('common.saving') : t('securityCenter.saveEnable') }}
@@ -264,6 +305,92 @@
         </div>
       </div>
     </div>
+
+    <!-- ── Passkeys (WebAuthn) ─────────────────────────────────────────────── -->
+    @if (webauthnSupported) {
+      <div class="card mb-4" style="border-radius: 8px;">
+        <div class="card-body">
+          <div class="row align-items-center mb-2">
+            <div class="col">
+              <h5 class="card-title mb-1"><i class="bi bi-fingerprint" style="margin-right: 8px;"></i>Passkeys</h5>
+              <h6 class="card-subtitle text-muted">
+                Sign in with your device's fingerprint, face, or screen lock — no password to type or steal.
+              </h6>
+            </div>
+            <div class="col-auto">
+              <button (click)="openAddPasskey()" [disabled]="isLoading() || passkeyAddOpen()"
+                      class="btn btn-outline-primary btn-sm" type="button">
+                <i class="bi bi-plus-lg" style="margin-right: 4px;"></i>Add a passkey
+              </button>
+            </div>
+          </div>
+
+          @if (passkeyAddOpen()) {
+            <form #passkeyNameForm="ngForm" (ngSubmit)="addPasskey(passkeyNameForm)" class="row g-2 align-items-end mb-3" novalidate>
+              <div class="col-auto">
+                <label class="form-label mb-1" for="passkeyDeviceName">Name this passkey</label>
+                <input [disabled]="passkeyAdding()" class="form-control form-control-sm" id="passkeyDeviceName"
+                       maxlength="100" name="deviceName" ngModel placeholder="MacBook Touch ID" type="text">
+              </div>
+              <div class="col-auto">
+                <button [disabled]="passkeyAdding()" class="btn btn-primary btn-sm" type="submit">
+                  @if (passkeyAdding()) {
+                    <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                    <span>Follow your device's prompt&hellip;</span>
+                  } @else {
+                    <span>Create passkey</span>
+                  }
+                </button>
+              </div>
+              <div class="col-auto">
+                <button (click)="cancelAddPasskey(passkeyNameForm)" [disabled]="passkeyAdding()"
+                        class="btn btn-outline-secondary btn-sm" type="button">
+                  {{ t('common.cancel') }}
+                </button>
+              </div>
+            </form>
+          }
+
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+              <tr>
+                <th scope="col">Passkey</th>
+                <th scope="col">Created</th>
+                <th scope="col">Last used</th>
+                <th scope="col">{{ t('common.action') }}</th>
+              </tr>
+              </thead>
+              <tbody>
+                @for (passkey of passkeys(); track passkey.id) {
+                  <tr>
+                    <td>
+                      <i class="bi" [class.bi-phone]="passkey.transports?.includes('hybrid')"
+                         [class.bi-usb-symbol]="passkey.transports?.includes('usb')"
+                         [class.bi-fingerprint]="!passkey.transports || passkey.transports === 'internal'"
+                         style="margin-right: 6px;"></i>
+                      {{ passkey.deviceName || 'Passkey' }}
+                    </td>
+                    <td>{{ passkey.createdAt | date: 'MMM d, y' }}</td>
+                    <td>{{ passkey.lastUsedAt ? (passkey.lastUsedAt | date: 'MMM d, y, h:mm a') : 'Never' }}</td>
+                    <td>
+                      <button (click)="removePasskey(passkey.id)" [disabled]="isLoading()"
+                              class="btn btn-outline-danger btn-sm" type="button">
+                        {{ t('common.delete') }}
+                      </button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td class="text-muted" colspan="4">No passkeys registered yet.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    }
 
     <!-- ── Connected accounts (ROADMAP §1.4) ───────────────────────────────── -->
     @if (connectedProviders().length > 0 || connectableProviders().length > 0) {
@@ -328,48 +455,50 @@
           </div>
         </div>
 
-        <table class="table table-hover mb-0">
-          <thead>
-          <tr>
-            <th scope="col">{{ t('security.log.device') }}</th>
-            <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
-            <th scope="col">{{ t('securityCenter.signedIn') }}</th>
-            <th scope="col">{{ t('securityCenter.lastActive') }}</th>
-            <th scope="col">{{ t('securityCenter.expires') }}</th>
-            <th scope="col">{{ t('common.action') }}</th>
-          </tr>
-          </thead>
-          <tbody>
-            @for (session of sessions(); track session.family) {
-              <tr>
-                <td>
-                  {{ session.device }}
-                  @if (session.family === currentFamily()) {
-                    <span class="badge bg-info ms-2">{{ t('securityCenter.thisDevice') }}</span>
-                  }
-                </td>
-                <td class="mono">{{ session.ipAddress }}</td>
-                <td>{{ session.createdAt | date: 'MMM d, y, h:mm a' }}</td>
-                <td>{{ session.lastUsedAt | date: 'MMM d, y, h:mm a' }}</td>
-                <td>{{ session.expiresAt | date: 'MMM d, y, h:mm a' }}</td>
-                <td>
-                  <button (click)="revokeSession(session.family)"
-                          [disabled]="isLoading() || session.family === currentFamily()"
-                          [title]="session.family === currentFamily() ? t('securityCenter.useLogoutTitle') : t('securityCenter.revokeTitle')"
-                          class="btn btn-outline-danger btn-sm" type="button">
-                    {{ t('securityCenter.revoke') }}
-                  </button>
-                </td>
-              </tr>
-            } @empty {
-              <tr>
-                <td class="text-muted" colspan="6">
-                  No tracked sessions yet — sessions appear here after your next sign-in.
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+            <tr>
+              <th scope="col">{{ t('security.log.device') }}</th>
+              <th scope="col">{{ t('securityCenter.ipAddress') }}</th>
+              <th scope="col">{{ t('securityCenter.signedIn') }}</th>
+              <th scope="col">{{ t('securityCenter.lastActive') }}</th>
+              <th scope="col">{{ t('securityCenter.expires') }}</th>
+              <th scope="col">{{ t('common.action') }}</th>
+            </tr>
+            </thead>
+            <tbody>
+              @for (session of sessions(); track session.family) {
+                <tr>
+                  <td>
+                    {{ session.device }}
+                    @if (session.family === currentFamily()) {
+                      <span class="badge bg-info ms-2">{{ t('securityCenter.thisDevice') }}</span>
+                    }
+                  </td>
+                  <td class="mono">{{ session.ipAddress }}</td>
+                  <td>{{ session.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                  <td>{{ session.lastUsedAt | date: 'MMM d, y, h:mm a' }}</td>
+                  <td>{{ session.expiresAt | date: 'MMM d, y, h:mm a' }}</td>
+                  <td>
+                    <button (click)="revokeSession(session.family)"
+                            [disabled]="isLoading() || session.family === currentFamily()"
+                            [title]="session.family === currentFamily() ? t('securityCenter.useLogoutTitle') : t('securityCenter.revokeTitle')"
+                            class="btn btn-outline-danger btn-sm" type="button">
+                      {{ t('securityCenter.revoke') }}
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="text-muted" colspan="6">
+                    No tracked sessions yet — sessions appear here after your next sign-in.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -383,52 +512,54 @@
           Every security event on your account — newest first.
         </h6>
 
-        <table class="table table-hover mb-2">
-          <thead>
-          <tr>
-            <th scope="col">{{ t('securityCenter.event') }}</th>
-            <th scope="col">Device</th>
-            <th scope="col">IP Address</th>
-            <th scope="col">{{ t('common.date') }}</th>
-          </tr>
-          </thead>
-          <tbody>
-            @for (event of events(); track event.id) {
-              <tr>
-                <td>
-                  <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
-                    <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
-                    {{ getEventDisplay(event.type).label }}
-                  </span>
-                  <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
-                </td>
-                <td style="font-size: 0.85rem;">{{ event.device }}</td>
-                <td class="mono" style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
-                <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
-              </tr>
-            } @empty {
-              <tr>
-                <td class="text-muted text-center" colspan="4">{{ t('securityCenter.noEvents') }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <div class="table-responsive">
+          <table class="table table-hover mb-2">
+            <thead>
+            <tr>
+              <th scope="col">{{ t('securityCenter.event') }}</th>
+              <th scope="col">Device</th>
+              <th scope="col">IP Address</th>
+              <th scope="col">{{ t('common.date') }}</th>
+            </tr>
+            </thead>
+            <tbody>
+              @for (event of events(); track event.id) {
+                <tr>
+                  <td>
+                    <span [class]="'badge ' + getEventDisplay(event.type).badgeClass" style="font-size: 0.8rem;">
+                      <i [class]="'bi ' + getEventDisplay(event.type).icon" style="margin-right: 4px;"></i>
+                      {{ getEventDisplay(event.type).label }}
+                    </span>
+                    <span class="d-block text-muted mt-1" style="font-size: 0.78rem;">{{ event.description }}</span>
+                  </td>
+                  <td style="font-size: 0.85rem;">{{ event.device }}</td>
+                  <td class="mono" style="font-size: 0.85rem;">{{ event.ipAddress }}</td>
+                  <td style="font-size: 0.85rem;">{{ event.createdAt | date: 'MMM d, y, h:mm a' }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="text-muted text-center" colspan="4">{{ t('securityCenter.noEvents') }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
 
         @if (eventsTotalPages() > 1) {
           <nav [attr.aria-label]="t('securityCenter.activityPagination')">
             <ul class="pagination pagination-sm justify-content-end mb-0">
               <li [class.disabled]="currentEventPage() === 0" class="page-item">
-                <button (click)="goToEventsPage(currentEventPage() - 1)" class="page-link">&laquo;</button>
+                <button (click)="goToEventsPage(currentEventPage() - 1)"
+                        [disabled]="currentEventPage() === 0"
+                        class="page-link">&laquo;</button>
               </li>
-              @for (p of [].constructor(eventsTotalPages()); track $index; let i = $index) {
-                <li class="page-item">
-                  <button (click)="goToEventsPage(i)"
-                          [class.active]="i === currentEventPage()"
-                          class="page-link">{{ i + 1 }}</button>
-                </li>
-              }
+              <li class="page-item disabled">
+                <span class="page-link">{{ t('common.pageXofY', { page: currentEventPage() + 1, total: eventsTotalPages() }) }}</span>
+              </li>
               <li [class.disabled]="currentEventPage() === eventsTotalPages() - 1" class="page-item">
-                <button (click)="goToEventsPage(currentEventPage() + 1)" class="page-link">&raquo;</button>
+                <button (click)="goToEventsPage(currentEventPage() + 1)"
+                        [disabled]="currentEventPage() === eventsTotalPages() - 1"
+                        class="page-link">&raquo;</button>
               </li>
             </ul>
           </nav>

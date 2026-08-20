@@ -162,6 +162,17 @@ export interface InvoiceListDataInterface {
 }
 
 /**
+ * The data payload returned by {@code GET /admin/analytics/invoices/all}.
+ *
+ * Unpaginated — every invoice in the caller's scope, for chart derivations that need a true
+ * total (monthly revenue, status breakdown, service revenue) rather than a single page.
+ */
+export interface AllInvoicesDataInterface {
+  user: UserInterface;
+  invoices?: InvoiceInterface[];
+}
+
+/**
  * The data payload returned by {@code GET /customer/invoice/get/:id}.
  *
  * Contains the authenticated user, the matching invoice, and the customer the

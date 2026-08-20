@@ -1,9 +1,10 @@
 <!--
   The animation host carries [@.disabled] so that users who prefer reduced motion skip the
   route cross-fade. The inner <main> holds the actual [@routeTransition] trigger and wraps
-  the single <router-outlet> that every feature view renders into.
+  the single <router-outlet> that every feature view renders into. `class="anim-host"` keeps
+  this div out of the sticky-footer flex layout — see app.component.css.
 -->
-<div [@.disabled]="prefersReducedMotion">
+<div class="anim-host" [@.disabled]="prefersReducedMotion">
   <main [@routeTransition]="getRouteAnimationData()">
     <router-outlet />
   </main>
@@ -11,3 +12,6 @@
 
 <!-- Always-mounted global command palette (⌘/Ctrl+K); self-gates on authentication. -->
 <app-command-palette />
+
+<!-- Always-mounted global footer — see app.component.css for the sticky-footer layout. -->
+<app-footer />

@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
-import { SecurityOverviewDataInterface } from '../interface/security-overview.interface';
+import { SecurityOverviewDataInterface, SecuritySettingsDataInterface } from '../interface/security-overview.interface';
 import { environment } from '../../environments/environment';
 
 /**
@@ -39,17 +39,74 @@ export class SecurityDashboardService {
    * <p>One request rather than six so every panel reflects the same instant — a suspicious login
    * cannot appear in the table while the counter above it still reads zero.
    *
-   * @param days - how many days of history to summarise; the server clamps this to 1–90, so an
+   * <p>The two growing tables — flagged sign-ins and restricted accounts — are paged
+   * <em>independently</em>. They are separate query parameters rather than one shared `page`
+   * because an administrator working down the restricted-accounts list must not have their place
+   * reset because they stepped forward through flagged sign-ins in the panel above.
+   *
+   * @param days - how many days of history to summarize; the server clamps this to 1–90, so an
    *               out-of-range value degrades to the nearest sane window rather than erroring
-   * @returns Observable emitting the envelope carrying {@code user} and {@code overview}
+   * <p>Each table's row count is a separate parameter for the same reason, and the server clamps
+   * both to 1–100 — so a value outside that range degrades to the nearest sane page instead of
+   * erroring, and the {@code PageInfo} that comes back states the size actually applied rather than
+   * the one that was asked for.
+   *
+   * @param suspiciousPage - 0-based page of the flagged sign-ins table
+   * @param suspiciousSize - rows per page for that table; clamped server-side to 1–100
+   * @param restrictedPage - 0-based page of the locked/disabled accounts table
+   * @param restrictedSize - rows per page for that table; clamped server-side to 1–100
+   * @returns Observable emitting the envelope carrying {@code user} and {@code overview}; each
+   *          paged table's metadata rides along as a {@code PageInfo} inside {@code overview}
    */
-  overview$ = (days = 7): Observable<CustomHttpResponseInterface<SecurityOverviewDataInterface>> =>
+  overview$ = (
+    days = 7,
+    suspiciousPage = 0,
+    suspiciousSize = 50,
+    restrictedPage = 0,
+    restrictedSize = 50,
+  ): Observable<CustomHttpResponseInterface<SecurityOverviewDataInterface>> =>
     this.http
-      .get<CustomHttpResponseInterface<SecurityOverviewDataInterface>>(`${this.server}/admin/security/overview?days=${days}`)
+      .get<CustomHttpResponseInterface<SecurityOverviewDataInterface>>(
+        `${this.server}/admin/security/overview?days=${days}` +
+          `&suspiciousPage=${suspiciousPage}&suspiciousSize=${suspiciousSize}` +
+          `&restrictedPage=${restrictedPage}&restrictedSize=${restrictedSize}`,
+      )
       .pipe(catchError(this.handleError));
 
   /**
-   * Normalises HTTP errors into a single Observable<never>, mirroring the other services so
+   * Fetches the current anomaly detection overrides (FUTURE-ENHANCEMENTS "Anomaly signal tuning
+   * UI"). A {@code null} field means no override is on record — see
+   * {@link SecuritySettingsInterface} for why that must not be treated as false/zero.
+   *
+   * @returns Observable emitting the envelope carrying {@code user} and {@code settings}
+   */
+  anomalySettings$ = (): Observable<CustomHttpResponseInterface<SecuritySettingsDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<SecuritySettingsDataInterface>>(`${this.server}/admin/security/anomaly-settings`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Sets or clears the anomaly detection overrides. A full replace, not a partial patch — passing
+   * {@code null} for either argument clears that override back to the server's env default, so a
+   * caller that wants to change only one field must resend the other's current value.
+   *
+   * @param enabled      the new override, or null to clear it
+   * @param historyLimit the new override, or null to clear it
+   * @returns Observable emitting the envelope carrying {@code user} and the settings as persisted
+   */
+  updateAnomalySettings$ = (
+    enabled: boolean | null,
+    historyLimit: number | null,
+  ): Observable<CustomHttpResponseInterface<SecuritySettingsDataInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<SecuritySettingsDataInterface>>(`${this.server}/admin/security/anomaly-settings`, {
+        enabled,
+        historyLimit,
+      })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Normalizes HTTP errors into a single Observable<never>, mirroring the other services so
    * callers handle failures uniformly through {@code catchError}.
    *
    * @param error - the HttpErrorResponse from Angular's HttpClient

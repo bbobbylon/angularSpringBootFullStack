@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -25,9 +26,11 @@ import java.util.Optional;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ADMIN;
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_APPLICATION_ADMIN;
+import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_HELP_DESK_ADMIN;
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -112,37 +115,56 @@ class AnalyticsControllerOrgScopeTest {
     @DisplayName("an org admin's customer page is restricted to their organizations")
     void orgAdminCustomersAreScoped() {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
-        when(customerService.getCustomersForOrganizations(ORG_IDS, 0, 20)).thenReturn(new PageImpl<>(List.of(new Customer())));
+        when(customerService.getCustomersForOrganizations(ORG_IDS, 0, 20, Sort.unsorted())).thenReturn(new PageImpl<>(List.of(new Customer())));
         when(customerService.getStatsForOrganizations(ORG_IDS)).thenReturn(new Stats());
         when(customerService.getCustomerStatusBreakdownForOrganizations(ORG_IDS)).thenReturn(Map.of());
 
-        controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty());
+        controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
 
-        verify(customerService).getCustomersForOrganizations(ORG_IDS, 0, 20);
-        verify(customerService, never()).getCustomers(anyInt(), anyInt());
+        verify(customerService).getCustomersForOrganizations(ORG_IDS, 0, 20, Sort.unsorted());
+        verify(customerService, never()).getCustomers(anyInt(), anyInt(), any());
     }
 
     @Test
     @DisplayName("an org admin's invoice page is restricted to their organizations")
     void orgAdminInvoicesAreScoped() {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
-        when(customerService.getInvoicesForOrganizations(ORG_IDS, 0, 20)).thenReturn(new PageImpl<>(List.of(new Invoice())));
+        when(customerService.getInvoicesForOrganizations(ORG_IDS, 0, 20, Sort.unsorted())).thenReturn(new PageImpl<>(List.of(new Invoice())));
 
-        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty());
+        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
 
-        verify(customerService).getInvoicesForOrganizations(ORG_IDS, 0, 20);
-        verify(customerService, never()).getInvoices(anyInt(), anyInt());
+        verify(customerService).getInvoicesForOrganizations(ORG_IDS, 0, 20, Sort.unsorted());
+        verify(customerService, never()).getInvoices(anyInt(), anyInt(), any());
     }
 
     @Test
     @DisplayName("pagination parameters survive scoping rather than being silently reset")
     void scopedPagingHonoursRequestedPage() {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
-        when(customerService.getInvoicesForOrganizations(ORG_IDS, 3, 50)).thenReturn(Page.empty());
+        when(customerService.getInvoicesForOrganizations(ORG_IDS, 3, 50, Sort.unsorted())).thenReturn(Page.empty());
 
-        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(3), Optional.of(50));
+        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(3), Optional.of(50), Optional.empty());
 
-        verify(customerService).getInvoicesForOrganizations(ORG_IDS, 3, 50);
+        verify(customerService).getInvoicesForOrganizations(ORG_IDS, 3, 50, Sort.unsorted());
+    }
+
+    // ── Regression, 2026-08-13: scoped callers OTHER than ROLE_ORGANIZATION_ADMIN ───────────
+
+    @Test
+    @DisplayName("a help-desk admin's summary is scoped too, not just an org admin's")
+    void helpDeskAdminSummaryIsScoped() {
+        // Before the fix, resolveScope() checked the caller's role name against the literal string
+        // "ROLE_ORGANIZATION_ADMIN" — so a help-desk admin (also UPDATE:USER, also reaches this
+        // controller) fell through to the unscoped branch and saw every organization's rollups.
+        when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
+        when(customerService.getStatsForOrganizations(ORG_IDS)).thenReturn(new Stats());
+        when(customerService.getCustomerStatusBreakdownForOrganizations(ORG_IDS)).thenReturn(Map.of("ACTIVE", 3));
+
+        controller.getSummary(callerWithRole(ROLE_HELP_DESK_ADMIN.name()));
+
+        verify(customerService).getStatsForOrganizations(ORG_IDS);
+        verify(customerService, never()).getStats();
+        verify(customerService, never()).getCustomerStatusBreakdown();
     }
 
     // ── Unscoped callers: ROLE_ADMIN / ROLE_APPLICATION_ADMIN (FR-ORG-3) ────────────────────
@@ -164,12 +186,12 @@ class AnalyticsControllerOrgScopeTest {
     @Test
     @DisplayName("an application admin remains unscoped (FR-ORG-3)")
     void applicationAdminIsUnscoped() {
-        when(customerService.getInvoices(0, 20)).thenReturn(Page.empty());
+        when(customerService.getInvoices(0, 20, Sort.unsorted())).thenReturn(Page.empty());
 
-        controller.getInvoices(callerWithRole(ROLE_APPLICATION_ADMIN.name()), Optional.empty(), Optional.empty());
+        controller.getInvoices(callerWithRole(ROLE_APPLICATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
 
-        verify(customerService).getInvoices(0, 20);
-        verify(customerService, never()).getInvoicesForOrganizations(org.mockito.ArgumentMatchers.any(), anyInt(), anyInt());
+        verify(customerService).getInvoices(0, 20, Sort.unsorted());
+        verify(customerService, never()).getInvoicesForOrganizations(any(), anyInt(), anyInt(), any());
     }
 
     // ── The degenerate case ─────────────────────────────────────────────────────────────────
@@ -199,11 +221,11 @@ class AnalyticsControllerOrgScopeTest {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(List.of());
 
         ResponseEntity<HttpResponse> response =
-                controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(2), Optional.of(10));
+                controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(2), Optional.of(10), Optional.empty());
 
         // The service fails closed on an empty scope (an empty SQL `IN ()` is invalid anyway), so
         // the controller must short-circuit rather than let that surface as a 500.
-        verify(customerService, never()).getCustomersForOrganizations(org.mockito.ArgumentMatchers.any(), anyInt(), anyInt());
+        verify(customerService, never()).getCustomersForOrganizations(any(), anyInt(), anyInt(), any());
         assertTrue(((Page<?>) dataOf(response).get("page")).isEmpty());
     }
 }

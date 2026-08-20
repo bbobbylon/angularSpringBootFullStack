@@ -84,10 +84,10 @@ public class ErrorDetailScrubber implements ResponseBodyAdvice<Object> {
      * since it is by definition developer-facing.
      *
      * <p>{@code @JsonInclude(NON_DEFAULT)} on {@link HttpResponse} means a nulled field is omitted
-     * from the JSON entirely rather than serialised as {@code null} — the client sees a body that
+     * from the JSON entirely rather than serialized as {@code null} — the client sees a body that
      * simply never had those keys.
      *
-     * @param body       the response payload about to be serialised
+     * @param body       the response payload about to be serialized
      * @param returnType the controller method's return type
      * @param selectedContentType the negotiated content type
      * @param selectedConverterType the chosen message converter

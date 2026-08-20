@@ -7,6 +7,8 @@ import org.springframework.data.repository.ListCrudRepository;
 import org.springframework.data.repository.PagingAndSortingRepository;
 
 import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * CustomerRepo is the Spring Data JPA repository for {@link Customer} entities.
@@ -43,4 +45,40 @@ public interface CustomerRepo extends PagingAndSortingRepository<Customer, Long>
      * @return a page of customers belonging to those organizations
      */
     Page<Customer> findByOrganizationIdIn(Collection<Long> organizationIds, Pageable pageable);
+
+    /**
+     * Unpaginated form of {@link #findByOrganizationIdIn(Collection, Pageable)}, for the
+     * dropdown/export call sites that already use the unscoped no-arg {@code findAll()} today
+     * (the new-invoice customer picker, the XLSX report). Same NULL-{@code organization_id}
+     * exclusion applies.
+     *
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @return every customer belonging to those organizations, unpaginated
+     */
+    List<Customer> findByOrganizationIdIn(Collection<Long> organizationIds);
+
+    /**
+     * Org-scoped form of {@link #findByCustomerNameContaining(String, Pageable)} (FR-ORG-2), for
+     * an org admin's use of {@code GET /customer/search} — otherwise a scoped caller could search
+     * their way to a customer name outside their organizations even though the plain list is
+     * scoped.
+     *
+     * @param customerName    the substring to search for within customer names
+     * @param organizationIds the caller's active organization ids; must not be empty
+     * @param pageable        pagination and sorting parameters
+     * @return a page of matching customers restricted to those organizations
+     */
+    Page<Customer> findByCustomerNameContainingAndOrganizationIdIn(
+            String customerName, Collection<Long> organizationIds, Pageable pageable);
+
+    /**
+     * Looks up a customer by their exact email address — the dedupe key
+     * {@code BatchImportServiceImpl} checks before creating a customer from an uploaded row, so
+     * re-importing the same spreadsheet twice reports "already exists" per row instead of
+     * silently duplicating every customer in it.
+     *
+     * @param email the exact email address to match
+     * @return the matching customer, if one exists
+     */
+    Optional<Customer> findByEmail(String email);
 }

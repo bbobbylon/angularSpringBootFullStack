@@ -27,7 +27,6 @@ and each per-flow diagram reuses the same named lifelines:
 | **DOM** | the component's HTML template | `*.component.html` |
 | **CMP** | the component class | `*.component.ts` |
 | **SVC** | `UserService` / `AdminUserService` / `CustomerService` | `src/app/service/*.ts` |
-| **CACHE** | `cacheInterceptor` (runs first) | `src/app/interceptor/cache.interceptor.ts` |
 | **TOK** | `tokenInterceptor` (attaches the JWT) | `src/app/interceptor/token.interceptor.ts` |
 | **LS** | `localStorage` (`access_token` / `refresh_token`) | browser |
 | **NET** | the browser's HTTP stack / the wire | — |
@@ -87,6 +86,7 @@ Legend: ✅ documented · ⏳ planned
 | 10 | Profile: view, audit events, update, password, settings, image, toggle SMS-MFA | [10-profile-and-account.md](./10-profile-and-account.md) | ✅ |
 | 11 | Authenticator (TOTP) enrollment: setup → enable → disable → status | [11-totp-enrollment.md](./11-totp-enrollment.md) | ✅ |
 | 12 | Sessions & devices: list, revoke one, revoke all others | [12-sessions-and-devices.md](./12-sessions-and-devices.md) | ✅ |
+| 13 | Passkeys (WebAuthn): enrollment, usernameless login, admin revoke | [13-passkeys.md](./13-passkeys.md) | ✅ |
 
 ### 3 · Administration & RBAC
 
@@ -126,26 +126,38 @@ Legend: ✅ documented · ⏳ planned
 
 ### Backend endpoints / features planned
 
+Two rows below were re-verified 2026-08-08 and are already built — left here struck through rather
+than deleted so the source-marker history isn't lost.
+
 | Planned capability | Source marker | State | Flow |
 | --- | --- | --- | --- |
-| Admin **profile-field** update `PATCH /user/admin/update/{userId}` (org-scoped) | `UserController.java:519` | not built — admins change role + account-state only | [20](./20-admin-users-rbac.md) |
+| ~~Admin **profile-field** update (org-scoped)~~ | — | **Built.** `PATCH /admin/user/{id}/update` (`AdminUserController#updateUserByAdmin`) | [20](./20-admin-users-rbac.md) |
 | Link a *standalone* invoice to a customer `PUT /customer/invoice/{invoiceId}/addtocustomer/{customerId}` | `CustomerController.java:183` | not built | [31](./31-invoices.md) |
 | Draft invoices (nullable customer) | `Invoice.java:80` | not built — every invoice is created already linked | [31](./31-invoices.md) |
 | Invoice total-sum `@Query` | `InvoiceRepo.java:15` | not built (stats use `CustomerQuery.STATS_QUERY`) | [31](./31-invoices.md), [32](./32-dashboard.md) |
 | Deeper org-scoped role system | `RoleRepoImpl.java:24` | partial — several `RoleRepoImpl` methods are `Not yet implemented; return null` | [20](./20-admin-users-rbac.md) |
-| Server-side `@Valid` on registration & customer-create | flows 01 / 30 | open — validation is **client-side only**, bypassable by a direct API call | [01](./01-register-and-verify.md), [30](./30-customers.md) |
+| ~~Server-side `@Valid` on registration & customer-create~~ | — | **Built.** `@Valid` is present on `UserController#saveUser` and `CustomerController#createCustomer` | [01](./01-register-and-verify.md), [30](./30-customers.md) |
 
 ### Known debt / hardening (tracked, non-blocking)
 
+This table had drifted well behind reality (last touched long before this week) — several rows
+below were re-verified against current code on 2026-08-08 and turned out to already be resolved.
+Live tracking now lives in [`FUTURE-ENHANCEMENTS.md`](../FUTURE-ENHANCEMENTS.md); this table is
+kept for the source-marker pointers but should not be trusted over that file for current state.
+
 | Item | Source | Note |
 | --- | --- | --- |
-| SMS-2FA dispatch **stubbed** | `NotificationServiceImpl.java:54` | logged, not sent; TOTP ([11](./11-totp-enrollment.md)) is the production factor. Live SMS = Twilio creds + uncomment |
-| Profile-image storage hardcoded to `~/Downloads/images` | `UserController.java:316,359`, `WebMvcConfig.java:20` | dev-only; move to a configurable path / object storage |
-| HTTP caching is client-side | `cache.interceptor.ts` TODO | move to backend (ETag / Redis) and delete the interceptor |
-| `url` column stores a bare key | `UserQuery.java:36`, `UserRepoImpl.java:182` | rename to `verification_key` (DB migration deferred) |
-| Hardcoded API base `localhost:8080` | `environment.ts:11` | make environment-driven before any real deployment |
-| Near-zero tests | `plan.md §3` | priority paths: rotation/reuse ([05](./05-token-refresh-sessions.md)), TOTP challenge binding ([02](./02-login-and-mfa.md)/[11](./11-totp-enrollment.md)), org scoping ([20](./20-admin-users-rbac.md)) |
-| Two JWT libraries on the classpath | `plan.md §3` | `jjwt` + `java-jwt` — consolidation candidate |
+| `url` column stores a bare key | `UserQuery.java:36`, `UserRepoImpl.java:182` | still open — rename to `verification_key` (DB migration deferred). See FUTURE-ENHANCEMENTS §4 |
+
+**Resolved since this table was last accurate (re-verified 2026-08-08):**
+
+| Item | Was | Now |
+| --- | --- | --- |
+| SMS-2FA dispatch | "stubbed" — logged, never sent | Sends for real via Twilio once credentials are configured (`SMSUtils`); degrades to logging only when they're placeholders/unset. See [02](./02-login-and-mfa.md) |
+| Profile-image storage | hardcoded to `~/Downloads/images` | `ImageStorageService` abstraction (`LocalImageStorageService` / `S3ImageStorageService`), selected at startup via `IMAGE_STORAGE_TYPE` |
+| Hardcoded API base `localhost:8080` | fixed string in `environment.ts` | derived from `window.location.hostname` in dev; a relative same-origin URL in prod (the SPA is baked into the same jar) |
+| Near-zero tests | ~0 | **199 backend / 87 frontend**, all green |
+| Two JWT libraries on the classpath | `jjwt` + `java-jwt` | consolidated to `java-jwt` alone |
 | `HandleException` exposes `.reason`/`.message` | `HandleException.java:31` | strip PII before production |
 | `.env` placeholder `jwt.secret` | `.env` | must be high-entropy anywhere reachable — it underpins every signature in [`00 §6`](./00-anatomy-of-a-request.md) |
 
@@ -161,7 +173,7 @@ AI anomaly detection and a login-analytics dashboard (**FR-EXT-2**) are *planned
 These flow docs are the **dynamic** view — what happens *over time* on a single request.
 They complement, and link back to, the **static** reference docs:
 
-- [`../architecture.md`](../architecture.md) — the component/layer structure (the boxes).
-- [`../security.md`](../security.md) — the security model and threat posture.
-- [`../api-reference.md`](../api-reference.md) — the endpoint catalog (request/response shapes).
-- [`../database.md`](../database.md) — the schema the repositories read and write.
+- [`../GUIDE.md` §1](../GUIDE.md#1-architecture) — the component/layer structure (the boxes).
+- [`../GUIDE.md` §7](../GUIDE.md#7-security-model) — the security model and threat posture.
+- [`../GUIDE.md` §8](../GUIDE.md#8-api-reference) — the endpoint catalog (request/response shapes).
+- [`../GUIDE.md` §9](../GUIDE.md#9-database) — the schema the repositories read and write.

@@ -64,11 +64,65 @@ public class OAuth2ClientConfig {
     private String microsoftTenant;
 
     /**
+     * Absolute public origin to build OAuth redirect URIs from, e.g.
+     * {@code https://d3911jyxcju4q4.cloudfront.net}. Blank (the default) keeps the standard
+     * request-derived behavior, which is correct for local development.
+     *
+     * <p><b>Why this exists.</b> Spring's default template is
+     * {@code {baseUrl}/login/oauth2/code/{registrationId}}, and {@code baseUrl} is reconstructed
+     * from the incoming request — scheme included. That scheme comes from {@code X-Forwarded-Proto}.
+     * In the CloudFront-in-front-of-ALB deployment that header is <em>wrong</em>: CloudFront sets it
+     * to {@code https}, but the ALB then <b>overwrites</b> it with its own listener protocol
+     * ({@code http}, since the ALB has no TLS listener without a domain). The app therefore emits
+     * {@code redirect_uri=http://…} — which Google and Entra reject outright, because both refuse
+     * any non-{@code https} redirect URI outside {@code localhost}. Verified empirically against the
+     * live distribution before this property was added.
+     *
+     * <p>Setting an explicit origin removes the dependency on a header the app does not control.
+     * Only the <em>scheme and host</em> come from here; the path is still Spring's, so the
+     * callback contract is unchanged.
+     *
+     * <p>Deliberately its own variable rather than reusing {@code UI_APP_URL}: they happen to be
+     * equal in the single-origin deployment, but they answer different questions ("where does the
+     * SPA live" vs "what public address will the provider redirect back to"), and silently coupling
+     * them would break the first split-origin deployment.
+     */
+    @Value("${oauth2.redirect-base-url:${OAUTH2_REDIRECT_BASE_URL:}}")
+    private String redirectBaseUrl;
+
+    /**
+     * The redirect-URI template handed to every provider registration.
+     *
+     * <p>Returns Spring's request-derived default unless {@link #redirectBaseUrl} is set, in which
+     * case the origin is pinned. Applied to all three providers so they cannot drift — Microsoft
+     * previously spelled the template out by hand while Google and GitHub inherited it from
+     * {@code CommonOAuth2Provider}, which is exactly the kind of split that lets one provider be
+     * quietly fixed and the others left broken.
+     *
+     * @return the redirect-URI template, with {@code {registrationId}} still unexpanded
+     */
+    private String redirectUriTemplate() {
+        String path = "/login/oauth2/code/{registrationId}";
+        return isNotBlank(redirectBaseUrl)
+                ? redirectBaseUrl.replaceAll("/+$", "") + path
+                : "{baseUrl}" + path;
+    }
+
+    /**
      * Lists the providers whose credentials are actually present, in the order the
      * login screen should render them. Consumed by the public
      * {@code GET /oauth2/providers} endpoint.
      *
-     * @return the catalog of genuinely configured providers (placeholder excluded)
+     * <p><b>The test is blankness, not plausibility.</b> A provider is included whenever its client
+     * id is non-blank, so a <em>placeholder</em> value such as {@code CHANGE_ME} still produces a
+     * rendered button — the flow then fails at the provider's authorize endpoint with
+     * {@code client_id=CHANGE_ME} rather than being hidden here. This is not hypothetical: it is why
+     * GitHub sign-in was long documented as "working in the deployed environment" when its ECS
+     * credentials had never been populated. If that failure mode is worth closing, widen this check
+     * to treat known placeholder values as unconfigured; it is deliberately left alone for now
+     * because silently hiding a provider can be just as confusing as a failing one.
+     *
+     * @return the catalog of providers with a non-blank client id
      */
     @Bean
     public FederatedProviderCatalog federatedProviderCatalog() {
@@ -77,7 +131,33 @@ public class OAuth2ClientConfig {
         if (isNotBlank(githubClientId)) providers.add("github");
         if (isNotBlank(microsoftClientId)) providers.add("microsoft");
         log.info("Federated login providers configured: {}", providers.isEmpty() ? "none" : providers);
+        warnIfPlaceholder("google", googleClientId);
+        warnIfPlaceholder("github", githubClientId);
+        warnIfPlaceholder("microsoft", microsoftClientId);
         return new FederatedProviderCatalog(providers);
+    }
+
+    /**
+     * Logs a boot-time warning when a configured provider's client id still looks like the
+     * {@code CHANGE_ME} placeholder every deploy script seeds Secrets Manager with. Deliberately a
+     * warning, not a fail-fast guard like {@code JwtSecretGuard}: federated login is an optional
+     * feature, and refusing to boot over it would take down the rest of the application for
+     * something that previously only surfaced as a confusing "invalid_client" error page at the
+     * provider — exactly the failure this warning exists to make loud earlier instead.
+     *
+     * <p>The check is a prefix match, not exact equality — {@code secrets-setup.sh} seeds slightly
+     * different placeholder strings per credential (e.g. {@code CHANGE_ME_google_secret}), so this
+     * catches all of them without needing to enumerate every script's exact literal.
+     *
+     * @param provider the registration id, for the log message
+     * @param clientId the configured client id, or blank if this provider is not configured at all
+     */
+    private void warnIfPlaceholder(String provider, String clientId) {
+        if (isNotBlank(clientId) && clientId.toUpperCase().startsWith("CHANGE_ME")) {
+            log.warn("[FEDERATION] {} client-id looks like a placeholder ('CHANGE_ME...') — the {} " +
+                    "login button will render but fail at {}'s authorize endpoint until real credentials are set.",
+                    provider, provider, provider);
+        }
     }
 
     /**
@@ -94,6 +174,7 @@ public class OAuth2ClientConfig {
             registrations.add(CommonOAuth2Provider.GOOGLE.getBuilder("google")
                     .clientId(googleClientId)
                     .clientSecret(googleClientSecret)
+                    .redirectUri(redirectUriTemplate())
                     .build());
         }
         if (catalog.getProviders().contains("github")) {
@@ -103,6 +184,7 @@ public class OAuth2ClientConfig {
                     // read:user is the preset; user:email additionally exposes the verified
                     // primary email so find-or-create can converge accounts by address.
                     .scope("read:user", "user:email")
+                    .redirectUri(redirectUriTemplate())
                     .build());
         }
         if (catalog.getProviders().contains("microsoft")) {
@@ -127,7 +209,7 @@ public class OAuth2ClientConfig {
                 .clientSecret(microsoftClientSecret)
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
+                .redirectUri(redirectUriTemplate())
                 .scope("openid", "profile", "email")
                 .authorizationUri(base + "/oauth2/v2.0/authorize")
                 .tokenUri(base + "/oauth2/v2.0/token")

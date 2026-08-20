@@ -7,9 +7,11 @@ import com.bob.angularspringbootfullstack.enumeration.LoginRiskReason;
 import com.bob.angularspringbootfullstack.enumeration.StepUpMethod;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.model.LoginContext;
+import com.bob.angularspringbootfullstack.model.SecuritySettings;
 import com.bob.angularspringbootfullstack.repo.LoginRiskRepo;
 import com.bob.angularspringbootfullstack.service.LoginRiskService;
 import com.bob.angularspringbootfullstack.service.NotificationService;
+import com.bob.angularspringbootfullstack.service.SecuritySettingsService;
 import com.bob.angularspringbootfullstack.utils.RequestUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -24,13 +26,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Behavioural anomaly detection for sign-ins, and the step-up escalation it triggers
+ * Behavioral anomaly detection for sign-ins, and the step-up escalation it triggers
  * (SRS FR-TPF-1).
  *
  * <h3>What it compares</h3>
  * Every completed sign-in already writes a {@code userevents} row stamped with the device string
  * and IP address ({@link com.bob.angularspringbootfullstack.listener.NewUserEventListener} +
- * {@link RequestUtils}). That existing audit trail <em>is</em> the behavioural baseline, so this
+ * {@link RequestUtils}). That existing audit trail <em>is</em> the behavioral baseline, so this
  * feature adds no new table and no new write path — it only reads history back and compares it
  * against the request in hand.
  *
@@ -45,8 +47,8 @@ import java.util.Set;
  *
  * <h3>Deliberate non-goals</h3>
  * <p>There is no cross-account correlation and no geo-IP lookup. Cross-account comparison would
- * make the risk verdict a function of other users' behaviour — a subtle enumeration channel — and
- * geo-IP would add an external dependency and a licence for marginal gain over prefix matching.
+ * make the risk verdict a function of other users' behavior — a subtle enumeration channel — and
+ * geo-IP would add an external dependency and a license for marginal gain over prefix matching.
  * The check is intentionally cheap and explainable: a grader (or an auditor) can read exactly why
  * a login was flagged.
  *
@@ -70,18 +72,24 @@ public class LoginRiskServiceImpl implements LoginRiskService {
     private final LoginRiskRepo loginRiskRepo;
     private final NotificationService notificationService;
     private final ApplicationEventPublisher eventPublisher;
+    private final SecuritySettingsService securitySettingsService;
 
     /**
-     * Master switch for FR-TPF-1. Disabling it reverts login to its pre-anomaly behaviour
-     * (first factor → existing 2FA branch → tokens) without removing the code path.
+     * Master switch for FR-TPF-1, and the env-driven fallback for it. Disabling it reverts login
+     * to its pre-anomaly behavior (first factor → existing 2FA branch → tokens) without removing
+     * the code path. An admin can override this per-deployment at runtime through the
+     * {@code securitysettings} table without a redeploy — see {@link #effectiveAnomalyDetectionEnabled}
+     * — so this field is consulted only when no such override is on record.
      */
     @Value("${app.security.anomaly.enabled:true}")
     private boolean anomalyDetectionEnabled;
 
     /**
-     * How many <em>distinct</em> device/network fingerprints form the baseline. Bounded so a
-     * long-lived account's history query stays cheap; 50 distinct fingerprints is far more than a
-     * real user accumulates, while still capping the work for a pathological account.
+     * How many <em>distinct</em> device/network fingerprints form the baseline, and the env-driven
+     * fallback for it. Bounded so a long-lived account's history query stays cheap; 50 distinct
+     * fingerprints is far more than a real user accumulates, while still capping the work for a
+     * pathological account. Overridable at runtime the same way as {@link #anomalyDetectionEnabled}
+     * — see {@link #effectiveHistoryLimit()}.
      */
     @Value("${app.security.anomaly.history-limit:50}")
     private int historyLimit;
@@ -98,11 +106,15 @@ public class LoginRiskServiceImpl implements LoginRiskService {
      */
     @Override
     public LoginRiskAssessment assess(UserDTO userDTO, HttpServletRequest request) {
-        if (!anomalyDetectionEnabled || userDTO == null) {
+        // Resolved fresh on every call, not cached on the bean — see effectiveAnomalyDetectionEnabled
+        // and effectiveHistoryLimit for why an admin's settings-panel change must be visible on the
+        // very next login rather than after a restart.
+        SecuritySettings settings = securitySettingsService.getSettings();
+        if (!effectiveAnomalyDetectionEnabled(settings) || userDTO == null) {
             return LoginRiskAssessment.NONE;
         }
 
-        List<LoginContext> history = loginRiskRepo.findRecentLoginContexts(userDTO.getId(), historyLimit);
+        List<LoginContext> history = loginRiskRepo.findRecentLoginContexts(userDTO.getId(), effectiveHistoryLimit(settings));
         if (history.isEmpty()) {
             // No baseline yet (first-ever sign-in, or the history read degraded). Nothing to
             // compare against, so nothing can legitimately be called anomalous.
@@ -217,7 +229,7 @@ public class LoginRiskServiceImpl implements LoginRiskService {
         if (octets.length == 4) {
             return String.join(".", octets[0], octets[1], octets[2]);
         }
-        return client; // Not a shape we recognise; compare the whole string rather than guess.
+        return client; // Not a shape we recognize; compare the whole string rather than guess.
     }
 
     /**
@@ -228,5 +240,29 @@ public class LoginRiskServiceImpl implements LoginRiskService {
      */
     private boolean isUsable(String value) {
         return value != null && !value.isBlank();
+    }
+
+    /**
+     * The master switch actually in effect for this call: the admin's override if one is on
+     * record, otherwise {@link #anomalyDetectionEnabled}.
+     *
+     * @param settings the settings row read at the top of {@link #assess}
+     * @return whether anomaly detection should run
+     */
+    private boolean effectiveAnomalyDetectionEnabled(SecuritySettings settings) {
+        Boolean override = settings.getAnomalyEnabled();
+        return override != null ? override : anomalyDetectionEnabled;
+    }
+
+    /**
+     * The history-window size actually in effect for this call: the admin's override if one is on
+     * record, otherwise {@link #historyLimit}.
+     *
+     * @param settings the settings row read at the top of {@link #assess}
+     * @return how many recent login contexts to compare against
+     */
+    private int effectiveHistoryLimit(SecuritySettings settings) {
+        Integer override = settings.getAnomalyHistoryLimit();
+        return override != null ? override : historyLimit;
     }
 }

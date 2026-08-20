@@ -48,7 +48,6 @@ sequenceDiagram
     actor U as User
     participant CMP as BillingComponent
     participant SVC as CustomerService
-    participant CACHE as cacheInterceptor
     participant TOK as tokenInterceptor
     participant SEC as SecurityConfig
     participant CTRL as CustomerController
@@ -57,9 +56,7 @@ sequenceDiagram
     Note over CMP: ngOnInit fires BOTH fetches  :248-274
     par stats KPIs
         CMP->>SVC: stats$()  :250 / customer.service.ts:44
-        SVC->>CACHE: GET /customer/stats
-        Note over CACHE: GET → cache miss → forward  cache.interceptor.ts
-        CACHE->>TOK: next(req)
+        SVC->>TOK: GET /customer/stats
         Note over TOK: attaches Bearer 🔑  token.interceptor.ts:49
         TOK->>SEC: GET /customer/stats  🔑
         Note over SEC: matcher GET /** → READ:USER / READ:CUSTOMER  :160
@@ -184,9 +181,9 @@ GET /customer/invoice/list?page=0&size=200       ← customer.service.ts:112-115
 Authorization: Bearer <access JWT>               🔑
 ```
 
-Both are GETs, so `cacheInterceptor` may serve a cache hit and short-circuit before the token is even
-attached; any prior mutation (a new invoice from [`31 §A`](./31-invoices.md)) calls `evictAll()` and
-forces a fresh fetch on the next visit.
+Both are GETs, so both responses carry `Cache-Control: private, no-cache` + an ETag
+(`HttpCacheHeadersFilter`); a prior mutation (a new invoice from [`31 §A`](./31-invoices.md)) changes
+the ETag, so the next visit's revalidation comes back `200` with fresh data instead of `304`.
 
 ### E.2 · `GET /customer/stats` → `200`
 ```jsonc
@@ -232,5 +229,5 @@ service rows are folded from `content[]` in the browser, so `totalElements > siz
 - The invoices this page aggregates (list / new / detail) → [`31-invoices.md`](./31-invoices.md)
 - `STATS_QUERY` and its other consumer (the home dashboard) → [`32 §A`](./32-dashboard.md)
 - The admin authority model this page *displays* but does not *enforce* server-side → [`20-admin-users-rbac.md`](./20-admin-users-rbac.md)
-- The `GET /**` matcher fall-through that makes the admin gate frontend-only → [`00 §6-7`](./00-anatomy-of-a-request.md) · [`../security.md`](../security.md)
+- The `GET /**` matcher fall-through that makes the admin gate frontend-only → [`00 §6-7`](./00-anatomy-of-a-request.md) · [`../GUIDE.md` §7](../GUIDE.md#7-security-model)
 - The shared list idiom & pagination envelope → [`30 §A`](./30-customers.md)

@@ -5,7 +5,9 @@ import { catchError, tap } from 'rxjs/operators';
 import { AccountType, NewPasswordFormInterface, ProfileInterface } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import {
+  PasskeysDataInterface,
   ProviderLinksDataInterface,
+  RecoveryCodesInterface,
   SessionsDataInterface,
   TotpEnableInterface,
   TotpSetupInterface,
@@ -14,7 +16,6 @@ import {
 import { UserInterface } from '../interface/user.interface';
 import { Key } from '../enumeration/key.enumeration';
 import { JwtHelperService } from '@auth0/angular-jwt';
-import { HttpCacheService } from './http-cache.service';
 import { environment } from '../../environments/environment';
 
 /**
@@ -29,7 +30,7 @@ import { environment } from '../../environments/environment';
  * browser console, where it persists in the devtools buffer and in any screen recording.
  *
  * Each method returns a typed Observable wrapping the server's standard
- * CustomHttpResponseInterface envelope. Errors are normalised by handleError
+ * CustomHttpResponseInterface envelope. Errors are normalized by handleError
  * into a single Error observable so callers can handle failures uniformly.
  * Token storage side-effects (reading/writing localStorage) live here rather
  * than in components so the interceptor and components share one source of truth.
@@ -39,7 +40,6 @@ import { environment } from '../../environments/environment';
 })
 export class UserService {
   private http = inject(HttpClient);
-  private readonly httpCache = inject(HttpCacheService);
   private jwtHelper = new JwtHelperService();
   private readonly server = environment.apiUrl;
 
@@ -54,6 +54,20 @@ export class UserService {
     this.http
       .get<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/code/${email}/${code}`)
       .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Requests redelivery of an outstanding 2FA/step-up code ({@code POST /user/verify/resend},
+   * public). The backend always returns the same non-committal 200 (FR-AUTH-4) regardless of
+   * whether the email exists or a code was actually pending — see
+   * {@code UserController#resendVerificationCode}.
+   *
+   * @param email - the email currently mid-verification on the login screen
+   * @returns Observable emitting the backend's generic acknowledgement
+   */
+  resendCode$ = (email: string): Observable<CustomHttpResponseInterface<void>> =>
+    this.http
+      .post<CustomHttpResponseInterface<void>>(`${this.server}/user/verify/resend`, { email })
+      .pipe(catchError(this.handleError));
 
   verifyAccount$ = (key: string, type: AccountType): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
@@ -309,6 +323,19 @@ export class UserService {
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
+   * Replaces the entire recovery-code batch on demand ({@code POST /user/totp/recovery-codes/regenerate},
+   * authenticated) — the standalone counterpart to disable-then-re-enroll. Requires the same
+   * proof of possession as {@link totpDisable$}.
+   *
+   * @param code - a current authenticator code or an unused (about-to-be-replaced) recovery code
+   * @returns Observable of the API envelope carrying the fresh plaintext {@code recoveryCodes}
+   */
+  regenerateRecoveryCodes$ = (code: string): Observable<CustomHttpResponseInterface<RecoveryCodesInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<RecoveryCodesInterface>>(`${this.server}/user/totp/recovery-codes/regenerate`, { code })
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
    * Fetches authenticator status ({@code GET /user/totp/status}, authenticated) for the
    * Security Center: enabled flag plus how many recovery codes remain unused.
    *
@@ -318,6 +345,86 @@ export class UserService {
     this.http
       .get<CustomHttpResponseInterface<TotpStatusInterface>>(`${this.server}/user/totp/status`)
       .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Begins passkey registration ({@code POST /user/webauthn/enroll/options}, authenticated).
+   * Returns the {@code publicKey} creation options for {@link startRegistration} — see
+   * `utils/webauthn.utils.ts`.
+   *
+   * <p>The path says "enroll", not "register": {@code tokenInterceptor} withholds the
+   * Authorization header from any URL with {@code register} (or {@code verify}) as a path segment,
+   * which this authenticated endpoint needs attached.
+   *
+   * @returns Observable of the API envelope carrying the WebAuthn creation options
+   */
+  webauthnEnrollOptions$ = (): Observable<CustomHttpResponseInterface<{ publicKey: unknown }>> =>
+    this.http
+      .post<CustomHttpResponseInterface<{ publicKey: unknown }>>(`${this.server}/user/webauthn/enroll/options`, {})
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Completes passkey registration ({@code POST /user/webauthn/enroll/complete}, authenticated).
+   *
+   * @param deviceName - the nickname the user gave this passkey
+   * @param credential - the browser's registration response from {@link startRegistration}
+   * @returns Observable of the API envelope with the updated user and passkey list
+   */
+  webauthnEnrollComplete$ = (
+    deviceName: string,
+    credential: unknown,
+  ): Observable<CustomHttpResponseInterface<PasskeysDataInterface & { user: UserInterface }>> =>
+    this.http
+      .post<
+        CustomHttpResponseInterface<PasskeysDataInterface & { user: UserInterface }>
+      >(`${this.server}/user/webauthn/enroll/complete`, { deviceName, credential })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Lists the caller's registered passkeys ({@code GET /user/webauthn/list}, authenticated) for
+   * the Security Center's Passkeys card.
+   *
+   * @returns Observable of the API envelope carrying {@link PasskeysDataInterface}
+   */
+  webauthnList$ = (): Observable<CustomHttpResponseInterface<PasskeysDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<PasskeysDataInterface>>(`${this.server}/user/webauthn/list`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Removes one of the caller's own passkeys ({@code DELETE /user/webauthn/:id}, authenticated).
+   *
+   * @param id - the credential's database id (never the WebAuthn credential id itself)
+   * @returns Observable of the API envelope carrying the refreshed passkey list
+   */
+  webauthnDelete$ = (id: number): Observable<CustomHttpResponseInterface<PasskeysDataInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<PasskeysDataInterface>>(`${this.server}/user/webauthn/${id}`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Begins a usernameless passkey sign-in ({@code POST /user/verify/webauthn/options}, public).
+   * No email is sent — the whole point of a discoverable-credential login is that the browser
+   * offers every passkey it holds for this site without the server naming an account first.
+   *
+   * @returns Observable of the API envelope carrying the WebAuthn request options
+   */
+  webauthnLoginOptions$ = (): Observable<CustomHttpResponseInterface<{ publicKey: unknown }>> =>
+    this.http
+      .post<CustomHttpResponseInterface<{ publicKey: unknown }>>(`${this.server}/user/verify/webauthn/options`, {})
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Completes a passkey sign-in ({@code POST /user/verify/webauthn}, public). Mirrors
+   * {@link verifyTotp$}'s response shape (user + token pair) — the route contains "verify", so
+   * the token interceptor correctly attaches no Authorization header.
+   *
+   * @param credential - the browser's authentication response from {@link startAuthentication}
+   * @returns Observable emitting a ProfileInterface response containing tokens
+   */
+  webauthnLoginVerify$ = (credential: unknown): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/verify/webauthn`, { credential })
+      .pipe(catchError(this.handleError));
 
   /**
    * Lists the caller's live refresh sessions ({@code GET /user/sessions}) for the
@@ -368,6 +475,23 @@ export class UserService {
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
+   * Starts connecting an identity provider to the caller's own account (ROADMAP §1.4).
+   *
+   * Returns a single-use, five-minute ticket plus the URL to navigate to. The two-step shape exists
+   * because the browser leaves the app during the OAuth handshake, and a JWT cannot ride a
+   * top-level navigation — so the account is decided *here*, while the caller is still
+   * authenticated, and carried across in the ticket rather than inferred from the provider response.
+   *
+   * @param provider - the registration id to connect
+   * @returns Observable of the envelope carrying `ticket` and `linkUrl`
+   */
+  startProviderLink$ = (provider: string): Observable<CustomHttpResponseInterface<{ ticket: string; linkUrl: string }>> =>
+    this.http
+      .post<CustomHttpResponseInterface<{ ticket: string; linkUrl: string }>>(
+        `${this.server}/user/sessions/providers/link/${provider}`, {})
+      .pipe(catchError(this.handleError));
+
+  /**
    * Disconnects one provider from the caller's own account
    * ({@code DELETE /user/sessions/providers/{provider}}).
    *
@@ -410,8 +534,31 @@ export class UserService {
     window.location.assign(`${this.server}/oauth2/authorization/${provider}`);
   }
 
-  isAuthenticated = (): boolean =>
-    !!this.jwtHelper.decodeToken<string>(localStorage.getItem(Key.TOKEN) ?? '') && !this.jwtHelper.isTokenExpired(localStorage.getItem(Key.TOKEN) ?? '');
+  /**
+   * Whether storage currently holds a decodable, unexpired access token.
+   *
+   * <p>Consulted by {@code authenticationGuard} on every protected navigation, so its failure
+   * mode matters more than its happy path. {@link JwtHelperService#decodeToken} *throws* on a
+   * value that does not split into three dot-separated parts — it does not return null — and a
+   * throw here escapes the guard and aborts the router navigation, stranding the user on the
+   * current page instead of sending them to {@code /login}. Storage can hold such a value
+   * legitimately: a half-written token, a leftover from an older build, or anything a user has
+   * typed into devtools. A token we cannot read is treated exactly like no token at all.
+   *
+   * @returns true only when a well-formed, unexpired token is present
+   */
+  isAuthenticated = (): boolean => {
+    const token = localStorage.getItem(Key.TOKEN) ?? '';
+    if (!token) {
+      return false;
+    }
+    try {
+      return !!this.jwtHelper.decodeToken<string>(token) && !this.jwtHelper.isTokenExpired(token);
+    } catch {
+      // Unreadable token: fail closed to "signed out" so the guard can redirect normally.
+      return false;
+    }
+  };
 
   /**
    * Returns whether the current access token grants at least one of the given authorities.
@@ -452,29 +599,45 @@ export class UserService {
    */
   private grantedAuthorities(): string[] {
     const token = localStorage.getItem(Key.TOKEN) ?? '';
-    if (!token || this.jwtHelper.isTokenExpired(token)) {
+    try {
+      if (!token || this.jwtHelper.isTokenExpired(token)) {
+        this.cachedToken = '';
+        this.cachedAuthorities = [];
+        return this.cachedAuthorities;
+      }
+      if (token !== this.cachedToken) {
+        this.cachedToken = token;
+        const claim = this.jwtHelper.decodeToken<{ authorities?: unknown }>(token)?.authorities;
+        // The claim is attacker-editable (the client never verifies the signature), so its shape
+        // is checked rather than asserted. A bare string would otherwise be kept as-is and every
+        // later `granted.includes(...)` would run String.prototype.includes — matching by
+        // substring, so a token claiming "UPDATE:USERS" would satisfy a check for "UPDATE:USER".
+        this.cachedAuthorities = Array.isArray(claim) ? claim.filter((entry): entry is string => typeof entry === 'string') : [];
+      }
+      return this.cachedAuthorities;
+    } catch {
+      // An unreadable token throws out of the helper rather than decoding to nothing. Templates
+      // call this during change detection, so letting it escape takes down the whole render pass
+      // — the user gets a blank screen instead of a page with the privileged controls withheld.
+      // Grant nothing, and drop the memo so a subsequent good token is not shadowed by it.
       this.cachedToken = '';
       this.cachedAuthorities = [];
       return this.cachedAuthorities;
     }
-    if (token !== this.cachedToken) {
-      this.cachedToken = token;
-      this.cachedAuthorities = this.jwtHelper.decodeToken<{ authorities?: string[] }>(token)?.authorities ?? [];
-    }
-    return this.cachedAuthorities;
   }
 
   /**
-   * Ends the user's session by clearing both JWT tokens from localStorage AND
-   * evicting the in-memory HTTP cache.
+   * Ends the user's session by clearing both JWT tokens from localStorage.
    *
-   * The cache eviction is essential for correctness and security. {@link HttpCacheService}
-   * (populated by {@code cacheInterceptor}) keys GET responses by URL and is not cleared
-   * on logout by default; the subsequent {@code /user/login} POST is in the interceptor's
-   * {@code bypassRoutes}, so it never triggers the usual mutation-based eviction either.
-   * Without this call, a different user signing in within the same SPA session (no full
-   * page reload) could be served the previous user's cached {@code /user/profile} data —
-   * a cross-session data leak that directly violates the app's zero-trust posture.
+   * <p>GET responses are cached by the browser's native HTTP cache now (backend-driven via
+   * {@code Cache-Control: private, no-cache} + ETag — see
+   * {@code HttpCacheHeadersFilter}/POST-SUBMISSION-UPGRADES.md #3), which always revalidates with
+   * the server before reusing a response, so there is no client-side cache to evict here the way
+   * {@code HttpCacheService#evictAll()} previously had to be called by hand. The one gap that
+   * revalidation alone cannot close — a same-tab, different-user ETag collision — is handled
+   * server-side instead: {@code SessionController#logout} answers with
+   * {@code Clear-Site-Data: "cache"}, which purges the browser's HTTP cache for this origin as
+   * part of the POST below, before a different user can ever sign in on the same tab.
    */
   logOut() {
     // Tell the server FIRST, while the access token still exists to authenticate the call —
@@ -497,11 +660,10 @@ export class UserService {
       });
     localStorage.removeItem(Key.TOKEN);
     localStorage.removeItem(Key.REFRESH_TOKEN);
-    this.httpCache.evictAll();
   }
 
   /**
-   * Normalises HTTP errors into a single Observable<never> so all callers
+   * Normalizes HTTP errors into a single Observable<never> so all callers
    * receive a consistent Error instance regardless of whether the failure
    * was a client-side network event or a structured server error response.
    *

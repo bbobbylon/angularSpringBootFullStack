@@ -74,6 +74,9 @@ export class InvoiceDetailComponent implements OnInit {
   /** Blocks duplicate submits while a save is in flight. */
   protected readonly isSaving = signal(false);
 
+  /** Blocks duplicate submits while an "Email Invoice" send is in flight. */
+  protected readonly isEmailing = signal(false);
+
   ngOnInit(): void {
     this.customerService.invoice$(this.id).pipe(
       map((response) => {
@@ -132,6 +135,31 @@ export class InvoiceDetailComponent implements OnInit {
         },
         error: (error: Error) => {
           this.isSaving.set(false);
+          this.notification.onError(error.message);
+        },
+      });
+  }
+
+  /**
+   * Emails this invoice's PDF to its customer via the backend's server-side render
+   * ({@code POST /customer/invoice/:id/email}) — distinct from {@link exportAsPDF}, which renders
+   * client-side via jsPDF and never leaves the browser. 400s (surfaced as an error toast) if the
+   * invoice is still a draft with no customer attached.
+   */
+  protected emailInvoice(): void {
+    if (this.isEmailing()) return;
+    this.isEmailing.set(true);
+
+    this.customerService
+      .emailInvoice$(this.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isEmailing.set(false);
+          this.notification.onSuccess(response.message ?? 'Invoice emailed.');
+        },
+        error: (error: Error) => {
+          this.isEmailing.set(false);
           this.notification.onError(error.message);
         },
       });

@@ -168,6 +168,29 @@
   border-color: var(--accent-ring);
   color: var(--text-strong);
 }
+
+/* Placement wrapper. Sits at the start of the collapsed bar (see navbar.component.html); the nav
+   list's own `ms-auto` is what pushes the destinations to the opposite edge, so this needs no
+   margin of its own beyond the offset from the wordmark. `flex-shrink: 0` stops the field from
+   being squeezed to nothing when the nav list is wide — the exact cramping this move was for. */
+.sc-navbar-search {
+  flex-shrink: 0;
+}
+
+@media (min-width: 992px) {
+  /* Given a real width it reads as a field rather than a button that happens to hold a magnifier.
+     `margin-right: auto` on the label pins the ⌘K hint to the trailing edge, which is the layout
+     every search input with a shortcut badge uses — the flex `gap` alone would bunch all three
+     children at the start and leave dead space on the right. */
+  .sc-navbar-search .sc-cmdk-trigger {
+    min-width: 250px;
+    padding: 0.4rem 0.5rem 0.4rem 0.8rem;
+  }
+
+  .sc-navbar-search .sc-cmdk-trigger__text {
+    margin-right: auto;
+  }
+}
 .sc-cmdk-trigger__kbd {
   font-family: var(--font-mono);
   font-size: 0.68rem;

@@ -1,6 +1,8 @@
 package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.enumeration.VerificationType;
+import com.bob.angularspringbootfullstack.model.SecurityOverview;
+import com.bob.angularspringbootfullstack.model.Stats;
 
 /**
  * Contract for sending verification emails (account activation, password reset).
@@ -54,4 +56,58 @@ public interface EmailService {
      * @param reasonSummary human-readable description of what looked unusual
      */
     void sendSecurityAlertEmail(String firstName, String email, String reasonSummary);
+
+    /**
+     * Forwards a public Contact Us submission to the app's own mailbox (SRS §3.5 public-facing
+     * surface). Unlike every other method here, the recipient is the team, not the visitor who
+     * triggered the send — there is no account, and therefore no {@code firstName}/{@code email}
+     * of a signed-in user to address it to.
+     *
+     * @param name    the visitor's supplied name
+     * @param email   the visitor's supplied reply-to address — never verified, since there is no
+     *                account to verify it against; set as the message's {@code Reply-To}, not its
+     *                {@code From}, so the team can reply directly without spoofing the envelope sender
+     * @param subject the visitor's supplied subject line
+     * @param message the visitor's supplied message body
+     */
+    void sendContactMessage(String name, String email, String subject, String message);
+
+    /**
+     * Emails a PDF copy of an invoice to its owning customer (manual "Email Invoice" action —
+     * POST-SUBMISSION-UPGRADES.md "PDF invoice attachments").
+     * <p>
+     * Unlike every flow above, this is triggered explicitly by an authenticated staff member from
+     * {@code CustomerController#emailInvoice}, not by an account lifecycle or security event — there
+     * is no {@code firstName} to greet with, only the customer's own name, and the recipient is
+     * whichever customer the invoice belongs to rather than the account holder.
+     *
+     * @param customerName  the receiving customer's name, used in the greeting
+     * @param customerEmail the receiving customer's email address (the {@code To:} header)
+     * @param invoiceNumber the invoice's human-readable reference, used in the subject and the
+     *                      attached file's name
+     * @param pdfBytes      the rendered PDF, as produced by
+     *                      {@code com.bob.angularspringbootfullstack.report.InvoicePdfReport#exportReport()}
+     */
+    void sendInvoiceEmail(String customerName, String customerEmail, String invoiceNumber, byte[] pdfBytes);
+
+    /**
+     * Emails a business + security snapshot to one recipient — the manual "Email me this report"
+     * action on the Analytics screen and the payload the scheduled digest
+     * ({@code SchedulingConfig}) sends to every organization's and the system's administrators
+     * (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report emails").
+     * <p>
+     * Unlike {@link #sendInvoiceEmail}, there is no attachment: the numbers are summarized inline
+     * as branded paragraphs, matching {@link com.bob.angularspringbootfullstack.utils.EmailTemplate}'s
+     * available blocks, which has no table/list renderer.
+     *
+     * @param recipientEmail the administrator's email address (the {@code To:} header)
+     * @param scopeLabel     what the figures describe — an organization's name, or a system-wide
+     *                       label — used in the subject line and heading so a recipient of several
+     *                       digests (an application admin receiving the system-wide one, or an
+     *                       organization admin of several orgs) can tell them apart at a glance
+     * @param stats          the business rollup ({@code ReportDigestServiceImpl} resolves this to
+     *                       the caller's scope before calling in)
+     * @param overview       the security rollup, already resolved to the same scope as {@code stats}
+     */
+    void sendReportDigestEmail(String recipientEmail, String scopeLabel, Stats stats, SecurityOverview overview);
 }

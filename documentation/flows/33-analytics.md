@@ -49,7 +49,6 @@ sequenceDiagram
     actor U as User
     participant CMP as AnalyticsComponent
     participant SVC as CustomerService
-    participant CACHE as cacheInterceptor
     participant TOK as tokenInterceptor
     participant FILT as CustomAuthFilter
     participant SEC as SecurityConfig authz
@@ -61,10 +60,8 @@ sequenceDiagram
     Note over CMP: ngOnInit → TWO parallel subscriptions  :403-429
     par customers
         CMP->>SVC: customers$(0, 500)  :404-405 / customer.service.ts:56
-        SVC->>CACHE: GET /customer/list?page=0&size=500
-        Note over CACHE: GET + cache miss → forward  🔑
-        CACHE->>TOK: clone + Authorization: Bearer <access>  🔑
-        TOK->>FILT: HTTP request
+        SVC->>TOK: GET /customer/list?page=0&size=500
+        TOK->>FILT: clone + Authorization: Bearer <access>  🔑
         FILT->>SEC: token valid → authorities
         Note over SEC: matcher #12 GET /** → READ:USER/READ:CUSTOMER  :160<br/>(NOT an admin rule — see §C)
         SEC->>CTRL: getCustomers(page,size)  :84-97
@@ -77,9 +74,8 @@ sequenceDiagram
         CMP->>CMP: customersState.set(state)  :415
     and invoices
         CMP->>SVC: invoices$(0, 500)  :417-418 / customer.service.ts:112
-        SVC->>CACHE: GET /customer/invoice/list?page=0&size=500
-        CACHE->>TOK: clone + Authorization 🔑
-        TOK->>CTRL: (via FILT/SEC, same matcher #12)
+        SVC->>TOK: GET /customer/invoice/list?page=0&size=500
+        TOK->>CTRL: clone + Authorization 🔑 (via FILT/SEC, same matcher #12)
         CTRL->>SRV: getInvoices(0,500)  :219-230
         SRV->>REPO: invoiceRepo.findAll(of(0,500))  impl:142-144
         REPO->>DB: SELECT … FROM invoice LIMIT 500 + COUNT(*)
@@ -154,7 +150,7 @@ Monthly grouping is done in JS off `createdAt` (customers, `ts:165-183`) and `in
 > directly and receive the same system-wide data — the `adminGuard` only changes what *renders*
 > (per NFR-SEC-4, `admin.guard.ts:14-16`). There is no server-side admin double-check on the data
 > behind this page. Treat the hub as an admin *convenience surface*, not an access-control boundary;
-> the data it shows is not actually admin-scoped. See [`../security.md`](../security.md).
+> the data it shows is not actually admin-scoped. See [`../GUIDE.md` §7](../GUIDE.md#7-security-model).
 
 Also note `isAdmin` (`ts:128`) is a **different** authority set from the route guard: it adds
 `DELETE:USER` and only toggles the in-header "Billing Overview" button (`html:14-18`), nothing more.
@@ -222,10 +218,11 @@ Authorization: Bearer <access_token>                  🔑
 Accept: application/json
 ```
 
-Neither URL is in `cacheInterceptor.bypassRoutes`, so on a cold load both are GET cache **misses**,
-flow through `tokenInterceptor`, get the Bearer header, and are then **stored** in the in-memory cache
-(`cache.interceptor.ts`). A later navigation back to `/analytics` (no intervening mutation) is served
-from cache and never re-hits the server — see [`00 §2.2`](./00-anatomy-of-a-request.md#22-the-interceptor-chain--order-is-load-bearing).
+Neither URL is in `HttpCacheHeadersFilter`'s bypass list, so both responses carry `Cache-Control:
+private, no-cache` + an ETag. A later navigation back to `/analytics` (no intervening mutation)
+still makes a real request — `no-cache` means "always revalidate," not "skip the network" — but
+gets back an empty `304 Not Modified` rather than the full payload, since nothing has changed. See
+[`00 §2.3`](./00-anatomy-of-a-request.md#23-response-caching-backend-driven-not-an-interceptor).
 
 ### F.2 · Request bodies & validation
 
@@ -350,4 +347,4 @@ this flow does not rotate tokens.
 - The dashboard that *does* use `statusBreakdown` and shares both endpoints → [`32-dashboard.md`](./32-dashboard.md)
 - The list idiom & pagination envelope this hub reuses → [`30 §A`](./30-customers.md)
 - The invoice page + `services[]` line items the service-utilisation chart aggregates → [`31-invoices.md`](./31-invoices.md)
-- Why frontend admin gates are usability-only, not a security boundary → [`../security.md`](../security.md)
+- Why frontend admin gates are usability-only, not a security boundary → [`../GUIDE.md` §7](../GUIDE.md#7-security-model)

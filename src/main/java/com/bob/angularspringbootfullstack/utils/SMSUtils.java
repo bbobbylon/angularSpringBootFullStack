@@ -35,10 +35,11 @@ public class SMSUtils {
     /**
      * Sends an SMS to the given number, or logs it when Twilio is unconfigured.
      * <p>
-     * Phone numbers should be supplied without a country code; "+1" (US) is prepended
-     * to form E.164 (e.g. "+11234567890").
+     * Accepts a US number with or without a leading country code and in any of the shapes the
+     * Security Center's phone field allows (spaces, dashes, parens, a leading {@code +}) — see
+     * {@link #toE164US}. Formats it to E.164 (e.g. "+11234567890") before sending.
      *
-     * @param toNumber    recipient phone number without country code (US assumed)
+     * @param toNumber    recipient phone number, US assumed, any of the accepted input shapes
      * @param messageBody the SMS text to send
      */
     public static void sendSMS(String toNumber, String messageBody) {
@@ -50,17 +51,73 @@ public class SMSUtils {
         }
         Twilio.init(ACCOUNT_SID, AUTH_TOKEN);
         Message.creator(
-                new PhoneNumber("+1" + toNumber),
+                new PhoneNumber(toE164US(toNumber)),
                 new PhoneNumber(FROM_NUMBER),
                 messageBody
         ).create();
         log.info("SMS dispatched via Twilio to {}", toNumber);
     }
 
-    /** True only when all three Twilio settings are present and non-blank. */
-    private static boolean isConfigured() {
-        return FROM_NUMBER != null && !FROM_NUMBER.isBlank()
-                && ACCOUNT_SID != null && !ACCOUNT_SID.isBlank()
-                && AUTH_TOKEN != null && !AUTH_TOKEN.isBlank();
+    /**
+     * Normalizes a US phone number to E.164 ({@code +1} followed by exactly 10 digits).
+     * <p>
+     * Strips every non-digit character first, then adds the {@code 1} country code only if it
+     * isn't already there. Blindly prepending {@code "+1"} (the previous behavior) silently
+     * produced an invalid, undeliverable number whenever the input already carried a leading
+     * {@code 1} — e.g. {@code "18084824518"} became {@code "+118084824518"}, 13 characters
+     * instead of the required 12. The Security Center's phone field
+     * (pattern {@code ^\+?[0-9. ()-]{7,25}$}) accepts both shapes, so both have to normalize the
+     * same way here.
+     *
+     * @param rawNumber a US phone number in any of the accepted input shapes
+     * @return the number as {@code +1XXXXXXXXXX}
+     */
+    static String toE164US(String rawNumber) {
+        String digits = rawNumber.replaceAll("\\D", "");
+        if (digits.length() == 11 && digits.startsWith("1")) {
+            return "+" + digits;
+        }
+        return "+1" + digits;
+    }
+
+    /**
+     * True only when all three Twilio settings are present and non-blank.
+     * <p>
+     * This is the switch that decides whether 2FA texts are really sent or merely logged, so it is
+     * the one behavior in this class worth testing. The environment-reading form below cannot be
+     * exercised directly — the three fields are {@code static final} and initialized from
+     * {@link System#getenv} at class-initialisation time, which no test can rebind — so the decision
+     * itself lives in the pure {@link #isConfigured(String, String, String)} overload and this method
+     * only supplies the ambient values.
+     *
+     * @return whether a real Twilio call should be attempted
+     */
+    static boolean isConfigured() {
+        return isConfigured(FROM_NUMBER, ACCOUNT_SID, AUTH_TOKEN);
+    }
+
+    /**
+     * The configuration rule, expressed over explicit values so it can be tested.
+     * <p>
+     * All three credentials are required together: a partially configured deployment must fall to
+     * the logging path rather than attempt a call that would throw inside the 2FA flow. Blank is
+     * treated as absent because an unset environment variable frequently arrives as an empty string
+     * through a container's env-file plumbing rather than as {@code null}.
+     *
+     * @param fromNumber the Twilio sender number
+     * @param accountSid the Twilio account SID
+     * @param authToken  the Twilio auth token
+     * @return {@code true} only when every value is present and non-blank
+     */
+    static boolean isConfigured(String fromNumber, String accountSid, String authToken) {
+        return isPresent(fromNumber) && isPresent(accountSid) && isPresent(authToken);
+    }
+
+    /**
+     * @param value a credential value straight from the environment
+     * @return whether the value carries anything usable
+     */
+    private static boolean isPresent(String value) {
+        return value != null && !value.isBlank();
     }
 }

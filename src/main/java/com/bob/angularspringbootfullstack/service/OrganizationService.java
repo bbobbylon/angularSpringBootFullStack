@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.model.OrganizationSummary;
 
 import java.util.Collection;
 
@@ -57,9 +58,13 @@ public interface OrganizationService {
      * @param searchTerm free-text filter; blank or null lists everyone in scope
      * @param page       0-indexed page number
      * @param pageSize   rows per page
-     * @return the in-scope users on the requested page, newest accounts first
+     * @param orderBy    a validated, {@code u.}-qualified {@code "column ASC|DESC"} SQL fragment
+     *                   (see {@code SortUtils#resolveSqlOrderBy}), e.g. {@code "u.created_at DESC, u.id DESC"} —
+     *                   qualified because the query joins {@code userorganizations}, so an unqualified
+     *                   column name could collide with one on the joined table
+     * @return the in-scope users on the requested page, in the requested order
      */
-    Collection<UserDTO> searchUsersSharingOrganizations(Long adminId, String searchTerm, int page, int pageSize);
+    Collection<UserDTO> searchUsersSharingOrganizations(Long adminId, String searchTerm, int page, int pageSize, String orderBy);
 
     /**
      * Counts the users {@link #searchUsersSharingOrganizations} would match, for
@@ -70,4 +75,22 @@ public interface OrganizationService {
      * @return the total number of in-scope matching users
      */
     long countUsersSharingOrganizations(Long adminId, String searchTerm);
+
+    /**
+     * Lists every active organization's id and name — the iteration set the scheduled report
+     * digest walks to send each organization its own org-scoped digest
+     * (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report emails").
+     *
+     * @return every active organization, ordered by name
+     */
+    Collection<OrganizationSummary> findActiveOrganizations();
+
+    /**
+     * The email addresses of every {@code ROLE_ORGANIZATION_ADMIN} holding an active membership
+     * in the given organization — the recipient list for that organization's report digest.
+     *
+     * @param organizationId the organization whose admins should receive the digest
+     * @return the in-scope organization admins' emails, possibly empty, never {@code null}
+     */
+    Collection<String> findOrganizationAdminEmails(Long organizationId);
 }

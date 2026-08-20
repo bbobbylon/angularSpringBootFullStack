@@ -1,0 +1,38 @@
+meta {
+  name: 1. GET Customer List (capture ETag)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/customer/list?page=0&size=5
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+params:query {
+  page: 0
+  size: 5
+}
+
+script:post-response {
+  const etag = res.getHeader("etag");
+  if (etag) {
+    bru.setVar("etag", etag);
+  }
+}
+
+tests {
+  test("Cache-Control is private, no-cache", function () {
+    const cc = res.getHeader("cache-control") || "";
+    expect(cc).to.include("private");
+    expect(cc).to.include("no-cache");
+  });
+  test("ETag present", function () {
+    expect(res.getHeader("etag")).to.not.equal(undefined);
+  });
+}

@@ -113,6 +113,13 @@ public class UserDTO {
      */
     private boolean usingTotp;
     /**
+     * Whether the user has at least one registered passkey (WebAuthn credential). Mirrors
+     * {@link com.bob.angularspringbootfullstack.model.User#usingPasskey}; copied automatically by
+     * {@code BeanUtils.copyProperties} in {@code UserDTOMapper}. Informational only — the login
+     * screen does not branch on it, since a passkey sign-in is usernameless.
+     */
+    private boolean usingPasskey;
+    /**
      * Timestamp of when the account was created
      */
     private LocalDateTime createdAt;
@@ -125,6 +132,15 @@ public class UserDTO {
      */
     private String permissions;
     /**
+     * When the user's CURRENT role assignment auto-reverts to {@code ROLE_USER}, or {@code null}
+     * for an unlimited assignment (flattened from {@link com.bob.angularspringbootfullstack.model.Role#getExpiresAt()}).
+     * Only meaningful because every {@code UserPrincipal}/{@code UserDTO} construction site sources
+     * its {@link com.bob.angularspringbootfullstack.model.Role} from {@code RoleRepo#getRoleByUserId},
+     * the single choke point that evaluates and clears an expired assignment on read — this field is
+     * never stale by more than one lookup.
+     */
+    private LocalDateTime roleExpiresAt;
+    /**
      * Mirrors {@link com.bob.angularspringbootfullstack.model.User #passwordChangedAt}.
      * <p>
      * Carried on the DTO so {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider}
@@ -133,4 +149,20 @@ public class UserDTO {
      * in which case no token invalidation check is performed.
      */
     private LocalDateTime passwordChangedAt;
+    /**
+     * Mirrors {@link com.bob.angularspringbootfullstack.model.User#getOrigin()} — copied through
+     * automatically by {@code BeanUtils.copyProperties} since the property names match. Raw
+     * storage value only ({@code null} or {@code "FEDERATED_<PROVIDER>"}); see {@link #userType}
+     * for the collapsed admin-facing category.
+     */
+    private String origin;
+    /**
+     * The admin-facing user-type badge — {@code INTERNAL}, {@code EXTERNAL}, or {@code FEDERATED}
+     * (P2-1). NOT copied by {@code BeanUtils}; {@link com.bob.angularspringbootfullstack.model.User}
+     * has no matching property. Set explicitly by
+     * {@link com.bob.angularspringbootfullstack.utils.UserTypeResolver#resolve} wherever this DTO
+     * is built for an admin-facing response, so it stays {@code null} (and simply doesn't render a
+     * badge) on any path that doesn't need it.
+     */
+    private String userType;
 }

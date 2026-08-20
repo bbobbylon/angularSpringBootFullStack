@@ -84,7 +84,7 @@ sequenceDiagram
 | --- | --- | --- |
 | `firstName`, `lastName` | `@NotEmpty` | required |
 | `email` | `@Email` | |
-| `phoneNumber` | `@Pattern(^\+?[0-9. ()-]{7,25}$)` | optional, format-checked |
+| `phoneNumber` | `@Pattern(PhonePolicy.PATTERN)` | optional; tightened 2026-08-08 from a near-unrestricted `{7,25}`-length pattern to a real US 10-digit shape check (`constants/PhonePolicy.java`) |
 | `id` | — | ignored server-side — overwritten with the JWT principal's id (IDOR fix, see above) |
 | `imageUrl`,`address`,`bio`,`title` | — | optional; `image_url` uses `COALESCE` so null preserves existing |
 

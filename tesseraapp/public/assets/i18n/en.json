@@ -32,7 +32,11 @@
     "back": "Back",
     "description": "Description",
     "price": "Price",
-    "amount": "Amount"
+    "amount": "Amount",
+    "pageXofY": "Page {{page}} of {{total}}",
+    "nTotal": "{{count}} total",
+    "acrossNPages": "across {{count}} pages",
+    "viewAll": "View all"
   },
   "nav": {
     "customers": "Customers",
@@ -45,9 +49,10 @@
     "serviceCatalog": "Service Catalog",
     "newServiceInvoice": "New Service Invoice",
     "manageServices": "Manage Services",
+    "newService": "New Service",
     "admin": "Admin",
     "userDirectory": "User Directory",
-    "assignRoles": "Assign Roles",
+    "insights": "Insights",
     "rolesPermissions": "Roles & Permissions",
     "securityOverview": "Security Overview",
     "billingOverview": "Billing Overview",
@@ -147,6 +152,21 @@
       "passwordOnly": "Password only",
       "federatedSignIns": "Federated sign-ins",
       "recoveryCodesUsed": "Recovery codes used"
+    },
+    "settings": {
+      "title": "Anomaly detection settings",
+      "subtitle": "Overrides take effect on the very next sign-in — no redeploy required.",
+      "enabledLabel": "Anomaly detection",
+      "useDefault": "Use server default",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "historyLimitLabel": "Login history window",
+      "historyLimitHint": "How many of the account's recent sign-ins a new one is compared against.",
+      "historyLimitPlaceholder": "Server default",
+      "clearOverride": "Use default",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "unsavedChanges": "Unsaved changes"
     }
   },
   "servicesAdmin": {
@@ -164,8 +184,10 @@
     "description": "Description",
     "basePrice": "Base price",
     "noDescription": "No description provided.",
-    "emptyTitle": "The catalog is empty.",
-    "emptyHint": "Add your first service to make it selectable on new invoices.",
+    "emptyTitle": "No services found",
+    "emptyHint": "Try a different search term, or add your first service.",
+    "searchByName": "Search by name or description",
+    "searchAria": "Search the services catalog",
     "editNote": "Editing a service does not change invoices already raised — they keep the name and price captured at the time.",
     "summary": {
       "offered": "offered",
@@ -175,6 +197,8 @@
   },
   "invoice": {
     "exportPdf": "Export as PDF",
+    "emailInvoice": "Email invoice",
+    "sending": "Sending…",
     "edit": "Edit invoice",
     "cancelEdit": "Cancel edit",
     "invoiceDate": "Invoice date",
@@ -209,8 +233,11 @@
     "catalogValue": "Catalog value",
     "createInvoice": "Create Invoice",
     "emptyTitle": "No services in catalog",
-    "emptyHint": "The service catalog is empty. Add services from the admin panel.",
-    "manageCatalog": "Manage catalog"
+    "emptyHint": "No services have been published yet. Once they are, they'll appear here ready to add to an invoice.",
+    "emptyHintAdmin": "Publish your first service to make it selectable on new invoices.",
+    "manageCatalog": "Manage catalog",
+    "noResultsTitle": "No services found",
+    "noResultsHint": "Try a different search term."
   },
   "securityCenter": {
     "eyebrow": "Account",
@@ -226,6 +253,8 @@
     "codesLow": "Running low — re-enroll to get a fresh set",
     "disableCodeLabel": "Authenticator or recovery code",
     "disableAuthenticator": "Disable authenticator",
+    "regenerateCodes": "Regenerate recovery codes",
+    "regenerateConfirm": "Regenerate",
     "enrollTitle": "Set up your authenticator",
     "enrollHint": "Scan the QR code, then enter the 6-digit code your app shows to confirm.",
     "codeFromApp": "Code from your app",
@@ -349,9 +378,25 @@
     "title": "Invoices",
     "invoiceNumber": "Invoice #",
     "service": "Service",
-    "emptyTitle": "No invoices yet",
-    "emptyHint": "Invoices you create will appear here with their status and totals.",
-    "loading": "Loading invoices…"
+    "emptyTitle": "No invoices found",
+    "emptyHint": "Try a different search term, or create a new invoice.",
+    "loading": "Loading invoices…",
+    "searchByInvoiceNumber": "Search by invoice # or customer",
+    "searchAria": "Search invoices"
+  },
+  "batchImport": {
+    "button": "Import",
+    "title": "Batch import",
+    "hintCustomers": "Upload a CSV or Excel file of customers.",
+    "hintInvoices": "Upload a CSV or Excel file of invoices.",
+    "chooseFile": "Choose file",
+    "noFileChosen": "No file chosen",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "resultSummary": "Imported {{imported}} of {{total}} rows.",
+    "row": "Row",
+    "reason": "Reason",
+    "close": "Close"
   },
   "users": {
     "breadcrumb": "Users",
@@ -439,7 +484,17 @@
     "eyebrow": "Access control",
     "title": "Roles × Permissions",
     "loading": "Loading roles catalogue…",
-    "error": "Could not load the roles catalogue. Please refresh."
+    "error": "Could not load the roles catalogue. Please refresh.",
+    "notYetAssignableHint": "Created, but no application build recognizes this role name yet — it cannot be assigned to a user until a redeploy adds it.",
+    "catalogTitle": "Role Catalog Management",
+    "newRoleName": "New role name",
+    "newRolePermission": "Permissions",
+    "createRole": "Create Role",
+    "createRoleHint": "Name must look like ROLE_SOMETHING. The new role is created but not assignable to any user until a future deployment recognizes it.",
+    "role": "Role",
+    "permissions": "Permissions",
+    "builtIn": "Built-in",
+    "builtInHint": "Built-in roles cannot be deleted."
   },
   "charts": {
     "customerAnalytics": "Customer Analytics",
@@ -456,6 +511,8 @@
   "analytics": {
     "eyebrow": "Insights",
     "title": "Analytics Hub",
+    "emailReport": "Email me this report",
+    "sendingReport": "Sending…",
     "customerGrowth": "Customer Growth (MoM)",
     "revenueGrowth": "Revenue Growth (MoM)",
     "collectionRate": "Collection Rate",
@@ -469,7 +526,7 @@
     "statusOverTime": "Invoice Status Over Time",
     "statusOverTimeSub": "Collection momentum — PAID / PENDING / OVERDUE per month",
     "noInvoiceData": "No invoice data yet.",
-    "serviceUtilisation": "Service Utilisation",
+    "serviceUtilization": "Service Utilization",
     "serviceSub": "Top 10 services by invoice frequency",
     "noServiceData": "No service data yet.",
     "customerStatus": "Customer Status",
@@ -499,8 +556,16 @@
     "assignedRole": "Assigned role",
     "updateRole": "Update Role",
     "updateState": "Update State",
+    "revokeSessions": "Sign out everywhere",
+    "revokeSessionsTitle": "Active sessions",
+    "revokeSessionsHint": "Ends every signed-in session on this account. Locking alone does not — an open session keeps working until its token expires.",
     "noActivity": "No recorded activity.",
-    "loading": "Loading account…"
+    "loading": "Loading account…",
+    "expires": "Expires",
+    "roleExpiresOn": "This role assignment expires on {{date}}",
+    "notYetAssignable": "not yet assignable",
+    "expiresOn": "Expires on",
+    "expiresHint": "Optional. Leave blank for an unlimited assignment; the role automatically reverts to the default user role at the end of the selected day."
   },
   "newCustomer": {
     "saveCustomer": "Save Customer",
@@ -521,11 +586,16 @@
     "settingsUpdated": "Settings updated successfully",
     "totpEnabled": "Authenticator app enabled",
     "totpDisabled": "Authenticator app disabled",
+    "recoveryCodesRegenerated": "Recovery codes regenerated",
     "smsUpdated": "SMS verification setting updated",
     "phoneSaved": "Phone number saved — SMS verification is now enabled",
     "sessionRevoked": "Session revoked",
     "otherSessionsRevoked": "Logged out of other sessions",
-    "providerDisconnected": "Provider disconnected"
+    "providerDisconnected": "Provider disconnected",
+    "providerLinked": "Connected {{provider}} to your account",
+    "passkeyAdded": "Passkey added",
+    "passkeyRemoved": "Passkey removed",
+    "passkeyCancelled": "Passkey setup cancelled"
   },
   "palette": {
     "sectionNavigate": "Navigate",
@@ -558,6 +628,8 @@
     "securityOverviewHint": "Admin · anomalies & MFA coverage",
     "manageServices": "Manage Services",
     "manageServicesHint": "Admin · catalog CRUD",
+    "newService": "New Service",
+    "newServiceHint": "Admin · add a catalog offering",
     "toggleTheme": "Toggle Theme",
     "toggleThemeHint": "Switch dark / light",
     "logout": "Log Out",

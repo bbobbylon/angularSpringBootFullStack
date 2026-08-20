@@ -3,7 +3,7 @@ package com.bob.angularspringbootfullstack.model;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * Multi-factor enrolment across the in-scope account population (SRS FR-TPF-2).
+ * Multi-factor enrollment across the in-scope account population (SRS FR-TPF-2).
  *
  * <p>This is the dashboard's only *posture* metric — everything else on the screen reports what
  * has happened, while this reports how exposed the population is to what happens next. It is the
@@ -32,7 +32,7 @@ public record MfaAdoption(long totalUsers, long totpUsers, long smsUsers, long s
      * case, not a defensive flourish: an organization admin whose memberships have all lapsed sees
      * a scope of nobody, and that screen must render zeros rather than fail.
      *
-     * <p>{@code @JsonProperty} is required rather than decorative: Jackson serialises a record
+     * <p>{@code @JsonProperty} is required rather than decorative: Jackson serializes a record
      * from its component accessors only, so a derived method would otherwise be invisible to the
      * client and the SPA would silently show nothing where the coverage figure belongs.
      *

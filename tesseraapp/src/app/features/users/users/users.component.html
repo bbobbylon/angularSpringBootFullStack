@@ -1,7 +1,7 @@
 @if (usersState(); as state) {
   @switch (state.dataState) {
     @case (DataState.LOADED) {
-      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <app-navbar></app-navbar>
       <main *transloco="let t" class="sc-page">
         <div class="container">
 
@@ -36,9 +36,16 @@
                   <tr>
                     <th class="text-center" scope="col">ID</th>
                     <th scope="col">{{ t('common.photo') }}</th>
-                    <th scope="col">{{ t('common.name') }}</th>
-                    <th scope="col">{{ t('common.email') }}</th>
+                    <th (click)="toggleSort('firstName')" (keydown.enter)="toggleSort('firstName')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('common.name') }} <i [class]="'bi ' + sortIconClass('firstName')"></i>
+                    </th>
+                    <th (click)="toggleSort('email')" (keydown.enter)="toggleSort('email')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('common.email') }} <i [class]="'bi ' + sortIconClass('email')"></i>
+                    </th>
                     <th scope="col">{{ t('users.role') }}</th>
+                    <th scope="col">Type</th>
                     <th scope="col">MFA</th>
                     <th scope="col">{{ t('common.status') }}</th>
                     <th class="text-end" scope="col">{{ t('common.action') }}</th>
@@ -76,6 +83,22 @@
                           </span>
                         </td>
                         <td>
+                          @if (user.userType; as userType) {
+                            <!-- P2-1: how the account was created (FEDERATED) or, for a password
+                                 account, whether its email domain is on the deployment's internal
+                                 allowlist (INTERNAL/EXTERNAL). See UserTypeResolver. -->
+                            <span [ngClass]="[
+                                    userType === 'INTERNAL' ? ' bg-success' : '',
+                                    userType === 'FEDERATED' ? ' bg-info' : '',
+                                    userType === 'EXTERNAL' ? ' bg-secondary' : '',
+                                  ]"
+                                  [title]="userType === 'FEDERATED' && user.origin ? ('via ' + (user.origin | slice: 10)) : ''"
+                                  class="badge">
+                              {{ userType }}
+                            </span>
+                          }
+                        </td>
+                        <td>
                           <span [ngClass]="user.using2FA ? 'bg-success' : 'bg-secondary'" class="badge">
                             {{ user.using2FA ? 'ON' : 'OFF' }}
                           </span>
@@ -99,24 +122,24 @@
                 </table>
               </div>
 
-              <div class="sc-panel__foot d-flex justify-content-end">
-                <nav aria-label="User directory pagination">
+              <div class="sc-panel__foot d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <app-page-size-select (sizeSelected)="changePageSize($event)" [size]="pageSize$()"></app-page-size-select>
+                <nav [attr.aria-label]="t('common.pageNavigation')">
                   <ul class="pagination justify-content-end mb-0">
                     <li [ngClass]="0 === currentPage$() ? ' disabled' : ''" class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; Prev</button>
+                      <button (click)="goToNextOrPreviousPage('backward')"
+                              [disabled]="0 === currentPage$()"
+                              class="page-link">&laquo; {{ t('common.prev') }}</button>
                     </li>
-                    @for (pageNumber of (state?.appData?.data?.usersTotalPages ?? 0) | ExtractArrayValue: 'number'; track i; let i = $index) {
-                      <li class="page-item pointer">
-                        <button (click)="goToPage(i)"
-                                [ngClass]="i === currentPage$() ? ' active' : ''"
-                                class="page-link">{{ i + 1 }}
-                        </button>
-                      </li>
-                    }
+                    <li class="page-item disabled">
+                      <span class="page-link">{{ t('common.pageXofY', { page: currentPage$() + 1, total: state?.appData?.data?.usersTotalPages ?? 1 }) }}</span>
+                    </li>
                     <li
                       [ngClass]="(state?.appData?.data?.usersTotalPages ?? 0) - 1 === currentPage$() ? ' disabled' : ''"
                       class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">{{ t('common.next') }} &raquo;</button>
+                      <button (click)="goToNextOrPreviousPage('forward')"
+                              [disabled]="(state?.appData?.data?.usersTotalPages ?? 0) - 1 === currentPage$()"
+                              class="page-link">{{ t('common.next') }} &raquo;</button>
                     </li>
                   </ul>
                 </nav>

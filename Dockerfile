@@ -23,6 +23,19 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 COPY --from=backend-build /build/target/*.jar app.jar
 RUN chown appuser:appgroup app.jar
+
+# Import Aiven's per-project MySQL CA certificate into the JRE's default truststore, so
+# MYSQL_SSL_MODE=VERIFY_IDENTITY (application-prod.yml) can actually authenticate the server, not
+# just encrypt to it. This cert is PUBLIC (it verifies the server's identity; it holds no private
+# key), so committing it is safe. --alias is fixed so re-running this build (a fresh image each
+# time) never collides with a stale alias from a previous layer.
+COPY certs/aiven-mysql-ca.pem /tmp/aiven-mysql-ca.pem
+RUN keytool -importcert -noprompt -alias aiven-mysql-ca \
+      -file /tmp/aiven-mysql-ca.pem \
+      -keystore "$JAVA_HOME/lib/security/cacerts" \
+      -storepass changeit \
+    && rm /tmp/aiven-mysql-ca.pem
+
 USER appuser
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

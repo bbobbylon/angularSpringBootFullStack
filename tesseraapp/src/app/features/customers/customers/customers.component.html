@@ -1,7 +1,7 @@
 @if (customersState(); as state) {
   @switch (state.dataState) {
     @case (DataState.LOADED) {
-      <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+      <app-navbar></app-navbar>
       <main *transloco="let t" class="sc-page">
         <div class="container">
 
@@ -27,6 +27,7 @@
               <a [routerLink]="['/customer/new']" class="btn btn-primary btn-sm sc-panel__action">
                 <i class="bi bi-person-plus"></i> {{ t('home.newCustomer') }}
               </a>
+              <app-batch-import (imported)="refresh()" kind="customers"></app-batch-import>
             </div>
           </header>
 
@@ -40,11 +41,23 @@
                   <tr>
                     <th class="text-center" scope="col">{{ t('common.id') }}</th>
                     <th scope="col">{{ t('common.photo') }}</th>
-                    <th scope="col">{{ t('common.name') }}</th>
-                    <th scope="col">{{ t('common.email') }}</th>
+                    <th (click)="toggleSort('customerName')" (keydown.enter)="toggleSort('customerName')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('common.name') }} <i [class]="'bi ' + sortIconClass('customerName')"></i>
+                    </th>
+                    <th (click)="toggleSort('email')" (keydown.enter)="toggleSort('email')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('common.email') }} <i [class]="'bi ' + sortIconClass('email')"></i>
+                    </th>
                     <th scope="col">{{ t('common.phone') }}</th>
-                    <th scope="col">{{ t('common.status') }}</th>
-                    <th scope="col">{{ t('common.type') }}</th>
+                    <th (click)="toggleSort('status')" (keydown.enter)="toggleSort('status')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('common.status') }} <i [class]="'bi ' + sortIconClass('status')"></i>
+                    </th>
+                    <th (click)="toggleSort('type')" (keydown.enter)="toggleSort('type')"
+                        class="pointer" role="button" scope="col" tabindex="0">
+                      {{ t('common.type') }} <i [class]="'bi ' + sortIconClass('type')"></i>
+                    </th>
                     <th class="text-end" scope="col">{{ t('common.action') }}</th>
                   </tr>
                   </thead>
@@ -54,8 +67,10 @@
                         <th class="text-center text-muted">{{ customer.id }}</th>
                         <td>
                           @if (customer.imageUrl) {
-                            <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
-                                 loading="lazy" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">
+                            <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
+                              <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
+                                   loading="lazy" style="object-fit: cover;">
+                            </div>
                           } @else {
                             <div [style.background-color]="getAvatarColor(customer.id)" class="sc-avatar">
                               {{ customer.customerName.charAt(0).toUpperCase() }}
@@ -89,24 +104,24 @@
                 </table>
               </div>
 
-              <div class="sc-panel__foot d-flex justify-content-end">
+              <div class="sc-panel__foot d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <app-page-size-select (sizeSelected)="changePageSize($event)" [size]="pageSize$()"></app-page-size-select>
                 <nav [attr.aria-label]="t('common.pageNavigation')">
                   <ul class="pagination justify-content-end mb-0">
                     <li [ngClass]="0 === currentPage$() ? ' disabled' : ''" class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('backward')" class="page-link">&laquo; {{ t('common.prev') }}</button>
+                      <button (click)="goToNextOrPreviousPage('backward')"
+                              [disabled]="0 === currentPage$()"
+                              class="page-link">&laquo; {{ t('common.prev') }}</button>
                     </li>
-                    @for (pageNumber of (state?.appData?.data?.page?.page?.totalPages ?? 0) | ExtractArrayValue: 'number'; track i; let i = $index) {
-                      <li class="page-item pointer">
-                        <button (click)="goToPage(i)"
-                                [ngClass]="i === currentPage$() ? ' active' : ''"
-                                class="page-link">{{ i + 1 }}
-                        </button>
-                      </li>
-                    }
+                    <li class="page-item disabled">
+                      <span class="page-link">{{ t('common.pageXofY', { page: currentPage$() + 1, total: state?.appData?.data?.page?.page?.totalPages ?? 1 }) }}</span>
+                    </li>
                     <li
                       [ngClass]="(state?.appData?.data?.page?.page?.totalPages ?? 0) - 1 === currentPage$() ? ' disabled' : ''"
                       class="page-item pointer">
-                      <button (click)="goToNextOrPreviousPage('forward')" class="page-link">{{ t('common.next') }} &raquo;</button>
+                      <button (click)="goToNextOrPreviousPage('forward')"
+                              [disabled]="(state?.appData?.data?.page?.page?.totalPages ?? 0) - 1 === currentPage$()"
+                              class="page-link">{{ t('common.next') }} &raquo;</button>
                     </li>
                   </ul>
                 </nav>

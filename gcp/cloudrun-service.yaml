@@ -33,7 +33,7 @@ spec:
           env:
             # ── Non-sensitive config ───────────────────────────────────────────
             - { name: SPRING_ACTIVE_PROFILES, value: "prod" }
-            - { name: SPRING_DATASOURCE_URL,  value: "jdbc:mysql://${AIVEN_HOST}:${AIVEN_PORT}/${AIVEN_DB}?useSSL=true&requireSSL=true" }
+            - { name: SPRING_DATASOURCE_URL,  value: "jdbc:mysql://${AIVEN_HOST}:${AIVEN_PORT}/${AIVEN_DB}?sslMode=REQUIRED" }
             - { name: SPRING_DATASOURCE_USERNAME, value: "${AIVEN_USER}" }
             - { name: MAIL_HOST, value: "smtp.gmail.com" }
             - { name: MAIL_PORT, value: "587" }

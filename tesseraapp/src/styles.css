@@ -407,7 +407,7 @@ a:hover { color: var(--accent-strong); }
 
 /* ===========================================================================
    8. INTERACTION RESET
-   Preserve the original non-selectable-chrome behaviour, but keep real inputs
+   Preserve the original non-selectable-chrome behavior, but keep real inputs
    and editable fields functional, and restore a pointer cursor on the
    interactive elements that the broad reset below would otherwise flatten.
    =========================================================================== */
@@ -614,6 +614,13 @@ select,
   text-transform: uppercase;
   color: var(--text-muted);
 }
+/* Wraps just the icon + input pair. .sc-field__icon anchors to THIS box, not .sc-field itself,
+   so a field that adds trailing content after the input (register/verify's password-requirements
+   hint) doesn't stretch the positioning context and drag the icon down behind that trailing text —
+   the bug this box exists to prevent. Fields with no trailing content don't need the wrapper: the
+   icon falls back to positioning against .sc-field, which is exactly as tall as label + input there
+   anyway, so the result is identical either way. */
+.sc-field__control { position: relative; }
 .sc-field__icon {
   position: absolute;
   left: 0.85rem;
@@ -701,11 +708,16 @@ select,
 /* ---- Footer links ---- */
 .sc-auth__links {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-3) var(--space-4);
   margin-top: var(--space-5);
   font-size: var(--fs-sm);
+}
+.sc-auth__links > a,
+.sc-linkbtn {
+  white-space: nowrap;
 }
 .sc-linkbtn {
   display: inline-flex;
@@ -806,7 +818,7 @@ select,
   line-height: 1.1;
 }
 .sc-head__sub { margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--fs-lg); }
-.sc-head__actions { display: inline-flex; align-items: center; gap: var(--space-3); flex: none; }
+.sc-head__actions { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); flex: none; }
 
 /* ---- Elevated glass panel ---- */
 .sc-panel {

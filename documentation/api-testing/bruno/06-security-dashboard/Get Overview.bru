@@ -1,0 +1,29 @@
+meta {
+  name: Get Overview
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/admin/security/overview?days=7&suspiciousPage=0&suspiciousSize=10&restrictedPage=0&restrictedSize=10
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+params:query {
+  days: 7
+  suspiciousPage: 0
+  suspiciousSize: 10
+  restrictedPage: 0
+  restrictedSize: 10
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

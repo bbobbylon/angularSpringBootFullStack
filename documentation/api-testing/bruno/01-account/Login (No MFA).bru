@@ -1,0 +1,39 @@
+meta {
+  name: Login (No MFA)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/user/login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "{{adminEmail}}",
+    "password": "{{adminPassword}}"
+  }
+}
+
+script:post-response {
+  const json = res.getBody();
+  if (json.data && json.data.access_token) {
+    bru.setVar("adminAccessToken", json.data.access_token);
+    bru.setVar("adminRefreshToken", json.data.refresh_token);
+    bru.setVar("adminId", json.data.user.id);
+  } else {
+    console.log("No access_token — demo account may have MFA enabled, or a challenge was returned:", json);
+  }
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

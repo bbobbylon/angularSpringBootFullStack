@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, Input, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, Input, OnInit, signal } from '@angular/core';
 import { DatePipe, NgClass } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { UserService } from '../../../service/user.service';
+import { CurrentUserService } from '../../../service/current-user.service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { NotificationsService } from '../../../service/notifications-service';
@@ -15,6 +16,8 @@ import { getEventDisplay } from '../../../utils/event-display.utils';
 import { UserInterface } from '../../../interface/user.interface';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../../constants/password-policy';
+import { PHONE_HINT, PHONE_PATTERN } from '../../../constants/phone-policy';
 
 // TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
 
@@ -42,6 +45,13 @@ export class ProfileComponent implements OnInit {
   @Input() user: UserInterface | undefined;
   /** Exposes the `DataState` enum to the template for asynchronous data handling. */
   readonly DataState = DataState;
+  /** Password requirements — mirrors the backend's `PasswordPolicy` exactly; see that constant's doc. */
+  protected readonly PASSWORD_MIN_LENGTH = PASSWORD_MIN_LENGTH;
+  protected readonly PASSWORD_PATTERN = PASSWORD_PATTERN;
+  protected readonly PASSWORD_HINT = PASSWORD_HINT;
+  /** Phone number shape — mirrors the backend's `PhonePolicy` exactly; see that constant's doc. */
+  protected readonly PHONE_PATTERN = PHONE_PATTERN;
+  protected readonly PHONE_HINT = PHONE_HINT;
   /**
    * Single source of truth for the profile view. Carries `dataState`,
    * `appData` (the full profile response), and optional `error` for the template.
@@ -75,6 +85,23 @@ export class ProfileComponent implements OnInit {
   private readonly transloco = inject(TranslocoService);
   /** Caches the most recent successful API response so all update methods can stay in LOADED state while requests are in flight. */
   private data = signal<CustomHttpResponseInterface<ProfileInterface> | undefined>(undefined);
+
+  private readonly currentUser = inject(CurrentUserService);
+
+  constructor() {
+    // Republish the user to the shared identity signal whenever this screen receives a fresh one.
+    //
+    // The navbar reads that signal rather than an @Input, so without this a name or avatar edit
+    // would apply here and leave the header showing the old value until a full page reload. It
+    // used to self-correct only by accident: the updated user rode back up through the binding
+    // this screen no longer has.
+    //
+    // An effect on `data` rather than a call in each handler — every one of the seven update paths
+    // already funnels through `data.set(...)`, so watching that seam covers them all and cannot be
+    // forgotten when an eighth is added. `set()` ignores undefined, so the initial empty state and
+    // any response without a user are no-ops.
+    effect(() => this.currentUser.set(this.data()?.data?.user));
+  }
 
   /**
    * Initializes the component by fetching the user's profile information.

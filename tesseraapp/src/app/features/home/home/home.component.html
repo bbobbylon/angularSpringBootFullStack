@@ -1,7 +1,7 @@
 <!-- Three-branch state rendering (LOADING skeletons / ERROR / LOADED), the pattern the
      other routed pages follow. -->
 @if (homeState(); as state) {
-  <app-navbar [user]="state?.appData?.data?.user"></app-navbar>
+  <app-navbar></app-navbar>
 
   <main *transloco="let t" class="sc-dash">
     <div class="container">
@@ -129,8 +129,10 @@
                     <th class="text-center text-muted">{{ customer.id }}</th>
                     <td>
                       @if (customer.imageUrl) {
-                        <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
-                             loading="lazy" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">
+                        <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
+                          <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
+                               loading="lazy" style="object-fit: cover;">
+                        </div>
                       } @else {
                         <div [style.background-color]="getAvatarColor(customer.id)" class="sc-avatar">
                           {{ customer.customerName.charAt(0).toUpperCase() }}
@@ -164,15 +166,7 @@
           </div>
 
           <div class="d-flex align-items-center justify-content-between sc-panel__foot">
-            <div class="d-flex align-items-center gap-2">
-              <label class="form-label mb-0 small text-muted" for="pageSize">{{ t('common.rowsPerPage') }}</label>
-              <select (change)="changePageSize(+$any($event.target).value)" id="pageSize"
-                      class="form-select form-select-sm w-auto">
-                @for (option of pageSizeOptions; track option) {
-                  <option [selected]="option === pageSize()" [value]="option">{{ option }}</option>
-                }
-              </select>
-            </div>
+            <app-page-size-select (sizeSelected)="changePageSize($event)" [size]="pageSize()"></app-page-size-select>
             <nav [attr.aria-label]="t('common.pageNavigation')">
               <ul class="pagination justify-content-end mb-0">
                 <li [ngClass]="0 === currentPage() ? 'disabled' : ''"
@@ -182,15 +176,9 @@
                           class="page-link">&laquo; {{ t('common.prev') }}
                   </button>
                 </li>
-                @for (_page of (state?.appData?.data?.page?.page?.totalPages ?? 0) | ExtractArrayValue: 'number'; track $index; let i = $index) {
-                  <li class="page-item pointer">
-                    <button (click)="goToPage(i)"
-                            [ngClass]="i === currentPage() ? 'active' : ''"
-                            class="page-link">
-                      {{ i + 1 }}
-                    </button>
-                  </li>
-                }
+                <li class="page-item disabled">
+                  <span class="page-link">{{ t('common.pageXofY', { page: currentPage() + 1, total: state?.appData?.data?.page?.page?.totalPages ?? 1 }) }}</span>
+                </li>
                 <li
                   [ngClass]="((state?.appData?.data?.page?.page?.totalPages ?? 0) - 1) === currentPage() ? 'disabled' : ''"
                   class="page-item pointer">

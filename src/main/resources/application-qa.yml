@@ -17,6 +17,13 @@ SPRING_ACTIVE_PROFILES: qa
 
 MYSQL_PORT: 3306
 
+# Encrypted DB transport is mandatory here for the same reason as prod: QA points at a managed
+# database, not a localhost MySQL. REQUIRED refuses to connect rather than silently downgrading
+# to plaintext the way the base profile's PREFERRED would. See application.yml's datasource
+# block for the full sslMode ladder.
+MYSQL_SSL_MODE: REQUIRED
+MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL: false
+
 MAIL_HOST: smtp.gmail.com
 MAIL_PORT: 587
 

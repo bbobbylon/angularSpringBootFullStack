@@ -1,0 +1,43 @@
+meta {
+  name: Create Invoice For Customer
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/customer/invoice/addtocustomer/{{customerId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "invoiceNumber": "BRUNO-001",
+    "status": "PENDING",
+    "totalAmount": 10.0,
+    "invoiceDate": "2026-01-01"
+  }
+}
+
+script:post-response {
+  const json = res.getBody();
+  const inv = json.data && (json.data.invoice || json.data.invoices);
+  if (inv && inv.id) {
+    bru.setVar("invoiceId", inv.id);
+  }
+}
+
+tests {
+  test("status is 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+}
+
+docs {
+  Run after Create Customer.
+}

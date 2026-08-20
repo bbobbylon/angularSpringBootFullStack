@@ -32,7 +32,11 @@
     "back": "Zurück",
     "description": "Beschreibung",
     "price": "Preis",
-    "amount": "Betrag"
+    "amount": "Betrag",
+    "pageXofY": "Seite {{page}} von {{total}}",
+    "nTotal": "{{count}} insgesamt",
+    "acrossNPages": "über {{count}} Seiten",
+    "viewAll": "Alle anzeigen"
   },
   "nav": {
     "customers": "Kunden",
@@ -45,9 +49,10 @@
     "serviceCatalog": "Leistungskatalog",
     "newServiceInvoice": "Neue Leistungsrechnung",
     "manageServices": "Leistungen verwalten",
+    "newService": "Neue Leistung",
     "admin": "Administration",
     "userDirectory": "Benutzerverzeichnis",
-    "assignRoles": "Rollen zuweisen",
+    "insights": "Berichte",
     "rolesPermissions": "Rollen und Berechtigungen",
     "securityOverview": "Sicherheitsübersicht",
     "billingOverview": "Abrechnungsübersicht",
@@ -147,6 +152,21 @@
       "passwordOnly": "Nur Passwort",
       "federatedSignIns": "Föderierte Anmeldungen",
       "recoveryCodesUsed": "Verwendete Wiederherstellungscodes"
+    },
+    "settings": {
+      "title": "Einstellungen zur Anomalieerkennung",
+      "subtitle": "Überschreibungen wirken sich sofort auf die nächste Anmeldung aus – kein erneutes Deployment nötig.",
+      "enabledLabel": "Anomalieerkennung",
+      "useDefault": "Serverstandard verwenden",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "historyLimitLabel": "Anmeldeverlauf-Fenster",
+      "historyLimitHint": "Wie viele der letzten Anmeldungen des Kontos zum Vergleich mit einer neuen herangezogen werden.",
+      "historyLimitPlaceholder": "Serverstandard",
+      "clearOverride": "Standard verwenden",
+      "save": "Änderungen speichern",
+      "saving": "Wird gespeichert…",
+      "unsavedChanges": "Nicht gespeicherte Änderungen"
     }
   },
   "servicesAdmin": {
@@ -164,8 +184,10 @@
     "description": "Beschreibung",
     "basePrice": "Grundpreis",
     "noDescription": "Keine Beschreibung vorhanden.",
-    "emptyTitle": "Der Katalog ist leer.",
-    "emptyHint": "Fügen Sie Ihre erste Leistung hinzu, damit sie auf neuen Rechnungen ausgewählt werden kann.",
+    "emptyTitle": "Keine Leistungen gefunden",
+    "emptyHint": "Versuchen Sie einen anderen Suchbegriff oder fügen Sie Ihre erste Leistung hinzu.",
+    "searchByName": "Nach Name oder Beschreibung suchen",
+    "searchAria": "Leistungskatalog durchsuchen",
     "editNote": "Das Bearbeiten einer Leistung ändert bereits erstellte Rechnungen nicht – sie behalten den damals erfassten Namen und Preis.",
     "summary": {
       "offered": "im Angebot",
@@ -209,8 +231,11 @@
     "catalogValue": "Katalogwert",
     "createInvoice": "Rechnung erstellen",
     "emptyTitle": "Keine Leistungen im Katalog",
-    "emptyHint": "Der Leistungskatalog ist leer. Fügen Sie Leistungen über die Administration hinzu.",
-    "manageCatalog": "Katalog verwalten"
+    "emptyHint": "Es wurden noch keine Leistungen veröffentlicht. Sobald das geschehen ist, erscheinen sie hier und können einer Rechnung hinzugefügt werden.",
+    "emptyHintAdmin": "Veröffentlichen Sie Ihre erste Leistung, damit sie für neue Rechnungen auswählbar wird.",
+    "manageCatalog": "Katalog verwalten",
+    "noResultsTitle": "Keine Leistungen gefunden",
+    "noResultsHint": "Versuchen Sie einen anderen Suchbegriff."
   },
   "securityCenter": {
     "eyebrow": "Konto",
@@ -226,6 +251,8 @@
     "codesLow": "Fast aufgebraucht – neu registrieren, um einen frischen Satz zu erhalten",
     "disableCodeLabel": "Authenticator- oder Wiederherstellungscode",
     "disableAuthenticator": "Authenticator deaktivieren",
+    "regenerateCodes": "Wiederherstellungscodes neu generieren",
+    "regenerateConfirm": "Neu generieren",
     "enrollTitle": "Richten Sie Ihren Authenticator ein",
     "enrollHint": "Scannen Sie den QR-Code und geben Sie dann den 6-stelligen Code aus Ihrer App ein.",
     "codeFromApp": "Code aus Ihrer App",
@@ -349,9 +376,25 @@
     "title": "Rechnungen",
     "invoiceNumber": "Rechnungsnr.",
     "service": "Leistung",
-    "emptyTitle": "Noch keine Rechnungen",
-    "emptyHint": "Von Ihnen erstellte Rechnungen erscheinen hier mit Status und Summen.",
-    "loading": "Rechnungen werden geladen…"
+    "emptyTitle": "Keine Rechnungen gefunden",
+    "emptyHint": "Versuchen Sie einen anderen Suchbegriff oder erstellen Sie eine neue Rechnung.",
+    "loading": "Rechnungen werden geladen…",
+    "searchByInvoiceNumber": "Nach Rechnungsnr. oder Kunde suchen",
+    "searchAria": "Rechnungen suchen"
+  },
+  "batchImport": {
+    "button": "Importieren",
+    "title": "Stapelimport",
+    "hintCustomers": "Laden Sie eine CSV- oder Excel-Datei mit Kunden hoch.",
+    "hintInvoices": "Laden Sie eine CSV- oder Excel-Datei mit Rechnungen hoch.",
+    "chooseFile": "Datei auswählen",
+    "noFileChosen": "Keine Datei ausgewählt",
+    "upload": "Hochladen",
+    "uploading": "Wird hochgeladen…",
+    "resultSummary": "{{imported}} von {{total}} Zeilen importiert.",
+    "row": "Zeile",
+    "reason": "Grund",
+    "close": "Schließen"
   },
   "users": {
     "breadcrumb": "Benutzer",
@@ -439,7 +482,17 @@
     "eyebrow": "Zugriffssteuerung",
     "title": "Rollen × Berechtigungen",
     "loading": "Rollenkatalog wird geladen…",
-    "error": "Der Rollenkatalog konnte nicht geladen werden. Bitte aktualisieren."
+    "error": "Der Rollenkatalog konnte nicht geladen werden. Bitte aktualisieren.",
+    "notYetAssignableHint": "Erstellt, aber noch von keinem Anwendungs-Build erkannt — kann keinem Benutzer zugewiesen werden, bis ein erneutes Deployment die Rolle hinzufügt.",
+    "catalogTitle": "Rollenkatalog verwalten",
+    "newRoleName": "Name der neuen Rolle",
+    "newRolePermission": "Berechtigungen",
+    "createRole": "Rolle erstellen",
+    "createRoleHint": "Der Name muss dem Muster ROLE_ETWAS entsprechen. Die neue Rolle wird erstellt, kann aber erst nach einem künftigen Deployment, das sie erkennt, einem Benutzer zugewiesen werden.",
+    "role": "Rolle",
+    "permissions": "Berechtigungen",
+    "builtIn": "Integriert",
+    "builtInHint": "Integrierte Rollen können nicht gelöscht werden."
   },
   "charts": {
     "customerAnalytics": "Kundenanalyse",
@@ -469,7 +522,7 @@
     "statusOverTime": "Rechnungsstatus im Zeitverlauf",
     "statusOverTimeSub": "Zahlungsdynamik – BEZAHLT / OFFEN / ÜBERFÄLLIG pro Monat",
     "noInvoiceData": "Noch keine Rechnungsdaten.",
-    "serviceUtilisation": "Leistungsnutzung",
+    "serviceUtilization": "Leistungsnutzung",
     "serviceSub": "Top 10 Leistungen nach Rechnungshäufigkeit",
     "noServiceData": "Noch keine Leistungsdaten.",
     "customerStatus": "Kundenstatus",
@@ -499,8 +552,16 @@
     "assignedRole": "Zugewiesene Rolle",
     "updateRole": "Rolle aktualisieren",
     "updateState": "Status aktualisieren",
+    "revokeSessions": "Überall abmelden",
+    "revokeSessionsTitle": "Aktive Sitzungen",
+    "revokeSessionsHint": "Beendet jede angemeldete Sitzung dieses Kontos. Sperren allein genügt nicht — eine offene Sitzung bleibt bis zum Ablauf des Tokens gültig.",
     "noActivity": "Keine Aktivität erfasst.",
-    "loading": "Konto wird geladen…"
+    "loading": "Konto wird geladen…",
+    "expires": "Läuft ab",
+    "roleExpiresOn": "Diese Rollenzuweisung läuft am {{date}} ab",
+    "notYetAssignable": "noch nicht zuweisbar",
+    "expiresOn": "Läuft ab am",
+    "expiresHint": "Optional. Leer lassen für eine unbefristete Zuweisung; die Rolle wird am Ende des ausgewählten Tages automatisch auf die Standardbenutzerrolle zurückgesetzt."
   },
   "newCustomer": {
     "saveCustomer": "Kunden speichern",
@@ -521,11 +582,16 @@
     "settingsUpdated": "Einstellungen aktualisiert",
     "totpEnabled": "Authenticator-App aktiviert",
     "totpDisabled": "Authenticator-App deaktiviert",
+    "recoveryCodesRegenerated": "Wiederherstellungscodes neu generiert",
     "smsUpdated": "SMS-Verifizierungseinstellung aktualisiert",
     "phoneSaved": "Telefonnummer gespeichert – die SMS-Verifizierung ist jetzt aktiv",
     "sessionRevoked": "Sitzung widerrufen",
     "otherSessionsRevoked": "Von anderen Sitzungen abgemeldet",
-    "providerDisconnected": "Anbieter getrennt"
+    "providerDisconnected": "Anbieter getrennt",
+    "providerLinked": "{{provider}} wurde mit Ihrem Konto verbunden",
+    "passkeyAdded": "Passkey hinzugefügt",
+    "passkeyRemoved": "Passkey entfernt",
+    "passkeyCancelled": "Passkey-Einrichtung abgebrochen"
   },
   "palette": {
     "sectionNavigate": "Navigieren",
@@ -558,6 +624,8 @@
     "securityOverviewHint": "Admin · Auffälligkeiten und MFA-Abdeckung",
     "manageServices": "Leistungen verwalten",
     "manageServicesHint": "Admin · Katalog-CRUD",
+    "newService": "Neue Leistung",
+    "newServiceHint": "Admin · Katalogangebot hinzufügen",
     "toggleTheme": "Design wechseln",
     "toggleThemeHint": "Dunkel / hell umschalten",
     "logout": "Abmelden",

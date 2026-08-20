@@ -2,9 +2,9 @@
    Manage Services (ROADMAP §2 — services catalog administration)
 
    Built on the global tokens so the screen follows the theme switch. The only
-   colour decisions made here are semantic ones: "offered" borrows --ok and
+   color decisions made here are semantic ones: "offered" borrows --ok and
    "retired" borrows --text-faint, because a retired service is not an error
-   state — it is simply not in play, and colouring it red would suggest
+   state — it is simply not in play, and coloring it red would suggest
    something had gone wrong.
    =========================================================================== */
 

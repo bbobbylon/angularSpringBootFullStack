@@ -187,6 +187,29 @@ public class TotpServiceImpl implements TotpService {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>Same possession check as {@link #disableTotp}: a live TOTP code, OR one of the
+     * about-to-be-replaced recovery codes, must be presented first. Verifying against the
+     * OLD batch before {@link #issueRecoveryCodes} deletes it is deliberate — checking
+     * after would mean checking a code against a batch that already no longer exists.
+     */
+    @Override
+    @Transactional
+    public List<String> regenerateRecoveryCodes(Long userId, String code) {
+        TotpCredential credential = findCredential(userId);
+        if (credential == null || !credential.confirmed()) {
+            throw new ApiException("An authenticator app is not enabled on this account.");
+        }
+        if (!TotpUtils.verifyCode(credential.secret(), code) && !consumeRecoveryCode(userId, code)) {
+            throw new ApiException("That code didn't match. Enter a current authenticator code or an unused recovery code.");
+        }
+        List<String> recoveryCodes = issueRecoveryCodes(userId);
+        log.info("Recovery codes regenerated for user id {}", userId);
+        return recoveryCodes;
+    }
+
+    /**
      * Replaces the user's recovery codes with {@value #RECOVERY_CODE_COUNT} fresh ones,
      * persisting only SHA-256 digests and returning the plaintext for one-time display.
      */
@@ -221,6 +244,23 @@ public class TotpServiceImpl implements TotpService {
      */
     private static String normalizeRecoveryCode(String code) {
         return code.replaceAll("[\\s-]", "").toUpperCase();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Same deletion as {@link #disableTotp} — credential row, all recovery codes, and the
+     * denormalized flag — with the possession check removed entirely rather than bypassed by a
+     * caller-supplied flag, so there is exactly one code path that can strip a second factor
+     * without proof: this one, reachable only from {@code AdminUserController}.
+     */
+    @Override
+    @Transactional
+    public void adminResetTotp(Long userId) {
+        jdbcTemplate.update(DELETE_TOTP_CREDENTIAL_BY_USER_ID_QUERY, Map.of("userId", userId));
+        jdbcTemplate.update(DELETE_RECOVERY_CODES_BY_USER_ID_QUERY, Map.of("userId", userId));
+        jdbcTemplate.update(UPDATE_USER_USING_TOTP_QUERY, Map.of("usingTotp", false, "userId", userId));
+        log.warn("TOTP administratively reset for user id {}", userId);
     }
 
     /**

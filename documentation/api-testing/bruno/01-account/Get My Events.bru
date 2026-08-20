@@ -1,0 +1,26 @@
+meta {
+  name: Get My Events
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/user/events?page=0&size=10
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+params:query {
+  page: 0
+  size: 10
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

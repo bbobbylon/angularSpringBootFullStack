@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import static com.bob.angularspringbootfullstack.query.SecurityDashboardQuery.COUNT_ACTIVE_SESSIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.SecurityDashboardQuery.COUNT_RECENT_SUSPICIOUS_LOGINS_QUERY;
+import static com.bob.angularspringbootfullstack.query.SecurityDashboardQuery.COUNT_RESTRICTED_ACCOUNTS_QUERY;
 import static com.bob.angularspringbootfullstack.query.SecurityDashboardQuery.COUNT_SECURITY_EVENTS_SINCE_QUERY;
 import static com.bob.angularspringbootfullstack.query.SecurityDashboardQuery.SCOPE_MARKER;
 import static com.bob.angularspringbootfullstack.query.SecurityDashboardQuery.SCOPE_PREDICATE;
@@ -43,7 +45,7 @@ import static com.bob.angularspringbootfullstack.query.SecurityDashboardQuery.SE
  * organization predicate or nothing. The spliced fragment is a compile-time constant; the
  * organization ids themselves are bound as a named parameter, so no request data ever reaches the
  * SQL text. The alternative of one always-present predicate (e.g. {@code OR :unscoped = TRUE})
- * would keep the SQL static but make the optimiser unable to use the {@code userorganizations}
+ * would keep the SQL static but make the optimizer unable to use the {@code userorganizations}
  * index, turning every panel into a full scan for the common unscoped case.
  *
  * <h3>2. Non-fatal reads</h3>
@@ -87,12 +89,31 @@ public class SecurityDashboardRepoImpl implements SecurityDashboardRepo {
      * {@inheritDoc}
      */
     @Override
-    public List<SuspiciousLoginEntry> findRecentSuspiciousLogins(LocalDateTime since, int limit,
+    public List<SuspiciousLoginEntry> findRecentSuspiciousLogins(LocalDateTime since, int page, int size,
                                                                  Collection<Long> organizationIds) {
         return read("suspicious logins", List.of(), () -> jdbcTemplate.query(
                 scoped(SELECT_RECENT_SUSPICIOUS_LOGINS_QUERY, organizationIds),
-                parameters(organizationIds).addValue("since", since).addValue("limit", limit),
+                parameters(organizationIds)
+                        .addValue("since", since)
+                        .addValue("size", size)
+                        // Computed here rather than taken from the caller so the offset can never
+                        // disagree with the page/size the count is derived from.
+                        .addValue("offset", (long) page * size),
                 new SuspiciousLoginEntryRowMapper()));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long countRecentSuspiciousLogins(LocalDateTime since, Collection<Long> organizationIds) {
+        // Falls back to 0 on failure like every other read here. A zero total renders as a single
+        // page, which degrades the pager rather than the table it belongs to — consistent with the
+        // class's "one broken panel must not break the other five" posture.
+        return read("suspicious login count", 0L, () -> jdbcTemplate.queryForObject(
+                scoped(COUNT_RECENT_SUSPICIOUS_LOGINS_QUERY, organizationIds),
+                parameters(organizationIds).addValue("since", since),
+                Long.class));
     }
 
     /**
@@ -119,11 +140,24 @@ public class SecurityDashboardRepoImpl implements SecurityDashboardRepo {
      * {@inheritDoc}
      */
     @Override
-    public List<RestrictedAccount> findRestrictedAccounts(int limit, Collection<Long> organizationIds) {
+    public List<RestrictedAccount> findRestrictedAccounts(int page, int size, Collection<Long> organizationIds) {
         return read("restricted accounts", List.of(), () -> jdbcTemplate.query(
                 scoped(SELECT_RESTRICTED_ACCOUNTS_QUERY, organizationIds),
-                parameters(organizationIds).addValue("limit", limit),
+                parameters(organizationIds)
+                        .addValue("size", size)
+                        .addValue("offset", (long) page * size),
                 new RestrictedAccountRowMapper()));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long countRestrictedAccounts(Collection<Long> organizationIds) {
+        return read("restricted account count", 0L, () -> jdbcTemplate.queryForObject(
+                scoped(COUNT_RESTRICTED_ACCOUNTS_QUERY, organizationIds),
+                parameters(organizationIds),
+                Long.class));
     }
 
     /**

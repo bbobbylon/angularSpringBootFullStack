@@ -1,6 +1,7 @@
 import { UserInterface } from './user.interface';
 import { UserEventsInterface } from './user-events.interface';
 import { RolesInterface } from './roles.interface';
+import { PasskeyInterface, SessionInterface } from './security.interface';
 
 /**
  * The data payload returned by {@code GET /admin/user/list} (SRS FR-ADMIN-1).
@@ -9,7 +10,7 @@ import { RolesInterface } from './roles.interface';
  * shared navbar, mirroring how the customer list responses carry the viewer. The
  * directory rows live under {@code users} with flat pagination metadata (this endpoint
  * does not use Spring's {@code Page<T>} envelope; the backend computes the totals from
- * its JDBC count query). {@code roles} is the full catalogue so the list view can
+ * its JDBC count query). {@code roles} is the full catalog so the list view can
  * render role badges and the detail view's reassignment selector without extra calls.
  */
 export interface AdminUserListInterface {
@@ -29,7 +30,11 @@ export interface AdminUserListInterface {
  * {@code user} is the calling administrator (navbar); {@code selectedUser} is the
  * account being managed. {@code events} is the first page of the selected user's
  * audit history — the same {@link UserEventsInterface} rows the profile page shows
- * for one's own account, here surfaced to administrators per FR-ADMIN-2.
+ * for one's own account, here surfaced to administrators per FR-ADMIN-2. {@code passkeys}
+ * is metadata only (nickname, transports, timestamps) — never the WebAuthn credential id
+ * or attestation object, which the backend never returns to any client. {@code sessions}
+ * is the same {@link SessionInterface} shape the Security Center shows for a user's own
+ * devices, here surfaced read-only (plus revoke) to administrators.
  */
 export interface AdminUserDetailInterface {
   user?: UserInterface;
@@ -38,4 +43,6 @@ export interface AdminUserDetailInterface {
   eventsTotalElements?: number;
   eventsTotalPages?: number;
   roles?: RolesInterface[];
+  passkeys?: PasskeyInterface[];
+  sessions?: SessionInterface[];
 }

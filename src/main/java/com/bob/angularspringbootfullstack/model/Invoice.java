@@ -9,6 +9,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -55,6 +56,7 @@ public class Invoice {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "invoiceserviceitems", joinColumns = @JoinColumn(name = "invoice_id"))
     @OrderColumn(name = "item_order")
+    @BatchSize(size = 50)
     private List<InvoiceLineItem> services = new ArrayList<>();
     /**
      * The billed amount for this invoice in the application's default currency.

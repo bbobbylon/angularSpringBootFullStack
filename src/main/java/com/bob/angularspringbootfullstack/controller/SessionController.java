@@ -5,6 +5,7 @@ import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.service.FederatedIdentityService;
 import com.bob.angularspringbootfullstack.service.SessionService;
+import com.bob.angularspringbootfullstack.service.serviceimpl.ProviderLinkTicketService;
 import com.bob.angularspringbootfullstack.tokenprovider.TokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import static com.bob.angularspringbootfullstack.constants.Constants.TOKEN_PREFIX;
-import static com.bob.angularspringbootfullstack.enumeration.EventType.PROFILE_UPDATE;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.PROVIDER_UNLINKED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.SESSION_REVOKED;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static java.time.LocalTime.now;
@@ -52,6 +53,7 @@ public class SessionController {
 
     private final SessionService sessionService;
     private final FederatedIdentityService federatedIdentityService;
+    private final ProviderLinkTicketService linkTicketService;
     private final TokenProvider tokenProvider;
     private final ApplicationEventPublisher eventPublisher;
     private final HttpServletRequest request;
@@ -149,6 +151,21 @@ public class SessionController {
      * within 30 minutes. What this stops is the ability to <em>renew</em>, which is what turns a
      * stolen refresh token into indefinite access.
      *
+     * <p><b>{@code Clear-Site-Data: "cache"}.</b> Now that GET responses carry an ETag and
+     * {@code Cache-Control: private, no-cache} ({@link com.bob.angularspringbootfullstack.filter.HttpCacheHeadersFilter}),
+     * the browser always revalidates before reusing a cached body rather than blindly trusting one
+     * — but revalidation is an ETag comparison, not an identity check, so if two different users'
+     * responses for the same URL ever hashed to the same ETag (an empty list, for instance), a
+     * browser that still had User A's cached bytes on file could accept a {@code 304} answered
+     * under User B's freshly-authenticated request and hand User B stale data belonging to User A.
+     * This header tells the browser to drop its entire HTTP cache for the origin on sign-out,
+     * closing that narrow window outright rather than relying on hash collisions never happening.
+     * It is the server-driven replacement for the old {@code HttpCacheService#evictAll()} call
+     * that {@code cacheInterceptor} needed — that in-memory client cache had no freshness check at
+     * all, so it required an explicit, JS-triggered eviction on every logout; this cache always
+     * revalidates on its own, so eviction is only needed for this one same-tab, different-user
+     * edge case.
+     *
      * @param authentication the current Spring Security authentication
      * @return 200 OK confirming the session was ended
      */
@@ -160,8 +177,9 @@ public class SessionController {
             sessionService.revokeSession(userDTO.getId(), family);
             eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), SESSION_REVOKED));
         }
-        return ResponseEntity.ok(
-                HttpResponse.builder()
+        return ResponseEntity.ok()
+                .header("Clear-Site-Data", "\"cache\"")
+                .body(HttpResponse.builder()
                         .timeStamp(now().toString())
                         .message("You have been signed out.")
                         .status(OK)
@@ -195,6 +213,36 @@ public class SessionController {
     }
 
     /**
+     * Starts connecting an identity provider to the caller's own account (ROADMAP §1.4).
+     *
+     * <p>Returns a single-use, five-minute {@code ticket} the SPA puts in the URL when it navigates
+     * to {@code GET /oauth2/link/{provider}}. That indirection exists because the browser leaves the
+     * application during the OAuth handshake and a JWT cannot ride a top-level navigation — see
+     * {@code ProviderLinkTicketService} for why a ticket beats a cookie-backed session here.
+     *
+     * <p>The ticket is bound to the JWT principal, so the account being linked is decided here,
+     * while the caller is still authenticated, and never inferred later from the provider response.
+     *
+     * @param authentication the current Spring Security authentication
+     * @param provider       the registration id the user chose
+     * @return 200 OK with {@code ticket} and the {@code linkUrl} to navigate to
+     */
+    @PostMapping("/providers/link/{provider}")
+    public ResponseEntity<HttpResponse> startProviderLink(Authentication authentication, @PathVariable String provider) {
+        UserDTO userDTO = getAuthenticatedUser(authentication);
+        String ticket = linkTicketService.mint(userDTO.getId(), provider);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("ticket", ticket,
+                                "linkUrl", "/oauth2/link/" + provider + "?ticket=" + ticket))
+                        .message("Ready to connect.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
      * Disconnects an identity provider from the caller's own account.
      *
      * <p>The account acted on comes from the JWT principal, never from the request — the provider
@@ -213,7 +261,7 @@ public class SessionController {
     public ResponseEntity<HttpResponse> unlinkProvider(Authentication authentication, @PathVariable String provider) {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         federatedIdentityService.unlinkProvider(userDTO.getId(), provider);
-        eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), PROFILE_UPDATE));
+        eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), PROVIDER_UNLINKED));
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())

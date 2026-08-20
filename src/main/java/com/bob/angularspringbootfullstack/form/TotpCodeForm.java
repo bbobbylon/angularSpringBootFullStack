@@ -4,13 +4,13 @@ import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
 
 /**
- * Request body for the authenticated TOTP lifecycle endpoints
- * ({@code POST /user/totp/enable} and {@code POST /user/totp/disable}).
+ * Request body for the authenticated TOTP lifecycle endpoints ({@code POST /user/totp/enable},
+ * {@code POST /user/totp/disable}, and {@code POST /user/totp/recovery-codes/regenerate}).
  * <p>
  * Carries the single proof-of-possession value those operations demand: a current
- * 6-digit authenticator code (or, for disable, alternatively an unused recovery code).
- * {@code TotpServiceImpl} decides which forms of code are acceptable per operation —
- * this form only guarantees something was submitted.
+ * 6-digit authenticator code (or, for disable and regenerate, alternatively an unused
+ * recovery code). {@code TotpServiceImpl} decides which forms of code are acceptable per
+ * operation — this form only guarantees something was submitted.
  */
 @Data
 public class TotpCodeForm {

@@ -5,6 +5,7 @@ import { Observable, throwError } from 'rxjs';
 // import { catchError, tap } from 'rxjs/operators';
 import { catchError } from 'rxjs/operators';
 import {
+  AllInvoicesDataInterface,
   CustomerListDataInterface,
   InvoiceListDataInterface,
   StatsDataInterface,
@@ -18,7 +19,7 @@ import { environment } from '../../environments/environment';
  * /analytics}) pages.
  *
  * <p><b>Why this is separate from {@link CustomerService}.</b> The billing and analytics
- * dashboards visualise <em>aggregate financial</em> data that is genuinely admin-only,
+ * dashboards visualize <em>aggregate financial</em> data that is genuinely admin-only,
  * whereas {@link CustomerService} hits the application-wide {@code /customer/**} endpoints
  * that every authenticated user can reach (home, customers, invoices). Routing these two
  * pages through their own service — which targets {@code /admin/analytics/**} — means the
@@ -28,7 +29,7 @@ import { environment } from '../../environments/environment';
  * keys as their {@code /customer/**} counterparts, so the components' interfaces and
  * computed signals are unchanged — only the URL (and its enforcement) differs.
  *
- * <p>Errors are normalised by {@link handleError} into a single error Observable, matching
+ * <p>Errors are normalized by {@link handleError} into a single error Observable, matching
  * {@link CustomerService}, so callers handle failures uniformly via {@code catchError}.
  */
 @Injectable({
@@ -81,7 +82,36 @@ export class AnalyticsService {
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
-   * Normalises HTTP errors into a single Observable<never> so all callers receive a
+   * Fetches every invoice in the caller's scope, unpaginated ({@code GET
+   * /admin/analytics/invoices/all}, admin-gated). For chart derivations that must be
+   * numerically correct over the whole dataset (monthly revenue, status breakdown, service
+   * revenue) — {@link invoices$}'s fixed page size silently truncates past its page size,
+   * which is invisible in a chart until an account's invoice count actually exceeds it.
+   *
+   * @returns Observable emitting an {@link AllInvoicesDataInterface} response
+   */
+  allInvoices$ = (): Observable<CustomHttpResponseInterface<AllInvoicesDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<AllInvoicesDataInterface>>(`${this.server}/admin/analytics/invoices/all`)
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Emails the caller their own report digest — the "Email me this report" button on the
+   * Analytics screen (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report emails").
+   * Mirrors {@code CustomerService.emailInvoice$} exactly: a bare {@code POST} with no body,
+   * because the backend derives both the scope and the recipient (the caller themselves) from
+   * the authenticated principal, and the response carries no report payload — only the standard
+   * envelope's {@code user} — since nothing about the dashboard itself changes.
+   *
+   * @returns Observable emitting the envelope once the send completes
+   */
+  emailReport$ = (): Observable<CustomHttpResponseInterface<{ user: unknown }>> =>
+    this.http
+      .post<CustomHttpResponseInterface<{ user: unknown }>>(`${this.server}/admin/analytics/report/email`, {})
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Normalizes HTTP errors into a single Observable<never> so all callers receive a
    * consistent Error instance, mirroring {@code CustomerService.handleError}.
    *
    * @param error - the HttpErrorResponse from Angular's HttpClient

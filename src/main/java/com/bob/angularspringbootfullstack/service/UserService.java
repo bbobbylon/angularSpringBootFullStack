@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 
 /**
@@ -65,6 +66,24 @@ public interface UserService {
      * @return the verified user as a DTO
      */
     UserDTO verifyCode(String email, String code);
+
+    /**
+     * Redelivers an already-outstanding 2FA/step-up code, without ever minting one from an email
+     * alone (SRS FR-AUTH-4 / anti-enumeration).
+     *
+     * <p>A no-op — same as a hit — for an unknown email, a TOTP-enrolled account (that challenge
+     * has no server-issued code to resend), or an account with no pending
+     * {@code twofactorverifications} row. Only when {@code UserRepo#hasPendingVerificationCode}
+     * is true does this redeliver, over whichever channel that account's original challenge used:
+     * SMS/Twilio Verify via {@link #sendVerificationCode} for a 2FA-enrolled account, or email via
+     * {@link #sendStepUpCode} for an FR-TPF-1 step-up challenge. Both mint a fresh code (see
+     * {@code UserRepo#issueVerificationCode}'s delete-then-insert), which invalidates whatever the
+     * caller was just resending — intentional, since the old one is what they are asking to
+     * replace.
+     *
+     * @param email the account email a code may be outstanding for; never confirmed to exist
+     */
+    void resendVerificationCode(String email);
 
     /**
      * Starts the password reset flow for the given email address.
@@ -134,12 +153,15 @@ public interface UserService {
     void updatePassword(Long id, String currentPassword, String newPassword, String confirmPassword);
 
     /**
-     * Updates the role of a user.
+     * Updates the role of a user, optionally time-boxing the assignment.
      *
-     * @param id       The ID of the user.
-     * @param roleName The name of the new role.
+     * @param id        The ID of the user.
+     * @param roleName  The name of the new role.
+     * @param expiresAt when the assignment should expire, or {@code null} for unlimited (the
+     *                  default) — see {@link com.bob.angularspringbootfullstack.repo.RoleRepo#updateUserRole}
+     *                  for how the expiry is enforced.
      */
-    void updateUserRole(Long id, String roleName);
+    void updateUserRole(Long id, String roleName, LocalDateTime expiresAt);
 
     /**
      * Updates a user's account settings.
@@ -175,9 +197,11 @@ public interface UserService {
      * @param searchTerm free-text filter; blank or null lists everyone
      * @param page       0-indexed page number
      * @param pageSize   rows per page
-     * @return the matching users on the requested page, newest accounts first
+     * @param orderBy    a validated {@code "column ASC|DESC"} SQL fragment (see
+     *                   {@code SortUtils#resolveSqlOrderBy}), e.g. {@code "created_at DESC, id DESC"}
+     * @return the matching users on the requested page, in the requested order
      */
-    Collection<UserDTO> searchUsers(String searchTerm, int page, int pageSize);
+    Collection<UserDTO> searchUsers(String searchTerm, int page, int pageSize, String orderBy);
 
     /**
      * Counts the users {@link #searchUsers} would match for the same term, so the
@@ -187,6 +211,17 @@ public interface UserService {
      * @return the total number of matching users
      */
     long countUsers(String searchTerm);
+
+    /**
+     * The email addresses of every system-wide administrator ({@code ROLE_ADMIN} or
+     * {@code ROLE_APPLICATION_ADMIN}) — the recipient list for the scheduled/on-demand system-wide
+     * report digest (POST-SUBMISSION-UPGRADES.md "Scheduled/on-demand report emails"). Distinct
+     * from an organization's {@code ROLE_ORGANIZATION_ADMIN} recipients, which
+     * {@code OrganizationService#findOrganizationAdminEmails} resolves instead.
+     *
+     * @return every system administrator's email, in no particular order; empty if none exist
+     */
+    Collection<String> findSystemAdminEmails();
 }
 
 

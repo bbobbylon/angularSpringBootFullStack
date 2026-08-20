@@ -234,23 +234,45 @@
   position: relative;
 }
 .sc-bar-col__fill:hover { opacity: 0.85; }
+/* Monthly revenue value, shown ABOVE each bar at all times.
+   This was a hover-only tooltip (opacity: 0 until :hover), which meant the chart's actual numbers
+   were invisible until you went looking for them — and unreachable entirely on touch, where there
+   is no hover. Since the value is the whole point of the chart, it is now a permanent label.
+   The floating-tooltip chrome (surface fill, border, radius) is dropped with it: a box drawn around
+   every bar reads as twelve tooltips stuck open, whereas bare text reads as an axis label, which is
+   what this now is. Hover keeps an emphasis state so the crosshair still feels responsive. */
 .sc-bar-col__tip {
   position: absolute;
-  bottom: calc(100% + 4px);
+  bottom: calc(100% + 3px);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--surface-3);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-sm);
-  padding: 2px 6px;
-  font-size: 0.7rem;
-  color: var(--text);
+  padding: 0 2px;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--text-muted);
   white-space: nowrap;
-  opacity: 0;
   pointer-events: none;
-  transition: opacity var(--dur-fast) ease;
+  transition: color var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
-.sc-bar-col__fill:hover .sc-bar-col__tip { opacity: 1; }
+.sc-bar-col__fill:hover .sc-bar-col__tip {
+  color: var(--text);
+  transform: translateX(-50%) translateY(-2px);
+}
+
+/* Narrow viewports cannot fit twelve currency strings side by side. Rotating them keeps every
+   value readable instead of letting them collide into an unreadable smear. */
+@media (max-width: 720px) {
+  .sc-bar-col__tip {
+    transform: translateX(-50%) rotate(-60deg);
+    transform-origin: center bottom;
+    font-size: 0.58rem;
+  }
+  .sc-bar-col__fill:hover .sc-bar-col__tip {
+    transform: translateX(-50%) rotate(-60deg);
+  }
+}
 .sc-bar-col__label {
   font-size: 0.68rem;
   color: var(--text-muted);

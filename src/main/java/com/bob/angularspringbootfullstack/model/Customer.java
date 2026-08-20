@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.BatchSize;
 
 import java.util.Collection;
 import java.util.Date;
@@ -123,7 +124,30 @@ public class Customer {
     /**
      * All invoices associated with this customer.
      * Loaded eagerly, so the full invoice history is always available with the customer.
+     *
+     * <p><b>{@code @BatchSize} is load-bearing, not a micro-optimisation.</b> An eager
+     * {@code @OneToMany} on a <em>paged</em> query is the textbook N+1: Spring Data issues one
+     * {@code SELECT ... FROM Customer LIMIT ?,?} and Hibernate then issues one
+     * {@code SELECT ... FROM Invoice WHERE customer = ?} <em>per row returned</em>. Observed on the
+     * live ECS deployment 2026-08-02: a single customer-list request produced ~35 sequential invoice
+     * queries at roughly 67&nbsp;ms per Aiven round trip — about 2.4 seconds of pure network latency
+     * before the response could be serialized.
+     *
+     * <p>With {@code @BatchSize}, Hibernate collects the pending collection loads and satisfies them
+     * with {@code ... WHERE customer IN (?, ?, ?, …)} — so a 35-row page costs 2 queries instead of
+     * 35. The size is chosen to comfortably exceed a normal page of customers so a page almost
+     * always resolves in one batch.
+     *
+     * <p>The reason this is {@code @BatchSize} and <em>not</em> a {@code JOIN FETCH} query: fetching a
+     * collection while paginating makes Hibernate log
+     * {@code HHH90003004: firstResult/maxResults specified with collection fetch; applying in memory}
+     * and pull <em>every</em> matching row into the JVM to paginate there — strictly worse than the
+     * problem being solved. Batching is the correct fix for the paged + eager shape.
+     *
+     * <p>The deeper fix (LAZY + a projection/DTO for the list view, so invoices are never loaded for
+     * a screen that does not display them) is tracked in {@code ROADMAP.md}.
      */
     @OneToMany(mappedBy = "customer", fetch = EAGER, cascade = ALL)
+    @BatchSize(size = 50)
     private Collection<Invoice> invoices;
 }

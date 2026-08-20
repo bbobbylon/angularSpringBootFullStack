@@ -1,4 +1,4 @@
-<app-navbar [user]="user()"></app-navbar>
+<app-navbar></app-navbar>
 
 <main *transloco="let t" class="sc-svcadmin">
   <div class="container">
@@ -12,6 +12,12 @@
         </p>
       </div>
       <div class="sc-svcadmin__actions">
+        <label class="sc-search">
+          <i class="bi bi-search"></i>
+          <input #catalogSearchForm (input)="onCatalogSearch(catalogSearchForm.value)"
+                 class="form-control form-control-sm" id="catalogSearch"
+                 [placeholder]="t('servicesAdmin.searchByName')" type="text" [attr.aria-label]="t('servicesAdmin.searchAria')" />
+        </label>
         <a [routerLink]="['/services']" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-grid-1x2-fill"></i> {{ t('servicesAdmin.publicCatalog') }}
         </a>
@@ -50,6 +56,12 @@
           <span class="sc-svcadmin__sep">·</span>
           <span>{{ t('servicesAdmin.summary.catalogValue') }} <strong>${{ catalogValue() | number: '1.2-2' }}</strong></span>
         </div>
+        <p class="small text-muted sc-reveal" style="--d: 50ms;">
+          <i class="bi bi-info-circle"></i>
+          A new service appears in the public Service Catalog and invoice forms immediately — no
+          separate publish step. "Retire" only hides it from both without deleting it; "Reinstate"
+          brings it back.
+        </p>
 
         <!-- ── Add form ─────────────────────────────────────────────────── -->
         @if (isCreating()) {
@@ -82,7 +94,7 @@
 
         <!-- ── Catalog table ────────────────────────────────────────────── -->
         <section class="sc-panel sc-reveal" style="--d: 80ms;">
-          @if (services().length === 0) {
+          @if (filteredServices().length === 0) {
             <div class="sc-svcadmin__empty">
               <i class="bi bi-grid-3x3" aria-hidden="true"></i>
               <p class="mb-1">{{ t('servicesAdmin.emptyTitle') }}</p>
@@ -101,11 +113,14 @@
                 </tr>
                 </thead>
                 <tbody>
-                  @for (service of services(); track service.id) {
+                  <!-- pagedServices(), not services(). The summary bar above deliberately still
+                       reads the FULL list, so its offered/retired counts and catalog value stay
+                       totals rather than becoming per-page figures. -->
+                  @for (service of pagedServices(); track service.id) {
                     @if (editingId() === service.id) {
                       <!-- Inline edit row. Replaces the row in place rather than opening a modal so
                            the surrounding catalog stays visible — pricing decisions are usually made
-                           by comparison with the neighbouring entries. -->
+                           by comparison with the neighboring entries. -->
                       <tr class="sc-svcadmin__editing">
                         <td colspan="5">
                           <form #editForm="ngForm" (ngSubmit)="save(service.id, editForm)">
@@ -162,12 +177,12 @@
                             </button>
                             @if (service.active === false) {
                               <button (click)="toggleActive(service)" [disabled]="isSaving()"
-                                      class="btn btn-outline-success btn-sm" type="button">
+                                      class="btn btn-outline-success btn-sm" title="Adds this service back to the public Service Catalog" type="button">
                                 <i class="bi bi-arrow-counterclockwise"></i> {{ t('servicesAdmin.reinstate') }}
                               </button>
                             } @else {
                               <button (click)="toggleActive(service)" [disabled]="isSaving()"
-                                      class="btn btn-outline-warning btn-sm" type="button">
+                                      class="btn btn-outline-warning btn-sm" title="Removes this service from the public Service Catalog — it stays here to reinstate later" type="button">
                                 <i class="bi bi-archive"></i> {{ t('servicesAdmin.retire') }}
                               </button>
                             }
@@ -179,6 +194,41 @@
                 </tbody>
               </table>
             </div>
+
+<!-- The footer is gated on the row COUNT, not on the page count: at 100 rows/page a 40-entry
+                 catalog is one page, and gating on `showCatalogPager()` would hide the very control
+                 needed to go back to 10. The prev/next nav inside still hides below two pages. -->
+            @if (showCatalogFoot()) {
+              <div class="sc-panel__foot d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <app-page-size-select (sizeSelected)="changeCatalogPageSize($event)"
+                                        [size]="catalogPageSize()"></app-page-size-select>
+                  <span class="text-muted small mono">
+                    {{ t('common.pageXofY', { page: safeCatalogPage() + 1, total: catalogTotalPages() }) }}
+                    · {{ t('common.nTotal', { count: filteredServices().length }) }}
+                  </span>
+                </div>
+                @if (showCatalogPager()) {
+                  <nav [attr.aria-label]="t('common.pageNavigation')">
+                    <ul class="pagination pagination-sm mb-0">
+                      <li class="page-item" [class.disabled]="safeCatalogPage() === 0">
+                        <button type="button" class="page-link" [disabled]="safeCatalogPage() === 0"
+                                (click)="goToCatalogPage(safeCatalogPage() - 1)">
+                          &laquo; {{ t('common.prev') }}
+                        </button>
+                      </li>
+                      <li class="page-item" [class.disabled]="safeCatalogPage() >= catalogTotalPages() - 1">
+                        <button type="button" class="page-link"
+                                [disabled]="safeCatalogPage() >= catalogTotalPages() - 1"
+                                (click)="goToCatalogPage(safeCatalogPage() + 1)">
+                          {{ t('common.next') }} &raquo;
+                        </button>
+                      </li>
+                    </ul>
+                  </nav>
+                }
+              </div>
+            }
           }
         </section>
       }

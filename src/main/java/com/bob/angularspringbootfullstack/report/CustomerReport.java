@@ -20,9 +20,9 @@ import java.util.stream.IntStream;
 /**
  * Generates an XLSX report of all customers using Apache POI.
  *
- * <p>Construction is two-phase: the constructor initialises the {@link XSSFWorkbook},
+ * <p>Construction is two-phase: the constructor initializes the {@link XSSFWorkbook},
  * creates a "Customers" sheet, and writes the bold header row via {@link #setHeaders()}.
- * Calling {@link #exportReport()} then writes all data rows and serialises the workbook
+ * Calling {@link #exportReport()} then writes all data rows and serializes the workbook
  * into a heap-backed {@link InputStreamResource} — no temp files are created or need
  * to be cleaned up.
  *
@@ -40,7 +40,7 @@ public class CustomerReport {
     private final XSSFSheet sheet;
 
     /**
-     * Initialises the workbook and writes the header row.
+     * Initializes the workbook and writes the header row.
      *
      * @param customers the full list of customers to include in the report;
      *                  passed directly to {@link #generateReport()} without filtering
@@ -75,7 +75,7 @@ public class CustomerReport {
     /**
      * Builds the data rows and returns the finished workbook as a streamable resource.
      *
-     * @return an {@link InputStreamResource} wrapping the serialised XLSX bytes,
+     * @return an {@link InputStreamResource} wrapping the serialized XLSX bytes,
      *         ready to be set as the body of a {@link org.springframework.http.ResponseEntity}
      */
     public InputStreamResource exportReport() {
@@ -83,7 +83,7 @@ public class CustomerReport {
     }
 
     /**
-     * Writes one row per customer and serialises the workbook to a byte array.
+     * Writes one row per customer and serializes the workbook to a byte array.
      *
      * <p>The {@code createdAt} date is formatted as {@code yyyy-MM-dd hh:mm:ss};
      * a null date is written as an empty string to avoid an NPE from

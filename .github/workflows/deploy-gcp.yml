@@ -38,9 +38,19 @@ on:
   #   branches: [master]
 
 jobs:
+  # Same gate as the AWS pipeline: run the full CI suite before building or shipping.
+  verify:
+    name: Verify (CI)
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   deploy:
     name: Build → Artifact Registry → Cloud Run
     runs-on: ubuntu-latest
+    needs: verify
+    # Binds the run to a GitHub Environment, so qa/stage/prod can carry their own
+    # secrets and required reviewers rather than all sharing the repository-level set.
+    environment: ${{ github.event.inputs.environment || 'prod' }}
     env:
       IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.AR_REPO }}/${{ secrets.CLOUD_RUN_SERVICE }}:${{ github.sha }}
       TARGET_ENV: ${{ github.event.inputs.environment || 'prod' }}
@@ -78,7 +88,7 @@ jobs:
             --port 8080 \
             --service-account "${{ secrets.GCP_RUNTIME_SA }}" \
             --cpu 1 --memory 1Gi --min-instances 0 --max-instances 4 \
-            --set-env-vars "^##^SPRING_ACTIVE_PROFILES=${TARGET_ENV}##SPRING_DATASOURCE_URL=jdbc:mysql://${{ secrets.AIVEN_HOST }}:${{ secrets.AIVEN_PORT }}/${{ secrets.AIVEN_DB }}?useSSL=true&requireSSL=true##SPRING_DATASOURCE_USERNAME=${{ secrets.AIVEN_USER }}##MAIL_HOST=smtp.gmail.com##MAIL_PORT=587##UI_APP_URL=${{ secrets.APP_DOMAIN }}##VERIFY_EMAIL_HOST=${{ secrets.APP_DOMAIN }}##CONTAINER_PORT=8080##IMAGE_STORAGE_PATH=/tmp/images##MICROSOFT_TENANT_ID=common" \
+            --set-env-vars "^##^SPRING_ACTIVE_PROFILES=${TARGET_ENV}##SPRING_DATASOURCE_URL=jdbc:mysql://${{ secrets.AIVEN_HOST }}:${{ secrets.AIVEN_PORT }}/${{ secrets.AIVEN_DB }}?sslMode=REQUIRED##SPRING_DATASOURCE_USERNAME=${{ secrets.AIVEN_USER }}##MAIL_HOST=smtp.gmail.com##MAIL_PORT=587##UI_APP_URL=${{ secrets.APP_DOMAIN }}##VERIFY_EMAIL_HOST=${{ secrets.APP_DOMAIN }}##CONTAINER_PORT=8080##IMAGE_STORAGE_PATH=/tmp/images##MICROSOFT_TENANT_ID=common" \
             --set-secrets "SPRING_DATASOURCE_PASSWORD=tessera-db-password:latest,JWT_SECRET=tessera-jwt-secret:latest,MAIL_USERNAME=tessera-mail-username:latest,MAIL_PASSWORD=tessera-mail-password:latest,GOOGLE_CLIENT_ID=tessera-google-client-id:latest,GOOGLE_CLIENT_SECRET=tessera-google-client-secret:latest,GITHUB_CLIENT_ID=tessera-github-client-id:latest,GITHUB_CLIENT_SECRET=tessera-github-client-secret:latest,MICROSOFT_CLIENT_ID=tessera-microsoft-client-id:latest,MICROSOFT_CLIENT_SECRET=tessera-microsoft-client-secret:latest,TWILIO_ACCOUNT_SID=tessera-twilio-sid:latest,TWILIO_AUTH_TOKEN=tessera-twilio-token:latest,TWILIO_FROM_NUMBER=tessera-twilio-from-number:latest"
 
       - name: Show service URL

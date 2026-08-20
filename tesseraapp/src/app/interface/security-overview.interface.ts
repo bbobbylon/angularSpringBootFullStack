@@ -77,6 +77,25 @@ export interface MfaAdoptionInterface {
 }
 
 /**
+ * Pagination metadata for one of the dashboard's two growing tables.
+ *
+ * Mirrors the backend's {@code SecurityOverview.PageInfo} record. Both tables previously arrived
+ * capped by a bare SQL {@code LIMIT} with no total, so the screen showed the newest N rows and said
+ * nothing about the rest — on an audit surface, "three flagged sign-ins this week" and "the three
+ * most recent of three hundred" demand different responses and rendered identically.
+ */
+export interface PageInfoInterface {
+  /** 0-based index of the page held in the sibling list. */
+  page: number;
+  /** Rows per page, echoed by the server so the client need not assume its default. */
+  size: number;
+  /** Total matching rows ignoring pagination — the number that resolves the ambiguity above. */
+  totalElements: number;
+  /** Total pages at this size; 0 when the table is empty. */
+  totalPages: number;
+}
+
+/**
  * The complete security dashboard payload (SRS FR-TPF-2).
  *
  * Delivered as one object from one request so every panel describes the same instant; see the
@@ -96,9 +115,13 @@ export interface SecurityOverviewInterface {
   /** Event type name → count over the window. Every tracked type is present, at zero if unused. */
   eventCounts: Record<string, number>;
   suspiciousLogins: SuspiciousLoginInterface[];
+  /** Pagination metadata for {@link suspiciousLogins} — see {@link PageInfoInterface}. */
+  suspiciousLoginsPage: PageInfoInterface;
   /** Oldest first, one entry per day, gap-filled by the server. */
   trend: LoginOutcomeTrendPointInterface[];
   restrictedAccounts: RestrictedAccountInterface[];
+  /** Pagination metadata for {@link restrictedAccounts} — see {@link PageInfoInterface}. */
+  restrictedAccountsPage: PageInfoInterface;
   mfaAdoption: MfaAdoptionInterface;
   /** Live refresh sessions in scope (not revoked, not superseded, not expired). */
   activeSessions: number;
@@ -110,4 +133,31 @@ export interface SecurityOverviewInterface {
 export interface SecurityOverviewDataInterface {
   user: UserInterface;
   overview: SecurityOverviewInterface;
+}
+
+/**
+ * The admin-tunable anomaly detection overrides (FUTURE-ENHANCEMENTS "Anomaly signal tuning UI"),
+ * as returned by {@code GET}/{@code PATCH /admin/security/anomaly-settings}.
+ *
+ * Mirrors the backend {@code SecuritySettings} model. {@code null} on either override field means
+ * "no override on record — the server is using its env-configured default", not "off" or "zero";
+ * the settings panel must render that as an explicit "using default" state rather than a blank or
+ * unchecked control, which would look like a deliberate override of false/0.
+ */
+export interface SecuritySettingsInterface {
+  id: number;
+  /** {@code null} = no override, server uses {@code app.security.anomaly.enabled}. */
+  anomalyEnabled: boolean | null;
+  /** {@code null} = no override, server uses {@code app.security.anomaly.history-limit}. */
+  anomalyHistoryLimit: number | null;
+  /** ISO timestamp of the last change, or null if this row has never been edited. */
+  updatedAt: string | null;
+  /** Id of the administrator who last changed it, or null. */
+  updatedBy: number | null;
+}
+
+/** The {@code data} block of the anomaly-settings response envelope. */
+export interface SecuritySettingsDataInterface {
+  user: UserInterface;
+  settings: SecuritySettingsInterface;
 }

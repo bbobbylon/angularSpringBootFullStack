@@ -15,7 +15,7 @@ import { translocoStub } from '../testing/transloco-stub';
  * <p>Structured like {@code admin.guard.spec.ts}, and for the same reason: the two guards must
  * be indistinguishable to a user who trips over them. The cases unique to this one are the
  * *parameterisation* — that it asks for the authorities the route declares rather than a fixed
- * pair — and the fail-closed behaviour when a route forgets to declare any.
+ * pair — and the fail-closed behavior when a route forgets to declare any.
  *
  * <p>The authority list deserves care in both directions. Demanding too much locks
  * {@code ROLE_MODERATOR} out of a page the backend would happily serve; demanding too little
@@ -25,7 +25,7 @@ import { translocoStub } from '../testing/transloco-stub';
 describe('capabilityGuard', () => {
   let userService: { isAuthenticated: ReturnType<typeof vi.fn>; hasAnyAuthority: ReturnType<typeof vi.fn> };
   let notifications: { onWarning: ReturnType<typeof vi.fn> };
-  /** Translation double, shared with admin.guard.spec so both guards are held to one behaviour. */
+  /** Translation double, shared with admin.guard.spec so both guards are held to one behavior. */
   let transloco: { translate: ReturnType<typeof vi.fn> };
   let router: Router;
 

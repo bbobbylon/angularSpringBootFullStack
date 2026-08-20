@@ -4,7 +4,10 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.GlobalExceptionHandler;
 import com.bob.angularspringbootfullstack.service.EventService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
+import com.bob.angularspringbootfullstack.service.PasskeyService;
 import com.bob.angularspringbootfullstack.service.RoleService;
+import com.bob.angularspringbootfullstack.service.SessionService;
+import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,11 +63,17 @@ class AdminUserControllerOrgScopeTest {
 
     private static final long ORG_ADMIN_ID = 5L;
     private static final long IN_SCOPE_TARGET = 20L;
-    private static final long OUT_OF_SCOPE_TARGET = 77L;
+    // Deliberately long and non-sequential: denialIsNonEnumerating scans the raw JSON body — including
+    // the response's nanosecond-precision timestamp field — for this id as a substring. A short id like
+    // 77 has real odds of appearing by coincidence inside an unrelated ~9-digit timestamp fraction and
+    // failing the test on a leak that never happened; a 9-digit id makes that collision astronomically
+    // unlikely while still exercising the exact same org-scope-denial code path.
+    private static final long OUT_OF_SCOPE_TARGET = 918273645L;
 
     private UserService userService;
     private EventService eventService;
     private OrganizationService organizationService;
+    private SessionService sessionService;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -73,10 +82,13 @@ class AdminUserControllerOrgScopeTest {
         RoleService roleService = mock(RoleService.class);
         eventService = mock(EventService.class);
         organizationService = mock(OrganizationService.class);
+        sessionService = mock(SessionService.class);
+        PasskeyService passkeyService = mock(PasskeyService.class);
+        TotpService totpService = mock(TotpService.class);
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
         AdminUserController controller = new AdminUserController(userService, roleService, eventService,
-                organizationService, eventPublisher);
+                organizationService, sessionService, passkeyService, totpService, eventPublisher);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -93,6 +105,16 @@ class AdminUserControllerOrgScopeTest {
     /** A platform administrator — unscoped by design (FR-ORG-3). */
     private static Authentication globalAdmin() {
         return authFor("ROLE_ADMIN");
+    }
+
+    /**
+     * A help-desk administrator — also carries {@code UPDATE:USER} and reaches this controller,
+     * but is tier 4, below the unscoped tiers. Regression coverage for the 2026-08-13 fix: this
+     * role used to bypass organization scope entirely because the old check only recognised
+     * {@code ROLE_ORGANIZATION_ADMIN} by name.
+     */
+    private static Authentication helpDeskAdmin() {
+        return authFor("ROLE_HELP_DESK_ADMIN");
     }
 
     private static Authentication authFor(String roleName) {
@@ -166,6 +188,32 @@ class AdminUserControllerOrgScopeTest {
         // Not merely "allowed" — the membership question is never even asked. Asserting the call
         // never happens is what distinguishes "unscoped by design" from "happened to be a member".
         verify(organizationService, never()).isWithinOrganizationScope(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("a help-desk admin is scoped too, not just an org admin (regression, 2026-08-13)")
+    void helpDeskAdminIsScopedTooNotJustOrgAdmin() throws Exception {
+        // Same shape as outOfScopeReadIsForbidden, but for the role the old name-only check missed
+        // entirely. Before the fix this assertion failed: a help-desk admin sailed straight through
+        // to 200 OK for ANY user id, org membership never even consulted.
+        when(organizationService.isWithinOrganizationScope(ORG_ADMIN_ID, OUT_OF_SCOPE_TARGET)).thenReturn(false);
+
+        mockMvc.perform(get("/admin/user/{id}", OUT_OF_SCOPE_TARGET).principal(helpDeskAdmin()))
+                .andExpect(status().isForbidden());
+
+        verify(userService, never()).getUserById(OUT_OF_SCOPE_TARGET);
+    }
+
+    @Test
+    @DisplayName("a help-desk admin CAN read a user inside their own organization")
+    void helpDeskAdminInScopeReadIsAllowed() throws Exception {
+        when(organizationService.isWithinOrganizationScope(ORG_ADMIN_ID, IN_SCOPE_TARGET)).thenReturn(true);
+        stubExistingTarget(IN_SCOPE_TARGET);
+
+        mockMvc.perform(get("/admin/user/{id}", IN_SCOPE_TARGET).principal(helpDeskAdmin()))
+                .andExpect(status().isOk());
+
+        verify(userService).getUserById(IN_SCOPE_TARGET);
     }
 
     @Test

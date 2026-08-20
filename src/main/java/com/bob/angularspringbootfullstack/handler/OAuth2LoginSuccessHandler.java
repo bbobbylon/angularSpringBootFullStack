@@ -1,6 +1,8 @@
 package com.bob.angularspringbootfullstack.handler;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.exception.ApiException;
+import com.bob.angularspringbootfullstack.controller.FederatedAuthController;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.FederatedIdentityService;
@@ -10,6 +12,7 @@ import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,8 +23,14 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
+import static com.bob.angularspringbootfullstack.enumeration.EventType.PROVIDER_LINKED;
+
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.FEDERATED_LOGIN;
@@ -78,6 +87,21 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private String uiAppUrl;
 
     /**
+     * Debounce window for {@link #sendSmsChallengeOnce}, guarding against a duplicate Twilio
+     * dispatch (and a real charge) when this handler runs twice in quick succession for the same
+     * user — e.g. a provider/proxy-level retry of the {@code /login/oauth2/code/{provider}}
+     * callback, or the caller re-attempting "Sign in with Google" after the previous attempt
+     * appeared to hang. Every {@code onAuthenticationSuccess} invocation issues a brand new
+     * OAuth2 authentication, so this cannot be keyed off anything provider-supplied (state/code are
+     * already consumed by the time this handler runs) — the local user id plus a short wall-clock
+     * window is the only signal available here.
+     */
+    private static final Duration SMS_CHALLENGE_DEBOUNCE = Duration.ofSeconds(15);
+
+    /** Per-user last-dispatch timestamp backing {@link #sendSmsChallengeOnce}. */
+    private final Map<Long, Instant> lastSmsChallengeAt = new ConcurrentHashMap<>();
+
+    /**
      * Completes a federated login per the class contract: resolve the local user,
      * enforce account state and MFA policy, then deliver tokens (or the MFA challenge)
      * to the SPA via redirect.
@@ -93,6 +117,19 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
             String provider = oauthToken.getAuthorizedClientRegistrationId();
             FederatedProfile profile = extractProfile(provider, oauthToken.getPrincipal());
+
+            // ── Account-link handshake (ROADMAP §1.4) ────────────────────────────────────────
+            // A link intent parked by FederatedAuthController#startLink means the user was ALREADY
+            // signed in and asked to attach this identity to their existing account. That is a
+            // different question from "who is this identity?", so it must not go through
+            // find-or-create: doing so is what used to switch the session to whichever account the
+            // provider identity happened to resolve to. No tokens are issued here — the caller's
+            // existing session simply continues.
+            Long linkUserId = consumeLinkIntent(request);
+            if (linkUserId != null) {
+                handleAccountLink(response, provider, profile, linkUserId);
+                return;
+            }
 
             UserDTO userDTO = federatedIdentityService.findOrCreateFederatedUser(
                     provider, profile.subject(), profile.email(), profile.firstName(), profile.lastName(), profile.imageUrl());
@@ -119,7 +156,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             // FR-MFA-2: a successful first factor (federated included) does not yield tokens
             // while MFA is enabled — send the SMS code and bounce to the SPA's MFA screen.
             if (userDTO.isUsing2FA()) {
-                userService.sendVerificationCode(userDTO);
+                sendSmsChallengeOnce(userDTO);
                 String phone = userDTO.getPhoneNumber() == null ? "" : userDTO.getPhoneNumber();
                 response.sendRedirect(uiAppUrl + "/oauth2/callback#mfa=true"
                         + "&email=" + URLEncoder.encode(userDTO.getEmail(), UTF_8)
@@ -206,6 +243,74 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
      * profile fields the local account needs at creation time (FR-FED-6 — nothing more
      * than this is ever persisted from the provider).
      */
+    /**
+     * Reads and clears any pending link intent for this handshake.
+     *
+     * <p>Cleared unconditionally, whether or not it is used: an intent that survived into a later,
+     * unrelated sign-in would silently attach that identity to the earlier user's account.
+     *
+     * @param request the callback request, whose session may carry the intent
+     * @return the user id to link to, or null for an ordinary sign-in
+     */
+    private static Long consumeLinkIntent(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null) return null;
+        Object value = session.getAttribute(FederatedAuthController.LINK_INTENT_SESSION_KEY);
+        session.removeAttribute(FederatedAuthController.LINK_INTENT_SESSION_KEY);
+        return value instanceof Long userId ? userId : null;
+    }
+
+    /**
+     * Attaches the verified identity to the account that asked for it and returns the browser to the
+     * Security Center.
+     *
+     * <p>Redirects rather than issuing tokens: the user never stopped being signed in, and minting a
+     * fresh session here would be the very behavior this branch exists to prevent. The outcome is
+     * reported through a query flag so the SPA can raise the right toast — including the refusal,
+     * which is a normal thing to hit (connecting an identity that already belongs to someone else)
+     * rather than an error state.
+     *
+     * @param response the response used for the redirect
+     * @param provider the registration id being connected
+     * @param profile  the verified provider identity
+     * @param userId   the account the link was requested for
+     */
+    private void handleAccountLink(HttpServletResponse response, String provider,
+                                   FederatedProfile profile, Long userId) throws IOException {
+        try {
+            boolean linked = federatedIdentityService.linkProviderToUser(userId, provider, profile.subject());
+            if (linked) {
+                UserDTO owner = userService.getUserById(userId);
+                eventPublisher.publishEvent(new NewUserEvent(owner.getEmail(), PROVIDER_LINKED, provider));
+            }
+            response.sendRedirect(uiAppUrl + "/security?linked=" + URLEncoder.encode(provider, UTF_8));
+        } catch (ApiException exception) {
+            log.warn("Federated link refused for userId {} provider '{}': {}", userId, provider, exception.getMessage());
+            response.sendRedirect(uiAppUrl + "/security?linkError=" + URLEncoder.encode(exception.getMessage(), UTF_8));
+        }
+    }
+
+    /**
+     * Dispatches the SMS/voice 2FA challenge via {@link UserService#sendVerificationCode}, unless
+     * one was already dispatched for this exact user within {@link #SMS_CHALLENGE_DEBOUNCE} — see
+     * that field's Javadoc for why a duplicate call here is a real risk despite there being only one
+     * call site. Skipping the resend is safe either way: a code issued moments ago is still valid
+     * and still pending, so the redirect to the MFA screen below proceeds unchanged regardless of
+     * which branch runs.
+     *
+     * @param userDTO the federated user whose phone challenge is being started
+     */
+    private void sendSmsChallengeOnce(UserDTO userDTO) {
+        Instant now = Instant.now();
+        Instant previous = lastSmsChallengeAt.put(userDTO.getId(), now);
+        if (previous != null && Duration.between(previous, now).compareTo(SMS_CHALLENGE_DEBOUNCE) < 0) {
+            log.warn("Suppressed duplicate SMS 2FA dispatch for user id {} — a challenge was already sent {}ms ago",
+                    userDTO.getId(), Duration.between(previous, now).toMillis());
+            return;
+        }
+        userService.sendVerificationCode(userDTO);
+    }
+
     private record FederatedProfile(String subject, String email, String firstName, String lastName, String imageUrl) {
     }
 }

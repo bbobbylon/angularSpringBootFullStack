@@ -1,0 +1,26 @@
+meta {
+  name: Retire Service
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/admin/services/{{serviceId}}/active/false
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  There is deliberately no DELETE for services — retire, never delete
+  (invoices copy the name/price at creation time).
+}

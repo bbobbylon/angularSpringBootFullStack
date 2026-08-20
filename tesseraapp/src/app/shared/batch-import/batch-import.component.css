@@ -1,0 +1,25 @@
+/*
+ * The host sits inside .sc-head__actions (an inline-flex toolbar row shared with the search box
+ * and "New Customer"/"New invoice" links). `display: contents` drops the host's own box so the
+ * toggle button and, once opened, the .batch-import panel become independent flex items of that
+ * row instead of being nested inside one tall item — otherwise the row would try to fit the whole
+ * expanded panel beside the other toolbar controls on a single nowrap-width line.
+ */
+:host {
+  display: contents;
+}
+
+/*
+ * flex-basis: 100% is the standard flexbox line-break trick: paired with .sc-head__actions'
+ * flex-wrap: wrap, an item requesting the full row width never fits next to its siblings, so it
+ * is always pushed onto its own line below them rather than squeezing the toolbar horizontally.
+ */
+.batch-import {
+  flex: 1 1 100%;
+  margin-top: var(--space-3);
+}
+
+.batch-import__failures {
+  max-height: 16rem;
+  overflow-y: auto;
+}

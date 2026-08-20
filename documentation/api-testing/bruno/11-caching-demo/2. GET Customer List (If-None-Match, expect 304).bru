@@ -1,0 +1,32 @@
+meta {
+  name: 2. GET Customer List (If-None-Match, expect 304)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/customer/list?page=0&size=5
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+  If-None-Match: {{etag}}
+}
+
+params:query {
+  page: 0
+  size: 5
+}
+
+tests {
+  test("revalidated with 304", function () {
+    expect(res.getStatus()).to.equal(304);
+  });
+}
+
+docs {
+  Run request 1 first in this same run so {{etag}} is populated. See
+  documentation/flows/00-anatomy-of-a-request.md §2.3.
+}

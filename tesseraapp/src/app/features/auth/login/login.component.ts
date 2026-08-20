@@ -7,9 +7,11 @@ import { LoginStateInterface } from '../../../interface/appstates.interface';
 import { UserService } from '../../../service/user.service';
 import { Key } from '../../../enumeration/key.enumeration';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { retry } from 'rxjs';
+import { firstValueFrom, retry } from 'rxjs';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { isWebAuthnSupported, shouldPromptForPasskey, startAuthentication } from '../../../utils/webauthn.utils';
+import { UserInterface } from '../../../interface/user.interface';
 
 /**
  * Handles login and MFA verification flows.
@@ -39,6 +41,10 @@ export class LoginComponent implements OnInit {
    * "or continue with" section entirely.
    */
   protected readonly federatedProviders = signal<string[]>([]);
+  /** Whether this browser supports WebAuthn at all — hides the passkey button when false. */
+  protected readonly webauthnSupported = isWebAuthnSupported();
+  /** True while a passkey sign-in ceremony is in flight. */
+  protected readonly passkeyLoginInProgress = signal(false);
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -53,6 +59,12 @@ export class LoginComponent implements OnInit {
    * information — it is useless without the authenticator.
    */
   private readonly challenge = signal<string | null>(null);
+  /** True while a resend request is in flight, so the button can't be double-clicked. */
+  protected readonly resendInFlight = signal(false);
+  /** Seconds remaining before another resend is allowed. Client-side courtesy only — the
+   *  backend's own auth-tier rate limit (10/min/IP) is the real enforcement. */
+  protected readonly resendCooldown = signal(0);
+  private resendCooldownHandle: ReturnType<typeof setInterval> | undefined;
 
   /**
    * Boot logic for the login screen. Beyond the original authenticated-redirect,
@@ -135,6 +147,47 @@ export class LoginComponent implements OnInit {
   }
 
   /**
+   * Routes home after ANY successful login — password, MFA-verified, or passkey — detouring
+   * through the one-time "Add a passkey?" prompt first when {@link shouldPromptForPasskey} says
+   * to (account has none yet, browser supports WebAuthn, not already dismissed on this device).
+   * Centralized here rather than duplicated per success branch, since this component has three.
+   */
+  private navigateHome(user: UserInterface | undefined): void {
+    this.router.navigate([shouldPromptForPasskey(user?.usingPasskey) ? '/welcome-passkey' : '/']);
+  }
+
+  /**
+   * Runs a usernameless passkey sign-in: fetches request options, prompts the browser to pick a
+   * registered passkey via {@link startAuthentication}, then posts the assertion for
+   * verification. On success this goes straight to tokens — no risk-based step-up and no second
+   * factor, mirroring how {@code OAuth2LoginSuccessHandler} already treats federated login as
+   * strong enough on its own (see {@code PasskeyController} for the backend side of that decision).
+   *
+   * <p>A cancelled or dismissed platform prompt throws a {@code DOMException} from
+   * {@code navigator.credentials.get()} without ever reaching the backend — caught here and
+   * treated as a silent no-op rather than an error, since the user simply changed their mind and
+   * the password form is still right there.
+   */
+  async loginWithPasskey(): Promise<void> {
+    this.passkeyLoginInProgress.set(true);
+    try {
+      const options = await firstValueFrom(this.userService.webauthnLoginOptions$());
+      const credential = await startAuthentication(options.data!.publicKey as PublicKeyCredentialRequestOptionsJSON);
+      const response = await firstValueFrom(this.userService.webauthnLoginVerify$(credential));
+      localStorage.setItem(Key.TOKEN, response.data!.access_token);
+      localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
+      this.navigateHome(response.data!.user);
+      this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
+    } catch (error) {
+      if (!(error instanceof DOMException)) {
+        this.notification.onError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      this.passkeyLoginInProgress.set(false);
+    }
+  }
+
+  /**
    * Submits the MFA verification code once the backend has requested 2FA.
    *
    * Dispatches to the method-appropriate endpoint (FR-MFA-2/4, FR-TPF-1): the SMS path
@@ -164,7 +217,7 @@ export class LoginComponent implements OnInit {
       next: (response) => {
         localStorage.setItem(Key.TOKEN, response.data!.access_token);
         localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
-        this.router.navigate(['/']);
+        this.navigateHome(response.data!.user);
         this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
       },
       error: (error: string) => {
@@ -179,6 +232,53 @@ export class LoginComponent implements OnInit {
         });
       },
     });
+  }
+
+  /**
+   * Requests redelivery of the outstanding SMS/email code from the "Resend code" link.
+   * Only reachable for the {@code 'sms'}/{@code 'email'} methods — TOTP has no server-issued
+   * code to resend, so the template hides the link entirely for that method.
+   *
+   * <p>The backend's response is deliberately non-committal (FR-AUTH-4) — it never confirms
+   * whether a code was actually resent — so this always shows the same neutral confirmation
+   * and starts a client-side cooldown, both to discourage repeat clicks and to mirror the
+   * backend's own auth-tier rate limit (10 req/min/IP) with immediate UI feedback rather than
+   * only surfacing a 429 after the fact.
+   */
+  resendCode(): void {
+    const email = this.email();
+    if (!email || this.resendInFlight() || this.resendCooldown() > 0) {
+      return;
+    }
+    this.resendInFlight.set(true);
+    this.userService
+      .resendCode$(email)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.resendInFlight.set(false);
+          this.notification.onSuccess("If a code is pending, we've sent it again.");
+          this.startResendCooldown();
+        },
+        error: (error: string) => {
+          this.resendInFlight.set(false);
+          this.notification.onError(error);
+        },
+      });
+  }
+
+  /** Runs a 30-second countdown, ticking {@link resendCooldown} down to 0 once a second. */
+  private startResendCooldown(): void {
+    clearInterval(this.resendCooldownHandle);
+    this.resendCooldown.set(30);
+    this.resendCooldownHandle = setInterval(() => {
+      const remaining = this.resendCooldown() - 1;
+      this.resendCooldown.set(Math.max(remaining, 0));
+      if (remaining <= 0) {
+        clearInterval(this.resendCooldownHandle);
+      }
+    }, 1000);
+    this.destroyRef.onDestroy(() => clearInterval(this.resendCooldownHandle));
   }
 
   /**
@@ -240,7 +340,7 @@ export class LoginComponent implements OnInit {
           } else {
             localStorage.setItem(Key.TOKEN, response.data!.access_token);
             localStorage.setItem(Key.REFRESH_TOKEN, response.data!.refresh_token);
-            this.router.navigate(['/']);
+            this.navigateHome(response.data!.user);
             this.loginState.set({ dataState: DataState.LOADED, loginSuccess: true });
           }
         },
