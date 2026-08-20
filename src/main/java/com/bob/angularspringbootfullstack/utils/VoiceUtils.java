@@ -1,6 +1,5 @@
 package com.bob.angularspringbootfullstack.utils;
 
-import com.twilio.Twilio;
 import com.twilio.rest.api.v2010.account.Call;
 import com.twilio.twiml.TwiMLException;
 import com.twilio.twiml.VoiceResponse;
@@ -50,7 +49,7 @@ public class VoiceUtils {
             log.warn("Twilio is not configured; voice call not placed. Code for {}: {}", toNumber, code);
             return;
         }
-        Twilio.init(SMSUtils.ACCOUNT_SID, SMSUtils.AUTH_TOKEN);
+        SMSUtils.ensureTwilioInitialized();
         try {
             Call.creator(
                     new PhoneNumber(SMSUtils.toE164US(toNumber)),

@@ -1,6 +1,5 @@
 package com.bob.angularspringbootfullstack.utils;
 
-import com.twilio.Twilio;
 import com.twilio.rest.verify.v2.service.Verification;
 import com.twilio.rest.verify.v2.service.VerificationCheck;
 import org.slf4j.Logger;
@@ -53,7 +52,7 @@ public class TwilioVerifyUtils {
      * @param channel  {@code "sms"} or {@code "call"}
      */
     public static void startVerification(String toNumber, String channel) {
-        Twilio.init(SMSUtils.ACCOUNT_SID, SMSUtils.AUTH_TOKEN);
+        SMSUtils.ensureTwilioInitialized();
         Verification verification = Verification.creator(VERIFY_SERVICE_SID, SMSUtils.toE164US(toNumber), channel).create();
         log.info("Twilio Verify {} challenge dispatched to {}, status={}", channel, toNumber, verification.getStatus());
     }
@@ -66,7 +65,7 @@ public class TwilioVerifyUtils {
      * @return {@code true} only when Twilio reports the challenge as {@code "approved"}
      */
     public static boolean checkVerification(String toNumber, String code) {
-        Twilio.init(SMSUtils.ACCOUNT_SID, SMSUtils.AUTH_TOKEN);
+        SMSUtils.ensureTwilioInitialized();
         VerificationCheck check = VerificationCheck.creator(VERIFY_SERVICE_SID)
                 .setTo(SMSUtils.toE164US(toNumber))
                 .setCode(code)

@@ -32,6 +32,32 @@ public class SMSUtils {
     /** Twilio Auth Token, loaded from TWILIO_AUTH_TOKEN env var. */
     public static final String AUTH_TOKEN   = System.getenv("TWILIO_AUTH_TOKEN");
 
+    /** Guards {@link #ensureTwilioInitialized()} so {@code Twilio.init} runs at most once per JVM. */
+    private static volatile boolean twilioInitialized = false;
+
+    /**
+     * Initializes the Twilio SDK's shared REST client exactly once per JVM lifetime.
+     * <p>
+     * {@code Twilio.init(...)} does not just set the account SID/auth token — it discards the SDK's
+     * cached {@code TwilioRestClient}, so the next API call rebuilds the underlying HTTP client and
+     * connection pool from scratch. {@link #ACCOUNT_SID} and {@link #AUTH_TOKEN} are {@code static
+     * final}, loaded once from the environment and never change at runtime, so calling {@code init}
+     * on every send/verify (as {@link #sendSMS}, {@link TwilioVerifyUtils}, and {@link VoiceUtils}
+     * previously each did independently) bought nothing but forced a fresh TCP+TLS handshake to
+     * Twilio on every single request — directly inside the login/2FA request thread. Calling it once
+     * here lets the SDK's client (and its connection keep-alive) persist across requests.
+     */
+    static void ensureTwilioInitialized() {
+        if (!twilioInitialized) {
+            synchronized (SMSUtils.class) {
+                if (!twilioInitialized) {
+                    Twilio.init(ACCOUNT_SID, AUTH_TOKEN);
+                    twilioInitialized = true;
+                }
+            }
+        }
+    }
+
     /**
      * Sends an SMS to the given number, or logs it when Twilio is unconfigured.
      * <p>
@@ -49,7 +75,7 @@ public class SMSUtils {
             log.warn("Twilio is not configured; SMS not sent. Code/message for {}: {}", toNumber, messageBody);
             return;
         }
-        Twilio.init(ACCOUNT_SID, AUTH_TOKEN);
+        ensureTwilioInitialized();
         Message.creator(
                 new PhoneNumber(toE164US(toNumber)),
                 new PhoneNumber(FROM_NUMBER),

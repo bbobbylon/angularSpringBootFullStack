@@ -200,7 +200,10 @@ CREATE TABLE IF NOT EXISTS userevents
     detail     VARCHAR(255) DEFAULT NULL,
     created_at DATETIME     DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE RESTRICT ON UPDATE CASCADE
+    FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    -- Performance indexes for login flow (brute-force check, audit queries)
+    INDEX idx_userevents_user_created (user_id, created_at),
+    INDEX idx_userevents_created (created_at)
 );
 
 -- Idempotent add of userevents.detail for databases created before FR-FED-5 shipped. MySQL has

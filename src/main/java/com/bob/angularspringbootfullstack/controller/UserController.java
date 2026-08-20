@@ -210,15 +210,14 @@ public class UserController {
     }
 
     /**
-     * Reloads the User entity and Role for the given DTO and wraps them in a
-     * UserPrincipal so TokenProvider can mint tokens whose authorities reflect
-     * the user's current permissions.
+     * Wraps the authenticated user and their role in a UserPrincipal for token minting.
+     * Uses the already-fetched UserDTO, avoiding redundant database lookups.
      *
-     * @param userDTO an authenticated user
+     * @param userDTO an authenticated user (already fetched from DB)
      * @return a UserPrincipal carrying the User and Role
      */
     private UserPrincipal getUserPrincipal(UserDTO userDTO) {
-        return new UserPrincipal(toUser(userService.getUserByEmail(userDTO.getEmail())), roleService.getRoleByUserId(userDTO.getId()));
+        return new UserPrincipal(toUser(userDTO), roleService.getRoleByUserId(userDTO.getId()));
     }
 
     /**
