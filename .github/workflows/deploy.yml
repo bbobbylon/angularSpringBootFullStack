@@ -106,6 +106,13 @@ jobs:
 
     env:
       TARGET_ENV: ${{ github.event.inputs.environment || 'prod' }}
+      # Reconstructed locally rather than read from needs.build-and-push.outputs.image-uri:
+      # that cross-job output was observed to evaluate empty at runtime on every attempt
+      # (same-job outputs, e.g. steps.target.outputs.* below, resolve fine — the gap is
+      # specifically in needs.<job>.outputs propagation). The URI is fully deterministic
+      # from values already available here, so there's nothing to pass across the job
+      # boundary in the first place.
+      ECR_IMAGE_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
 
     steps:
       - name: Checkout (for task definition template)
@@ -158,7 +165,7 @@ jobs:
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
           AWS_REGION:     ${{ secrets.AWS_REGION }}
-          ECR_IMAGE_URI:  ${{ needs.build-and-push.outputs.image-uri }}
+          ECR_IMAGE_URI:  ${{ env.ECR_IMAGE_URI }}
           AIVEN_HOST:     ${{ secrets.AIVEN_HOST }}
           AIVEN_PORT:     ${{ secrets.AIVEN_PORT }}
           AIVEN_DB:       ${{ secrets.AIVEN_DB }}
@@ -196,7 +203,7 @@ jobs:
         with:
           task-definition: aws/task-definition.filled.json
           container-name: tessera-app
-          image: ${{ needs.build-and-push.outputs.image-uri }}
+          image: ${{ env.ECR_IMAGE_URI }}
           # Override the Spring profile so the container loads application-<env>.yml
           environment-variables: |
             SPRING_ACTIVE_PROFILES=${{ env.TARGET_ENV }}
