@@ -473,6 +473,14 @@ export class SecurityCenterComponent implements OnInit {
   }
 
   /**
+   * Refreshes the current page of audit events — called when the user clicks
+   * the manual refresh button in the Activity History panel.
+   */
+  protected refreshEvents(): void {
+    this.loadEvents(this.currentEventPage());
+  }
+
+  /**
    * Navigates to the given events page in the Activity History panel.
    * Fetches only the events slice so the rest of the page stays intact.
    *

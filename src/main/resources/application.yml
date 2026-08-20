@@ -13,6 +13,11 @@
 jwt:
   secret: ${JWT_SECRET}
 
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+
 server:
   port: ${CONTAINER_PORT:8080}
   # ── Reverse-proxy awareness ────────────────────────────────────────────────────────────
