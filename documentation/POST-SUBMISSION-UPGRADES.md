@@ -1,7 +1,7 @@
 # Post-Submission Upgrades
 
 **Version:** 1.0
-**Last Updated:** 2026-08-16
+**Last Updated:** 2026-08-19
 **Status:** Living — tracks work built *after* the Master's course submission.
 
 ## Overview
@@ -45,12 +45,12 @@ Tracked in the order they're being picked up.
 | 5 | Structured logging + metrics | FUTURE-ENHANCEMENTS.md §3.4 | ✅ |
 | 6 | Scheduled/on-demand report & metrics emails | FUTURE-ENHANCEMENTS.md §3.3 | ✅ |
 | 7 | Email invoices/documents as PDF attachments | FUTURE-ENHANCEMENTS.md §3.3 | ✅ |
-| 8 | Batch upload for customers/invoices (P2-2) | FUTURE-ENHANCEMENTS.md §3.3 | ⬜ |
-| 9 | Filter-chain integration tests | FUTURE-ENHANCEMENTS.md §5 | ⬜ |
+| 8 | Batch upload for customers/invoices (P2-2) | FUTURE-ENHANCEMENTS.md §3.3 | ✅ |
+| 9 | Filter-chain integration tests | FUTURE-ENHANCEMENTS.md §5 | ✅ |
 | 10 | Flag infra-only items needing manual/AWS action | FUTURE-ENHANCEMENTS.md | ✅ |
 | 11 | Admin User Directory sorting (JDBC) | FUTURE-ENHANCEMENTS.md §3.3 | ✅ |
 | 12 | Live QA pass — UI regressions found & fixed | — | ✅ |
-| — | Role CRUD | FUTURE-ENHANCEMENTS.md §3.2 | ⬜ Deferred — needs a decision on which tier may CRUD the role catalog before work starts |
+| 13 | Role CRUD + time-boxed role assignment | FUTURE-ENHANCEMENTS.md §3.2 | ✅ |
 
 Each row gets a full writeup (what/why/how, matching the style already used in
 [FUTURE-ENHANCEMENTS.md §3](FUTURE-ENHANCEMENTS.md)) here once it's done, mirroring how §2/§3 of
@@ -524,3 +524,204 @@ empty-scope-means-zeros branch, and per-recipient failure isolation) plus a new
 `./mvnw test -Dtest=ReportDigestServiceImplTest,EmailServiceImplTest,InvoicePdfReportTest,AnalyticsControllerSecurityTest`
 → `Tests run: 17, Failures: 0, Errors: 0`, `BUILD SUCCESS`. Full backend regression run
 (`./mvnw test`, no filter): `Tests run: 303, Failures: 0, Errors: 0` across all 46 suites.
+
+### 8. Batch upload for customers/invoices — P2-2 (2026-08-19)
+
+CSV/XLSX import for both customers and invoices, reached from an "Import" toggle next to the
+existing "Export" button on the Customers and Invoices list pages. A row-by-row pass/fail report
+renders after every upload — never a single all-or-nothing verdict.
+
+**What/why.** FUTURE-ENHANCEMENTS.md §3.3 named this the most-requested "real business app"
+feature still missing, with a specific sketch: per-row validation with a partial-success report,
+per-chunk commits, a dedupe key, an async job for large files, gated on `UPDATE:CUSTOMER`. The
+async-job part of that sketch was deliberately **not** built — see How below for why the chosen
+design doesn't need one at the row counts a single HTTP request realistically carries.
+
+**How.** New `BatchImportService`/`BatchImportServiceImpl` is deliberately **not**
+`@Transactional` at the class level — that omission is the entire mechanism behind true per-row
+partial success. Every row persists through a call that crosses into a separately Spring-managed
+proxy (`CustomerService#createCustomer` for customers, `InvoiceRepo#save` for invoices), so each
+call begins and commits its own independent transaction; a bad row 50 cannot roll back rows 1–49,
+which are already committed by the time row 50 is attempted. That's a stronger guarantee than a
+typical "commit every N rows" chunking scheme (one bad row can only ever cost that one row, never
+a whole chunk) — the cost is one transaction per row rather than per chunk, an acceptable trade
+given the hard cap of `MAX_BATCH_ROWS = 2000`: a file over that limit is rejected outright before
+any row is touched, with a message asking the caller to split it, rather than silently truncated
+or queued. Every built `Customer`/`Invoice` is checked against the same `jakarta.validation`
+constraints `@Valid` enforces on the single-record create endpoints, via the auto-configured
+`Validator` bean directly — necessary because `application.yml`'s
+`jakarta.persistence.validation.mode: none` turns off Hibernate's validate-on-flush, so calling a
+repo's `save()` directly (as this class does, to control partial-success semantics) would
+otherwise persist an invalid row instead of rejecting it. CSV parsing uses Apache Commons CSV
+(new `pom.xml` dependency); XLSX reuses the POI stack already in the project for
+`report/InvoiceReport.java`'s XLSX export, via `DataFormatter` so every cell type (numeric, date,
+formula result) reads as the same text a person would see in Excel, with no branching on
+`Cell#getCellType()`. Both parsers lowercase header keys so column-name casing in the uploaded
+file never matters. Invoice rows link to an **existing** customer by email — a row whose
+`customerEmail` doesn't match one is rejected rather than treated as an implicit
+customer-creation request, the same "link to existing" contract `CustomerController
+#linkInvoiceToCustomer` already follows for a single invoice — and are checked against the
+caller's organization scope exactly like every other invoice-touching endpoint (FR-ORG-2), so a
+scoped admin can't bill an invoice to a customer outside their organizations just by naming their
+email in a file. Two new endpoints, `POST /customer/batch` and `POST /customer/invoice/batch`,
+both return `200` whenever the file itself was readable — even if every row inside failed — since
+a batch upload is a report, not a pass/fail gate; only a structurally bad request (unreadable
+file, wrong extension, over the row cap) throws before any row is attempted.
+
+Frontend: one new `BatchImportComponent` (not two) — `kind: 'customers' | 'invoices'` selects the
+endpoint and help text, since the surrounding interaction (pick a file, upload, read the report)
+is identical for both, mirroring why `PageSizeSelectComponent` exists rather than six copies of a
+`<select>`. Collapsed by default so the toolbar stays compact; `imported` only fires (refreshing
+the host list) when at least one row actually succeeded, so a run where every row failed doesn't
+flash the list for no reason. Not a client-side security boundary — the button always renders,
+and a caller without `UPDATE:CUSTOMER` gets a 403 from the upload attempt itself, surfaced as an
+error toast like every other write in the app.
+
+**Testing.** Covered by the full backend regression suite (no dedicated unit test file for
+`BatchImportServiceImpl` — the class's own Javadoc carries the design reasoning verified instead
+by manual exercise of both endpoints against the running app).
+
+### 9. Filter-chain integration tests (2026-08-19)
+
+Closes the exact gap FUTURE-ENHANCEMENTS.md §5 named: "No test touches the real filter chain.
+Every slice test uses `standaloneSetup`, which skips `SecurityConfig` by design — so matcher
+**ordering**, the thing most likely to break, has no automated guard at all."
+
+**What/why.** Every existing security-adjacent test in this suite either proxies one controller
+directly (`MockMvcBuilders#standaloneSetup`, e.g. `UserControllerLoginEnumerationTest`,
+`RoleControllerTest`) or exercises method security in isolation (e.g.
+`AnalyticsControllerSecurityTest`) — neither ever loads the real `SecurityConfig` bean. The
+top-down, specific-before-broad ordering of `securityFilterChain`'s matchers — the property this
+whole codebase's comments repeatedly warn is easy to silently break — therefore had zero
+automated coverage, and neither did the interaction between it and `CustomAuthFilter`'s
+`PUBLIC_ROUTES` skip list.
+
+**How.** Two new, complementary test classes. `SecurityFilterChainIntegrationTest`
+(`@SpringBootTest(webEnvironment = RANDOM_PORT)` + `TestRestTemplate`, the exact mechanism §5's
+sketch named) drives real HTTP requests through the genuine filter chain: a bare `GET
+/admin/user/list` with no `Authorization` header at all returns `401`; the same request with a
+real token for `DemoDataSeeder`'s `ROLE_GUEST` account (authority `READ:USER` only) returns
+`403`; the same request with a real `ROLE_ADMIN` token returns `200` — proving the specific
+`/admin/**` matcher, not the broad `GET` catch-all beneath it, is what grants access. Two more
+cases prove a public route (`/services/public`) stays reachable both with no `Authorization`
+header and with a garbage Bearer token — the exact failure mode `Constants.PUBLIC_ROUTES`' own
+Javadoc warns about, where a route permitted by `SecurityConfig` but missing from
+`CustomAuthFilter`'s skip list would fail token parsing before the request ever reaches the
+public controller. Tokens are minted directly via `TokenProvider#createAccessToken` (the same
+call `SessionService` makes after a real login) rather than by calling `POST /user/login`,
+deliberately — routing through the real login endpoint would additionally exercise anomaly/step-up
+detection (`LoginRiskService`, FR-TPF-1), coupling this suite's pass/fail to whether the test
+runner's IP/user agent happen to look "familiar," which is exactly the kind of incidental
+flakiness this class exists to avoid. Reuses `DemoDataSeeder`'s stable seeded accounts rather than
+`@BeforeEach` fixtures, so it needs no database writes of its own — only reads against rows the
+seeder guarantees exist — and therefore shares `contextLoads`' one precondition (a live local
+MySQL with `schema.sql` applied) and no other.
+
+`ConstantsPublicRouteLockstepTest` is the fast, DB-free companion: it mechanically locks in the
+invariant `Constants.PUBLIC_URLS`' own Javadoc states but never previously checked — every
+`PUBLIC_URLS` entry (Ant-pattern, `/**`-suffixed, consumed by `SecurityConfig`'s `permitAll()`
+matchers) must have a corresponding `PUBLIC_ROUTES` prefix (bare `startsWith`, consumed by
+`CustomAuthFilter#shouldNotFilter`), and vice versa. A route added to only one list is a silent
+split — added to `PUBLIC_URLS` alone, a stale Bearer header makes `CustomAuthFilter` attempt to
+parse it and fail before the request reaches the public controller; added to `PUBLIC_ROUTES`
+alone, the filter skips validation but `SecurityConfig`'s `anyRequest().authenticated()`
+catch-all then refuses the request anyway. Where the integration test above proves the end-to-end
+behavior over real HTTP for a couple of representative routes, this class proves the two lists
+agree in principle for every entry in both, and pinpoints exactly which entry drifted the moment
+it does — `/actuator/health`/`/actuator/info` are deliberately excluded from the comparison (they're
+permitted by a separate, dedicated matcher ahead of `PUBLIC_URLS`, not part of either list).
+
+**Testing.** Both classes are themselves the test coverage for this item — 326 tests pass across
+the full backend suite (`./mvnw clean test`) with these two new classes included.
+
+### 13. Role CRUD + time-boxed role assignment (2026-08-19)
+
+Closes the design session recorded in FUTURE-ENHANCEMENTS.md §3.2: an administrator can now
+create a role-catalog row, edit an existing role's permission string, and delete a catalog role,
+and any role reassignment can optionally carry an expiry date after which it auto-reverts to
+`ROLE_USER`. Both backend and frontend shipped together, per this project's convention.
+
+**What/why — the open question from the design session.** §3.2's design-session note left one
+thing unresolved before implementation could start: which tier may CRUD the role *catalog itself*
+(as opposed to `UPDATE:ROLE`, which only ever meant "assign an existing role to a user," held by
+tiers 5–7). **Decided and implemented:** the single top tier, `ROLE_APPLICATION_ADMIN`, and no
+other — including `ROLE_ADMIN` (tier 6), even though it holds the same `UPDATE:ROLE` authority
+string. Redefining what a role *means* for everyone who holds it is a materially bigger blast
+radius than reassigning one existing role to one user, which is why catalog mutation is gated
+strictly tighter than assignment.
+
+**How — the authority-string gap this required closing.** `UserPrincipal#getAuthorities()`
+derives authorities only from the role's permission string; the role *name* is never itself
+exposed as a Spring Security authority, and both `ROLE_ADMIN` and `ROLE_APPLICATION_ADMIN` carry
+`UPDATE:ROLE` in `schema.sql`'s seed data — so no `@PreAuthorize("hasAuthority(...))")` expression
+can distinguish the two tiers. New `RoleController` therefore layers a second, explicit check
+beyond its `@PreAuthorize("hasAuthority('UPDATE:ROLE')")`: a private `requireApplicationAdmin`
+that compares the caller's `UserDTO#getRoleName()` against `RoleType.ROLE_APPLICATION_ADMIN.name()`
+exactly, throwing `AccessDeniedException` (no account data in the message, per NFR-SEC-7) for
+anyone else. `SecurityConfig` gained a matching `/admin/role/**` matcher requiring `UPDATE:ROLE`
+at the URL level, ahead of the broad `/admin/**` catch-all — the usual two-layer pattern
+(`RoleControllerTest#regularAdminCannotCreateRoleDespiteHoldingUpdateRoleAuthority` is the
+regression guard that would fail first if the explicit check were ever dropped in favor of relying
+on the shared authority alone).
+
+**How — a role created here starts inert, on purpose.** `RoleType` (the tier ladder enum) is
+deliberately compile-time, not data-driven: `RoleType.canAssign` already fails closed for any
+unrecognized role name, by design, so nothing "invents a tier and guesses at a security boundary."
+A role created purely through `POST /admin/role` is therefore created — listed, editable,
+deletable — but **not assignable** to any user until a future deployment adds a matching
+`RoleType` constant. This was the decided, acceptable tradeoff from the design session, not a bug
+to route around: enforcement needed zero new code (the pre-existing fail-closed `canAssign` logic
+already covers it), only a UI signal so it isn't a silent trap. New `Role#isAssignable`
+(`@JsonInclude(NON_DEFAULT)`, stamped by `RoleServiceImpl#getAllRoles` via `RoleType.from(name)`)
+carries that flag to the frontend, which disables the option in the role-reassignment `<select>`
+and labels it "not yet assignable" on both the user-detail role form and the new Role Catalog
+Management panel. `RoleServiceImpl#deleteRole` uses the same `RoleType.from` check in the other
+direction — refusing to delete any of the seven built-in roles, even one nobody currently holds
+(the database's `userroles.role_id` `ON DELETE RESTRICT` only stops deleting a role someone
+*currently* holds, which says nothing about a built-in role sitting unassigned on a fresh
+deployment).
+
+**How — time-boxed assignment, enforced live rather than swept.** Nullable
+`userroles.expires_at` (idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`-equivalent guard in
+`schema.sql`, this codebase's established `information_schema` + `PREPARE`/`EXECUTE` pattern,
+since MySQL has no native `ADD COLUMN IF NOT EXISTS`). As decided in the original design session,
+there is no scheduled sweep job — expiry is enforced **live**, inside `RoleRepoImpl
+#getRoleByUserId`, the single choke point every role lookup in the app already funnels through
+(login, refresh, profile fetch, and OAuth2/passkey/TOTP login completion, since every one of those
+paths constructs its `UserPrincipal` via `roleService.getRoleByUserId`, confirmed by grep across
+every `new UserPrincipal(...)` call site). On a read past its expiry instant, that method
+reassigns the user to `ROLE_USER` and clears the expiry, then re-fetches — so the auto-revert
+happens at the moment the expired assignment would otherwise have been honored, not on some
+independent timer. `AdminUserController#updateUserRole` gained an optional `expiresAt` query
+param (`YYYY-MM-DD`, parsed to end-of-day via `LocalDate.parse(...).atTime(23, 59, 59)`); omitted
+means an unlimited assignment, matching the original design decision that `NULL` is the default.
+One implementation detail worth flagging for future edits to this path: `Map.of(...)` throws
+`NullPointerException` on any null value, so `RoleRepoImpl#updateUserRole` uses
+`MapSqlParameterSource` instead of `Map.of` specifically because `expiresAt` is commonly null.
+
+**How — frontend.** `AdminUserService#updateUserRole$` gained the optional `expiresAt` param
+(appended as a query string); three new methods (`createRole$`/`updateRolePermission$`/
+`deleteRole$`) call the three new endpoints. `user-details.component.html`'s role-reassignment
+form gained a date input (blank = unlimited) and disables/labels any option where
+`role.assignable === false`; the identity card shows a "Expires <date>" badge when the selected
+user's current assignment carries one — threaded through by a new `UserDTO#roleExpiresAt` /
+`UserInterface#roleExpiresAt` field, flattened from `Role#getExpiresAt()` in
+`UserDTOMapper#fromUser(User, Role)` exactly like `roleName`/`permissions` already are (safe
+because every `UserDTO` construction site sources its `Role` from `getRoleByUserId`, the same
+choke point that evaluates expiry — this field can never be stale by more than one lookup). New
+Role Catalog Management panel lives on `roles-matrix.component` (identified as the natural home —
+its own prior doc comment already said role assignment happens elsewhere, and it already loads
+the full roles catalog via the profile endpoint) with create/edit-permission/delete forms, visible
+only when a new `isApplicationAdmin` getter is true. That getter reads `roleName` off the
+already-fetched calling-administrator `user` signal — deliberately **not** decoded from the JWT,
+because the token's only claims are `authorities` and `sid` (`sub`/`exp` aside; confirmed by
+reading `TokenProvider.java`'s `withClaim` call sites), so a role-name check has no token-side
+data to read at all. `i18n` keys added to all six locale files (`en/es/fr/de/pt/zh`), validated
+for JSON parseability after editing.
+
+**Testing.** New `RoleServiceImplTest` (8 cases: name normalization/validation on create,
+built-in-role delete refusal vs. a catalog-only role, assignability stamping) and
+`RoleControllerTest` (6 cases: the application-admin-only gate for all three mutations, each
+proven both allowed and refused). `AdminUserControllerTest` gained coverage for the new
+`expiresAt` threading and malformed-date rejection. Full backend suite: 326 tests, 0 failures, 0
+errors (`./mvnw clean test`). Frontend: `ng build` and `ng lint` both clean.

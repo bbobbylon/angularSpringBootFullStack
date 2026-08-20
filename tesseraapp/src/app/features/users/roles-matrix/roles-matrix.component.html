@@ -5,7 +5,10 @@
   Rows    = every role in the catalog.
   Cell    = checkmark when the role carries that permission, dash when not.
 
-  Read-only. Role and permission assignment lives in the admin user-detail view.
+  The grid itself is read-only. Role ASSIGNMENT (which user holds which existing role) lives
+  in the admin user-detail view. Role CRUD (create / edit-permission / delete a catalog row) is
+  the panel below the grid, visible only to an application administrator (see
+  RolesMatrixComponent#isApplicationAdmin).
 -->
 <app-navbar></app-navbar>
 <main class="sc-page" *transloco="let t">
@@ -67,6 +70,11 @@
                     <td style="position: sticky; left: 0; z-index: 1; font-weight: 500;"
                         class="bg-body">
                       <span class="badge bg-primary me-2">{{ role.name }}</span>
+                      @if (role.assignable === false) {
+                        <span class="badge bg-warning text-dark" [title]="t('rolesMatrix.notYetAssignableHint')">
+                          {{ t('userDetails.notYetAssignable') }}
+                        </span>
+                      }
                     </td>
                     @for (perm of allPermissions(); track perm) {
                       <td class="text-center" style="vertical-align: middle;">
@@ -97,6 +105,98 @@
           <a [routerLink]="['/users']">{{ t('nav.userDirectory') }}</a>.
           Permission strings are defined in the backend role catalog and enforced server-side on every request.
         </p>
+
+        @if (isApplicationAdmin) {
+          <!-- Role CRUD (create / edit-permission / delete a catalog row). Gated to exactly
+               ROLE_APPLICATION_ADMIN — see RolesMatrixComponent#isApplicationAdmin. -->
+          <div class="sc-panel sc-reveal mt-4" style="--d: 120ms;">
+            <div class="p-3">
+              <h2 class="h5 mb-3">
+                <i class="bi bi-shield-plus me-2"></i>{{ t('rolesMatrix.catalogTitle') }}
+              </h2>
+
+              <!-- Create -->
+              <form #createForm="ngForm" (ngSubmit)="createRole(createForm)" class="row g-2 align-items-end mb-4">
+                <div class="col-md-4">
+                  <label class="form-label" for="newRoleName">{{ t('rolesMatrix.newRoleName') }}</label>
+                  <input [disabled]="isMutating()" class="form-control" id="newRoleName" name="name"
+                         ngModel pattern="^ROLE_[A-Za-z_]+$" placeholder="ROLE_BILLING_REVIEWER" required type="text">
+                </div>
+                <div class="col-md-5">
+                  <label class="form-label" for="newRolePermission">{{ t('rolesMatrix.newRolePermission') }}</label>
+                  <input [disabled]="isMutating()" class="form-control" id="newRolePermission" name="permission"
+                         ngModel placeholder="READ:CUSTOMER,UPDATE:CUSTOMER" required type="text">
+                </div>
+                <div class="col-md-3">
+                  <button [disabled]="isMutating() || createForm.invalid" class="btn btn-primary w-100" type="submit">
+                    @if (isMutating()) {
+                      <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                    }
+                    {{ t('rolesMatrix.createRole') }}
+                  </button>
+                </div>
+                <div class="col-12">
+                  <small class="text-secondary">{{ t('rolesMatrix.createRoleHint') }}</small>
+                </div>
+              </form>
+
+              <!-- Per-row edit / delete -->
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                  <tr>
+                    <th scope="col">{{ t('rolesMatrix.role') }}</th>
+                    <th scope="col">{{ t('rolesMatrix.permissions') }}</th>
+                    <th scope="col">{{ t('common.action') }}</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                    @for (role of roles(); track role.id) {
+                      <tr>
+                        <td><span class="badge bg-primary">{{ role.name }}</span></td>
+                        <td>
+                          @if (editingRole()?.id === role.id) {
+                            <form #editForm="ngForm" (ngSubmit)="saveEditPermission(editForm)" class="d-flex gap-2 align-items-center">
+                              <input [disabled]="isMutating()" [ngModel]="role.permission"
+                                     class="form-control form-control-sm" name="permission" required type="text">
+                              <button [disabled]="isMutating() || editForm.invalid" class="btn btn-sm btn-primary" type="submit">
+                                {{ t('common.save') }}
+                              </button>
+                              <button (click)="cancelEditPermission()" [disabled]="isMutating()"
+                                      class="btn btn-sm btn-outline-secondary" type="button">
+                                {{ t('common.cancel') }}
+                              </button>
+                            </form>
+                          } @else {
+                            <span class="text-muted" style="font-size: 0.85rem;">{{ role.permission }}</span>
+                          }
+                        </td>
+                        <td>
+                          @if (editingRole()?.id !== role.id) {
+                            <button (click)="startEditPermission(role)" [disabled]="isMutating()"
+                                    class="btn btn-sm btn-outline-primary me-2" type="button">
+                              {{ t('common.edit') }}
+                            </button>
+                            @if (role.assignable === false) {
+                              <button (click)="deleteRole(role)" [disabled]="isMutating()"
+                                      class="btn btn-sm btn-outline-danger" type="button">
+                                {{ t('common.delete') }}
+                              </button>
+                            } @else {
+                              <span class="text-muted" [title]="t('rolesMatrix.builtInHint')" style="font-size: 0.8rem;">
+                                <i class="bi bi-lock-fill" aria-hidden="true"></i> {{ t('rolesMatrix.builtIn') }}
+                              </span>
+                            }
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        }
       }
     }
   </div>

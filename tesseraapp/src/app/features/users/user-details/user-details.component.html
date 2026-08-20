@@ -42,6 +42,13 @@
                     <p class="text-secondary mb-1">{{ state?.appData?.data?.selectedUser?.title }}</p>
                   }
                   <span class="badge bg-primary">{{ state?.appData?.data?.selectedUser?.roleName }}</span>
+                  @if (state?.appData?.data?.selectedUser?.roleExpiresAt; as roleExpiresAt) {
+                    <span class="badge bg-warning text-dark" style="margin-left: 6px;"
+                          [title]="t('userDetails.roleExpiresOn', { date: (roleExpiresAt | date: 'mediumDate') })">
+                      <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                      {{ t('userDetails.expires') }} {{ roleExpiresAt | date: 'mediumDate' }}
+                    </span>
+                  }
                   @if (state?.appData?.data?.selectedUser?.userType; as userType) {
                     <!-- P2-1: how the account was created (FEDERATED) or, for a password account,
                          whether its email domain is on the deployment's internal allowlist
@@ -80,17 +87,24 @@
                   <h5 class="mb-3"><i class="bi bi-shield-shaded" style="margin-right: 8px;"></i>{{ t('users.role') }}</h5>
                   <form #roleForm="ngForm" (ngSubmit)="updateRole(roleForm)">
                     <div class="row align-items-end">
-                      <div class="col-md-8">
+                      <div class="col-md-6">
                         <label class="form-label" for="roleName">{{ t('userDetails.assignedRole') }}</label>
                         <select [disabled]="!canEditRole || isSelf() || isLoading()"
                                 [ngModel]="state?.appData?.data?.selectedUser?.roleName"
                                 class="form-control select-cl" id="roleName" name="roleName" required>
                           @for (role of state?.appData?.data?.roles; track role.name) {
-                            <option [ngValue]="role.name">{{ role.name }}</option>
+                            <option [disabled]="role.assignable === false" [ngValue]="role.name">
+                              {{ role.name }}{{ role.assignable === false ? ' (' + t('userDetails.notYetAssignable') + ')' : '' }}
+                            </option>
                           }
                         </select>
                       </div>
-                      <div class="col-md-4">
+                      <div class="col-md-3">
+                        <label class="form-label" for="roleExpiresAt">{{ t('userDetails.expiresOn') }}</label>
+                        <input [disabled]="!canEditRole || isSelf() || isLoading()"
+                               class="form-control" id="roleExpiresAt" name="expiresAt" ngModel type="date">
+                      </div>
+                      <div class="col-md-3">
                         <button [disabled]="!canEditRole || isSelf() || isLoading()"
                                 class="btn btn-primary w-100" type="submit">
                           @if (isLoading()) {
@@ -103,6 +117,7 @@
                         </button>
                       </div>
                     </div>
+                    <small class="text-secondary d-block mt-2">{{ t('userDetails.expiresHint') }}</small>
                     @if (!canEditRole) {
                       <small class="text-secondary d-block mt-2">
                         <i class="bi bi-lock-fill" aria-hidden="true"></i>

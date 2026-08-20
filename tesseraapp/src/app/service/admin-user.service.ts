@@ -6,6 +6,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import { AdminUserDetailInterface, AdminUserListInterface } from '../interface/admin.interface';
+import { RoleCatalogInterface } from '../interface/roles.interface';
 import { environment } from '../../environments/environment';
 
 /**
@@ -65,13 +66,19 @@ export class AdminUserService {
    * {@code UPDATE:ROLE} authority and rejects self-targeting, and records the change
    * as an audit event on the target user.
    *
-   * @param id       - the managed user's primary key
-   * @param roleName - the role to assign (e.g. {@code 'ROLE_MODERATOR'})
+   * @param id        - the managed user's primary key
+   * @param roleName  - the role to assign (e.g. {@code 'ROLE_MODERATOR'})
+   * @param expiresAt - optional {@code YYYY-MM-DD} date the assignment auto-reverts to
+   *                    {@code ROLE_USER} at (end of that calendar day); omitted for an
+   *                    unlimited assignment
    * @returns Observable of the API envelope carrying the refreshed selectedUser
    */
-  updateUserRole$ = (id: number, roleName: string): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
+  updateUserRole$ = (id: number, roleName: string, expiresAt?: string): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
     this.http
-      .patch<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/role/${roleName}`, {})
+      .patch<CustomHttpResponseInterface<AdminUserDetailInterface>>(
+        `${this.server}/admin/user/${id}/role/${roleName}${expiresAt ? `?expiresAt=${encodeURIComponent(expiresAt)}` : ''}`,
+        {},
+      )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
@@ -185,6 +192,47 @@ export class AdminUserService {
   resetTotp$ = (id: number): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
     this.http
       .delete<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/totp`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Creates a new role catalog row ({@code POST /admin/role}). Gated server-side to exactly
+   * {@code ROLE_APPLICATION_ADMIN} — see {@code RoleController}'s Javadoc for why this is
+   * tighter than every other {@code /admin/**} mutation. The created role has no {@code RoleType}
+   * constant until a redeploy adds one, so it comes back with {@code assignable: false}.
+   *
+   * @param name       - the new role's name; must match {@code ^ROLE_[A-Z_]+$} (backend normalizes case)
+   * @param permission - comma-delimited permission string (e.g. {@code 'READ:CUSTOMER,UPDATE:CUSTOMER'})
+   * @returns Observable of the API envelope carrying the created role and the refreshed catalog
+   */
+  createRole$ = (name: string, permission: string): Observable<CustomHttpResponseInterface<RoleCatalogInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<RoleCatalogInterface>>(`${this.server}/admin/role`, { name, permission })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Updates an existing role's permission string ({@code PATCH /admin/role/:id}). The role name
+   * is immutable — see {@code RolePermissionForm}'s Javadoc for why.
+   *
+   * @param id         - the role's database primary key
+   * @param permission - the replacement comma-delimited permission string
+   * @returns Observable of the API envelope carrying the updated role and the refreshed catalog
+   */
+  updateRolePermission$ = (id: number, permission: string): Observable<CustomHttpResponseInterface<RoleCatalogInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<RoleCatalogInterface>>(`${this.server}/admin/role/${id}`, { permission })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Deletes a role from the catalog ({@code DELETE /admin/role/:id}). Refused server-side for
+   * any of the seven built-in {@code RoleType} roles, and for a role any user currently holds
+   * (the {@code userroles.role_id} foreign key is {@code ON DELETE RESTRICT}).
+   *
+   * @param id - the role's database primary key
+   * @returns Observable of the API envelope carrying the refreshed catalog
+   */
+  deleteRole$ = (id: number): Observable<CustomHttpResponseInterface<RoleCatalogInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<RoleCatalogInterface>>(`${this.server}/admin/role/${id}`)
       .pipe(catchError(this.handleError));
 
   /**

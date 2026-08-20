@@ -482,7 +482,17 @@
     "eyebrow": "Control de acceso",
     "title": "Roles × Permisos",
     "loading": "Cargando el catálogo de roles…",
-    "error": "No se pudo cargar el catálogo de roles. Actualiza la página."
+    "error": "No se pudo cargar el catálogo de roles. Actualiza la página.",
+    "notYetAssignableHint": "Creado, pero ninguna versión de la aplicación reconoce aún este nombre de rol — no se puede asignar a un usuario hasta que una nueva implementación lo incluya.",
+    "catalogTitle": "Gestión del catálogo de roles",
+    "newRoleName": "Nombre del nuevo rol",
+    "newRolePermission": "Permisos",
+    "createRole": "Crear rol",
+    "createRoleHint": "El nombre debe tener el formato ROLE_ALGO. El nuevo rol se crea pero no puede asignarse a ningún usuario hasta que una futura implementación lo reconozca.",
+    "role": "Rol",
+    "permissions": "Permisos",
+    "builtIn": "Integrado",
+    "builtInHint": "Los roles integrados no se pueden eliminar."
   },
   "charts": {
     "customerAnalytics": "Análisis de clientes",
@@ -546,7 +556,12 @@
     "revokeSessionsTitle": "Sesiones activas",
     "revokeSessionsHint": "Finaliza todas las sesiones iniciadas en esta cuenta. Bloquear no basta: una sesión abierta sigue funcionando hasta que caduque su token.",
     "noActivity": "No hay actividad registrada.",
-    "loading": "Cargando cuenta…"
+    "loading": "Cargando cuenta…",
+    "expires": "Caduca",
+    "roleExpiresOn": "Esta asignación de rol caduca el {{date}}",
+    "notYetAssignable": "aún no asignable",
+    "expiresOn": "Caduca el",
+    "expiresHint": "Opcional. Déjalo en blanco para una asignación ilimitada; el rol vuelve automáticamente al rol de usuario predeterminado al final del día seleccionado."
   },
   "newCustomer": {
     "saveCustomer": "Guardar cliente",

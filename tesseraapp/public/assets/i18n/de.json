@@ -482,7 +482,17 @@
     "eyebrow": "Zugriffssteuerung",
     "title": "Rollen × Berechtigungen",
     "loading": "Rollenkatalog wird geladen…",
-    "error": "Der Rollenkatalog konnte nicht geladen werden. Bitte aktualisieren."
+    "error": "Der Rollenkatalog konnte nicht geladen werden. Bitte aktualisieren.",
+    "notYetAssignableHint": "Erstellt, aber noch von keinem Anwendungs-Build erkannt — kann keinem Benutzer zugewiesen werden, bis ein erneutes Deployment die Rolle hinzufügt.",
+    "catalogTitle": "Rollenkatalog verwalten",
+    "newRoleName": "Name der neuen Rolle",
+    "newRolePermission": "Berechtigungen",
+    "createRole": "Rolle erstellen",
+    "createRoleHint": "Der Name muss dem Muster ROLE_ETWAS entsprechen. Die neue Rolle wird erstellt, kann aber erst nach einem künftigen Deployment, das sie erkennt, einem Benutzer zugewiesen werden.",
+    "role": "Rolle",
+    "permissions": "Berechtigungen",
+    "builtIn": "Integriert",
+    "builtInHint": "Integrierte Rollen können nicht gelöscht werden."
   },
   "charts": {
     "customerAnalytics": "Kundenanalyse",
@@ -546,7 +556,12 @@
     "revokeSessionsTitle": "Aktive Sitzungen",
     "revokeSessionsHint": "Beendet jede angemeldete Sitzung dieses Kontos. Sperren allein genügt nicht — eine offene Sitzung bleibt bis zum Ablauf des Tokens gültig.",
     "noActivity": "Keine Aktivität erfasst.",
-    "loading": "Konto wird geladen…"
+    "loading": "Konto wird geladen…",
+    "expires": "Läuft ab",
+    "roleExpiresOn": "Diese Rollenzuweisung läuft am {{date}} ab",
+    "notYetAssignable": "noch nicht zuweisbar",
+    "expiresOn": "Läuft ab am",
+    "expiresHint": "Optional. Leer lassen für eine unbefristete Zuweisung; die Rolle wird am Ende des ausgewählten Tages automatisch auf die Standardbenutzerrolle zurückgesetzt."
   },
   "newCustomer": {
     "saveCustomer": "Kunden speichern",

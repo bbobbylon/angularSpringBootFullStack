@@ -128,14 +128,15 @@ export class UserDetailsComponent implements OnInit {
    * Submits the role-reassignment form to {@code PATCH /admin/user/:id/role/:roleName}
    * (FR-ADMIN-3) and merges the refreshed selected user back into the cached state.
    *
-   * @param roleForm - the NgForm carrying the selected {@code roleName}
+   * @param roleForm - the NgForm carrying the selected {@code roleName} and an optional
+   *                   {@code expiresAt} date; an empty date means an unlimited assignment
    */
   protected updateRole(roleForm: NgForm): void {
     const id = this.data()?.data?.selectedUser?.id;
     if (!id) return;
     this.isLoading.set(true);
     this.adminUserService
-      .updateUserRole$(id, roleForm.value.roleName)
+      .updateUserRole$(id, roleForm.value.roleName, roleForm.value.expiresAt || undefined)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => this.applyMutation(response, 'Role updated successfully'),

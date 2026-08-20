@@ -132,6 +132,15 @@ public class UserDTO {
      */
     private String permissions;
     /**
+     * When the user's CURRENT role assignment auto-reverts to {@code ROLE_USER}, or {@code null}
+     * for an unlimited assignment (flattened from {@link com.bob.angularspringbootfullstack.model.Role#getExpiresAt()}).
+     * Only meaningful because every {@code UserPrincipal}/{@code UserDTO} construction site sources
+     * its {@link com.bob.angularspringbootfullstack.model.Role} from {@code RoleRepo#getRoleByUserId},
+     * the single choke point that evaluates and clears an expired assignment on read — this field is
+     * never stale by more than one lookup.
+     */
+    private LocalDateTime roleExpiresAt;
+    /**
      * Mirrors {@link com.bob.angularspringbootfullstack.model.User #passwordChangedAt}.
      * <p>
      * Carried on the DTO so {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider}

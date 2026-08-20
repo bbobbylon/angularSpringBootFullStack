@@ -38,6 +38,13 @@ export interface UserInterface {
   roleName: string;
   permissions: string;
   /**
+   * ISO-8601 timestamp this user's CURRENT role assignment auto-reverts to {@code ROLE_USER}
+   * at, or absent for an unlimited assignment. Reflects the live value as of the response that
+   * carried it — the backend re-evaluates on every lookup, so a stale cached copy can read past
+   * its own expiry without this ever being wrong at the moment it was fetched.
+   */
+  roleExpiresAt?: string;
+  /**
    * Raw stamped value: {@code null} for a password-registered account, or
    * {@code "FEDERATED_<PROVIDER>"} for one created via federated sign-in. Prefer
    * {@link userType} for display — this is the underlying fact it derives from.

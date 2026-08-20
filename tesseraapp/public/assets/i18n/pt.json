@@ -482,7 +482,17 @@
     "eyebrow": "Controle de acesso",
     "title": "Funções × Permissões",
     "loading": "Carregando o catálogo de funções…",
-    "error": "Não foi possível carregar o catálogo de funções. Atualize a página."
+    "error": "Não foi possível carregar o catálogo de funções. Atualize a página.",
+    "notYetAssignableHint": "Criada, mas nenhuma versão da aplicação reconhece ainda este nome de função — não pode ser atribuída a um usuário até que uma nova implantação a inclua.",
+    "catalogTitle": "Gerenciamento do catálogo de funções",
+    "newRoleName": "Nome da nova função",
+    "newRolePermission": "Permissões",
+    "createRole": "Criar função",
+    "createRoleHint": "O nome deve seguir o padrão ROLE_ALGO. A nova função é criada, mas não pode ser atribuída a nenhum usuário até que uma implantação futura a reconheça.",
+    "role": "Função",
+    "permissions": "Permissões",
+    "builtIn": "Integrada",
+    "builtInHint": "Funções integradas não podem ser excluídas."
   },
   "charts": {
     "customerAnalytics": "Análise de clientes",
@@ -546,7 +556,12 @@
     "revokeSessionsTitle": "Sessões ativas",
     "revokeSessionsHint": "Encerra todas as sessões abertas nesta conta. Bloquear não basta — uma sessão aberta continua a funcionar até o token expirar.",
     "noActivity": "Nenhuma atividade registrada.",
-    "loading": "Carregando conta…"
+    "loading": "Carregando conta…",
+    "expires": "Expira",
+    "roleExpiresOn": "Esta atribuição de função expira em {{date}}",
+    "notYetAssignable": "ainda não atribuível",
+    "expiresOn": "Expira em",
+    "expiresHint": "Opcional. Deixe em branco para uma atribuição sem limite; a função reverte automaticamente para a função padrão de usuário no final do dia selecionado."
   },
   "newCustomer": {
     "saveCustomer": "Salvar cliente",

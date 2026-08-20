@@ -482,7 +482,17 @@
     "eyebrow": "Contrôle d'accès",
     "title": "Rôles × Autorisations",
     "loading": "Chargement du catalogue des rôles…",
-    "error": "Impossible de charger le catalogue des rôles. Veuillez actualiser."
+    "error": "Impossible de charger le catalogue des rôles. Veuillez actualiser.",
+    "notYetAssignableHint": "Créé, mais aucune version de l'application ne reconnaît encore ce nom de rôle — il ne peut pas être attribué à un utilisateur tant qu'un redéploiement ne l'ajoute pas.",
+    "catalogTitle": "Gestion du catalogue des rôles",
+    "newRoleName": "Nom du nouveau rôle",
+    "newRolePermission": "Autorisations",
+    "createRole": "Créer un rôle",
+    "createRoleHint": "Le nom doit ressembler à ROLE_QUELQUECHOSE. Le nouveau rôle est créé mais ne peut être attribué à aucun utilisateur tant qu'un futur déploiement ne le reconnaît pas.",
+    "role": "Rôle",
+    "permissions": "Autorisations",
+    "builtIn": "Intégré",
+    "builtInHint": "Les rôles intégrés ne peuvent pas être supprimés."
   },
   "charts": {
     "customerAnalytics": "Analyse des clients",
@@ -546,7 +556,12 @@
     "revokeSessionsTitle": "Sessions actives",
     "revokeSessionsHint": "Met fin à toutes les sessions ouvertes sur ce compte. Le verrouillage seul ne suffit pas : une session ouverte reste valable jusqu'à l'expiration de son jeton.",
     "noActivity": "Aucune activité enregistrée.",
-    "loading": "Chargement du compte…"
+    "loading": "Chargement du compte…",
+    "expires": "Expire",
+    "roleExpiresOn": "Cette attribution de rôle expire le {{date}}",
+    "notYetAssignable": "pas encore attribuable",
+    "expiresOn": "Expire le",
+    "expiresHint": "Facultatif. Laissez vide pour une attribution illimitée ; le rôle revient automatiquement au rôle utilisateur par défaut à la fin du jour sélectionné."
   },
   "newCustomer": {
     "saveCustomer": "Enregistrer le client",

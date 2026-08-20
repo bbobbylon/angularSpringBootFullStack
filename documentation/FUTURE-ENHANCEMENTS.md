@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.7
-**Last Updated:** 2026-08-14
+**Version:** 3.8
+**Last Updated:** 2026-08-19
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -152,15 +152,20 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 
 | Enhancement | Why | Sketch |
 |---|---|---|
-| ⬜ **Role CRUD** | Roles are seed-only; `RoleRepoImpl.create/update/delete` throw `UnsupportedOperationException`. Fine while the seven roles are fixed, blocking the moment anyone wants an eighth | **Design session held 2026-08-14, implementation deliberately deferred pending one more decision — see below.** |
-| ⬜ **Time-boxed role assignment** (new, spun out of the Role CRUD design session) | An assignment made today has no way to say "only until a date" — every grant is permanent until someone manually reverts it. Comes up naturally once role assignment is a first-class admin action | Nullable `expires_at` on `userroles`. **Decided:** on expiry, auto-revert to `ROLE_USER`, enforced **live** at login/token issuance (the existing role lookup checks `expires_at`, no scheduled sweep job) — not a background job, not a "flag but don't enforce" state. A calendar/date picker on the assignment UI; unlimited (`NULL`) is the default |
+| ✅ **Role CRUD** | Roles were seed-only; `RoleRepoImpl.create/update/delete` threw `UnsupportedOperationException`. Fine while the seven roles were fixed, blocking the moment anyone wants an eighth | Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #13) — new `RoleController` (`/admin/role`), gated to exactly `ROLE_APPLICATION_ADMIN` (the open question below, now resolved). A catalog-only role is created but not assignable until `RoleType` gains a matching constant — see the design-session notes below, now closed out |
+| ✅ **Time-boxed role assignment** (spun out of the Role CRUD design session) | An assignment made today had no way to say "only until a date" — every grant was permanent until someone manually reverted it | Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #13) — nullable `expires_at` on `userroles`, enforced **live** in `RoleRepoImpl#getRoleByUserId` (the single choke point every role lookup funnels through), auto-reverting to `ROLE_USER` on read past expiry rather than via a scheduled sweep job. A date picker on the user-detail role form; blank (`NULL`) is the default, matching the original decision |
 | ⬜ **Self-service organization management** | Orgs are seeded/DB-managed; there is no UI to create one or move a user between them. This is the single biggest gap between "demo" and "a business could run this" | Admin CRUD over `organizations` + `userorganizations`; must respect the same org scope it edits |
 | ✅ **Org scope for business data** | Done (2026-08-08) — every `/customer/**` read (`stats`, list, single get, search, invoice list/get, the new-invoice picker, both XLSX exports) is now restricted for `ROLE_ORGANIZATION_ADMIN` to customers/invoices owned by their active organizations, reusing the exact `*ForOrganizations` service methods `AnalyticsController` already had. Every other role (including plain `ROLE_USER`) keeps today's system-wide view — this closes the specific "org admin sees every customer" gap, not a broader per-user multi-tenancy wall. Found and fixed two pre-existing bugs along the way: `List.of(...).contains(null)` throws instead of returning `false` (would have crashed the scope check on any unowned row), and `GET /customer/invoice/get/{id}` 500'd unconditionally on a draft invoice (`Map.of` rejects a null value) — both predate this change. New suite: `CustomerControllerOrgScopeTest` (14 tests) | |
 | ✅ **Scope every `UPDATE:USER` holder, not just one role name** | Done (2026-08-14) — new `RoleType.isOrganizationScoped(roleName)` capability check; `AdminUserController#isOrganizationScoped` and `AnalyticsController#resolveScope` both delegate to it instead of each independently hardcoding `ROLE_ORGANIZATION_ADMIN.name().equals(...)`. `ROLE_HELP_DESK_ADMIN` (which also carries `UPDATE:USER`) is now correctly scoped on both surfaces instead of seeing every organization unscoped | |
 | ⬜ **Per-organization role definitions** | `RoleRepoImpl.java` `TODO(org-roles)`. FR-ORG scopes *administration*, not role *definitions* — every org shares one role catalogue | Only worth it for genuine multi-tenancy; it changes the authority-string model, so not a small change |
 | ✅ **P2-1 — User type classification** | Done (2026-08-08) — badge shows `INTERNAL` / `EXTERNAL` / `FEDERATED` on the admin Users list and detail pages. `users.origin` is an immutable fact stamped once, at account creation, by `FederatedIdentityServiceImpl#insertFederatedUser` (`"FEDERATED_" + provider`) — never touched again, including when an existing password account later links a federated identity. `UserTypeResolver` derives `INTERNAL`/`EXTERNAL` fresh on every read from the email domain against the env-driven `INTERNAL_DOMAINS` allowlist (`AdminUserController`). `AZURE_B2B` was dropped from scope — this app has no actual Azure B2B guest integration, only consumer OAuth via Google/GitHub/Microsoft, and fabricating a category for a provider that isn't built would misrepresent capability | |
 
-#### Role CRUD — design session notes (2026-08-14), implementation deliberately not started
+#### Role CRUD — design session notes (2026-08-14), implemented 2026-08-19
+
+**Resolved (2026-08-19):** the open question below was decided in favor of the narrower option —
+catalog CRUD is restricted to `ROLE_APPLICATION_ADMIN` only, not extended to `ROLE_ADMIN`. See
+POST-SUBMISSION-UPGRADES.md #13 for the full implementation writeup. The rest of this subsection
+is left as the historical design record.
 
 Investigating the stubs surfaced a real architectural constraint worth recording before anyone
 picks this up: `RoleType` (the tier/privilege-ladder enum `RoleType.java`) is **deliberately
@@ -194,7 +199,7 @@ not the role catalog.
 |---|---|---|
 | ✅ **List sorting & filtering** | Done — Customers/Invoices (2026-08-14, POST-SUBMISSION-UPGRADES.md #1) and the JDBC-based admin User Directory (2026-08-14, POST-SUBMISSION-UPGRADES.md #11), which needed its own allow-listed `ORDER BY` mechanism since it isn't Spring Data JPA | |
 | ✅ **Invoice total aggregation query** | Done (2026-08-12), but not the way this row originally described — see below | |
-| ⬜ **P2-2 — Batch upload** | CSV/Excel import for customers and invoices — the most-requested "real business app" feature still missing | Per-row validation with a partial-success report (`{ imported, failed: [{row, reason}] }`), per-chunk commits, a dedupe key, async job for large files. Gate on `UPDATE:CUSTOMER`. Apache Commons CSV (+ POI only for `.xlsx`) |
+| ✅ **P2-2 — Batch upload** | CSV/Excel import for customers and invoices — the most-requested "real business app" feature still missing | Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #8) — `BatchImportService`, deliberately not `@Transactional` at the class level so each row commits independently (true per-row partial success, no chunking needed); `MAX_BATCH_ROWS = 2000` hard cap instead of an async job. Apache Commons CSV + POI for `.xlsx`, reusing the existing bean-validation constraints via the `Validator` bean directly |
 | ⬜ **Favorites / pinned destinations bar** | Navigation has outgrown the navbar: the Admin dropdown alone holds six destinations, so common pages are two clicks deep behind a menu that must be opened to be read | **Build it on `command-palette.service.ts`, not a new route list** — see the design note below |
 | ⬜ **Backend-driven i18n** | Server-generated messages (validation, email bodies, capability-denied text) stay English while the UI switches language | Spring `MessageSource` + `Accept-Language`; the `CapabilityCatalog` phrases are the natural first target since they already have a message template |
 | ⬜ **Resolve `VERIFY_EMAIL_HOST`** | Reserved and unused (`UI_APP_URL` drives links today). Keep or remove deliberately — do not let it rot as ambiguous config | |
@@ -298,11 +303,11 @@ Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/
 
 - ⬜ **Per-instance security state** (brute force, rate limiting, link tickets) — §2.4. The scale-out blocker.
 - ✅ **Production boot with `ddl-auto=validate`** — §2.3. Verified 2026-08-14 against a fresh local database.
-- ⬜ **No test touches the real filter chain.** Every slice test uses `standaloneSetup`, which skips
-  `SecurityConfig` by design — so matcher **ordering**, the thing most likely to break, has no
-  automated guard at all. A `@SpringBootTest(webEnvironment=RANDOM_PORT)` + `TestRestTemplate` happy
-  path per controller would close it, and would also cover the `PUBLIC_URLS` ↔ `PUBLIC_ROUTES`
-  lockstep.
+- ✅ **No test touches the real filter chain.** Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #9) —
+  new `SecurityFilterChainIntegrationTest` (`@SpringBootTest(webEnvironment=RANDOM_PORT)` +
+  `TestRestTemplate`, real HTTP against the genuine `securityFilterChain` bean) plus the fast,
+  DB-free `ConstantsPublicRouteLockstepTest`, which mechanically proves the `PUBLIC_URLS` ↔
+  `PUBLIC_ROUTES` lockstep for every entry in both lists.
 - ⬜ **`contextLoads` needs a live local MySQL**, so it is the one suite that breaks in a
   database-less CI run. Replacing it with a Testcontainers-backed `@SpringBootTest` removes the
   footgun and unblocks DB-backed tests in CI.

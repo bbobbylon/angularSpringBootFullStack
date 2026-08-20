@@ -484,7 +484,17 @@
     "eyebrow": "Access control",
     "title": "Roles × Permissions",
     "loading": "Loading roles catalogue…",
-    "error": "Could not load the roles catalogue. Please refresh."
+    "error": "Could not load the roles catalogue. Please refresh.",
+    "notYetAssignableHint": "Created, but no application build recognizes this role name yet — it cannot be assigned to a user until a redeploy adds it.",
+    "catalogTitle": "Role Catalog Management",
+    "newRoleName": "New role name",
+    "newRolePermission": "Permissions",
+    "createRole": "Create Role",
+    "createRoleHint": "Name must look like ROLE_SOMETHING. The new role is created but not assignable to any user until a future deployment recognizes it.",
+    "role": "Role",
+    "permissions": "Permissions",
+    "builtIn": "Built-in",
+    "builtInHint": "Built-in roles cannot be deleted."
   },
   "charts": {
     "customerAnalytics": "Customer Analytics",
@@ -550,7 +560,12 @@
     "revokeSessionsTitle": "Active sessions",
     "revokeSessionsHint": "Ends every signed-in session on this account. Locking alone does not — an open session keeps working until its token expires.",
     "noActivity": "No recorded activity.",
-    "loading": "Loading account…"
+    "loading": "Loading account…",
+    "expires": "Expires",
+    "roleExpiresOn": "This role assignment expires on {{date}}",
+    "notYetAssignable": "not yet assignable",
+    "expiresOn": "Expires on",
+    "expiresHint": "Optional. Leave blank for an unlimited assignment; the role automatically reverts to the default user role at the end of the selected day."
   },
   "newCustomer": {
     "saveCustomer": "Save Customer",
