@@ -1,6 +1,15 @@
 # TesseraApp — AWS Deployment Guide
 
-End-to-end checklist for deploying TesseraApp to AWS using ECS Fargate + **Aiven MySQL** (managed DB) + S3 (image storage) + ALB (currently **plain HTTP** — see below) + Secrets Manager (secrets injection).
+**Version:** 1.1
+**Last Updated:** 2026-08-19
+**Status:** Reference — the "why it is built this way, and what broke" companion to [`RUNBOOK.md`](RUNBOOK.md), which is the linear procedure.
+
+End-to-end reference for deploying TesseraApp to AWS using ECS Fargate + **Aiven MySQL** (managed DB) + S3 (image storage) + ALB + **CloudFront** (which terminates TLS — the ALB listener itself stays plain HTTP on purpose, see [below](#https-cloudfront-in-front-of-the-alb-with-a-real-domain-on-top)) + Secrets Manager (secrets injection).
+
+> **The public origin is HTTPS** at `tesseraapp.dev` via CloudFront. "Plain HTTP" below always means
+> the ALB listener behind CloudFront, never what a visitor's browser speaks — and that distinction is
+> exactly why `OAUTH2_REDIRECT_BASE_URL` has to pin the redirect origin
+> ([RUNBOOK C3](RUNBOOK.md#c3-confirm-the-proxy-settings-are-in-the-task-definition)).
 
 ---
 
@@ -44,7 +53,7 @@ URL**. Google and Microsoft both accept a list of redirect URIs, so they still w
 
 Getting a domain wired up isn't scripted end-to-end by one file — [`setup-cloudfront.sh`](setup-cloudfront.sh)
 stands up CloudFront itself with *no* domain (the `*.cloudfront.net` name only), and
-[`RUNBOOK.md` §B1.6](RUNBOOK.md#b16-point-a-real-domain-at-cloudfront-optional--once-you-own-one)
+[`RUNBOOK.md` §B1.6](RUNBOOK.md#b16-point-a-real-domain-at-cloudfront-done--tesseraappdev-2026-08-08)
 is the step-by-step for adding a real domain on top once you own one — ACM cert, DNS validation,
 CloudFront alternate domain name, DNS pointing, app re-config. **`deploy-https.sh` is a different,
 unrelated procedure** — it puts TLS directly on the **ALB**, bypassing CloudFront entirely. Don't

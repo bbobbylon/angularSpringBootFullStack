@@ -257,7 +257,7 @@ endpoint by design (§8.9) and services are retired, not deleted (§8.8) — so 
 a footprint that can't be fully cleaned up by a second API call. The cURL script defaults to
 **read-only** (plus one harmless throwaway `POST /user/register`, which just leaves an unverified
 account) and requires an explicit `--with-mutations` flag to create a customer/invoice/service, and
-a *further*, separate `--with-contact-email` flag before it will fire `POST /contact` — which sends
+a *further*, separate `--with-contact-email` flag before it will fire `POST /contact/send` — which sends
 a real message through `NotificationService`, a side effect visible outside the app's own database.
 Postman and Bruno don't have an equivalent switch (they're click-to-run GUI tools, so every request
 firing is already a deliberate act), but both carry the same warnings in each mutating request's

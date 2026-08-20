@@ -147,16 +147,16 @@ kept for the source-marker pointers but should not be trusted over that file for
 
 | Item | Source | Note |
 | --- | --- | --- |
-| `url` column stores a bare key | `UserQuery.java:36`, `UserRepoImpl.java:182` | still open — rename to `verification_key` (DB migration deferred). See FUTURE-ENHANCEMENTS §4 |
+| `url` column stores a bare key | `UserQuery.java:36`, `UserRepoImpl.java:187` | still open — rename to `verification_key` (DB migration deferred). See FUTURE-ENHANCEMENTS §4 |
 
-**Resolved since this table was last accurate (re-verified 2026-08-08):**
+**Resolved since this table was last accurate (re-verified 2026-08-19):**
 
 | Item | Was | Now |
 | --- | --- | --- |
 | SMS-2FA dispatch | "stubbed" — logged, never sent | Sends for real via Twilio once credentials are configured (`SMSUtils`); degrades to logging only when they're placeholders/unset. See [02](./02-login-and-mfa.md) |
 | Profile-image storage | hardcoded to `~/Downloads/images` | `ImageStorageService` abstraction (`LocalImageStorageService` / `S3ImageStorageService`), selected at startup via `IMAGE_STORAGE_TYPE` |
 | Hardcoded API base `localhost:8080` | fixed string in `environment.ts` | derived from `window.location.hostname` in dev; a relative same-origin URL in prod (the SPA is baked into the same jar) |
-| Near-zero tests | ~0 | **199 backend / 87 frontend**, all green |
+| Near-zero tests | ~0 | **312 backend / 90 frontend**, all green (2026-08-19) |
 | Two JWT libraries on the classpath | `jjwt` + `java-jwt` | consolidated to `java-jwt` alone |
 | `HandleException` exposes `.reason`/`.message` | `HandleException.java:31` | strip PII before production |
 | `.env` placeholder `jwt.secret` | `.env` | must be high-entropy anywhere reachable — it underpins every signature in [`00 §6`](./00-anatomy-of-a-request.md) |

@@ -8,7 +8,7 @@
 # Usage:
 #   ./curl-smoke-test.sh                       # safe: reads only, plus one throwaway register
 #   ./curl-smoke-test.sh --with-mutations      # also creates a customer/invoice/service (see WARNING)
-#   ./curl-smoke-test.sh --with-contact-email  # also fires POST /contact (sends a REAL email)
+#   ./curl-smoke-test.sh --with-contact-email  # also fires POST /contact/send (sends a REAL email)
 #   BASE_URL=http://localhost:8080 ./curl-smoke-test.sh
 #
 # Requires: bash, curl. No jq dependency — field extraction is a small sed helper.
@@ -92,7 +92,7 @@ call_headers() {
 
 printf '%sTesseraApp API smoke test%s — %s\n' "$BOLD" "$RESET" "$BASE_URL"
 [[ "$WITH_MUTATIONS" == 1 ]] && note "mutations ENABLED — this run will create a permanent customer/invoice row (no delete endpoint exists) and a service row (retired automatically afterward)."
-[[ "$WITH_CONTACT_EMAIL" == 1 ]] && note "contact-email ENABLED — POST /contact will fire a real notification via NotificationService."
+[[ "$WITH_CONTACT_EMAIL" == 1 ]] && note "contact-email ENABLED — POST /contact/send will fire a real notification via NotificationService."
 
 # ---------------------------------------------------------------------------
 section "Public account endpoints (§8.2)"
@@ -220,9 +220,9 @@ if [[ "$SKIP_AUTH" == 0 ]]; then
   section "Contact form (public)"
   # -------------------------------------------------------------------------
   if [[ "$WITH_CONTACT_EMAIL" == 1 ]]; then
-    call POST /contact 200 '{"name":"Smoke Test","email":"smoketest@example.com","subject":"Smoke test","message":"Sent by curl-smoke-test.sh — safe to ignore."}' "" "POST /contact"
+    call POST /contact/send 200 '{"name":"Smoke Test","email":"smoketest@example.com","subject":"Smoke test","message":"Sent by curl-smoke-test.sh — safe to ignore."}' "" "POST /contact/send"
   else
-    note "POST /contact skipped — it sends a real email, pass --with-contact-email to exercise it."
+    note "POST /contact/send skipped — it sends a real email, pass --with-contact-email to exercise it."
   fi
 
   # -------------------------------------------------------------------------

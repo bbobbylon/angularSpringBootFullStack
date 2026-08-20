@@ -1,7 +1,7 @@
 # Complete Feature & Technical Inventory
 
 **Version:** 1.0
-**Last Updated:** 2026-08-08
+**Last Updated:** 2026-08-19
 **Purpose:** An exhaustive, verifiable inventory of everything **actually built and working** in
 TesseraApp — every library, every security control, every endpoint category, every convention.
 Built specifically to be checked line-by-line against course deliverables (SRS, architecture doc,
@@ -220,8 +220,8 @@ Maven profiles: `dev` (default), `prod`, `qa`, `stage`, `local` — each sets `s
 
 ## 10. Testing
 
-- **Backend: 230 tests across 34 suites** (`mvn test`, Surefire-verified 2026-08-08) — JUnit 5, Mockito, AssertJ, MockMvc `standaloneSetup`. Covers: refresh rotation/replay, TOTP challenge binding, anomaly detection (both false-positive and false-negative directions), the security dashboard's query clamping, org-scope enforcement on reads *and* writes (user directory, analytics, **and now customer/invoice**), `X-Forwarded-For` forgery cases, RBAC/auth diagnostics, capability-denial messaging, prod error scrubbing, federated link/unlink refusal cases, login-enumeration resistance, brute-force lockout, role-tier ceiling, admin session revoke (bulk and per-session), passkey CRUD, WebAuthn challenge single-use/purpose-binding, the `CHANGE_ME` placeholder warning, password/phone policy regex correctness, offline schema-drift and table-casing guards.
-- **Frontend: 87 specs across 8 files** (Vitest via `@angular/build:unit-test`) — token authority matching (exact, not prefix), the refresh interceptor's single-flight behavior, capability guard, admin guard, authentication guard, the command palette, the page-size selector.
+- **Backend: 312 tests across 46 suites** (`./mvnw clean test`, Surefire-verified 2026-08-19 — execution counts, not annotated-method counts, which read 240 `@Test` + 12 `@ParameterizedTest`) — JUnit 5, Mockito, AssertJ, MockMvc `standaloneSetup`. Covers: refresh rotation/replay, TOTP challenge binding, anomaly detection (both false-positive and false-negative directions), the security dashboard's query clamping, org-scope enforcement on reads *and* writes (user directory, analytics, **and** customer/invoice), `X-Forwarded-For` forgery cases, RBAC/auth diagnostics, capability-denial messaging, prod error scrubbing, federated link/unlink refusal cases, login-enumeration resistance, brute-force lockout, role-tier ceiling, admin session revoke (bulk and per-session), admin TOTP reset, passkey CRUD, WebAuthn challenge single-use/purpose-binding, the `CHANGE_ME` placeholder warning, the pinned OAuth2 redirect origin, per-profile datasource TLS mode, ETag/304 cache revalidation and rate-limit bucketing, report-digest construction, server-rendered invoice PDFs, allow-listed `ORDER BY` for the JDBC admin directory, password/phone policy regex correctness, and the offline schema-drift and table-casing guards. Exactly one class (`contextLoads`) needs a live database.
+- **Frontend: 90 specs across 9 files** (Vitest via `@angular/build:unit-test`, run through `ng test` — invoking `vitest` directly skips the builder's `TestBed.initTestEnvironment()` and fails every spec) — token authority matching (exact, not prefix), the refresh interceptor's single-flight behavior, the language interceptor, capability guard, admin guard, authentication guard, the `*appHasAuthority` directive, the command palette, the page-size selector.
 - **Known, named gaps** (not hidden): no test exercises the *real* Spring Security filter chain (every backend test uses `standaloneSetup`, which bypasses `SecurityConfig` by design); no end-to-end/browser test suite exists (Playwright is tracked, not built); the frontend passkey UI has no dedicated spec coverage.
 - **CI gates on**: `ng lint` (clean), `npm audit --audit-level=high` (exit 0), OWASP `dependency-check` (`failBuildOnCVSS=7`), both test suites, against a real MySQL service container (not mocked).
 
@@ -244,7 +244,9 @@ Maven profiles: `dev` (default), `prod`, `qa`, `stage`, `local` — each sets `s
 - `documentation/GUIDE.md` — how everything currently works: architecture, getting started, security model, full API reference, testing
 - `documentation/IMPLEMENTATION-HISTORY.md` — the retrospective: milestones, delivery timeline, and a detailed problem log (what broke, root cause, fix, standing lesson) for 25+ real incidents
 - `documentation/FUTURE-ENHANCEMENTS.md` — the single source of truth for planned/deferred work (explicitly **out of scope** for this inventory)
-- `documentation/flows/` — 16 click-to-database traces (Mermaid diagrams + file:line references + real request/response JSON + the SQL actually executed) covering every major user flow
+- `documentation/POST-SUBMISSION-UPGRADES.md` — work built after the course submission, and so outside the graded deliverable; the newest features are recorded there first
+- `documentation/flows/` — 17 click-to-database traces (Mermaid diagrams + file:line references + real request/response JSON + the SQL actually executed) covering every major user flow
+- `documentation/api-testing/` — cURL, Postman and Bruno collections covering all 12 controllers, kept in step with `GUIDE.md` §8
 - `aws/README.md` + `aws/RUNBOOK.md` — deployment and operations runbook, written for someone who didn't build the app
 - Full multi-line Javadoc/TSDoc on every class — a project-wide convention, not spot coverage
 
@@ -257,7 +259,10 @@ Per the scope boundary at the top: anything listed as ⬜ (not started) or 🔄 
 of doubt — full multi-tenancy for every role (only `ROLE_ORGANIZATION_ADMIN`'s customer/invoice
 reads are scoped; every other role, including plain `ROLE_USER`, still sees business data
 system-wide by design — see §4 and §6.1 of `FUTURE-ENHANCEMENTS.md`), the services catalog is not
-org-scoped, Playwright/e2e coverage, backend HTTP caching, role CRUD,
-self-service organization management, batch CSV upload, and machine-to-machine API access. If a
+org-scoped, Playwright/e2e coverage, role CRUD,
+self-service organization management, batch CSV upload, and machine-to-machine API access.
+(**Backend HTTP caching has since been built** — `HttpCacheHeadersFilter`, ETag + `Cache-Control:
+private, no-cache` on data GETs, with 8 specs — and so is no longer excluded here; see
+`POST-SUBMISSION-UPGRADES.md` #3.) If a
 grader or reviewer asks whether one of those is done, the honest answer is no — check
 `FUTURE-ENHANCEMENTS.md` §2–3 for the current state of each.

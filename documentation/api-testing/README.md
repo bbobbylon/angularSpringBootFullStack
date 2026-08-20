@@ -13,6 +13,26 @@ requests across all 12 controllers, kept in sync with each other and with
 All three assume the app is already running locally (`./start.sh`) at `http://localhost:8080`
 and that the demo seed data exists — `DemoDataSeeder` runs on every boot in non-prod profiles.
 
+## Coverage boundary (verified 2026-08-19)
+
+"All 12 controllers" means every controller is represented, **not** that every endpoint is. These
+routes exist in `GUIDE.md` §8 but are deliberately **not** exercised by any of the three collections
+yet — a smoke test is not an exhaustive suite, and several of these are destructive or single-use:
+
+| Not covered | Why it was left out |
+|---|---|
+| `POST /user/verify/resend` | Needs an account with a genuinely *pending* code; against seeded demo users it correctly no-ops, so a green result would prove nothing |
+| `POST /user/totp/recovery-codes/regenerate` | Requires a live TOTP or recovery code, which a script cannot produce without the shared secret |
+| `DELETE /admin/user/{id}/totp` | Destructive on a seeded account, and self-targeting is refused — it needs a throwaway second user |
+| `POST /user/sessions/providers/link/{provider}` | Mints a ticket whose only use is a browser redirect the script cannot follow |
+| `GET` / `PATCH /admin/security/anomaly-settings` | The `PATCH` mutates platform-wide login behaviour; safe to add read-only, but the pair belongs together |
+| `POST /admin/analytics/report/email` | Sends a real email, like `POST /contact/send` — would need its own opt-in flag |
+| `GET /customer/invoice/search` | Straightforward to add; simply not written yet |
+| `GET /customer/invoice/{id}/download/pdf` · `POST /customer/invoice/{id}/email` | The PDF needs a non-draft invoice with a customer attached; the email sends for real |
+
+Everything else in §8 is covered. If you add a request, add it to **all three** collections in the
+same change — the parity between them is the only reason having three is not a liability.
+
 ## Demo credentials
 
 Every seeded account shares the password **`TesseraDemo@1`**:
@@ -46,7 +66,7 @@ services are *retired*, never deleted (§8.8). That means:
 - The cURL script defaults to **read-only** plus one harmless throwaway `POST /user/register`.
   Pass `--with-mutations` to also create a customer + invoice (**permanent**, no cleanup possible)
   and a service (auto-retired at the end of the run, so at least it won't show up as active).
-- `POST /contact` sends a **real** notification through `NotificationService` — the cURL script
+- `POST /contact/send` sends a **real** notification through `NotificationService` — the cURL script
   gates it behind a *second*, separate flag (`--with-contact-email`) so it's never fired by
   accident. Postman's and Bruno's contact requests are present but you have to click Send yourself.
 - Postman and Bruno don't have a "mutations off" switch — they're GUI tools, so the assumption is

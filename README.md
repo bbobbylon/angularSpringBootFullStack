@@ -26,7 +26,8 @@ services domain on top — in six languages.
   so a code alone can never skip the password step
 - **Passkeys (WebAuthn)** — usernameless sign-in via `navigator.credentials`, phishing-resistant by
   construction; admins can view and revoke a user's registered devices (never "reset" one — the
-  private key never leaves the authenticator)
+  private key never leaves the authenticator), and can force-reset an authenticator for a user who
+  has lost both their phone and every recovery code
 - **Federated sign-in** via Google / GitHub / Microsoft, converging on one local identity; connected
   accounts are manageable from the Security Center
 - **Login-anomaly detection** — an unrecognised device or network escalates to step-up verification
@@ -37,16 +38,22 @@ services domain on top — in six languages.
 **Administration**
 - User directory with role reassignment and account-state control
 - **Security dashboard** — anomalous sign-ins, authentication trends, restricted accounts, MFA
-  adoption, live sessions
-- **Roles × permissions matrix**, services-catalog CRUD, billing and analytics hubs
+  adoption, live sessions — plus tunable anomaly-detection thresholds that take effect on the next
+  login
+- **Roles × permissions matrix**, services-catalog CRUD, billing and analytics hubs, and report
+  digests emailed on demand or on a weekly schedule
 
 **Business domain**
-- Customers and invoices (create, edit, export to XLSX), a services catalog, dashboard analytics
+- Customers and invoices — create, edit, search, export to XLSX, render to PDF server-side, and email
+  an invoice straight to its customer as an attachment
+- A services catalog (retired, never deleted, so invoice history stays intact) and dashboard analytics
 
 **Experience**
 - Six languages with instant switching, dark/light theming, a ⌘/Ctrl+K command palette, and
   capability-level UI gating so controls you cannot use are disabled with an explanation rather than
   failing on submit
+- A public surface that needs no account at all: a feature tour, the live services catalog, a contact
+  form, and the privacy/terms pages Twilio's A2P 10DLC registration requires
 
 ---
 
@@ -66,15 +73,17 @@ services domain on top — in six languages.
 
 ## Documentation
 
-Four documents cover the project, plus two deep-reference sets.
+Five documents cover the project, plus three deep-reference sets.
 
 | Document | What it covers |
 |---|---|
 | **[GUIDE.md](documentation/GUIDE.md)** | Everything operational: architecture, setup, configuration, the development loop, backend and frontend internals, the security model, the full API reference, the database, testing, and deployment. **Start here.** |
 | **[FEATURE-INVENTORY.md](documentation/FEATURE-INVENTORY.md)** | The exhaustive, verifiable "everything that's actually built" checklist — every library, every security control, every feature, each pointing at real code. Built to be checked against deliverables line-by-line. |
 | **[IMPLEMENTATION-HISTORY.md](documentation/IMPLEMENTATION-HISTORY.md)** | What was built over time, and — more usefully — the problems hit along the way and how each was diagnosed and solved. |
+| **[POST-SUBMISSION-UPGRADES.md](documentation/POST-SUBMISSION-UPGRADES.md)** | Work built *after* the Master's course submission, and therefore outside the graded deliverable. The newest features land here first, before they are folded into the Guide. |
 | **[FUTURE-ENHANCEMENTS.md](documentation/FUTURE-ENHANCEMENTS.md)** | The backlog, the open defects, and what it would take to run this as a real product for a small business. |
 | **[flows/](documentation/flows/README.md)** | Click-to-database walkthroughs of every major flow — sequence diagrams, JWT/header state, request/response JSON, and the real SQL. |
+| **[api-testing/](documentation/api-testing/README.md)** | Runnable cURL, Postman and Bruno collections covering all 12 controllers, kept in step with the Guide's API reference. |
 | **[aws/RUNBOOK.md](aws/RUNBOOK.md)** | The linear, assumes-nothing AWS deploy procedure, written so a teammate can deploy without asking anyone. |
 
 The frontend workspace has its own short README at [`tesseraapp/README.md`](tesseraapp/README.md).
@@ -139,8 +148,9 @@ angularSpringBootFullStack/
 │       ├── application-prod.yml                   # prod profile — no fallbacks, fails fast
 │       └── schema.sql                             # idempotent identity/auth schema (applied by hand)
 ├── tesseraapp/                                    # Angular 21 workspace
-│   └── src/app/{features,service,interceptor,guard,directive,shared}/
-├── documentation/                                 # the four docs + flows/
+│   └── src/app/{features,service,interceptor,guard,directive,pipe,shared,utils,constants}/
+├── documentation/                                 # the five docs + flows/ + api-testing/
+├── assignments/                                   # superseded pre-consolidation copies, kept for reference
 ├── aws/ · gcp/                                    # cloud bootstrap kits + the AWS runbook
 ├── Dockerfile                                     # multi-stage: Node 22 → Maven 21 → JRE 21 Alpine
 ├── docker-compose.yml
@@ -153,8 +163,8 @@ angularSpringBootFullStack/
 ## Verifying a change
 
 ```bash
-./mvnw clean test                      # backend: 126 tests
-cd tesseraapp && npm test              # frontend: 87 specs
+./mvnw clean test                      # backend: 312 tests / 46 suites
+cd tesseraapp && npm test              # frontend: 90 specs / 9 files
 cd tesseraapp && npm run lint          # gates in CI
 cd tesseraapp && npm run build         # production build
 ```
