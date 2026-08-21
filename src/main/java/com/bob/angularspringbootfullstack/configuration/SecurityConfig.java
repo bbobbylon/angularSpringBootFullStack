@@ -240,6 +240,7 @@ class SecurityConfig {
                             .requestMatchers("/user/totp/**").authenticated()
                             .requestMatchers("/user/webauthn/**").authenticated()
                             .requestMatchers("/user/sessions/**").authenticated()
+                            .requestMatchers("/user/favorites/**").authenticated()
                             // The Angular SPA is compiled into this jar's static resources (see
                             // Dockerfile) and served from this SAME origin in Docker/prod — unlike
                             // local dev, where Angular runs on its own dev server (port 4200) and

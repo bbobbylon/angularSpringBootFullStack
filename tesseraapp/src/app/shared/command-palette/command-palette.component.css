@@ -132,6 +132,31 @@
   white-space: nowrap;
 }
 
+.cmdk-item__star {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-left: 0.25rem;
+  border: 0;
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: color var(--dur-fast, 120ms) var(--ease-out, ease);
+}
+
+.cmdk-item__star:hover,
+.cmdk-item__star:focus-visible {
+  color: var(--text-muted);
+}
+
+.cmdk-item__star.is-pinned {
+  color: #f5b942;
+}
+
 .cmdk-empty {
   padding: 1.2rem;
   text-align: center;

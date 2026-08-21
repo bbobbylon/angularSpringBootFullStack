@@ -60,6 +60,18 @@
               <span class="cmdk-item__icon"><i class="bi {{ item.command.icon }}" aria-hidden="true"></i></span>
               <span class="cmdk-item__label">{{ item.command.label }}</span>
               <span class="cmdk-item__hint">{{ item.command.hint }}</span>
+              @if (isFavoritable(item.command.id)) {
+                <button
+                  type="button"
+                  class="cmdk-item__star"
+                  [class.is-pinned]="isPinned(item.command.id)"
+                  [attr.aria-pressed]="isPinned(item.command.id)"
+                  [attr.aria-label]="isPinned(item.command.id) ? 'Unpin' : 'Pin'"
+                  (click)="toggleFavorite($event, item.command.id)"
+                >
+                  <i class="bi" [class.bi-star-fill]="isPinned(item.command.id)" [class.bi-star]="!isPinned(item.command.id)" aria-hidden="true"></i>
+                </button>
+              }
             </li>
           }
         } @empty {

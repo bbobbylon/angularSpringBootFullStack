@@ -630,5 +630,8 @@
     "toggleThemeHint": "Dunkel / hell umschalten",
     "logout": "Abmelden",
     "logoutHint": "Ihre Sitzung beenden"
+  },
+  "favoritesBar": {
+    "ariaLabel": "Angeheftete Ziele"
   }
 }

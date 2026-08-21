@@ -51,6 +51,7 @@ Tracked in the order they're being picked up.
 | 11 | Admin User Directory sorting (JDBC) | FUTURE-ENHANCEMENTS.md §3.3 | ✅ |
 | 12 | Live QA pass — UI regressions found & fixed | — | ✅ |
 | 13 | Role CRUD + time-boxed role assignment | FUTURE-ENHANCEMENTS.md §3.2 | ✅ |
+| 14 | Favorites / pinned-destinations bar | FUTURE-ENHANCEMENTS.md §3.3 | ✅ |
 
 Each row gets a full writeup (what/why/how, matching the style already used in
 [FUTURE-ENHANCEMENTS.md §3](FUTURE-ENHANCEMENTS.md)) here once it's done, mirroring how §2/§3 of
@@ -725,3 +726,79 @@ built-in-role delete refusal vs. a catalog-only role, assignability stamping) an
 proven both allowed and refused). `AdminUserControllerTest` gained coverage for the new
 `expiresAt` threading and malformed-date rejection. Full backend suite: 326 tests, 0 failures, 0
 errors (`./mvnw clean test`). Frontend: `ng build` and `ng lint` both clean.
+
+### 14. Favorites / pinned-destinations bar (2026-08-21)
+
+Closes the design session recorded in FUTURE-ENHANCEMENTS.md §3.3: pages that were previously two
+clicks deep behind the Admin dropdown (which alone holds six destinations) can now be pinned to a
+quick-access strip. Both backend and frontend shipped together.
+
+**What/why — the two open decisions from the design session.** §3.3 left two things unresolved
+before implementation could start. First, storage: `localStorage` (an hour of work, mirroring the
+theme toggle, but pins are per-browser and vanish on a new device) versus a DB-backed table (closer
+to half a day, but the workspace follows the *identity* rather than the browser). **Decided:**
+DB-backed — a new `userfavorites` table, following the exact Query + RowMapper-less + Repo/RepoImpl
+shape this codebase already uses for every other JDBC aggregate (no `RowMapper` needed here since
+every query resolves to a single `destination_id` column or a count — see
+`FavoriteRepoImpl`'s doc comment for why a one-field model would be ceremony this domain doesn't
+need). Second, RBAC filtering: a role reassignment can strip `UPDATE:USER` from someone who pinned
+`/analytics` last week, and a pin that survives into the bar only to 403 on click is worse than no
+pin. **Decided:** a now-invisible pin is *hidden*, not removed — a temporary role change should not
+silently destroy someone's setup — enforced by re-checking `hasAnyAuthority` inside a `computed()`
+on every render, not just once at add-time.
+
+**How — one shared registry instead of two drifting lists.** The command palette already held every
+navigable destination's id/path/icon/label/hint/required-authorities as private literals inside
+`CommandPaletteComponent.buildCommands()`. Favorites needed the same metadata, so a new
+`shared/navigable-destinations.ts` extracts it into an exported `DestinationDefinition` interface,
+a `NAVIGABLE_DESTINATIONS` array (12 entries), and a `findDestination(id)` lookup — the single
+source of truth both the palette and the favorites bar now resolve ids through, closing off exactly
+the "two-source-of-truth" drift risk the design note warned about. `CommandPaletteComponent` was
+rewritten to build each `Command` from `findDestination(id)!` instead of repeating the same
+literals; behavior and ordering are unchanged, confirmed by its existing 12 specs staying green
+through the refactor.
+
+**How — backend.** `userfavorites (user_id, destination_id, created_at)` in `schema.sql`, composite
+primary key doubling as the "already pinned" uniqueness guard so `INSERT IGNORE` (`FavoriteQuery
+.INSERT_FAVORITE_QUERY`) is naturally idempotent with no separate existence check; `ON DELETE
+CASCADE` so a deleted user's pins don't orphan. New `FavoriteController` at `/user/favorites/**`
+(GET list, POST/DELETE `/{destinationId}`) — deliberately gated at `authenticated()` only, ahead of
+the broad `POST`/`DELETE` catch-alls that would otherwise demand `UPDATE:USER`/`UPDATE:CUSTOMER`,
+since pinning your own navigation shortcuts needs nothing narrower than "signed in" (mirrors
+`/user/totp/**` and `/user/sessions/**`'s posture). `destinationId` is treated as an opaque string
+end to end — the backend never re-validates it against the frontend's registry, which is the same
+single-source-of-truth reasoning as the registry extraction above, just crossing the API boundary.
+The one business rule this domain has — an 8-pin cap, a personal-convenience limit rather than a
+data-integrity boundary — lives in `FavoriteServiceImpl` (not the repo), consistent with this
+project's service-layer-owns-business-logic convention; a double-click race can at worst land
+exactly at the cap, never meaningfully over it, which was judged an acceptable tolerance for a
+preference feature.
+
+**How — frontend.** New `FavoriteService` mirrors `CurrentUserService`'s fetch-once-and-share signal
+cache exactly (`load()`/`clear()`/an `inFlight` guard so concurrent callers share one round trip),
+with `add$`/`remove$` publishing the server's refreshed list back into the same signal on success.
+Writing this service's own regression test caught a real bug: `fetch()`'s pipe had `tap` before
+`catchError`, so a failed request's `catchError` fallback (`of({})`) never reached `tap`'s
+signal-setting side effect, leaving the signal stuck at `undefined` forever instead of settling to
+`[]` on failure as intended. Fixed by swapping the operator order; `CurrentUserService` carries the
+identical latent ordering and was left untouched as out of scope (currently harmless there, since
+its callers already treat `undefined` and empty the same way). New `FavoritesBarComponent` mounts
+inside `NavbarComponent`'s own template rather than `app.component.html` — every protected feature
+template already includes `<app-navbar>` and no public page does, so construction time is a safe,
+zero-new-wiring proxy for "signed in," unlike the always-mounted command palette which must
+self-gate per interaction instead. The command palette gained a star affordance on each favoritable
+result (`isFavoritable`/`isPinned`/`toggleFavorite`), calling `load()` on open so the star states are
+never stale, and reporting a cap-exceeded rejection through the existing `NotificationsService`
+toast façade rather than a new error-display mechanism.
+
+**Testing.** New `FavoriteServiceImplTest` (6 cases) and `FavoriteControllerTest` (4 cases) on the
+backend. On the frontend: `favorite.service.spec.ts` (9 cases, driven through the real `HttpClient`
+against `HttpTestingController` rather than a stub, since this class *is* the HTTP boundary being
+tested — this is the suite that caught the pipe-ordering bug above) and
+`favorites-bar.component.spec.ts` (8 cases, using `TranslocoTestingModule.forRoot(...)` rather than
+the codebase's usual bare `.translate()` spy, because this component's template uses the reactive
+`*transloco="let t"` structural directive directly rather than resolving labels imperatively in TS —
+the first spec in this codebase to need a real `TranslocoService`). `command-palette.component.spec
+.ts` gained 5 cases covering load-on-open, filled-star-when-pinned, pin/unpin on click, and the
+cap-exceeded toast, for 17 total in that file. Full frontend suite: 11 test files, 112 tests, 0
+failures (`ng test --watch=false`); `ng lint` and production `ng build` both clean.

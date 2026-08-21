@@ -13,8 +13,11 @@ import { Router } from '@angular/router';
 import { UserService } from '../../service/user.service';
 import { ThemeService } from '../../service/theme.service';
 import { CommandPaletteService } from '../../service/command-palette.service';
+import { FavoriteService } from '../../service/favorite.service';
+import { NotificationsService } from '../../service/notifications-service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoService } from '@jsverse/transloco';
+import { findDestination } from '../navigable-destinations';
 
 /**
  * A single actionable entry in the command palette.
@@ -71,6 +74,8 @@ export class CommandPaletteComponent {
   private readonly themeService = inject(ThemeService);
   private readonly transloco = inject(TranslocoService);
   private readonly paletteService = inject(CommandPaletteService);
+  private readonly favoriteService = inject(FavoriteService);
+  private readonly notifications = inject(NotificationsService);
 
   /** Whether the overlay is currently visible. */
   protected readonly open = signal(false);
@@ -165,6 +170,10 @@ export class CommandPaletteComponent {
     this.query.set('');
     this.activeIndex.set(0);
     this.open.set(true);
+    // Idempotent — a no-op once the caller's favorites are already loaded (e.g. via the navbar's
+    // FavoritesBarComponent). Loaded here too because the palette can open before the navbar has
+    // ever mounted a favorites bar of its own.
+    this.favoriteService.load();
   }
 
   /** Hides the palette. */
@@ -235,6 +244,40 @@ export class CommandPaletteComponent {
     this.activeIndex.set(index);
   }
 
+  /**
+   * Whether a result can be pinned at all — only entries resolvable in
+   * {@code NAVIGABLE_DESTINATIONS} (navigable-destinations.ts) (i.e. not `home`, not an action like `toggle-theme`/`logout`,
+   * not the query-param `new-service` variant) show a star. See that module's doc for the
+   * full exclusion list and why.
+   */
+  protected isFavoritable(id: string): boolean {
+    return !!findDestination(id);
+  }
+
+  /** Whether the given destination id is currently in the caller's pinned set. */
+  protected isPinned(id: string): boolean {
+    return (this.favoriteService.favorites() ?? []).includes(id);
+  }
+
+  /**
+   * Pins or unpins a result's destination, without running the result itself or closing the
+   * palette — {@code stopPropagation} is required because the star sits inside the same
+   * {@code (click)="run(item.command)"} row.
+   *
+   * @param event the star button's click event
+   * @param id    the destination id to toggle
+   */
+  protected toggleFavorite(event: Event, id: string): void {
+    event.stopPropagation();
+    const request = this.isPinned(id) ? this.favoriteService.remove$(id) : this.favoriteService.add$(id);
+    request.subscribe({
+      // Only the cap-exceeded ApiException reaches here in practice (unpinning never errors) —
+      // surfaced as a toast rather than silently swallowed, since a star that visibly did nothing
+      // would read as a bug rather than a deliberate limit.
+      error: (err: Error) => this.notifications.onError(err.message),
+    });
+  }
+
   /** Runs whichever entry is currently highlighted, if any. */
   private runActive(): void {
     const command = this.results()[this.activeIndex()];
@@ -247,6 +290,10 @@ export class CommandPaletteComponent {
    * Assembles the command set for the current session. Base navigation is available to
    * every authenticated user; the admin block is appended only when the token carries a
    * staff-grade authority, and the theme/logout actions always close the list.
+   *
+   * <p>Label/hint/icon/route for every navigable entry come from {@code NAVIGABLE_DESTINATIONS} (navigable-destinations.ts)
+   * — the registry {@code FavoritesBarComponent} also resolves pinned destinations against —
+   * rather than being duplicated here, so the two surfaces cannot silently drift apart.
    */
   private buildCommands(): Command[] {
     // Resolved once per open rather than per entry: the palette is rebuilt every time it opens,
@@ -259,13 +306,21 @@ export class CommandPaletteComponent {
       void this.router.navigate([path]);
     };
 
+    const toCommand = (id: string): Command => {
+      const destination = findDestination(id)!;
+      return {
+        id: destination.id,
+        label: t(destination.labelKey),
+        hint: t(destination.hintKey),
+        icon: destination.icon,
+        section: navigate,
+        run: go(destination.path),
+      };
+    };
+
     const commands: Command[] = [
       { id: 'home', label: t('palette.home'), hint: t('palette.homeHint'), icon: 'bi-grid-1x2-fill', section: navigate, run: go('/') },
-      { id: 'customers', label: t('palette.customers'), hint: t('palette.customersHint'), icon: 'bi-people-fill', section: navigate, run: go('/customers') },
-      { id: 'invoices', label: t('palette.invoices'), hint: t('palette.invoicesHint'), icon: 'bi-receipt-cutoff', section: navigate, run: go('/invoices') },
-      { id: 'services', label: t('palette.services'), hint: t('palette.servicesHint'), icon: 'bi-grid-1x2', section: navigate, run: go('/services') },
-      { id: 'profile', label: t('palette.profile'), hint: t('palette.profileHint'), icon: 'bi-person-circle', section: navigate, run: go('/profile') },
-      { id: 'security', label: t('palette.security'), hint: t('palette.securityHint'), icon: 'bi-shield-lock', section: navigate, run: go('/security') },
+      ...(['customers', 'invoices', 'services', 'profile', 'security'] as const).map(toCommand),
     ];
 
     // Creation commands require write authority (ROADMAP §2 — capability-level RBAC gating).
@@ -275,20 +330,17 @@ export class CommandPaletteComponent {
     // submit. Gated at the same authorities the navbar uses, because a command palette that
     // offers a destination the menu hides is the same bug told twice.
     if (this.userService.hasAnyAuthority('UPDATE:CUSTOMER', 'UPDATE:USER')) {
-      commands.push(
-        { id: 'new-customer', label: t('palette.newCustomer'), hint: t('palette.newCustomerHint'), icon: 'bi-person-plus-fill', section: navigate, run: go('/customer/new') },
-        { id: 'new-invoice', label: t('palette.newInvoice'), hint: t('palette.newInvoiceHint'), icon: 'bi-receipt', section: navigate, run: go('/invoice/new') },
-      );
+      commands.push(toCommand('new-customer'), toCommand('new-invoice'));
     }
 
     if (this.userService.hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')) {
       commands.push(
-        { id: 'users', label: t('palette.users'), hint: t('palette.usersHint'), icon: 'bi-people-fill', section: navigate, run: go('/users') },
-        { id: 'roles', label: t('palette.roles'), hint: t('palette.rolesHint'), icon: 'bi-grid-3x3-gap-fill', section: navigate, run: go('/roles') },
-        { id: 'billing', label: t('palette.billing'), hint: t('palette.billingHint'), icon: 'bi-graph-up-arrow', section: navigate, run: go('/billing') },
-        { id: 'analytics', label: t('palette.analytics'), hint: t('palette.analyticsHint'), icon: 'bi-bar-chart-line-fill', section: navigate, run: go('/analytics') },
-        { id: 'security-overview', label: t('palette.securityOverview'), hint: t('palette.securityOverviewHint'), icon: 'bi-shield-exclamation', section: navigate, run: go('/security-overview') },
-        { id: 'manage-services', label: t('palette.manageServices'), hint: t('palette.manageServicesHint'), icon: 'bi-sliders', section: navigate, run: go('/services/manage') },
+        toCommand('users'),
+        toCommand('roles'),
+        toCommand('billing'),
+        toCommand('analytics'),
+        toCommand('security-overview'),
+        toCommand('manage-services'),
         {
           id: 'new-service',
           label: t('palette.newService'),
@@ -297,6 +349,7 @@ export class CommandPaletteComponent {
           section: navigate,
           // /services/manage has no dedicated create route (the form is an inline toggle over the
           // list, unlike /invoice/new and /customer/new) — the ?new query param opens it directly.
+          // Deliberately not in NAVIGABLE_DESTINATIONS — see that module's doc for why.
           run: () => {
             void this.router.navigate(['/services/manage'], { queryParams: { new: true } });
           },

@@ -634,5 +634,8 @@
     "toggleThemeHint": "Switch dark / light",
     "logout": "Log Out",
     "logoutHint": "End your session"
+  },
+  "favoritesBar": {
+    "ariaLabel": "Pinned destinations"
   }
 }

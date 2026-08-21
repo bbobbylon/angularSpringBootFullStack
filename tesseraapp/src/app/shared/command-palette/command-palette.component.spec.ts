@@ -1,10 +1,14 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
+import { signal } from '@angular/core';
+import { of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CommandPaletteComponent } from './command-palette.component';
 import { UserService } from '../../service/user.service';
 import { ThemeService } from '../../service/theme.service';
+import { FavoriteService } from '../../service/favorite.service';
+import { NotificationsService } from '../../service/notifications-service';
 import { TranslocoService } from '@jsverse/transloco';
 import { translocoStub } from '../../testing/transloco-stub';
 
@@ -32,6 +36,13 @@ describe('CommandPaletteComponent', () => {
   let userService: { isAuthenticated: ReturnType<typeof vi.fn>; hasAnyAuthority: ReturnType<typeof vi.fn>; logOut: ReturnType<typeof vi.fn> };
   let theme: { toggle: ReturnType<typeof vi.fn> };
   let router: { navigate: ReturnType<typeof vi.fn> };
+  let favoriteService: {
+    favorites: ReturnType<typeof signal<string[]>>;
+    load: ReturnType<typeof vi.fn>;
+    add$: ReturnType<typeof vi.fn>;
+    remove$: ReturnType<typeof vi.fn>;
+  };
+  let notifications: { onError: ReturnType<typeof vi.fn>; onSuccess: ReturnType<typeof vi.fn> };
 
   /** Dispatches the global open/close hotkey and flushes the resulting render. */
   const pressHotkey = (): void => {
@@ -59,6 +70,13 @@ describe('CommandPaletteComponent', () => {
       (el.textContent ?? '').trim(),
     );
 
+  /** The star button belonging to the result with the given label, or null if that result has none. */
+  const starFor = (label: string): HTMLButtonElement | null => {
+    const item = labels().indexOf(label);
+    if (item === -1) return null;
+    return host().querySelectorAll<HTMLElement>('.cmdk-item')[item]?.querySelector('.cmdk-item__star') ?? null;
+  };
+
   /** Types into the search box the way a user would, then flushes the render. */
   const type = (value: string): void => {
     const el = input();
@@ -81,8 +99,10 @@ describe('CommandPaletteComponent', () => {
    * @param opts.admin whether that token carries staff authorities (UPDATE:USER / UPDATE:ROLE)
    * @param opts.write whether it carries write authority (UPDATE:CUSTOMER); defaults to
    *                   {@code opts.admin}, since every staff role holds UPDATE:USER and so can write
+   * @param opts.favorites the caller's pinned destination ids, as {@code FavoriteService} would
+   *                       report them already loaded; defaults to none
    */
-  const setup = (opts: { authenticated: boolean; admin: boolean; write?: boolean }): void => {
+  const setup = (opts: { authenticated: boolean; admin: boolean; write?: boolean; favorites?: string[] }): void => {
     const granted = new Set<string>(['READ:USER', 'READ:CUSTOMER']);
     if (opts.write ?? opts.admin) granted.add('UPDATE:CUSTOMER');
     if (opts.admin) {
@@ -97,6 +117,13 @@ describe('CommandPaletteComponent', () => {
     };
     theme = { toggle: vi.fn() };
     router = { navigate: vi.fn().mockResolvedValue(true) };
+    favoriteService = {
+      favorites: signal<string[]>(opts.favorites ?? []),
+      load: vi.fn(),
+      add$: vi.fn().mockReturnValue(of({})),
+      remove$: vi.fn().mockReturnValue(of({})),
+    };
+    notifications = { onError: vi.fn(), onSuccess: vi.fn() };
 
     TestBed.configureTestingModule({
       imports: [CommandPaletteComponent],
@@ -107,6 +134,8 @@ describe('CommandPaletteComponent', () => {
         // the shipped English copy so these specs keep asserting on real user-facing text.
         { provide: TranslocoService, useValue: translocoStub() },
         { provide: Router, useValue: router },
+        { provide: FavoriteService, useValue: favoriteService },
+        { provide: NotificationsService, useValue: notifications },
       ],
     });
 
@@ -250,5 +279,61 @@ describe('CommandPaletteComponent', () => {
     expect(panel()).not.toBeNull();
     pressHotkey();
     expect(panel()).toBeNull();
+  });
+
+  it('loads favorites and shows a star only on favoritable results', () => {
+    setup({ authenticated: true, admin: false });
+
+    pressHotkey();
+
+    expect(favoriteService.load).toHaveBeenCalled();
+    // Navigable destinations get a star; the bare landing page and an action never do.
+    expect(starFor('All Customers')).not.toBeNull();
+    expect(starFor('Home')).toBeNull();
+    expect(starFor('Log Out')).toBeNull();
+  });
+
+  it('renders a filled star for an already-pinned destination', () => {
+    setup({ authenticated: true, admin: false, favorites: ['customers'] });
+
+    pressHotkey();
+
+    expect(starFor('All Customers')?.classList.contains('is-pinned')).toBe(true);
+    expect(starFor('All Invoices')?.classList.contains('is-pinned')).toBe(false);
+  });
+
+  it('pins a destination on star click without running or closing the result', () => {
+    setup({ authenticated: true, admin: false });
+    pressHotkey();
+
+    starFor('All Customers')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(favoriteService.add$).toHaveBeenCalledWith('customers');
+    expect(favoriteService.remove$).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(panel()).not.toBeNull();
+  });
+
+  it('unpins an already-pinned destination on star click', () => {
+    setup({ authenticated: true, admin: false, favorites: ['customers'] });
+    pressHotkey();
+
+    starFor('All Customers')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(favoriteService.remove$).toHaveBeenCalledWith('customers');
+    expect(favoriteService.add$).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a cap-exceeded rejection as a toast rather than failing silently', () => {
+    setup({ authenticated: true, admin: false });
+    favoriteService.add$.mockReturnValue(throwError(() => new Error('You can only pin up to 8 destinations — unpin one first.')));
+    pressHotkey();
+
+    starFor('All Customers')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(notifications.onError).toHaveBeenCalledWith('You can only pin up to 8 destinations — unpin one first.');
   });
 });

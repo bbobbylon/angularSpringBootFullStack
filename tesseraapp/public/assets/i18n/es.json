@@ -630,5 +630,8 @@
     "toggleThemeHint": "Alternar oscuro / claro",
     "logout": "Cerrar sesión",
     "logoutHint": "Finalizar tu sesión"
+  },
+  "favoritesBar": {
+    "ariaLabel": "Destinos fijados"
   }
 }

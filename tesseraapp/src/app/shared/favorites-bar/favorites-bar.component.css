@@ -1,0 +1,52 @@
+:host {
+  display: block;
+}
+
+/* Slim strip directly under the sticky navbar. Same glass/hairline tokens as .sc-navbar
+   (navbar.component.css) so it reads as an extension of the nav rather than a new surface. */
+.sc-favbar {
+  position: sticky;
+  top: 56px;
+  z-index: 1020;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.4rem 1rem;
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.sc-favbar__pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.sc-favbar__pin:hover,
+.sc-favbar__pin:focus-visible {
+  color: var(--text-strong);
+  border-color: var(--accent);
+  background: var(--surface-hover, rgba(127, 127, 127, 0.08));
+}
+
+.sc-favbar__pin i {
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.sc-favbar__label {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

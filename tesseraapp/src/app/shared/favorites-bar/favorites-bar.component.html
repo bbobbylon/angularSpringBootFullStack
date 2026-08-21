@@ -1,0 +1,10 @@
+@if (pins().length) {
+  <div *transloco="let t" class="sc-favbar" [attr.aria-label]="t('favoritesBar.ariaLabel')">
+    @for (pin of pins(); track pin.id) {
+      <button (click)="navigate(pin.path)" class="sc-favbar__pin" type="button" [title]="t(pin.hintKey)">
+        <i class="bi {{ pin.icon }}" aria-hidden="true"></i>
+        <span class="sc-favbar__label">{{ t(pin.labelKey) }}</span>
+      </button>
+    }
+  </div>
+}

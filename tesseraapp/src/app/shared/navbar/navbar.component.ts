@@ -2,11 +2,13 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { Router, RouterLink } from '@angular/router';
 import { UserService } from '../../service/user.service';
 import { CurrentUserService } from '../../service/current-user.service';
+import { FavoriteService } from '../../service/favorite.service';
 import { NgOptimizedImage } from '@angular/common';
 import { ThemeService } from '../../service/theme.service';
 import { LanguageService } from '../../service/language.service';
 import { CommandPaletteService } from '../../service/command-palette.service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { FavoritesBarComponent } from '../favorites-bar/favorites-bar.component';
 
 /**
  * Top navigation bar component.
@@ -30,7 +32,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-navbar',
-  imports: [RouterLink, NgOptimizedImage, TranslocoDirective],
+  imports: [RouterLink, NgOptimizedImage, TranslocoDirective, FavoritesBarComponent],
   templateUrl: './navbar.component.html',
   styleUrl: './navbar.component.css',
   standalone: true,
@@ -39,6 +41,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 export class NavbarComponent {
   private readonly currentUser = inject(CurrentUserService);
   private readonly userService = inject(UserService);
+  private readonly favoriteService = inject(FavoriteService);
   private readonly router = inject(Router);
 
   /**
@@ -187,6 +190,7 @@ export class NavbarComponent {
    */
   protected logOut(): void {
     this.currentUser.clear();
+    this.favoriteService.clear();
     this.userService.logOut();
     this.router.navigate(['/login']);
   }

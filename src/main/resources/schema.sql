@@ -127,6 +127,21 @@ PREPARE add_userroles_expires_at_stmt FROM @add_userroles_expires_at;
 EXECUTE add_userroles_expires_at_stmt;
 DEALLOCATE PREPARE add_userroles_expires_at_stmt;
 
+-- Favorites / pinned destinations bar (FUTURE-ENHANCEMENTS.md §3.3). destination_id is one of the
+-- command palette's navigable destination ids (e.g. 'customers', 'billing') — an id the frontend
+-- registry owns and validates; the backend deliberately treats it as an opaque string rather than
+-- re-encoding the palette's route list here, which would be the exact two-source-of-truth problem
+-- this feature was designed to avoid. Composite PK doubles as the "already pinned" uniqueness
+-- guard, so INSERT IGNORE is naturally idempotent with no separate existence check.
+CREATE TABLE IF NOT EXISTS userfavorites
+(
+    user_id        BIGINT UNSIGNED NOT NULL,
+    destination_id VARCHAR(64)     NOT NULL,
+    created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, destination_id),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 -- ── Audit: events catalog + per-user log ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS events
 (

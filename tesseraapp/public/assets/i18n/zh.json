@@ -630,5 +630,8 @@
     "toggleThemeHint": "切换深色 / 浅色",
     "logout": "退出登录",
     "logoutHint": "结束当前会话"
+  },
+  "favoritesBar": {
+    "ariaLabel": "固定目的地"
   }
 }
