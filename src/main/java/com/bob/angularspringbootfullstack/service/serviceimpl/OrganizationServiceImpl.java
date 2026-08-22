@@ -2,27 +2,49 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.ApiException;
+import com.bob.angularspringbootfullstack.model.Organization;
 import com.bob.angularspringbootfullstack.model.OrganizationSummary;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
+import com.bob.angularspringbootfullstack.rowmapper.OrganizationRowMapper;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERSHIP_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_SHARED_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_USERS_SHARING_ORGANIZATIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DEACTIVATE_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.REACTIVATE_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_MEMBERS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATION_IDS_BY_USER_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ALL_ORGANIZATIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATIONS_BY_IDS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_ADMIN_EMAILS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_BY_ID_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_NAME_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_STATUS_QUERY;
+import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 
 /**
@@ -145,6 +167,189 @@ public class OrganizationServiceImpl implements OrganizationService {
         } catch (Exception exception) {
             log.error("Error resolving organization admin emails for organization {}: {}", organizationId, exception.getMessage(), exception);
             throw new ApiException("An error occurred while resolving report digest recipients. Please try again.");
+        }
+    }
+
+    // ── Organization CRUD + membership management (2026-08-21, FUTURE-ENHANCEMENTS.md §3.2) ──
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Organization createOrganization(String name) {
+        String trimmed = requireNonBlankName(name);
+        log.info("Creating organization '{}'", trimmed);
+        try {
+            MapSqlParameterSource params = new MapSqlParameterSource().addValue("name", trimmed);
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            jdbcTemplate.update(INSERT_ORGANIZATION_QUERY, params, keyHolder);
+            return getOrganization(requireNonNull(keyHolder.getKey()).longValue());
+        } catch (DuplicateKeyException e) {
+            throw new ApiException("An organization named '" + trimmed + "' already exists.");
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while creating the organization. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@code organizationIds == null} is the unscoped signal every other org-aware method in
+     * this codebase uses; an empty (non-null) collection correctly short-circuits to an empty
+     * result rather than running {@code WHERE id IN ()}, which is invalid SQL.
+     */
+    @Override
+    public Collection<Organization> listOrganizations(Collection<Long> organizationIds) {
+        if (organizationIds != null && organizationIds.isEmpty()) {
+            return List.of();
+        }
+        try {
+            if (organizationIds == null) {
+                return jdbcTemplate.query(SELECT_ALL_ORGANIZATIONS_QUERY, new OrganizationRowMapper());
+            }
+            return jdbcTemplate.query(SELECT_ORGANIZATIONS_BY_IDS_QUERY, Map.of("ids", organizationIds), new OrganizationRowMapper());
+        } catch (Exception exception) {
+            log.error("Error listing organizations (scope={}): {}", organizationIds, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving organizations. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Organization renameOrganization(Long id, String name) {
+        String trimmed = requireNonBlankName(name);
+        log.info("Renaming organization id {} to '{}'", id, trimmed);
+        try {
+            int rows = jdbcTemplate.update(UPDATE_ORGANIZATION_NAME_QUERY, Map.of("name", trimmed, "id", id));
+            if (rows == 0) {
+                throw new ApiException("Organization not found.");
+            }
+            return getOrganization(id);
+        } catch (DuplicateKeyException e) {
+            throw new ApiException("An organization named '" + trimmed + "' already exists.");
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while renaming the organization. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Organization setOrganizationStatus(Long id, String status) {
+        String normalized = status == null ? "" : status.trim().toUpperCase();
+        if (!VALID_STATUSES.contains(normalized)) {
+            throw new ApiException("Status must be one of " + VALID_STATUSES + ".");
+        }
+        log.info("Setting organization id {} status to '{}'", id, normalized);
+        try {
+            int rows = jdbcTemplate.update(UPDATE_ORGANIZATION_STATUS_QUERY, Map.of("status", normalized, "id", id));
+            if (rows == 0) {
+                throw new ApiException("Organization not found.");
+            }
+            return getOrganization(id);
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while updating the organization. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isActiveMemberOfOrganization(Long userId, Long organizationId) {
+        try {
+            Long count = jdbcTemplate.queryForObject(COUNT_ACTIVE_MEMBERSHIP_QUERY,
+                    Map.of("userId", userId, "organizationId", organizationId), Long.class);
+            return count != null && count > 0;
+        } catch (Exception exception) {
+            log.error("Membership check failed for user {} in organization {}: {}", userId, organizationId, exception.getMessage(), exception);
+            // Fail closed, same direction as isWithinOrganizationScope: an error here must deny,
+            // never grant, a membership-mutation request.
+            return false;
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Tries a plain insert first, and only falls back to
+     * {@link com.bob.angularspringbootfullstack.query.OrganizationQuery#REACTIVATE_MEMBERSHIP_QUERY}
+     * on {@link DuplicateKeyException} — see
+     * {@link com.bob.angularspringbootfullstack.query.OrganizationQuery#INSERT_MEMBERSHIP_QUERY}'s
+     * Javadoc for why this is two statements rather than one
+     * {@code INSERT ... ON DUPLICATE KEY UPDATE}. {@link DuplicateKeyException} must be caught
+     * before the broader {@link DataIntegrityViolationException} it extends, or the collision
+     * case would never reach the reactivation branch.
+     */
+    @Override
+    public void addMember(Long organizationId, Long userId) {
+        log.info("Adding user {} to organization {}", userId, organizationId);
+        Map<String, Long> params = Map.of("userId", userId, "organizationId", organizationId);
+        try {
+            jdbcTemplate.update(INSERT_MEMBERSHIP_QUERY, params);
+        } catch (DuplicateKeyException e) {
+            jdbcTemplate.update(REACTIVATE_MEMBERSHIP_QUERY, params);
+        } catch (DataIntegrityViolationException e) {
+            throw new ApiException("That user or organization does not exist.");
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while adding the member. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void removeMember(Long organizationId, Long userId) {
+        log.info("Removing user {} from organization {}", userId, organizationId);
+        try {
+            jdbcTemplate.update(DEACTIVATE_MEMBERSHIP_QUERY, Map.of("userId", userId, "organizationId", organizationId));
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while removing the member. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection<UserDTO> listActiveMembers(Long organizationId) {
+        try {
+            Collection<User> members = jdbcTemplate.query(SELECT_ACTIVE_MEMBERS_QUERY,
+                    Map.of("organizationId", organizationId), new UserRowMapper());
+            return members.stream().map(this::mapToUserDTO).toList();
+        } catch (Exception exception) {
+            log.error("Error listing active members for organization {}: {}", organizationId, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving the organization's members. Please try again.");
+        }
+    }
+
+    private static final Set<String> VALID_STATUSES = Set.of("ACTIVE", "INACTIVE");
+
+    private static String requireNonBlankName(String name) {
+        if (isBlank(name)) {
+            throw new ApiException("Organization name is required.");
+        }
+        return name.trim();
+    }
+
+    private Organization getOrganization(Long id) {
+        try {
+            return jdbcTemplate.queryForObject(SELECT_ORGANIZATION_BY_ID_QUERY, Map.of("id", id), new OrganizationRowMapper());
+        } catch (EmptyResultDataAccessException e) {
+            throw new ApiException("Organization not found.");
         }
     }
 

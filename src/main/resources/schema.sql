@@ -88,16 +88,22 @@ CREATE TABLE IF NOT EXISTS roles
 -- valid. Fresh databases (and CI) get 1–7. Renumbering an existing database would mean updating
 -- `roles.id` and every `userroles.role_id` together, which is a deliberate migration and not
 -- something an idempotent seed should do behind your back.
+-- 2026-08-21: UPDATE:ORGANIZATION added to the same three tiers already holding UPDATE:ROLE
+-- (organization admin, admin, application admin) — see OrganizationQuery/OrganizationController
+-- for the Organization CRUD + membership-management feature it gates. Deliberately mirrors the
+-- UPDATE:ROLE distribution rather than inventing a new tier list: those are exactly the tiers
+-- that need some level of organization access (self-service org CRUD for the top two, own-org
+-- membership management for ROLE_ORGANIZATION_ADMIN); help desk and below get nothing new.
 INSERT INTO roles (id, name, permission)
 VALUES (1, 'ROLE_GUEST', 'READ:USER'),
        (2, 'ROLE_USER', 'READ:USER, READ:CUSTOMER'),
        (3, 'ROLE_MODERATOR', 'READ:USER, READ:CUSTOMER, UPDATE:CUSTOMER'),
        (4, 'ROLE_HELP_DESK_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER'),
-       (5, 'ROLE_ORGANIZATION_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE'),
+       (5, 'ROLE_ORGANIZATION_ADMIN', 'READ:USER, READ:CUSTOMER, UPDATE:USER, UPDATE:ROLE, UPDATE:ORGANIZATION'),
        (6, 'ROLE_ADMIN',
-        'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, DELETE:USER'),
+        'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, UPDATE:ORGANIZATION, DELETE:USER'),
        (7, 'ROLE_APPLICATION_ADMIN',
-        'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, DELETE:USER, DELETE:CUSTOMER') AS new
+        'READ:USER, READ:CUSTOMER, CREATE:USER, CREATE:CUSTOMER, UPDATE:USER, UPDATE:CUSTOMER, UPDATE:ROLE, UPDATE:ORGANIZATION, DELETE:USER, DELETE:CUSTOMER') AS new
 ON DUPLICATE KEY UPDATE permission = new.permission;
 
 CREATE TABLE IF NOT EXISTS userroles

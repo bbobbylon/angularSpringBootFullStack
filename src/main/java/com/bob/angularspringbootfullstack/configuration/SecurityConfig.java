@@ -231,6 +231,13 @@ class SecurityConfig {
                             // RoleController#requireApplicationAdmin narrows it further to exactly
                             // ROLE_APPLICATION_ADMIN, which this authority-string matcher cannot express.
                             .requestMatchers("/admin/role/**").hasAnyAuthority("UPDATE:ROLE")
+                            // Organization CRUD + membership management (OrganizationController,
+                            // FUTURE-ENHANCEMENTS.md §3.2 "Self-service organization management").
+                            // UPDATE:ORGANIZATION is the URL-level floor, held by ROLE_ORGANIZATION_ADMIN/
+                            // ROLE_ADMIN/ROLE_APPLICATION_ADMIN; OrganizationController narrows catalog
+                            // mutation to the unscoped two and membership mutation to an active member of
+                            // the target org, neither of which this authority-string matcher can express.
+                            .requestMatchers("/admin/organization/**").hasAnyAuthority("UPDATE:ORGANIZATION")
                             .requestMatchers("/admin/**").hasAnyAuthority("UPDATE:USER", "UPDATE:ROLE")
                             // Self-service account security (FR-MFA-4 / plan.md M4-M5): managing
                             // one's OWN second factor and sessions must not require staff

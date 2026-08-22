@@ -1197,10 +1197,12 @@ request body** — a client-supplied `organizationId` would let anyone file reco
 tenant's dashboards.
 
 **Known limits** (tracked in [FUTURE-ENHANCEMENTS §6.1](FUTURE-ENHANCEMENTS.md#61-tenancy--the-foundational-decision)):
-every role below `ROLE_ADMIN`'s tier is scoped, but there is still no self-service organization
-management — creating an organization or moving a user between organizations is DB-only, so
-onboarding a second tenant is an operator task, not a product feature — and role *definitions*
-(the catalog itself, not who holds which role) are shared across every organization rather than
+every role below `ROLE_ADMIN`'s tier is scoped, and self-service organization management is done
+end-to-end — `OrganizationController` (`/admin/organization`, `UPDATE:ORGANIZATION`) creates,
+renames, retires, and lists/adds/removes members of an organization, and the Angular `/organizations`
+route (gated the same as `/roles`) gives administrators a UI for all of it, so onboarding a second
+tenant no longer needs an operator touching the database or the raw API. Role *definitions* (the
+catalog itself, not who holds which role) remain shared across every organization rather than
 per-tenant.
 
 **To add a scope-respecting endpoint:** inject `OrganizationService`; call

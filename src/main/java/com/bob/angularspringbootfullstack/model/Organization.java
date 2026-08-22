@@ -1,0 +1,45 @@
+package com.bob.angularspringbootfullstack.model;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.validation.constraints.NotEmpty;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
+
+import java.time.LocalDateTime;
+
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT;
+
+/**
+ * Organization entity — the full {@code organizations} catalog row (SRS §4.6 FR-ORG, DB-4),
+ * the tenant that {@code userorganizations} memberships and {@code Customer.organization_id}
+ * attribute to.
+ *
+ * <p>Distinct from {@link OrganizationSummary}, which is a minimal id+name projection for
+ * internal iteration (the scheduled report digest walks it, never exposed to the client as a
+ * mutable entity): this is the row Organization CRUD
+ * ({@code OrganizationController}, FUTURE-ENHANCEMENTS.md §3.2 "Self-service organization
+ * management") reads and writes, including its lifecycle {@link #status}.
+ *
+ * <p>There is no hard delete: {@code status} ({@code 'ACTIVE'}/{@code 'INACTIVE'}, enforced by
+ * {@code schema.sql}'s {@code CK_Organizations_Status}) is the retirement lever, matching
+ * {@link com.bob.angularspringbootfullstack.query.OrganizationQuery}'s own scoping rule — "the
+ * organization's own status is not consulted [there]; deactivating memberships is the
+ * operational lever; retiring an org flips its rows inactive." Hard-deleting the row would
+ * cascade-delete every {@code userorganizations} membership ({@code ON DELETE CASCADE}) and
+ * orphan any {@code Customer.organization_id} still pointing at it — invisible to every
+ * org-scoped admin thereafter, with no error to explain why.
+ */
+@Data
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(NON_DEFAULT)
+public class Organization {
+    private Long id;
+    @NotEmpty(message = "Organization name is required")
+    private String name;
+    private String status;
+    private LocalDateTime createdAt;
+}

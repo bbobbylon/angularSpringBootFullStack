@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.model.Organization;
 import com.bob.angularspringbootfullstack.model.OrganizationSummary;
 
 import java.util.Collection;
@@ -93,4 +94,99 @@ public interface OrganizationService {
      * @return the in-scope organization admins' emails, possibly empty, never {@code null}
      */
     Collection<String> findOrganizationAdminEmails(Long organizationId);
+
+    // ── Organization CRUD + membership management (2026-08-21, FUTURE-ENHANCEMENTS.md §3.2) ──
+    // Gated to unscoped tiers (catalog mutation) and to an active member of the target org
+    // (membership mutation) at OrganizationController — these methods are pure data access with
+    // no role-awareness of their own, the same separation RoleService/RoleController keep for
+    // Role CRUD.
+
+    /**
+     * Creates a new organization, always starting {@code ACTIVE}.
+     *
+     * @param name the organization's display name; must be non-blank and not already taken
+     * @return the created organization with its generated id populated
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if the name is blank or
+     *         already taken
+     */
+    Organization createOrganization(String name);
+
+    /**
+     * Returns every organization the caller may see: the full catalog for an unscoped tier, or
+     * only the organizations in {@code organizationIds} otherwise.
+     *
+     * @param organizationIds {@code null} for the unscoped (full-catalog) view; otherwise the
+     *                        exact set of organization ids to return — an empty collection
+     *                        correctly yields an empty result, never falling back to the full
+     *                        catalog
+     * @return the in-scope organizations, ordered by id
+     */
+    Collection<Organization> listOrganizations(Collection<Long> organizationIds);
+
+    /**
+     * Renames an organization.
+     *
+     * @param id   the organization to rename
+     * @param name the new display name; must be non-blank and not already taken by another
+     *             organization
+     * @return the renamed organization, freshly re-read from the database
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no organization has
+     *         that id, the name is blank, or the name is already taken
+     */
+    Organization renameOrganization(Long id, String name);
+
+    /**
+     * Activates or deactivates an organization — the retirement lever; see
+     * {@link Organization}'s Javadoc for why this, not a hard delete, is how an organization is
+     * retired.
+     *
+     * @param id     the organization to update
+     * @param status {@code "ACTIVE"} or {@code "INACTIVE"}
+     * @return the updated organization, freshly re-read from the database
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no organization has
+     *         that id, or {@code status} is neither {@code ACTIVE} nor {@code INACTIVE}
+     */
+    Organization setOrganizationStatus(Long id, String status);
+
+    /**
+     * Whether {@code userId} holds an active membership in {@code organizationId} — the
+     * predicate {@code OrganizationController} uses to let a {@code ROLE_ORGANIZATION_ADMIN}
+     * manage membership of their own organization only.
+     *
+     * @param userId         the user whose membership is being checked
+     * @param organizationId the organization to check membership in
+     * @return true when the user holds an active membership in that organization
+     */
+    boolean isActiveMemberOfOrganization(Long userId, Long organizationId);
+
+    /**
+     * Adds a user to an organization, or reactivates their membership if they previously
+     * belonged and were removed.
+     *
+     * @param organizationId the organization to add the user to
+     * @param userId         the user to add
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if either id does not
+     *         exist
+     */
+    void addMember(Long organizationId, Long userId);
+
+    /**
+     * Removes a user from an organization by deactivating their membership row — see
+     * {@link Organization}'s Javadoc for why membership removal is a soft flag, not a delete.
+     *
+     * @param organizationId the organization to remove the user from
+     * @param userId         the user to remove
+     */
+    void removeMember(Long organizationId, Long userId);
+
+    /**
+     * Lists every user holding an ACTIVE membership in one organization — the read side the admin
+     * UI needs to show who is in an organization before adding or removing anyone, mirroring
+     * {@link #searchUsersSharingOrganizations} enrichment shape but unpaginated: one organization's
+     * roster is bounded by headcount, not by the whole directory.
+     *
+     * @param organizationId the organization whose active members should be listed
+     * @return the in-scope members, ordered by name, possibly empty, never {@code null}
+     */
+    Collection<UserDTO> listActiveMembers(Long organizationId);
 }

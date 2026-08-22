@@ -132,6 +132,10 @@
               <li><a [routerLink]="['/roles']" class="dropdown-item">
                 <i class="bi bi-grid-3x3-gap-fill"></i>{{ t('nav.rolesPermissions') }}</a>
               </li>
+              <!-- Organization administration (FUTURE-ENHANCEMENTS.md §3.2) -->
+              <li><a [routerLink]="['/organizations']" class="dropdown-item">
+                <i class="bi bi-diagram-3-fill"></i>{{ t('nav.organizations') }}</a>
+              </li>
               <li><hr class="dropdown-divider"></li>
               <!-- Security overview (FR-TPF-2) — the review surface for anomaly detection.
                    Note this is NOT the /security Account Security Center in the profile menu:

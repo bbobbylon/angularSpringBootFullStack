@@ -161,6 +161,15 @@ export const routes: Routes = [
     data: { deniedAction: 'manage roles and permissions', deniedActionKey: 'permissions.actions.manageRoles' },
     loadComponent: () => import('./features/users/roles-matrix/roles-matrix.component').then((m) => m.RolesMatrixComponent),
   },
+  // Organization administration (FUTURE-ENHANCEMENTS.md §3.2). adminGuard mirrors /roles —
+  // every tier UPDATE:ORGANIZATION was granted to (schema.sql's 2026-08-21 grant note) already
+  // holds UPDATE:USER or UPDATE:ROLE, so this guard is not a narrower gate than the backend's.
+  {
+    path: 'organizations',
+    canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'manage organizations', deniedActionKey: 'permissions.actions.manageOrganizations' },
+    loadComponent: () => import('./features/organizations/organizations.component').then((m) => m.OrganizationsComponent),
+  },
   {
     path: 'invoice/:id/:invoiceNumber',
     canActivate: [authenticationGuard],

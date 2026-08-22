@@ -1,0 +1,193 @@
+<!--
+  Organization administration (FUTURE-ENHANCEMENTS.md §3.2).
+
+  Catalog rows are listed with inline rename + status toggle, visible in full only to an
+  unscoped tier (OrganizationsComponent#isUnscopedTier). Every row's membership panel expands
+  in place to show current members plus an add-by-search box, available to whoever can see the
+  row at all — see the component's Javadoc for why no extra per-row check is needed here.
+-->
+<app-navbar></app-navbar>
+<main class="sc-page" *transloco="let t">
+  <div class="container">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb sc-breadcrumb">
+        <li class="breadcrumb-item"><a [routerLink]="['/']">{{ t('securityCenter.home') }}</a></li>
+        <li class="breadcrumb-item"><a [routerLink]="['/users']">{{ t('nav.admin') }}</a></li>
+        <li aria-current="page" class="breadcrumb-item active">{{ t('organizations.breadcrumb') }}</li>
+      </ol>
+    </nav>
+
+    <header class="sc-head sc-reveal">
+      <div>
+        <p class="eyebrow mb-1">{{ t('organizations.eyebrow') }}</p>
+        <h1 class="sc-head__title">{{ t('organizations.title') }}</h1>
+        <p class="sc-head__sub">{{ t('organizations.subtitle') }}</p>
+      </div>
+    </header>
+
+    @switch (dataState()) {
+
+      @case (DataState.LOADING) {
+        <div class="d-flex align-items-center gap-2 text-muted py-4">
+          <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+          <span>{{ t('organizations.loading') }}</span>
+        </div>
+      }
+
+      @case (DataState.ERROR) {
+        <div class="alert alert-danger">{{ t('organizations.error') }}</div>
+      }
+
+      @case (DataState.LOADED) {
+
+        @if (isUnscopedTier) {
+          <!-- Create — unscoped tiers only, mirrors OrganizationController#requireUnscopedTier -->
+          <div class="sc-panel sc-reveal mb-4">
+            <div class="p-3">
+              <h2 class="h5 mb-3"><i class="bi bi-building-add me-2"></i>{{ t('organizations.createTitle') }}</h2>
+              <form #createForm="ngForm" (ngSubmit)="createOrganization(createForm)" class="row g-2 align-items-end">
+                <div class="col-md-8">
+                  <label class="form-label" for="newOrgName">{{ t('organizations.newOrgName') }}</label>
+                  <input [disabled]="isMutating()" class="form-control" id="newOrgName" name="name"
+                         ngModel placeholder="Acme Partners" required type="text">
+                </div>
+                <div class="col-md-4">
+                  <button [disabled]="isMutating() || createForm.invalid" class="btn btn-primary w-100" type="submit">
+                    @if (isMutating()) {
+                      <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                    }
+                    {{ t('organizations.createOrganization') }}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        }
+
+        <div class="sc-panel sc-reveal" style="--d: 80ms;">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead>
+              <tr>
+                <th scope="col">{{ t('common.name') }}</th>
+                <th scope="col">{{ t('common.status') }}</th>
+                <th scope="col">{{ t('organizations.members') }}</th>
+                @if (isUnscopedTier) {
+                  <th scope="col">{{ t('common.action') }}</th>
+                }
+              </tr>
+              </thead>
+              <tbody>
+                @for (org of organizations(); track org.id) {
+                  <tr>
+                    <td>
+                      @if (editingOrg()?.id === org.id) {
+                        <form #editForm="ngForm" (ngSubmit)="saveRename(editForm)" class="d-flex gap-2 align-items-center">
+                          <input [disabled]="isMutating()" [ngModel]="org.name"
+                                 class="form-control form-control-sm" name="name" required type="text">
+                          <button [disabled]="isMutating() || editForm.invalid" class="btn btn-sm btn-primary" type="submit">
+                            {{ t('common.save') }}
+                          </button>
+                          <button (click)="cancelRename()" [disabled]="isMutating()"
+                                  class="btn btn-sm btn-outline-secondary" type="button">
+                            {{ t('common.cancel') }}
+                          </button>
+                        </form>
+                      } @else {
+                        <span class="fw-medium">{{ org.name }}</span>
+                      }
+                    </td>
+                    <td>
+                      <span class="badge" [class.bg-success]="org.status === 'ACTIVE'" [class.bg-secondary]="org.status !== 'ACTIVE'">
+                        {{ org.status === 'ACTIVE' ? t('organizations.active') : t('organizations.inactive') }}
+                      </span>
+                    </td>
+                    <td>
+                      <button (click)="toggleMembersPanel(org)" class="btn btn-sm btn-outline-primary" type="button">
+                        <i class="bi" [class.bi-chevron-down]="expandedOrgId() !== org.id" [class.bi-chevron-up]="expandedOrgId() === org.id"></i>
+                        {{ t('organizations.manageMembers') }}
+                      </button>
+                    </td>
+                    @if (isUnscopedTier) {
+                      <td>
+                        @if (editingOrg()?.id !== org.id) {
+                          <button (click)="startRename(org)" [disabled]="isMutating()"
+                                  class="btn btn-sm btn-outline-primary me-2" type="button">
+                            {{ t('common.edit') }}
+                          </button>
+                          <button (click)="toggleStatus(org)" [disabled]="isMutating()"
+                                  class="btn btn-sm" [class.btn-outline-danger]="org.status === 'ACTIVE'"
+                                  [class.btn-outline-success]="org.status !== 'ACTIVE'" type="button">
+                            {{ org.status === 'ACTIVE' ? t('organizations.deactivate') : t('organizations.activate') }}
+                          </button>
+                        }
+                      </td>
+                    }
+                  </tr>
+                  @if (expandedOrgId() === org.id) {
+                    <tr>
+                      <td [attr.colspan]="isUnscopedTier ? 4 : 3" class="bg-body-tertiary">
+                        <div class="p-3">
+                          @switch (membersState()) {
+                            @case (DataState.LOADING) {
+                              <div class="d-flex align-items-center gap-2 text-muted">
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span>{{ t('organizations.loadingMembers') }}</span>
+                              </div>
+                            }
+                            @case (DataState.ERROR) {
+                              <div class="alert alert-danger mb-0">{{ t('organizations.membersError') }}</div>
+                            }
+                            @case (DataState.LOADED) {
+                              <ul class="list-group mb-3">
+                                @for (member of members(); track member.id) {
+                                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>{{ member.firstName }} {{ member.lastName }} <span class="text-muted">({{ member.email }})</span></span>
+                                    <button (click)="removeMember(member)" [disabled]="isMutating()"
+                                            class="btn btn-sm btn-outline-danger" type="button">
+                                      {{ t('organizations.removeMember') }}
+                                    </button>
+                                  </li>
+                                } @empty {
+                                  <li class="list-group-item text-muted">{{ t('organizations.noMembers') }}</li>
+                                }
+                              </ul>
+
+                              <label class="form-label" for="memberSearch-{{ org.id }}">{{ t('organizations.addMember') }}</label>
+                              <input (input)="onMemberSearchInput($any($event.target).value)"
+                                     [disabled]="isMutating()" class="form-control form-control-sm mb-2"
+                                     id="memberSearch-{{ org.id }}" [placeholder]="t('organizations.searchPlaceholder')" type="text">
+                              @if (memberCandidates().length > 0) {
+                                <ul class="list-group">
+                                  @for (candidate of memberCandidates(); track candidate.id) {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                      <span>{{ candidate.firstName }} {{ candidate.lastName }} <span class="text-muted">({{ candidate.email }})</span></span>
+                                      <button (click)="addMember(candidate)" [disabled]="isMutating()"
+                                              class="btn btn-sm btn-outline-primary" type="button">
+                                        {{ t('organizations.addToOrganization') }}
+                                      </button>
+                                    </li>
+                                  }
+                                </ul>
+                              }
+                            }
+                          }
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                } @empty {
+                  <tr>
+                    <td [attr.colspan]="isUnscopedTier ? 4 : 3" class="text-center text-muted py-4">
+                      {{ t('organizations.noOrganizations') }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+    }
+  </div>
+</main>
