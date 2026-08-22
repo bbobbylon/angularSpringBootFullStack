@@ -176,7 +176,8 @@ ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
      'TOTP_ENROLLED', 'TOTP_DISABLED', 'RECOVERY_CODE_USED',
      'SESSION_REVOKED', 'TOKEN_REUSE_DETECTED',
      'SUSPICIOUS_LOGIN', 'PROVIDER_LINKED', 'PROVIDER_UNLINKED',
-     'PASSKEY_REGISTERED', 'PASSKEY_REMOVED', 'PASSKEY_LOGIN'));
+     'PASSKEY_REGISTERED', 'PASSKEY_REMOVED', 'PASSKEY_LOGIN',
+     'MFA_RESET', 'RECOVERY_CODES_REGENERATED'));
 
 INSERT INTO events (type, description)
 VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
@@ -199,7 +200,9 @@ VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
        ('PROVIDER_UNLINKED', 'You disconnected an identity provider from your account :|'),
        ('PASSKEY_REGISTERED', 'You registered a new passkey for signing in :)'),
        ('PASSKEY_REMOVED', 'You removed a passkey from your account :|'),
-       ('PASSKEY_LOGIN', 'You signed in with a passkey :)') AS new
+       ('PASSKEY_LOGIN', 'You signed in with a passkey :)'),
+       ('MFA_RESET', 'An administrator reset your authenticator MFA :)'),
+       ('RECOVERY_CODES_REGENERATED', 'You regenerated your recovery codes :)') AS new
 ON DUPLICATE KEY UPDATE description = new.description;
 
 CREATE TABLE IF NOT EXISTS userevents

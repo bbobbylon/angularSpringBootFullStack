@@ -303,13 +303,15 @@ class SecurityConfig {
                                     "/invoice/new", "/invoices", "/invoice/**", "/profile", "/security",
                                     "/users", "/users/**", "/roles", "/billing", "/services",
                                     "/services/manage", "/analytics", "/security-overview",
-                                    "/privacy", "/terms", "/contact", "/features").permitAll()
+                                    "/privacy", "/terms", "/contact", "/features",
+                                    "/welcome-passkey").permitAll()
                             .requestMatchers(HEAD, "/login", "/verify", "/verify/**", "/resetpassword",
                                     "/register", "/customers", "/customers/**", "/customer/new",
                                     "/invoice/new", "/invoices", "/invoice/**", "/profile", "/security",
                                     "/users", "/users/**", "/roles", "/billing", "/services",
                                     "/services/manage", "/analytics", "/security-overview",
-                                    "/privacy", "/terms", "/contact", "/features").permitAll()
+                                    "/privacy", "/terms", "/contact", "/features",
+                                    "/welcome-passkey").permitAll()
                             .requestMatchers(GET, "/**").hasAnyAuthority("READ:USER", "READ:CUSTOMER")
                             .requestMatchers(POST, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER")
                             .requestMatchers(PUT, "/**").hasAnyAuthority("UPDATE:USER", "UPDATE:CUSTOMER", "UPDATE:ROLE")

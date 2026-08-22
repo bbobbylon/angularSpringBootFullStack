@@ -26,6 +26,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ADMIN;
+import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_APPLICATION_ADMIN;
+import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_HELP_DESK_ADMIN;
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -47,6 +49,14 @@ import static org.mockito.Mockito.when;
  * {@code ROLE_ORGANIZATION_ADMIN} browsing day to day, not just through the dashboards) actually
  * hits. Before this, an org admin's directory-scoping (FR-ORG-1) covered user administration
  * only — {@code /customer/**} showed every organization's customers and invoices regardless.
+ *
+ * <p><b>2026-08-21:</b> {@code resolveScope} used to check the caller's role name against the
+ * literal string {@code "ROLE_ORGANIZATION_ADMIN"} — the identical bug
+ * {@code AnalyticsControllerOrgScopeTest} already caught and fixed on the analytics surface on
+ * 2026-08-13, just never propagated here. It now delegates to
+ * {@link com.bob.angularspringbootfullstack.enumeration.RoleType#isOrganizationScoped(String)},
+ * so every role below the unscoped tiers ({@code ROLE_ADMIN}, {@code ROLE_APPLICATION_ADMIN}) is
+ * scoped, including a plain {@code ROLE_USER} — not just an org admin.
  *
  * <p>Same pairing discipline as the analytics suite: a scoped caller reaching an unscoped
  * service method is exactly the bug (correct-looking data that silently spans tenants), so every
@@ -214,20 +224,38 @@ class CustomerControllerOrgScopeTest {
         verify(organizationService, never()).findActiveOrganizationIds(anyLong());
     }
 
-    // ── Unscoped callers: everyone except ROLE_ORGANIZATION_ADMIN ───────────────────────────
+    // ── Regression, 2026-08-21: scoped callers OTHER than ROLE_ORGANIZATION_ADMIN ───────────
 
     @Test
-    @DisplayName("a plain ROLE_USER remains unscoped — this closes an org-admin gap, not a per-user wall")
-    void plainUserIsUnscoped() {
-        when(customerService.getCustomers(0, 20, Sort.unsorted())).thenReturn(Page.empty());
-        when(customerService.getStats()).thenReturn(new Stats());
-        when(customerService.getCustomerStatusBreakdown()).thenReturn(Map.of());
+    @DisplayName("a plain ROLE_USER is now org-scoped too, not just an org admin")
+    void plainUserIsScoped() {
+        when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
+        when(customerService.getCustomersForOrganizations(ORG_IDS, 0, 20, Sort.unsorted())).thenReturn(new PageImpl<>(List.of(new Customer())));
+        when(customerService.getStatsForOrganizations(ORG_IDS)).thenReturn(new Stats());
+        when(customerService.getCustomerStatusBreakdownForOrganizations(ORG_IDS)).thenReturn(Map.of());
 
         controller.getCustomers(callerWithRole(ROLE_USER.name()), Optional.empty(), Optional.empty(), Optional.empty());
 
-        verify(customerService).getCustomers(0, 20, Sort.unsorted());
-        verify(organizationService, never()).findActiveOrganizationIds(anyLong());
+        verify(customerService).getCustomersForOrganizations(ORG_IDS, 0, 20, Sort.unsorted());
+        verify(customerService, never()).getCustomers(anyInt(), anyInt(), any());
     }
+
+    @Test
+    @DisplayName("a help-desk admin's invoice list is scoped too, not just an org admin's")
+    void helpDeskAdminInvoiceListIsScoped() {
+        // Before the fix, resolveScope() checked the caller's role name against the literal string
+        // "ROLE_ORGANIZATION_ADMIN" — so a help-desk admin (also UPDATE:USER, also reaches this
+        // controller) fell through to the unscoped branch and saw every organization's invoices.
+        when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
+        when(customerService.getInvoicesForOrganizations(ORG_IDS, 0, 20, Sort.unsorted())).thenReturn(new PageImpl<>(List.of(new Invoice())));
+
+        controller.getInvoices(callerWithRole(ROLE_HELP_DESK_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
+
+        verify(customerService).getInvoicesForOrganizations(ORG_IDS, 0, 20, Sort.unsorted());
+        verify(customerService, never()).getInvoices(anyInt(), anyInt(), any());
+    }
+
+    // ── Unscoped callers: ROLE_ADMIN / ROLE_APPLICATION_ADMIN (FR-ORG-3) ────────────────────
 
     @Test
     @DisplayName("a plain admin remains unscoped and still sees system-wide invoices")
@@ -238,6 +266,20 @@ class CustomerControllerOrgScopeTest {
 
         verify(customerService).getInvoices(0, 20, Sort.unsorted());
         verify(customerService, never()).getInvoicesForOrganizations(any(), anyInt(), anyInt(), any());
+        verify(organizationService, never()).findActiveOrganizationIds(anyLong());
+    }
+
+    @Test
+    @DisplayName("an application admin remains unscoped (FR-ORG-3)")
+    void applicationAdminIsUnscoped() {
+        when(customerService.getCustomers(0, 20, Sort.unsorted())).thenReturn(Page.empty());
+        when(customerService.getStats()).thenReturn(new Stats());
+        when(customerService.getCustomerStatusBreakdown()).thenReturn(Map.of());
+
+        controller.getCustomers(callerWithRole(ROLE_APPLICATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
+
+        verify(customerService).getCustomers(0, 20, Sort.unsorted());
+        verify(organizationService, never()).findActiveOrganizationIds(anyLong());
     }
 
     // ── The degenerate case ───────────────────────────────────────────────────────────────────

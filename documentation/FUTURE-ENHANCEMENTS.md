@@ -166,8 +166,8 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | ✅ **Role CRUD** | Roles were seed-only; `RoleRepoImpl.create/update/delete` threw `UnsupportedOperationException`. Fine while the seven roles were fixed, blocking the moment anyone wants an eighth | Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #13) — new `RoleController` (`/admin/role`), gated to exactly `ROLE_APPLICATION_ADMIN` (the open question below, now resolved). A catalog-only role is created but not assignable until `RoleType` gains a matching constant — see the design-session notes below, now closed out |
 | ✅ **Time-boxed role assignment** (spun out of the Role CRUD design session) | An assignment made today had no way to say "only until a date" — every grant was permanent until someone manually reverted it | Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #13) — nullable `expires_at` on `userroles`, enforced **live** in `RoleRepoImpl#getRoleByUserId` (the single choke point every role lookup funnels through), auto-reverting to `ROLE_USER` on read past expiry rather than via a scheduled sweep job. A date picker on the user-detail role form; blank (`NULL`) is the default, matching the original decision |
 | ⬜ **Self-service organization management** | Orgs are seeded/DB-managed; there is no UI to create one or move a user between them. This is the single biggest gap between "demo" and "a business could run this" | Admin CRUD over `organizations` + `userorganizations`; must respect the same org scope it edits |
-| ✅ **Org scope for business data** | Done (2026-08-08) — every `/customer/**` read (`stats`, list, single get, search, invoice list/get, the new-invoice picker, both XLSX exports) is now restricted for `ROLE_ORGANIZATION_ADMIN` to customers/invoices owned by their active organizations, reusing the exact `*ForOrganizations` service methods `AnalyticsController` already had. Every other role (including plain `ROLE_USER`) keeps today's system-wide view — this closes the specific "org admin sees every customer" gap, not a broader per-user multi-tenancy wall. Found and fixed two pre-existing bugs along the way: `List.of(...).contains(null)` throws instead of returning `false` (would have crashed the scope check on any unowned row), and `GET /customer/invoice/get/{id}` 500'd unconditionally on a draft invoice (`Map.of` rejects a null value) — both predate this change. New suite: `CustomerControllerOrgScopeTest` (14 tests) | |
-| ✅ **Scope every `UPDATE:USER` holder, not just one role name** | Done (2026-08-14) — new `RoleType.isOrganizationScoped(roleName)` capability check; `AdminUserController#isOrganizationScoped` and `AnalyticsController#resolveScope` both delegate to it instead of each independently hardcoding `ROLE_ORGANIZATION_ADMIN.name().equals(...)`. `ROLE_HELP_DESK_ADMIN` (which also carries `UPDATE:USER`) is now correctly scoped on both surfaces instead of seeing every organization unscoped | |
+| ✅ **Org scope for business data** | Done (2026-08-08), extended to every scoped tier 2026-08-21 — every `/customer/**` read (`stats`, list, single get, search, invoice list/get, the new-invoice picker, both XLSX exports) is restricted to customers/invoices owned by the caller's active organizations, reusing the exact `*ForOrganizations` service methods `AnalyticsController` already had. Originally scoped `ROLE_ORGANIZATION_ADMIN` only, leaving every other role (including plain `ROLE_USER`) on a system-wide view "by design" — that turned out to be the same literal-role-name bug the row below fixed on the analytics/admin surfaces on 2026-08-13/08-14, just never propagated to `CustomerController`, so it wasn't a design decision, it was the gap resurfacing a third time. Now delegates to `RoleType.isOrganizationScoped`, same as everywhere else. Found and fixed two pre-existing bugs along the way in the original pass: `List.of(...).contains(null)` throws instead of returning `false` (would have crashed the scope check on any unowned row), and `GET /customer/invoice/get/{id}` 500'd unconditionally on a draft invoice (`Map.of` rejects a null value). Suites: `CustomerControllerOrgScopeTest` (16 tests) | |
+| ✅ **Scope every `UPDATE:USER` holder, not just one role name** | Done (2026-08-14), and the same literal-name check found and re-fixed on two more controllers 2026-08-21 — `RoleType.isOrganizationScoped(roleName)` is the one capability check; `AdminUserController#isOrganizationScoped`, `AnalyticsController#resolveScope`, `CustomerController#resolveScope`, and `SecurityDashboardController#resolveScope` all delegate to it instead of independently hardcoding `ROLE_ORGANIZATION_ADMIN.name().equals(...)`. `ROLE_HELP_DESK_ADMIN` (which also carries `UPDATE:USER`) is now correctly scoped everywhere instead of seeing every organization unscoped on whichever surface hadn't been fixed yet. New suite: `SecurityDashboardControllerOrgScopeTest` (5 tests) | |
 | ⬜ **Per-organization role definitions** | `RoleRepoImpl.java` `TODO(org-roles)`. FR-ORG scopes *administration*, not role *definitions* — every org shares one role catalogue | Only worth it for genuine multi-tenancy; it changes the authority-string model, so not a small change |
 | ✅ **P2-1 — User type classification** | Done (2026-08-08) — badge shows `INTERNAL` / `EXTERNAL` / `FEDERATED` on the admin Users list and detail pages. `users.origin` is an immutable fact stamped once, at account creation, by `FederatedIdentityServiceImpl#insertFederatedUser` (`"FEDERATED_" + provider`) — never touched again, including when an existing password account later links a federated identity. `UserTypeResolver` derives `INTERNAL`/`EXTERNAL` fresh on every read from the email domain against the env-driven `INTERNAL_DOMAINS` allowlist (`AdminUserController`). `AZURE_B2B` was dropped from scope — this app has no actual Azure B2B guest integration, only consumer OAuth via Google/GitHub/Microsoft, and fabricating a category for a provider that isn't built would misrepresent capability | |
 
@@ -359,15 +359,24 @@ it a product rather than an installation, and §6.6 is what it costs.
 
 ### 6.1 Tenancy — the foundational decision
 
-**Updated 2026-08-08**: `ROLE_ORGANIZATION_ADMIN`'s reads of customer/invoice data are now scoped
-to their own organizations (§3.2 below is done). That closes the specific "an org admin sees
-everyone's data" gap, but it is a narrower fix than full multi-tenancy: every *other* role,
-including a plain `ROLE_USER` with `READ:CUSTOMER`, still sees every customer, invoice, and service
-row system-wide — that was a deliberate scope decision (mirroring how `AnalyticsController`'s
-scoping already worked), not an oversight, but it means the table below is still live. For a single
-business running its own instance the current state is fine. For a product serving several
-businesses as genuinely separate tenants, it is still disqualifying, and it is the decision
-everything else hangs off:
+**Updated 2026-08-21**: every role below `ROLE_ADMIN`'s tier — `ROLE_USER`, `ROLE_MODERATOR`,
+`ROLE_HELP_DESK_ADMIN`, and `ROLE_ORGANIZATION_ADMIN` alike — now has its reads of customer/invoice
+data (`CustomerController`) and the security dashboard (`SecurityDashboardController`) scoped to
+its own organizations, the same rule `AnalyticsController` and `AdminUserController` already
+applied. Both controllers had been left on a literal `ROLE_ORGANIZATION_ADMIN.name().equals(...)`
+check — the identical bug already found and fixed on the analytics/admin surfaces on
+2026-08-13/08-14 — so a plain `ROLE_USER` with `READ:CUSTOMER` saw every organization's customers
+and invoices system-wide until now. Only `ROLE_ADMIN` and `ROLE_APPLICATION_ADMIN` remain unscoped
+platform-operator tiers, by design. That closes shared-schema tenancy for every table `RoleType`
+already knows how to scope. What is *not* closed: the services catalog (`Services`) has no
+`organization_id` at all and is deliberately a single shared reference table — see its
+`schema.sql` seed comment on why prices/names are copied into each invoice's own line item rather
+than referenced live — so per-tenant service catalogs remain a distinct, unstarted feature (§3.2's
+"Per-organization role definitions" row has the same shape of gap for the role catalog). There is
+also still no self-service way to create an organization or move a user between them (below). For a
+single business running its own instance the current state is fine. For a product serving several
+businesses as genuinely separate tenants, that self-service gap — not the read-scoping this section
+used to track — is now the decision everything else hangs off:
 
 | Model | What it means here | Effort |
 |---|---|---|

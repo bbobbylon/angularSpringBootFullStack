@@ -42,6 +42,9 @@ spec:
             - { name: CONTAINER_PORT, value: "8080" }
             - { name: IMAGE_STORAGE_PATH, value: "/tmp/images" }   # ⚠ ephemeral on Cloud Run — see gcp/README.md
             - { name: MICROSOFT_TENANT_ID, value: "common" }
+            - { name: TRUSTED_PROXY_COUNT, value: "1" }   # Cloud Run itself is the one proxy hop; see aws/task-definition.json's note (2 there, because CloudFront+ALB is two hops)
+            - { name: FORWARD_HEADERS_STRATEGY, value: "framework" }
+            - { name: OAUTH2_REDIRECT_BASE_URL, value: "${APP_DOMAIN}" }
             # ── Secrets (Secret Manager) ───────────────────────────────────────
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom: { secretKeyRef: { name: tessera-db-password, key: latest } }

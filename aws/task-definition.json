@@ -64,7 +64,7 @@
         { "name": "LOG_LEVEL_SECURITY", "value": "INFO" },
         { "name": "LOG_LEVEL_WEB", "value": "INFO" },
         { "name": "LOG_LEVEL_HIBERNATE", "value": "INFO" },
-        { "name": "DEBUG_REPORT", "value": "true" }
+        { "name": "DEBUG_REPORT", "value": "false" }
       ],
       "secrets": [
         {

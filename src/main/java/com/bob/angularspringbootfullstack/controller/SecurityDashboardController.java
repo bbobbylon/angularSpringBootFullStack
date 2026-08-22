@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.RoleType;
 import com.bob.angularspringbootfullstack.form.AnomalySettingsForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.SecurityOverview;
@@ -24,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Collection;
 import java.util.Optional;
 
-import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static com.bob.angularspringbootfullstack.service.serviceimpl.SecurityDashboardServiceImpl.DEFAULT_LIST_SIZE;
 import static com.bob.angularspringbootfullstack.service.serviceimpl.SecurityDashboardServiceImpl.DEFAULT_WINDOW_DAYS;
 import static java.time.LocalTime.now;
@@ -52,12 +52,15 @@ import static org.springframework.http.HttpStatus.OK;
  *
  * <h3>Organization scoping (FR-ORG-2)</h3>
  * Security telemetry is exactly the kind of data where "may I open this screen?" and "whose
- * incidents am I looking at?" must be answered separately. A {@code ROLE_ORGANIZATION_ADMIN} may
- * open the dashboard, but must see only the accounts they administer — the alternative would let
- * any org admin watch every other organization's failed logins, locked accounts, and MFA gaps,
- * which is a more sensitive leak than the billing figures FR-ORG-2 originally closed.
- * {@link #resolveScope} is intentionally identical in shape to {@code AnalyticsController}'s, so
- * "who is scoped?" has one answer across the whole admin surface.
+ * incidents am I looking at?" must be answered separately. Any scoped staff role reaching this
+ * {@code /admin/**} surface — {@code ROLE_HELP_DESK_ADMIN} or {@code ROLE_ORGANIZATION_ADMIN} —
+ * may open the dashboard, but must see only the accounts they administer; only
+ * {@code ROLE_ADMIN} and {@code ROLE_APPLICATION_ADMIN} see every organization. Without this, any
+ * scoped staff account could watch every other organization's failed logins, locked accounts, and
+ * MFA gaps, which is a more sensitive leak than the billing figures FR-ORG-2 originally closed.
+ * {@link #resolveScope} delegates to {@link RoleType#isOrganizationScoped(String)}, the same rule
+ * {@code AnalyticsController}'s does, so "who is scoped?" has one answer across the whole admin
+ * surface.
  */
 @RestController
 @RequestMapping(path = "/admin/security")
@@ -174,15 +177,15 @@ public class SecurityDashboardController {
      * Resolves the organization restriction that applies to this caller (FR-ORG-2).
      *
      * <p>{@code null} for the unscoped tiers ({@code ROLE_ADMIN}, {@code ROLE_APPLICATION_ADMIN}),
-     * which see every organization. For {@code ROLE_ORGANIZATION_ADMIN}, the ids of their active
-     * memberships — possibly empty, which the service treats as "sees nothing" rather than
-     * collapsing into "unscoped".
+     * which see every organization. For every other role that reaches this {@code /admin/**}
+     * surface, the ids of their active memberships — possibly empty, which the service treats as
+     * "sees nothing" rather than collapsing into "unscoped".
      *
      * @param caller the authenticated principal from the JWT
      * @return {@code null} when the caller is unscoped, otherwise their active organization ids
      */
     private Collection<Long> resolveScope(UserDTO caller) {
-        if (!ROLE_ORGANIZATION_ADMIN.name().equals(caller.getRoleName())) {
+        if (!RoleType.isOrganizationScoped(caller.getRoleName())) {
             return null;
         }
         return organizationService.findActiveOrganizationIds(caller.getId());

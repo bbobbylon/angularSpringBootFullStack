@@ -2,6 +2,7 @@ package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.BatchImportResult;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.RoleType;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
@@ -41,7 +42,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ORGANIZATION_ADMIN;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpStatus.CREATED;
@@ -58,16 +58,18 @@ import static org.springframework.http.MediaType.parseMediaType;
  * All endpoints require a valid JWT — unauthenticated requests are rejected
  * by the security filter chain before reaching this controller.
  *
- * <p><b>Organization scoping (FR-ORG-2, 2026-08-08).</b> Every read here is restricted for
- * {@code ROLE_ORGANIZATION_ADMIN} to customers/invoices owned by their active organizations —
- * the same restriction {@link AnalyticsController} already applied to the admin-only rollups,
- * extended to this shared surface because an org admin browses customers and invoices here too,
- * not just through the analytics dashboards. Every other role (including plain
- * {@code ROLE_USER}) keeps today's system-wide view; see {@link #resolveScope} for why the line
- * is drawn there. Single-record gets ({@code /get/{id}}, {@code /invoice/get/{id}}) are checked
- * post-fetch via {@link #requireInScope}; every list/search/export goes through the
- * organization-scoped repository methods so the restriction lives in SQL, never in a post-filter
- * that would corrupt pagination totals.
+ * <p><b>Organization scoping (FR-ORG-2, 2026-08-08; extended to every role below the unscoped
+ * tiers, 2026-08-21).</b> Every read here is restricted to customers/invoices owned by the
+ * caller's active organizations — the same restriction {@link AnalyticsController} already
+ * applied to the admin-only rollups, extended to this shared surface because customers and
+ * invoices are browsed here directly, not just through the analytics dashboards. Only
+ * {@code ROLE_ADMIN} and {@code ROLE_APPLICATION_ADMIN} — the two tiers
+ * {@link RoleType#isOrganizationScoped()} treats as platform operators — keep today's
+ * system-wide view; see {@link #resolveScope} for the exact rule. Single-record gets
+ * ({@code /get/{id}}, {@code /invoice/get/{id}}) are checked post-fetch via
+ * {@link #requireInScope}; every list/search/export goes through the organization-scoped
+ * repository methods so the restriction lives in SQL, never in a post-filter that would corrupt
+ * pagination totals.
  */
 @RestController
 @RequestMapping(path = "/customer")
@@ -771,16 +773,19 @@ public class CustomerController {
      * invoices (FR-ORG-2, 2026-08-08), mirroring {@code AnalyticsController#resolveScope} exactly
      * so "who is scoped?" has one answer across the admin AND shared surfaces.
      *
-     * <p>Returns {@code null} for every role except {@code ROLE_ORGANIZATION_ADMIN} — including
-     * plain {@code ROLE_USER}/{@code ROLE_MODERATOR}, which keep today's system-wide view. This
-     * closes the specific gap FUTURE-ENHANCEMENTS.md named ("an org admin sees every customer"),
-     * not a broader per-user multi-tenancy wall nobody asked for.
+     * <p>Delegates to {@link RoleType#isOrganizationScoped(String)} rather than naming
+     * {@code ROLE_ORGANIZATION_ADMIN} literally: every role below the unscoped tiers
+     * ({@code ROLE_ADMIN}, {@code ROLE_APPLICATION_ADMIN}) is scoped, including plain
+     * {@code ROLE_USER}, {@code ROLE_MODERATOR}, and {@code ROLE_HELP_DESK_ADMIN} — the same
+     * literal-name bug {@code AnalyticsController#resolveScope} fixed on 2026-08-13 was still
+     * live here until now, so a plain user saw every organization's customers and invoices
+     * regardless of which business they actually belonged to.
      *
      * @param caller the authenticated principal from the JWT
      * @return {@code null} when unscoped, otherwise the caller's active organization ids (possibly empty)
      */
     private Collection<Long> resolveScope(UserDTO caller) {
-        if (!ROLE_ORGANIZATION_ADMIN.name().equals(caller.getRoleName())) {
+        if (!RoleType.isOrganizationScoped(caller.getRoleName())) {
             return null;
         }
         return organizationService.findActiveOrganizationIds(caller.getId());

@@ -1140,14 +1140,14 @@ New accounts — password or first federated sign-in — get `ROLE_USER`.
 | Capability | Guest | User | Mod | Help Desk | Org Admin | Admin | App Admin |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | Own profile, password, TOTP, passkeys, sessions, providers | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Browse customers / invoices / catalog | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Create / edit customers and invoices | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Browse customers / invoices / catalog | ❌ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
+| Create / edit customers and invoices | ❌ | ❌ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
 | Delete a customer | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Add / edit / retire services | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| User directory, detail, account state | ❌ | ❌ | ❌ | ✅ | 🟡 | ✅ | ✅ |
+| User directory, detail, account state | ❌ | ❌ | ❌ | 🟡 | 🟡 | ✅ | ✅ |
 | **Assign roles** | ❌ | ❌ | ❌ | ❌ | 🟡 | ✅ | ✅ |
 | Delete a user | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Billing / analytics / security dashboard | ❌ | ❌ | ❌ | ✅ | 🟡 | ✅ | ✅ |
+| Billing / analytics / security dashboard | ❌ | ❌ | ❌ | 🟡 | 🟡 | ✅ | ✅ |
 
 > **The help-desk gap is deliberate.** `ROLE_HELP_DESK_ADMIN` holds `UPDATE:USER` but not
 > `UPDATE:ROLE`, so support can unlock an account without being able to promote it. That is the whole
@@ -1164,15 +1164,21 @@ A second authorization axis *on top of* RBAC. Where authorities answer **"what m
 answers **"to whom may you do it?"**. Confusing them is the most common way to reason about this
 system wrongly — passing the first check is not evidence about the second.
 
-**The predicate:** an org admin may act on a user who shares at least one **active** membership with
-them (a `COUNT` over a self-join of `userorganizations`). Only `ROLE_ORGANIZATION_ADMIN` is scoped;
-`ROLE_ADMIN` and `ROLE_APPLICATION_ADMIN` act globally by design.
+**The predicate:** a scoped caller may act on a user (or see a customer/invoice) who shares at least
+one **active** membership with them (a `COUNT` over a self-join of `userorganizations`).
+`RoleType#isOrganizationScoped` — keyed on the role's *tier*, not its literal name — decides who that
+is: every role below `ROLE_ADMIN`'s tier (`ROLE_GUEST` through `ROLE_ORGANIZATION_ADMIN`) is scoped;
+only `ROLE_ADMIN` and `ROLE_APPLICATION_ADMIN` act globally by design. Every `resolveScope`
+implementation across the admin and shared surfaces (`AdminUserController`, `AnalyticsController`,
+`CustomerController`, `SecurityDashboardController`) delegates to this one method, so "who is
+scoped?" has a single answer regardless of which screen is asking.
 
-| Surface | Behaviour for an org admin |
+| Surface | Behaviour for a scoped caller |
 |---|---|
 | User directory | Lists only users sharing an organization (a scoped query, not a filtered page) |
 | User detail, audit log | **403 for anyone outside scope — reads are scoped, not just writes** |
 | Role / settings / profile changes | 403 for out-of-scope targets |
+| Customers, invoices (`/customer/**`) | Lists, search, exports, and single-record gets restricted to their organizations |
 | Billing, analytics, security dashboard | Aggregates restricted to their organizations |
 
 **Three rules that matter more than they look:**
@@ -1190,10 +1196,12 @@ New customers are stamped with the creating user's organization **from the JWT, 
 request body** — a client-supplied `organizationId` would let anyone file records into another
 tenant's dashboards.
 
-**Known limits** (tracked in [FUTURE-ENHANCEMENTS §3.2](FUTURE-ENHANCEMENTS.md#32-access-model)):
-scope covers *user administration only*, so `/customer/**` is system-wide; scoping is keyed to the
-literal role name, so `ROLE_HELP_DESK_ADMIN` (which also holds `UPDATE:USER`) is unscoped; and there
-is no role-tier ceiling, so an org admin can promote an in-scope user above their own tier.
+**Known limits** (tracked in [FUTURE-ENHANCEMENTS §6.1](FUTURE-ENHANCEMENTS.md#61-tenancy--the-foundational-decision)):
+every role below `ROLE_ADMIN`'s tier is scoped, but there is still no self-service organization
+management — creating an organization or moving a user between organizations is DB-only, so
+onboarding a second tenant is an operator task, not a product feature — and role *definitions*
+(the catalog itself, not who holds which role) are shared across every organization rather than
+per-tenant.
 
 **To add a scope-respecting endpoint:** inject `OrganizationService`; call
 `requireOrganizationScope(authentication, targetId)` as the *first* line of a single-target action;

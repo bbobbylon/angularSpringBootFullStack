@@ -147,7 +147,7 @@ Maven profiles: `dev` (default), `prod`, `qa`, `stage`, `local` — each sets `s
 - **Permission-based RBAC**, not role-name checks — authority strings (`READ:USER`, `UPDATE:CUSTOMER`, `UPDATE:ROLE`, `DELETE:USER`, …) split off a role's stored permission string and matched via `hasAnyAuthority`/`@PreAuthorize`
 - **Seven-role catalogue**, seeded with pinned IDs: `ROLE_GUEST`, `ROLE_USER`, `ROLE_MODERATOR`, `ROLE_HELP_DESK_ADMIN`, `ROLE_ORGANIZATION_ADMIN`, `ROLE_ADMIN`, `ROLE_APPLICATION_ADMIN`
 - **Role-tier ceiling** (`enumeration/RoleType.java#canAssign`, built 2026-08-07): an administrator can never assign a role that outranks their own — closes a privilege-elevation-by-proxy hole where an org admin could otherwise promote someone to an unscoped top-tier role
-- **Organization scoping** (FR-ORG): `ROLE_ORGANIZATION_ADMIN`'s user directory, single-user actions, analytics, **and — since 2026-08-08 — the shared `/customer/**` surface** (stats, list, single get, search, invoice list/get, the new-invoice picker, both XLSX exports) are all bounded to their active organizations; `ROLE_ADMIN`/`ROLE_APPLICATION_ADMIN` are unscoped by design, and every other role keeps system-wide business-data visibility (a deliberate scope decision, not yet full multi-tenancy — see `FUTURE-ENHANCEMENTS.md` §6.1). Enforced in SQL predicates, never by post-filtering a result set (a rule stated explicitly in code comments because post-filtering silently corrupts pagination totals). Single-record gets are checked post-fetch against the resolved scope.
+- **Organization scoping** (FR-ORG): the user directory, single-user actions, analytics, the shared `/customer/**` surface (stats, list, single get, search, invoice list/get, the new-invoice picker, both XLSX exports), and the security dashboard are all bounded to the caller's active organizations for every role below `ROLE_ADMIN`'s tier — `RoleType.isOrganizationScoped` is the single capability check every controller's `resolveScope` delegates to; `ROLE_ADMIN`/`ROLE_APPLICATION_ADMIN` are unscoped platform-operator tiers by design. Not yet full multi-tenancy: the services catalog has no `organization_id` at all, and there is no self-service way to create an organization or move a user between them — see `FUTURE-ENHANCEMENTS.md` §6.1. Enforced in SQL predicates, never by post-filtering a result set (a rule stated explicitly in code comments because post-filtering silently corrupts pagination totals). Single-record gets are checked post-fetch against the resolved scope.
 - **Dual enforcement, every mutating admin endpoint**: the URL-level `SecurityConfig` matcher **and** a method-level `@PreAuthorize` repeat the same authority requirement, so a routing change alone can't reopen a gap
 - **Self-targeting refused** on every admin mutation (role change, account-state change, session revoke, passkey revoke) — an administrator cannot elevate or lock themselves out through the admin surface; those belong to their own profile/Security Center
 - **User-type classification** (`utils/UserTypeResolver.java`, P2-1, 2026-08-08): admin-facing `INTERNAL`/`EXTERNAL`/`FEDERATED` badge — federated status read from the immutable `origin` column, internal/external derived fresh on every read from an env-driven email-domain allowlist (`INTERNAL_DOMAINS`)
@@ -183,7 +183,7 @@ Maven profiles: `dev` (default), `prod`, `qa`, `stage`, `local` — each sets `s
 
 ## 7. Business domain
 
-- **Customers**: CRUD; every read (`stats`, list, single get, search, XLSX export) is org-scoped for `ROLE_ORGANIZATION_ADMIN` (2026-08-08) — every other role keeps system-wide visibility by design, see §4
+- **Customers**: CRUD; every read (`stats`, list, single get, search, XLSX export) is org-scoped (2026-08-08, extended to every scoped tier 2026-08-21) — `RoleType.isOrganizationScoped` decides who is scoped (every role below `ROLE_ADMIN`'s tier); only `ROLE_ADMIN`/`ROLE_APPLICATION_ADMIN` keep system-wide visibility, see §4
 - **Invoices**: CRUD, linked to customers, invoice numbering; list/get/export are org-scoped the same way, derived through the owning customer (invoices carry no tenant column of their own)
 - **Services catalog**: CRUD (admin-managed) + a browse view (all authenticated users) for pre-filling a new invoice
 - **Billing** and **Analytics**: admin-only dashboards — dual-area trend chart, acquisition bars, stacked status breakdown, service utilization; served from `/admin/analytics/**`, gated the same way every other admin surface is
@@ -256,10 +256,10 @@ Maven profiles: `dev` (default), `prod`, `qa`, `stage`, `local` — each sets `s
 
 Per the scope boundary at the top: anything listed as ⬜ (not started) or 🔄 (in progress) in
 `FUTURE-ENHANCEMENTS.md` is **not** repeated here as a built feature, including — for the avoidance
-of doubt — full multi-tenancy for every role (only `ROLE_ORGANIZATION_ADMIN`'s customer/invoice
-reads are scoped; every other role, including plain `ROLE_USER`, still sees business data
-system-wide by design — see §4 and §6.1 of `FUTURE-ENHANCEMENTS.md`), the services catalog is not
-org-scoped, Playwright/e2e coverage, role CRUD,
+of doubt — full multi-tenancy for every table (customer/invoice reads and the security dashboard
+are org-scoped for every role below `ROLE_ADMIN`'s tier as of 2026-08-21, but the services catalog
+still has no `organization_id` at all and stays a single shared reference table — see §4 and §6.1 of
+`FUTURE-ENHANCEMENTS.md`), Playwright/e2e coverage, role CRUD,
 self-service organization management, batch CSV upload, and machine-to-machine API access.
 (**Backend HTTP caching has since been built** — `HttpCacheHeadersFilter`, ETag + `Cache-Control:
 private, no-cache` on data GETs, with 8 specs — and so is no longer excluded here; see

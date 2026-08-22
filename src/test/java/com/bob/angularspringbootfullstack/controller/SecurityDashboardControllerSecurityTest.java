@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.RoleType;
 import com.bob.angularspringbootfullstack.form.AnomalySettingsForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.SecurityOverview;
@@ -96,10 +97,18 @@ class SecurityDashboardControllerSecurityTest {
     @Autowired
     private SecuritySettingsService securitySettingsService;
 
+    /**
+     * ROLE_ADMIN — an unscoped tier — so this suite's stubs (which assert authority gating, not
+     * org scoping; see {@link SecurityDashboardControllerOrgScopeTest} for that) keep exercising
+     * the {@code resolveScope() == null} path. A real caller always carries a role name from the
+     * JWT; before {@link RoleType#isOrganizationScoped(String)} was wired in here (2026-08-21), a
+     * blank role name happened to also resolve unscoped, which is what let this go unset before.
+     */
     private static UserDTO principal() {
         UserDTO user = new UserDTO();
         user.setId(9L);
         user.setEmail("caller@example.com");
+        user.setRoleName(RoleType.ROLE_ADMIN.name());
         return user;
     }
 
