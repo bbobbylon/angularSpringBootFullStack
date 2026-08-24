@@ -519,7 +519,49 @@
     "addMember": "Agregar un miembro",
     "searchPlaceholder": "Buscar por nombre o correo electrónico…",
     "addToOrganization": "Agregar",
-    "noOrganizations": "No se encontraron organizaciones."
+    "noOrganizations": "No se encontraron organizaciones.",
+    "kpi": {
+      "total": "Total de organizaciones",
+      "active": "Organizaciones activas",
+      "members": "Total de miembros"
+    },
+    "tabs": {
+      "members": "Miembros",
+      "profile": "Perfil",
+      "activity": "Actividad",
+      "invites": "Invitaciones"
+    },
+    "profile": {
+      "description": "Descripción",
+      "contactEmail": "Correo de contacto",
+      "website": "Sitio web"
+    },
+    "auditLog": {
+      "error": "No se pudo cargar el registro de actividad. Inténtelo de nuevo.",
+      "empty": "Aún no hay actividad registrada.",
+      "system": "Sistema"
+    },
+    "invites": {
+      "error": "No se pudieron cargar las invitaciones. Inténtelo de nuevo.",
+      "empty": "No hay invitaciones pendientes.",
+      "role": "Rol otorgado",
+      "ttlHours": "Expira después de (horas)",
+      "create": "Crear invitación",
+      "expires": "Expira",
+      "copyLink": "Copiar enlace",
+      "revoke": "Revocar"
+    },
+    "join": {
+      "loading": "Comprobando su invitación…",
+      "title": "¿Unirse a {{name}}?",
+      "subtitle": "Se convertirá en miembro de esta organización con el rol que otorga esta invitación.",
+      "confirm": "Unirse a la organización",
+      "joinedTitle": "¡Listo!",
+      "joinedSubtitle": "Se ha unido a {{name}}.",
+      "goHome": "Ir al panel",
+      "invalidTitle": "Este enlace de invitación no es válido o ha expirado",
+      "invalidSubtitle": "Pida a un administrador de la organización un nuevo enlace de invitación."
+    }
   },
   "charts": {
     "customerAnalytics": "Análisis de clientes",
@@ -536,6 +578,8 @@
   "analytics": {
     "eyebrow": "Análisis",
     "title": "Centro de análisis",
+    "organizationFilter": "Filtrar por organización",
+    "allOrganizations": "Todas las organizaciones",
     "customerGrowth": "Crecimiento de clientes (mensual)",
     "revenueGrowth": "Crecimiento de ingresos (mensual)",
     "collectionRate": "Tasa de cobro",

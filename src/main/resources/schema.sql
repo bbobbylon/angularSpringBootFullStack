@@ -174,6 +174,9 @@ PREPARE drop_events_chk_stmt FROM @drop_events_chk;
 EXECUTE drop_events_chk_stmt;
 DEALLOCATE PREPARE drop_events_chk_stmt;
 
+-- 2026-08-22: ten ORG_* types added for the organization-level audit trail
+-- (organizationevents, below) — mirrors the per-user audit trail exactly, sharing this same
+-- catalog rather than a second CHECK-guarded type table.
 ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
     ('LOGIN_ATTEMPT', 'LOGIN_ATTEMPT_FAILURE', 'LOGIN_ATTEMPT_SUCCESS',
      'PROFILE_UPDATE', 'PROFILE_PICTURE_UPDATE', 'ROLE_UPDATE',
@@ -183,7 +186,10 @@ ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
      'SESSION_REVOKED', 'TOKEN_REUSE_DETECTED',
      'SUSPICIOUS_LOGIN', 'PROVIDER_LINKED', 'PROVIDER_UNLINKED',
      'PASSKEY_REGISTERED', 'PASSKEY_REMOVED', 'PASSKEY_LOGIN',
-     'MFA_RESET', 'RECOVERY_CODES_REGENERATED'));
+     'MFA_RESET', 'RECOVERY_CODES_REGENERATED',
+     'ORG_CREATED', 'ORG_RENAMED', 'ORG_STATUS_CHANGED', 'ORG_PROFILE_UPDATED',
+     'ORG_MEMBER_ADDED', 'ORG_MEMBER_REMOVED', 'ORG_MEMBER_ROLE_CHANGED',
+     'ORG_INVITE_CREATED', 'ORG_INVITE_REDEEMED', 'ORG_INVITE_REVOKED'));
 
 INSERT INTO events (type, description)
 VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
@@ -208,7 +214,17 @@ VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
        ('PASSKEY_REMOVED', 'You removed a passkey from your account :|'),
        ('PASSKEY_LOGIN', 'You signed in with a passkey :)'),
        ('MFA_RESET', 'An administrator reset your authenticator MFA :)'),
-       ('RECOVERY_CODES_REGENERATED', 'You regenerated your recovery codes :)') AS new
+       ('RECOVERY_CODES_REGENERATED', 'You regenerated your recovery codes :)'),
+       ('ORG_CREATED', 'A new organization was created :)'),
+       ('ORG_RENAMED', 'The organization was renamed :)'),
+       ('ORG_STATUS_CHANGED', 'The organization''s status was changed :|'),
+       ('ORG_PROFILE_UPDATED', 'The organization''s profile was updated :)'),
+       ('ORG_MEMBER_ADDED', 'A member was added to the organization :)'),
+       ('ORG_MEMBER_REMOVED', 'A member was removed from the organization :|'),
+       ('ORG_MEMBER_ROLE_CHANGED', 'A member''s role within the organization was changed :)'),
+       ('ORG_INVITE_CREATED', 'An invite link was created for the organization :)'),
+       ('ORG_INVITE_REDEEMED', 'An invite link was redeemed to join the organization :)'),
+       ('ORG_INVITE_REVOKED', 'An invite link for the organization was revoked :|') AS new
 ON DUPLICATE KEY UPDATE description = new.description;
 
 CREATE TABLE IF NOT EXISTS userevents
@@ -548,6 +564,22 @@ CREATE TABLE IF NOT EXISTS userorganizations
     CONSTRAINT UQ_UserOrganizations_User_Org UNIQUE (user_id, organization_id)
 );
 
+-- Idempotent add of organizations.description/contact_email/website (2026-08-22, self-service
+-- organization profile/settings). All three ship together, so checking for the absence of one
+-- (description) guards the whole ALTER — same information_schema pattern as every other
+-- idempotent column add in this file, since MySQL has no ADD COLUMN IF NOT EXISTS. All three are
+-- nullable: an organization created before this shipped, or one that simply has no website yet,
+-- is not forced to backfill a value.
+SET @add_organizations_profile := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE organizations ADD COLUMN description VARCHAR(500) DEFAULT NULL AFTER status, ADD COLUMN contact_email VARCHAR(255) DEFAULT NULL AFTER description, ADD COLUMN website VARCHAR(255) DEFAULT NULL AFTER contact_email',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizations' AND COLUMN_NAME = 'description');
+PREPARE add_organizations_profile_stmt FROM @add_organizations_profile;
+EXECUTE add_organizations_profile_stmt;
+DEALLOCATE PREPARE add_organizations_profile_stmt;
+
 -- ── Backfill: customer ownership (must follow the organizations tables above) ───────────
 --
 -- Adopts every unowned customer into the lowest-numbered ACTIVE organization.
@@ -582,6 +614,50 @@ SET `organization_id` = (SELECT MIN(id) FROM organizations WHERE status = 'ACTIV
 WHERE `id` > 0
   AND `organization_id` IS NULL
   AND EXISTS (SELECT 1 FROM organizations WHERE status = 'ACTIVE');
+
+-- ── Organization-level audit trail (2026-08-22) ────────────────────────────────────────
+--
+-- Mirrors userevents exactly, but keyed to an organization instead of to a single user, and
+-- shares the same `events` catalog (see the ORG_* additions to CK_Events_Type above) rather than
+-- a second, independently-maintained type table. actor_user_id is nullable and ON DELETE SET
+-- NULL rather than CASCADE: a deleted account should not erase the historical fact that an event
+-- happened on this organization, only the identity of who did it.
+CREATE TABLE IF NOT EXISTS organizationevents
+(
+    id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    organization_id BIGINT UNSIGNED NOT NULL,
+    actor_user_id   BIGINT UNSIGNED DEFAULT NULL,
+    event_id        BIGINT UNSIGNED NOT NULL,
+    detail          VARCHAR(255) DEFAULT NULL,
+    created_at      DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (actor_user_id) REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_organizationevents_org_created (organization_id, created_at)
+);
+
+-- ── Organization invites (2026-08-22, self-service member onboarding) ─────────────────
+--
+-- DB-backed, single-use, expiring token — the same convention resetpasswordverifications already
+-- uses (code + expiration_date, row deleted on redemption), NOT the in-memory
+-- ProviderLinkTicketService pattern, which is documented as a per-instance scaling limitation
+-- (FUTURE-ENHANCEMENTS.md §2.4) that new features should not repeat. role_name is the role the
+-- invite grants on redemption, bounded at creation time by RoleType#canAssign against the
+-- inviting administrator's own tier (see OrganizationController), so an invite can never be used
+-- to mint a role more privileged than its creator could otherwise assign.
+CREATE TABLE IF NOT EXISTS organizationinvites
+(
+    id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    organization_id    BIGINT UNSIGNED NOT NULL,
+    invited_by_user_id BIGINT UNSIGNED NOT NULL,
+    code               VARCHAR(64)  NOT NULL,
+    role_name          VARCHAR(50)  NOT NULL DEFAULT 'ROLE_USER',
+    expiration_date    DATETIME     NOT NULL,
+    created_at         DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (invited_by_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT UQ_OrganizationInvites_Code UNIQUE (code)
+);
 
 -- ── Authenticator-app (TOTP) multi-factor authentication ───────────────────────────────
 CREATE TABLE IF NOT EXISTS totpcredentials

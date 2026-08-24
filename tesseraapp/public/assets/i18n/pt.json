@@ -519,7 +519,49 @@
     "addMember": "Adicionar um membro",
     "searchPlaceholder": "Buscar por nome ou e-mail…",
     "addToOrganization": "Adicionar",
-    "noOrganizations": "Nenhuma organização encontrada."
+    "noOrganizations": "Nenhuma organização encontrada.",
+    "kpi": {
+      "total": "Total de organizações",
+      "active": "Organizações ativas",
+      "members": "Total de membros"
+    },
+    "tabs": {
+      "members": "Membros",
+      "profile": "Perfil",
+      "activity": "Atividade",
+      "invites": "Convites"
+    },
+    "profile": {
+      "description": "Descrição",
+      "contactEmail": "E-mail de contato",
+      "website": "Site"
+    },
+    "auditLog": {
+      "error": "Não foi possível carregar o registro de atividades. Tente novamente.",
+      "empty": "Nenhuma atividade registrada ainda.",
+      "system": "Sistema"
+    },
+    "invites": {
+      "error": "Não foi possível carregar os convites. Tente novamente.",
+      "empty": "Nenhum convite pendente.",
+      "role": "Função concedida",
+      "ttlHours": "Expira após (horas)",
+      "create": "Criar convite",
+      "expires": "Expira",
+      "copyLink": "Copiar link",
+      "revoke": "Revogar"
+    },
+    "join": {
+      "loading": "Verificando seu convite…",
+      "title": "Entrar em {{name}}?",
+      "subtitle": "Você se tornará membro desta organização com a função que este convite concede.",
+      "confirm": "Entrar na organização",
+      "joinedTitle": "Você entrou!",
+      "joinedSubtitle": "Você entrou em {{name}}.",
+      "goHome": "Ir para o painel",
+      "invalidTitle": "Este link de convite é inválido ou expirou",
+      "invalidSubtitle": "Peça a um administrador da organização um novo link de convite."
+    }
   },
   "charts": {
     "customerAnalytics": "Análise de clientes",
@@ -536,6 +578,8 @@
   "analytics": {
     "eyebrow": "Análises",
     "title": "Central de análises",
+    "organizationFilter": "Filtrar por organização",
+    "allOrganizations": "Todas as organizações",
     "customerGrowth": "Crescimento de clientes (mensal)",
     "revenueGrowth": "Crescimento da receita (mensal)",
     "collectionRate": "Taxa de cobrança",

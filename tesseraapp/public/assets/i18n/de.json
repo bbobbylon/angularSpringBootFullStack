@@ -519,7 +519,49 @@
     "addMember": "Mitglied hinzufügen",
     "searchPlaceholder": "Nach Name oder E-Mail suchen…",
     "addToOrganization": "Hinzufügen",
-    "noOrganizations": "Keine Organisationen gefunden."
+    "noOrganizations": "Keine Organisationen gefunden.",
+    "kpi": {
+      "total": "Organisationen gesamt",
+      "active": "Aktive Organisationen",
+      "members": "Mitglieder gesamt"
+    },
+    "tabs": {
+      "members": "Mitglieder",
+      "profile": "Profil",
+      "activity": "Aktivität",
+      "invites": "Einladungen"
+    },
+    "profile": {
+      "description": "Beschreibung",
+      "contactEmail": "Kontakt-E-Mail",
+      "website": "Website"
+    },
+    "auditLog": {
+      "error": "Das Aktivitätsprotokoll konnte nicht geladen werden. Bitte erneut versuchen.",
+      "empty": "Noch keine Aktivität aufgezeichnet.",
+      "system": "System"
+    },
+    "invites": {
+      "error": "Einladungen konnten nicht geladen werden. Bitte erneut versuchen.",
+      "empty": "Keine ausstehenden Einladungen.",
+      "role": "Zugewiesene Rolle",
+      "ttlHours": "Läuft ab nach (Stunden)",
+      "create": "Einladung erstellen",
+      "expires": "Läuft ab",
+      "copyLink": "Link kopieren",
+      "revoke": "Widerrufen"
+    },
+    "join": {
+      "loading": "Einladung wird geprüft…",
+      "title": "{{name}} beitreten?",
+      "subtitle": "Sie werden Mitglied dieser Organisation mit der Rolle, die diese Einladung gewährt.",
+      "confirm": "Organisation beitreten",
+      "joinedTitle": "Sie sind dabei!",
+      "joinedSubtitle": "Sie sind {{name}} beigetreten.",
+      "goHome": "Zum Dashboard",
+      "invalidTitle": "Dieser Einladungslink ist ungültig oder abgelaufen",
+      "invalidSubtitle": "Bitten Sie einen Administrator der Organisation um einen neuen Einladungslink."
+    }
   },
   "charts": {
     "customerAnalytics": "Kundenanalyse",
@@ -536,6 +578,8 @@
   "analytics": {
     "eyebrow": "Einblicke",
     "title": "Analysezentrum",
+    "organizationFilter": "Nach Organisation filtern",
+    "allOrganizations": "Alle Organisationen",
     "customerGrowth": "Kundenwachstum (MoM)",
     "revenueGrowth": "Umsatzwachstum (MoM)",
     "collectionRate": "Zahlungsquote",

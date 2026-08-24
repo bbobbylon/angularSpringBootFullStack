@@ -43,25 +43,31 @@ export class AnalyticsService {
    * Fetches the admin KPI summary: system-wide totals and the per-status customer
    * breakdown. Backs the Billing overview's scorecards.
    *
+   * @param organizationId - optional org-filter (FR-ORG-2 dashboard revamp, 2026-08-22); an
+   *                          unscoped caller may narrow to any organization, a scoped caller only
+   *                          within their own scope (validated server-side either way)
    * @returns Observable emitting a {@link StatsDataInterface} response ({@code user} + {@code stats})
    */
-  summary$ = (): Observable<CustomHttpResponseInterface<StatsDataInterface>> =>
+  summary$ = (organizationId?: number): Observable<CustomHttpResponseInterface<StatsDataInterface>> =>
     this.http
-      .get<CustomHttpResponseInterface<StatsDataInterface>>(`${this.server}/admin/analytics/summary`)
+      .get<CustomHttpResponseInterface<StatsDataInterface>>(
+        `${this.server}/admin/analytics/summary${organizationId ? `?organizationId=${organizationId}` : ''}`,
+      )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**
    * Fetches a paginated page of customers for the Analytics hub's growth/acquisition
    * charts. Same {@code page} shape as {@code CustomerService.customers$}, admin-gated.
    *
-   * @param page - zero-based page index (defaults to 0)
-   * @param size - number of records per page (defaults to 20)
+   * @param page           - zero-based page index (defaults to 0)
+   * @param size           - number of records per page (defaults to 20)
+   * @param organizationId - optional org-filter, same rule as {@link summary$}
    * @returns Observable emitting a {@link CustomerListDataInterface} response
    */
-  customers$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
+  customers$ = (page = 0, size = 20, organizationId?: number): Observable<CustomHttpResponseInterface<CustomerListDataInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<CustomerListDataInterface>>(
-        `${this.server}/admin/analytics/customers?page=${page}&size=${size}`,
+        `${this.server}/admin/analytics/customers?page=${page}&size=${size}${organizationId ? `&organizationId=${organizationId}` : ''}`,
       )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
@@ -70,14 +76,15 @@ export class AnalyticsService {
    * dashboards. Same {@code invoices} shape as {@code CustomerService.invoices$},
    * admin-gated.
    *
-   * @param page - zero-based page index (defaults to 0)
-   * @param size - number of records per page (defaults to 20)
+   * @param page           - zero-based page index (defaults to 0)
+   * @param size           - number of records per page (defaults to 20)
+   * @param organizationId - optional org-filter, same rule as {@link summary$}
    * @returns Observable emitting an {@link InvoiceListDataInterface} response
    */
-  invoices$ = (page = 0, size = 20): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
+  invoices$ = (page = 0, size = 20, organizationId?: number): Observable<CustomHttpResponseInterface<InvoiceListDataInterface>> =>
     this.http
       .get<CustomHttpResponseInterface<InvoiceListDataInterface>>(
-        `${this.server}/admin/analytics/invoices?page=${page}&size=${size}`,
+        `${this.server}/admin/analytics/invoices?page=${page}&size=${size}${organizationId ? `&organizationId=${organizationId}` : ''}`,
       )
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 

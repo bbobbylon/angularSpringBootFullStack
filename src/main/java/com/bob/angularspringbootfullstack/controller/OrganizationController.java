@@ -2,14 +2,19 @@ package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.RoleType;
+import com.bob.angularspringbootfullstack.event.NewOrganizationEvent;
 import com.bob.angularspringbootfullstack.form.OrganizationForm;
+import com.bob.angularspringbootfullstack.form.OrganizationInviteForm;
+import com.bob.angularspringbootfullstack.form.OrganizationProfileForm;
 import com.bob.angularspringbootfullstack.form.OrganizationStatusForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.Organization;
+import com.bob.angularspringbootfullstack.model.OrganizationInvite;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,10 +26,19 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collection;
 
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_CREATED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_INVITE_CREATED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_INVITE_REVOKED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_MEMBER_ADDED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_MEMBER_REMOVED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_PROFILE_UPDATED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_RENAMED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_STATUS_CHANGED;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
@@ -70,6 +84,7 @@ import static org.springframework.http.HttpStatus.OK;
 public class OrganizationController {
 
     private final OrganizationService organizationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Lists the organizations the caller may see: the full catalog for an unscoped tier, or
@@ -107,7 +122,9 @@ public class OrganizationController {
     public ResponseEntity<HttpResponse> createOrganization(Authentication authentication, @RequestBody @Valid OrganizationForm form) {
         requireUnscopedTier(authentication);
         Organization created = organizationService.createOrganization(form.getName());
-        log.info("'{}' created organization '{}'", getAuthenticatedUser(authentication).getEmail(), created.getName());
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(created.getId(), caller.getId(), ORG_CREATED, created.getName()));
+        log.info("'{}' created organization '{}'", caller.getEmail(), created.getName());
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -133,7 +150,9 @@ public class OrganizationController {
                                                             @RequestBody @Valid OrganizationForm form) {
         requireUnscopedTier(authentication);
         Organization updated = organizationService.renameOrganization(id, form.getName());
-        log.info("'{}' renamed organization id {} to '{}'", getAuthenticatedUser(authentication).getEmail(), id, updated.getName());
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(id, caller.getId(), ORG_RENAMED, updated.getName()));
+        log.info("'{}' renamed organization id {} to '{}'", caller.getEmail(), id, updated.getName());
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -160,7 +179,9 @@ public class OrganizationController {
                                                    @RequestBody @Valid OrganizationStatusForm form) {
         requireUnscopedTier(authentication);
         Organization updated = organizationService.setOrganizationStatus(id, form.getStatus());
-        log.info("'{}' set organization id {} status to '{}'", getAuthenticatedUser(authentication).getEmail(), id, updated.getStatus());
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(id, caller.getId(), ORG_STATUS_CHANGED, updated.getStatus()));
+        log.info("'{}' set organization id {} status to '{}'", caller.getEmail(), id, updated.getStatus());
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -187,7 +208,9 @@ public class OrganizationController {
                                                    @PathVariable Long userId) {
         requireMembershipAuthority(authentication, organizationId);
         organizationService.addMember(organizationId, userId);
-        log.info("'{}' added user {} to organization {}", getAuthenticatedUser(authentication).getEmail(), userId, organizationId);
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(organizationId, caller.getId(), ORG_MEMBER_ADDED, "user " + userId));
+        log.info("'{}' added user {} to organization {}", caller.getEmail(), userId, organizationId);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -212,7 +235,9 @@ public class OrganizationController {
                                                       @PathVariable Long userId) {
         requireMembershipAuthority(authentication, organizationId);
         organizationService.removeMember(organizationId, userId);
-        log.info("'{}' removed user {} from organization {}", getAuthenticatedUser(authentication).getEmail(), userId, organizationId);
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(organizationId, caller.getId(), ORG_MEMBER_REMOVED, "user " + userId));
+        log.info("'{}' removed user {} from organization {}", caller.getEmail(), userId, organizationId);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -240,6 +265,180 @@ public class OrganizationController {
                         .timeStamp(now().toString())
                         .data(of("members", organizationService.listActiveMembers(organizationId)))
                         .message("Members retrieved successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Updates an organization's profile fields (description/contact email/website), unscoped
+     * tiers only — the same catalog-mutation rule {@link #renameOrganization} applies, since a
+     * profile is as much a catalog attribute as the name.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the organization to update
+     * @param form           the validated profile payload; each field independently nullable
+     * @return 200 OK with the updated organization
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @PatchMapping("/{id}/profile")
+    public ResponseEntity<HttpResponse> updateProfile(Authentication authentication,
+                                                        @PathVariable Long id,
+                                                        @RequestBody @Valid OrganizationProfileForm form) {
+        requireUnscopedTier(authentication);
+        Organization updated = organizationService.updateOrganizationProfile(id, form.getDescription(), form.getContactEmail(), form.getWebsite());
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(id, caller.getId(), ORG_PROFILE_UPDATED, null));
+        log.info("'{}' updated the profile of organization id {}", caller.getEmail(), id);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("organization", updated))
+                        .message("Organization profile updated successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Returns one page of an organization's audit trail, newest first — same authorization rule
+     * as {@link #getMembers}.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param organizationId the organization whose activity to retrieve
+     * @param page           0-indexed page number, defaults to 0
+     * @param size           rows per page, defaults to 20
+     * @return 200 OK with the page of audit entries and a total count for pagination
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @GetMapping("/{organizationId}/events")
+    public ResponseEntity<HttpResponse> getEvents(Authentication authentication,
+                                                   @PathVariable Long organizationId,
+                                                   @RequestParam(required = false) Integer page,
+                                                   @RequestParam(required = false) Integer size) {
+        requireMembershipAuthority(authentication, organizationId);
+        int resolvedPage = page == null || page < 0 ? 0 : page;
+        int resolvedSize = size == null || size <= 0 ? 20 : size;
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("events", organizationService.listOrganizationEvents(organizationId, resolvedPage, resolvedSize),
+                                "totalEvents", organizationService.countOrganizationEvents(organizationId)))
+                        .message("Organization activity retrieved successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Returns one organization's KPI tiles (member count plus its customer/invoice/revenue
+     * rollups) for the dashboard-style Organizations page — same authorization rule as
+     * {@link #getMembers}.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param organizationId the organization to summarize
+     * @return 200 OK with the organization's stats
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @GetMapping("/{organizationId}/stats")
+    public ResponseEntity<HttpResponse> getStats(Authentication authentication, @PathVariable Long organizationId) {
+        requireMembershipAuthority(authentication, organizationId);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("stats", organizationService.getOrganizationStats(organizationId)))
+                        .message("Organization stats retrieved successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Creates a single-use invite for an organization — same authorization rule as
+     * {@link #getMembers}, plus a role-tier ceiling: the invite can never grant a role its creator
+     * could not otherwise assign directly, the same guard {@code AdminUserController} applies to a
+     * direct role reassignment (see {@link RoleType#canAssign}).
+     *
+     * @param authentication the calling administrator's authentication
+     * @param organizationId the organization the invite joins its redeemer to
+     * @param form           the optional {roleName, ttlHours} payload; both default when omitted
+     * @return 200 OK with the created invite (including its redeemable code)
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @PostMapping("/{organizationId}/invites")
+    public ResponseEntity<HttpResponse> createInvite(Authentication authentication,
+                                                      @PathVariable Long organizationId,
+                                                      @RequestBody(required = false) OrganizationInviteForm form) {
+        requireMembershipAuthority(authentication, organizationId);
+        UserDTO caller = getAuthenticatedUser(authentication);
+        String roleName = form == null || form.getRoleName() == null || form.getRoleName().isBlank()
+                ? RoleType.ROLE_USER.name() : form.getRoleName();
+        long ttlHours = form == null || form.getTtlHours() == null || form.getTtlHours() <= 0
+                ? 168L : form.getTtlHours();
+        if (!RoleType.canAssign(caller.getRoleName(), roleName)) {
+            log.warn("Caller '{}' (role {}) denied creating an invite granting role '{}' — at or above their own tier",
+                    caller.getEmail(), caller.getRoleName(), roleName);
+            throw new AccessDeniedException("You cannot create an invite granting a role with more privileges than your own.");
+        }
+        OrganizationInvite invite = organizationService.createInvite(organizationId, caller.getId(), roleName, ttlHours);
+        eventPublisher.publishEvent(new NewOrganizationEvent(organizationId, caller.getId(), ORG_INVITE_CREATED, roleName));
+        log.info("'{}' created a {}-granting invite for organization {}", caller.getEmail(), roleName, organizationId);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("invite", invite, "invites", organizationService.listActiveInvites(organizationId)))
+                        .message("Invite created successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Lists an organization's outstanding invites — same authorization rule as
+     * {@link #getMembers}.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param organizationId the organization whose invites to list
+     * @return 200 OK with the organization's active invites
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @GetMapping("/{organizationId}/invites")
+    public ResponseEntity<HttpResponse> getInvites(Authentication authentication, @PathVariable Long organizationId) {
+        requireMembershipAuthority(authentication, organizationId);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("invites", organizationService.listActiveInvites(organizationId)))
+                        .message("Invites retrieved successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Revokes an outstanding invite before it is redeemed — same authorization rule as
+     * {@link #getMembers}.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param organizationId the organization the invite belongs to
+     * @param inviteId       the invite to revoke
+     * @return 200 OK with the organization's refreshed active invites
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @DeleteMapping("/{organizationId}/invites/{inviteId}")
+    public ResponseEntity<HttpResponse> revokeInvite(Authentication authentication,
+                                                      @PathVariable Long organizationId,
+                                                      @PathVariable Long inviteId) {
+        requireMembershipAuthority(authentication, organizationId);
+        organizationService.revokeInvite(organizationId, inviteId);
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(organizationId, caller.getId(), ORG_INVITE_REVOKED, null));
+        log.info("'{}' revoked invite {} for organization {}", caller.getEmail(), inviteId, organizationId);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("invites", organizationService.listActiveInvites(organizationId)))
+                        .message("Invite revoked successfully.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

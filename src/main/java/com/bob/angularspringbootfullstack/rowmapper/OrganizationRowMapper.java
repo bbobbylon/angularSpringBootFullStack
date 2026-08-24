@@ -23,6 +23,9 @@ public class OrganizationRowMapper implements RowMapper<Organization> {
                 .id(resultSet.getLong("id"))
                 .name(resultSet.getString("name"))
                 .status(resultSet.getString("status"))
+                .description(resultSet.getString("description"))
+                .contactEmail(resultSet.getString("contact_email"))
+                .website(resultSet.getString("website"))
                 .createdAt(createdAt == null ? null : createdAt.toLocalDateTime())
                 .build();
     }

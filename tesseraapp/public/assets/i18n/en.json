@@ -521,7 +521,49 @@
     "addMember": "Add a member",
     "searchPlaceholder": "Search by name or email…",
     "addToOrganization": "Add",
-    "noOrganizations": "No organizations found."
+    "noOrganizations": "No organizations found.",
+    "kpi": {
+      "total": "Total Organizations",
+      "active": "Active Organizations",
+      "members": "Total Members"
+    },
+    "tabs": {
+      "members": "Members",
+      "profile": "Profile",
+      "activity": "Activity",
+      "invites": "Invites"
+    },
+    "profile": {
+      "description": "Description",
+      "contactEmail": "Contact email",
+      "website": "Website"
+    },
+    "auditLog": {
+      "error": "Could not load the activity log. Please try again.",
+      "empty": "No activity recorded yet.",
+      "system": "System"
+    },
+    "invites": {
+      "error": "Could not load invites. Please try again.",
+      "empty": "No outstanding invites.",
+      "role": "Role granted",
+      "ttlHours": "Expires after (hours)",
+      "create": "Create Invite",
+      "expires": "Expires",
+      "copyLink": "Copy Link",
+      "revoke": "Revoke"
+    },
+    "join": {
+      "loading": "Checking your invite…",
+      "title": "Join {{name}}?",
+      "subtitle": "You'll become a member of this organization with the role its invite grants.",
+      "confirm": "Join Organization",
+      "joinedTitle": "You're in!",
+      "joinedSubtitle": "You have joined {{name}}.",
+      "goHome": "Go to Dashboard",
+      "invalidTitle": "This invite link is invalid or has expired",
+      "invalidSubtitle": "Ask an administrator of the organization for a new invite link."
+    }
   },
   "charts": {
     "customerAnalytics": "Customer Analytics",
@@ -540,6 +582,8 @@
     "title": "Analytics Hub",
     "emailReport": "Email me this report",
     "sendingReport": "Sending…",
+    "organizationFilter": "Filter by organization",
+    "allOrganizations": "All organizations",
     "customerGrowth": "Customer Growth (MoM)",
     "revenueGrowth": "Revenue Growth (MoM)",
     "collectionRate": "Collection Rate",

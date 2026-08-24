@@ -248,6 +248,12 @@ class SecurityConfig {
                             .requestMatchers("/user/webauthn/**").authenticated()
                             .requestMatchers("/user/sessions/**").authenticated()
                             .requestMatchers("/user/favorites/**").authenticated()
+                            // Invite redemption (organization dashboard revamp, 2026-08-22): the
+                            // person clicking a shared invite link is, by definition, not yet a
+                            // member of the organization they're joining, so this cannot require
+                            // UPDATE:ORGANIZATION like /admin/organization/** below — any
+                            // authenticated user must be able to preview and redeem a code.
+                            .requestMatchers("/user/organization/**").authenticated()
                             // The Angular SPA is compiled into this jar's static resources (see
                             // Dockerfile) and served from this SAME origin in Docker/prod — unlike
                             // local dev, where Angular runs on its own dev server (port 4200) and

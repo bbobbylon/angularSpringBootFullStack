@@ -193,4 +193,102 @@ public class OrganizationQuery {
             "JOIN userorganizations uo ON uo.user_id = u.id " +
             "WHERE uo.organization_id = :organizationId AND uo.active = TRUE " +
             "ORDER BY u.first_name, u.last_name";
+
+    /**
+     * Counts the ACTIVE members of one organization — the {@code memberCount} tile on the
+     * dashboard-style Organizations page. Parameter: organizationId.
+     */
+    public static final String COUNT_ACTIVE_MEMBERS_QUERY =
+            "SELECT COUNT(*) FROM userorganizations WHERE organization_id = :organizationId AND active = TRUE";
+
+    // ── Organization profile/settings (2026-08-22, dashboard revamp) ─────────────────────────
+
+    /**
+     * Updates an organization's profile fields (Organization CRUD — profile/settings). All three
+     * are nullable, so binding must go through a null-tolerant {@code MapSqlParameterSource}
+     * rather than {@code Map.of} (which rejects null values). Parameters: description,
+     * contactEmail, website, id.
+     */
+    public static final String UPDATE_ORGANIZATION_PROFILE_QUERY =
+            "UPDATE organizations SET description = :description, contact_email = :contactEmail, website = :website WHERE id = :id";
+
+    // ── Organization-level audit trail (2026-08-22) ───────────────────────────────────────────
+
+    /**
+     * Inserts an organization audit entry. Mirrors {@code EventQuery#INSERT_EVENT_WITH_DETAIL_BY_EMAIL_QUERY}'s
+     * correlated-subquery shape for resolving {@code event_id} from a type name. {@code actorUserId}
+     * and {@code detail} are both nullable, so binding must go through a null-tolerant
+     * {@code MapSqlParameterSource}. Parameters: organizationId, actorUserId, type, detail.
+     */
+    public static final String INSERT_ORGANIZATION_EVENT_QUERY =
+            "INSERT INTO organizationevents (organization_id, actor_user_id, event_id, detail) " +
+            "VALUES (:organizationId, :actorUserId, (SELECT id FROM events WHERE type = :type), :detail)";
+
+    /**
+     * Fetches one page of an organization's audit trail, newest first, resolving the acting
+     * administrator's email (nullable — the account may since have been deleted) and the event's
+     * human-readable type/description from the shared {@code events} catalog. Parameters:
+     * organizationId, size, offset.
+     */
+    public static final String SELECT_ORGANIZATION_EVENTS_PAGINATED_QUERY =
+            "SELECT oev.id, ev.type, ev.description, u.email AS actor_email, oev.detail, oev.created_at " +
+            "FROM organizationevents oev " +
+            "JOIN events ev ON ev.id = oev.event_id " +
+            "LEFT JOIN users u ON u.id = oev.actor_user_id " +
+            "WHERE oev.organization_id = :organizationId " +
+            "ORDER BY oev.created_at DESC LIMIT :size OFFSET :offset";
+
+    /**
+     * Counts an organization's audit entries, for total-pages metadata. Parameter: organizationId.
+     */
+    public static final String COUNT_ORGANIZATION_EVENTS_QUERY =
+            "SELECT COUNT(*) FROM organizationevents WHERE organization_id = :organizationId";
+
+    // ── Organization invites (2026-08-22, self-service member onboarding) ───────────────────
+
+    /**
+     * Creates a pending invite. {@code organizationinvites.code} carries a unique constraint, so a
+     * (practically impossible) UUID collision surfaces as {@code DuplicateKeyException}. Parameters:
+     * organizationId, invitedByUserId, code, roleName, expirationDate.
+     */
+    public static final String INSERT_ORGANIZATION_INVITE_QUERY =
+            "INSERT INTO organizationinvites (organization_id, invited_by_user_id, code, role_name, expiration_date) " +
+            "VALUES (:organizationId, :invitedByUserId, :code, :roleName, :expirationDate)";
+
+    /**
+     * Resolves an invite by its code, joined to the inviting administrator's email. Does not filter
+     * on expiry — {@code OrganizationServiceImpl#redeemInvite} checks {@code expirationDate}
+     * itself so an expired invite can be told apart from one that never existed and deleted either
+     * way. Parameter: code.
+     */
+    public static final String SELECT_INVITE_BY_CODE_QUERY =
+            "SELECT oi.*, u.email AS invited_by_email FROM organizationinvites oi " +
+            "JOIN users u ON u.id = oi.invited_by_user_id WHERE oi.code = :code";
+
+    /**
+     * Lists every outstanding (not-yet-expired) invite for one organization, newest first, for the
+     * Organizations page's Invites panel. Parameter: organizationId.
+     */
+    public static final String SELECT_ACTIVE_INVITES_QUERY =
+            "SELECT oi.*, u.email AS invited_by_email FROM organizationinvites oi " +
+            "JOIN users u ON u.id = oi.invited_by_user_id " +
+            "WHERE oi.organization_id = :organizationId AND oi.expiration_date > NOW() " +
+            "ORDER BY oi.created_at DESC";
+
+    /**
+     * Deletes an invite by its primary key — used both for an explicit revoke and, via
+     * {@link #DELETE_INVITE_BY_CODE_QUERY}, for consuming it on redemption. Single-use is enforced
+     * by deletion rather than a {@code used} flag, matching {@code resetpasswordverifications}'
+     * convention. Parameters: id, organizationId (scopes a revoke to the caller's own organization
+     * rather than trusting the path id alone).
+     */
+    public static final String DELETE_INVITE_BY_ID_QUERY =
+            "DELETE FROM organizationinvites WHERE id = :id AND organization_id = :organizationId";
+
+    /**
+     * Deletes an invite by its code — the redemption path, where the caller does not yet know (or
+     * need) the row's primary key. Parameter: code.
+     */
+    public static final String DELETE_INVITE_BY_CODE_QUERY =
+            "DELETE FROM organizationinvites WHERE code = :code";
 }

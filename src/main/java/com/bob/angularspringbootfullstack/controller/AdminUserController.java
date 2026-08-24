@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.event.NewOrganizationEvent;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.enumeration.RoleType;
@@ -43,6 +44,7 @@ import java.util.Optional;
 
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ACCOUNT_SETTINGS_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.MFA_RESET;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_MEMBER_ROLE_CHANGED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.PASSKEY_REMOVED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.PROFILE_UPDATE;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ROLE_UPDATE;
@@ -283,6 +285,13 @@ public class AdminUserController {
      *                       end of that day and reverts to {@code ROLE_USER} automatically —
      *                       see {@link #parseExpiresAt}. Omitted or blank means unlimited, the
      *                       default.
+     * @param organizationId optional — when the caller made this change from an organization's own
+     *                       Members panel (organization dashboard revamp, 2026-08-22), the id of
+     *                       that organization, so the change is ALSO recorded on that
+     *                       organization's activity log via {@code NewOrganizationEvent}. Silently
+     *                       ignored if the target does not actually hold an active membership in
+     *                       that organization (a stale or forged hint must not corrupt another
+     *                       organization's audit trail); this never blocks the role change itself.
      * @return 200 OK with the refreshed target user and the roles catalog
      */
     @PreAuthorize("hasAuthority('UPDATE:ROLE')")
@@ -290,15 +299,20 @@ public class AdminUserController {
     public ResponseEntity<HttpResponse> updateUserRole(Authentication authentication,
                                                        @PathVariable Long id,
                                                        @PathVariable String roleName,
-                                                       @RequestParam(required = false) String expiresAt) {
+                                                       @RequestParam(required = false) String expiresAt,
+                                                       @RequestParam(required = false) Long organizationId) {
         requireNotSelf(authentication, id, "You cannot change your own role. Ask another administrator.");
         requireOrganizationScope(authentication, id);
         requireAssignableTier(authentication, roleName);
+        UserDTO caller = getAuthenticatedUser(authentication);
         UserDTO target = userService.getUserById(id);
         userService.updateUserRole(id, roleName, parseExpiresAt(expiresAt));
         eventPublisher.publishEvent(new NewUserEvent(target.getEmail(), ROLE_UPDATE));
+        if (organizationId != null && organizationService.isActiveMemberOfOrganization(id, organizationId)) {
+            eventPublisher.publishEvent(new NewOrganizationEvent(organizationId, caller.getId(), ORG_MEMBER_ROLE_CHANGED, target.getEmail() + " -> " + roleName));
+        }
         log.info("Admin '{}' reassigned role of user id {} to {} (expiresAt={})",
-                getAuthenticatedUser(authentication).getEmail(), id, roleName, expiresAt);
+                caller.getEmail(), id, roleName, expiresAt);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())

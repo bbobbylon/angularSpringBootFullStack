@@ -519,7 +519,49 @@
     "addMember": "Ajouter un membre",
     "searchPlaceholder": "Rechercher par nom ou e-mail…",
     "addToOrganization": "Ajouter",
-    "noOrganizations": "Aucune organisation trouvée."
+    "noOrganizations": "Aucune organisation trouvée.",
+    "kpi": {
+      "total": "Organisations au total",
+      "active": "Organisations actives",
+      "members": "Membres au total"
+    },
+    "tabs": {
+      "members": "Membres",
+      "profile": "Profil",
+      "activity": "Activité",
+      "invites": "Invitations"
+    },
+    "profile": {
+      "description": "Description",
+      "contactEmail": "E-mail de contact",
+      "website": "Site web"
+    },
+    "auditLog": {
+      "error": "Impossible de charger le journal d'activité. Veuillez réessayer.",
+      "empty": "Aucune activité enregistrée pour le moment.",
+      "system": "Système"
+    },
+    "invites": {
+      "error": "Impossible de charger les invitations. Veuillez réessayer.",
+      "empty": "Aucune invitation en attente.",
+      "role": "Rôle accordé",
+      "ttlHours": "Expire après (heures)",
+      "create": "Créer une invitation",
+      "expires": "Expire",
+      "copyLink": "Copier le lien",
+      "revoke": "Révoquer"
+    },
+    "join": {
+      "loading": "Vérification de votre invitation…",
+      "title": "Rejoindre {{name}} ?",
+      "subtitle": "Vous deviendrez membre de cette organisation avec le rôle accordé par cette invitation.",
+      "confirm": "Rejoindre l'organisation",
+      "joinedTitle": "C'est fait !",
+      "joinedSubtitle": "Vous avez rejoint {{name}}.",
+      "goHome": "Aller au tableau de bord",
+      "invalidTitle": "Ce lien d'invitation est invalide ou a expiré",
+      "invalidSubtitle": "Demandez un nouveau lien d'invitation à un administrateur de l'organisation."
+    }
   },
   "charts": {
     "customerAnalytics": "Analyse des clients",
@@ -536,6 +578,8 @@
   "analytics": {
     "eyebrow": "Analyses",
     "title": "Centre d'analyse",
+    "organizationFilter": "Filtrer par organisation",
+    "allOrganizations": "Toutes les organisations",
     "customerGrowth": "Croissance clients (mensuelle)",
     "revenueGrowth": "Croissance du chiffre (mensuelle)",
     "collectionRate": "Taux de recouvrement",

@@ -1,0 +1,55 @@
+<!--
+  Organization invite landing page (OrganizationJoinComponent's Javadoc). Reached by clicking a
+  shared invite link — never linked to from within the app itself.
+-->
+<app-navbar></app-navbar>
+<main class="sc-page" *transloco="let t">
+  <div class="container" style="max-width: 560px;">
+    <div class="sc-panel sc-reveal mt-5">
+      <div class="p-4 text-center">
+
+        @switch (state()) {
+
+          @case (DataState.LOADING) {
+            <div class="d-flex flex-column align-items-center gap-3 py-4">
+              <span class="spinner-border" role="status" aria-hidden="true"></span>
+              <span class="text-muted">{{ t('organizations.join.loading') }}</span>
+            </div>
+          }
+
+          @case (DataState.LOADED) {
+            <i class="bi bi-building-add display-4 text-primary mb-3"></i>
+            <h1 class="h4 mb-2">{{ t('organizations.join.title', { name: organizationName() }) }}</h1>
+            <p class="text-muted mb-4">{{ t('organizations.join.subtitle') }}</p>
+            <div class="d-flex justify-content-center gap-2">
+              <button (click)="join()" [disabled]="isJoining()" class="btn btn-primary" type="button">
+                @if (isJoining()) {
+                  <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                }
+                {{ t('organizations.join.confirm') }}
+              </button>
+              <button (click)="goHome()" [disabled]="isJoining()" class="btn btn-outline-secondary" type="button">
+                {{ t('common.cancel') }}
+              </button>
+            </div>
+          }
+
+          @case ('joined') {
+            <i class="bi bi-check-circle-fill display-4 text-success mb-3"></i>
+            <h1 class="h4 mb-2">{{ t('organizations.join.joinedTitle') }}</h1>
+            <p class="text-muted mb-4">{{ t('organizations.join.joinedSubtitle', { name: organizationName() }) }}</p>
+            <button (click)="goHome()" class="btn btn-primary" type="button">{{ t('organizations.join.goHome') }}</button>
+          }
+
+          @case (DataState.ERROR) {
+            <i class="bi bi-exclamation-triangle-fill display-4 text-warning mb-3"></i>
+            <h1 class="h4 mb-2">{{ t('organizations.join.invalidTitle') }}</h1>
+            <p class="text-muted mb-4">{{ t('organizations.join.invalidSubtitle') }}</p>
+            <button (click)="goHome()" class="btn btn-primary" type="button">{{ t('organizations.join.goHome') }}</button>
+          }
+        }
+
+      </div>
+    </div>
+  </div>
+</main>

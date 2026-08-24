@@ -1,10 +1,15 @@
 package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.EventType;
 import com.bob.angularspringbootfullstack.model.Organization;
+import com.bob.angularspringbootfullstack.model.OrganizationEvent;
+import com.bob.angularspringbootfullstack.model.OrganizationInvite;
+import com.bob.angularspringbootfullstack.model.OrganizationStats;
 import com.bob.angularspringbootfullstack.model.OrganizationSummary;
 
 import java.util.Collection;
+import java.util.Optional;
 
 /**
  * Business contract for organization-scoped authorization (SRS §4.6 FR-ORG-1..3).
@@ -189,4 +194,119 @@ public interface OrganizationService {
      * @return the in-scope members, ordered by name, possibly empty, never {@code null}
      */
     Collection<UserDTO> listActiveMembers(Long organizationId);
+
+    // ── Organization profile/settings, audit trail, invites, stats (2026-08-22 dashboard revamp) ──
+
+    /**
+     * Updates an organization's profile fields. All three are independently nullable — clearing
+     * one does not require resending the others as empty strings versus {@code null}; the caller
+     * passes exactly what the form submitted.
+     *
+     * @param id           the organization to update
+     * @param description  free-form description, or {@code null} to clear it
+     * @param contactEmail organization contact email, or {@code null} to clear it
+     * @param website      organization website, or {@code null} to clear it
+     * @return the updated organization, freshly re-read from the database
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no organization has
+     *         that id
+     */
+    Organization updateOrganizationProfile(Long id, String description, String contactEmail, String website);
+
+    /**
+     * Records an organization audit entry — the write side of the organization-level activity
+     * log, called by {@link com.bob.angularspringbootfullstack.listener.NewOrganizationEventListener}
+     * after a {@code NewOrganizationEvent} is published. Not called directly by controllers, the
+     * same separation {@code EventService#addUserEvent} keeps from {@code NewUserEventListener}.
+     *
+     * @param organizationId the organization the event occurred on
+     * @param actorUserId    the acting administrator's user id, or {@code null}
+     * @param eventType      the category of action that occurred
+     * @param detail         optional free-form context; may be {@code null}
+     */
+    void recordOrganizationEvent(Long organizationId, Long actorUserId, EventType eventType, String detail);
+
+    /**
+     * Returns one page of an organization's audit trail, newest first.
+     *
+     * @param organizationId the organization whose activity to retrieve
+     * @param page           zero-based page index
+     * @param size           maximum number of entries per page
+     * @return the page-sized collection of resolved {@link OrganizationEvent} rows
+     */
+    Collection<OrganizationEvent> listOrganizationEvents(Long organizationId, int page, int size);
+
+    /**
+     * Counts an organization's audit entries, for total-pages metadata.
+     *
+     * @param organizationId the organization whose activity to count
+     * @return the total number of audit entries
+     */
+    long countOrganizationEvents(Long organizationId);
+
+    /**
+     * Creates a pending, single-use invite for an organization.
+     *
+     * @param organizationId  the organization the invite joins its redeemer to
+     * @param invitedByUserId the creating administrator's user id
+     * @param roleName        the role granted on redemption
+     * @param ttlHours        how many hours the invite remains redeemable
+     * @return the created invite, including its redeemable {@code code}
+     */
+    OrganizationInvite createInvite(Long organizationId, Long invitedByUserId, String roleName, long ttlHours);
+
+    /**
+     * Lists an organization's outstanding (not-yet-expired) invites, newest first.
+     *
+     * @param organizationId the organization whose invites to list
+     * @return the organization's active invites, possibly empty, never {@code null}
+     */
+    Collection<OrganizationInvite> listActiveInvites(Long organizationId);
+
+    /**
+     * Revokes an outstanding invite before it is redeemed.
+     *
+     * @param organizationId the organization the invite belongs to — scopes the delete so a
+     *                       caller cannot revoke another organization's invite by guessing its id
+     * @param inviteId       the invite to revoke
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no matching invite
+     *         exists in that organization
+     */
+    void revokeInvite(Long organizationId, Long inviteId);
+
+    /**
+     * Resolves an invite's organization name for the join page's confirmation prompt
+     * ("Join {name}?"), without redeeming it. Returns empty for an unknown or expired code — the
+     * same "not found" verdict {@link #redeemInvite} gives, so a stale link cannot be used to
+     * fingerprint whether it once existed (NFR-SEC-7).
+     *
+     * @param code the invite code from the join link
+     * @return the organization's name, or empty if the code is unknown or expired
+     */
+    Optional<String> previewInvite(String code);
+
+    /**
+     * Redeems an invite: adds {@code userId} as a member of the invite's organization with the
+     * invite's granted role, then deletes the invite row so it cannot be redeemed again.
+     *
+     * <p>Fails with {@link com.bob.angularspringbootfullstack.exception.ApiException} for an
+     * unknown, already-redeemed, or expired code — deliberately the same message for all three, so
+     * the response cannot be used to distinguish "this never existed" from "someone already used
+     * it" (NFR-SEC-7).
+     *
+     * @param code   the invite code from the join link
+     * @param userId the redeeming (already-authenticated) user's id
+     * @return the organization the user just joined
+     */
+    Organization redeemInvite(String code, Long userId);
+
+    /**
+     * The per-organization KPI row for the dashboard-style Organizations page: member count plus
+     * this organization's customer/invoice/revenue rollups, delegating to
+     * {@link com.bob.angularspringbootfullstack.service.CustomerService}'s existing
+     * {@code *ForOrganizations} methods narrowed to one id — not a new aggregation.
+     *
+     * @param organizationId the organization to summarize
+     * @return the organization's stat tiles
+     */
+    OrganizationStats getOrganizationStats(Long organizationId);
 }

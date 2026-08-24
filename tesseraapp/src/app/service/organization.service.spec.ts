@@ -126,4 +126,144 @@ describe('OrganizationService', () => {
       request.flush({ message: 'Member removed successfully.' });
     });
   });
+
+  describe('updateOrganizationProfile$', () => {
+    it('patches the profile fields at the organization-scoped URL', () => {
+      let result: unknown;
+      service
+        .updateOrganizationProfile$(1, 'A description', 'contact@acme.test', 'https://acme.test')
+        .subscribe((response) => (result = response.data?.organization));
+
+      const request = httpMock.expectOne(`${orgUrl}/1/profile`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({
+        description: 'A description',
+        contactEmail: 'contact@acme.test',
+        website: 'https://acme.test',
+      });
+      request.flush({ data: { organization: { id: 1, name: 'Acme', description: 'A description' } } });
+
+      expect(result).toEqual({ id: 1, name: 'Acme', description: 'A description' });
+    });
+  });
+
+  describe('orgStats$', () => {
+    it('fetches one organization\'s KPI tiles', () => {
+      let result: unknown;
+      service.orgStats$(9).subscribe((response) => (result = response.data?.stats));
+
+      const request = httpMock.expectOne(`${orgUrl}/9/stats`);
+      expect(request.request.method).toBe('GET');
+      request.flush({ data: { stats: { memberCount: 3, stats: { totalCustomers: 5, totalInvoices: 8, totalBilled: 100 }, statusBreakdown: {} } } });
+
+      expect(result).toEqual({ memberCount: 3, stats: { totalCustomers: 5, totalInvoices: 8, totalBilled: 100 }, statusBreakdown: {} });
+    });
+  });
+
+  describe('orgEvents$', () => {
+    it('fetches a page of the audit trail with default paging', () => {
+      let result: unknown;
+      service.orgEvents$(9).subscribe((response) => (result = response.data?.events));
+
+      const request = httpMock.expectOne(`${orgUrl}/9/events?page=0&size=20`);
+      expect(request.request.method).toBe('GET');
+      request.flush({ data: { events: [{ id: 1, type: 'ORG_CREATED' }], totalEvents: 1 } });
+
+      expect(result).toEqual([{ id: 1, type: 'ORG_CREATED' }]);
+    });
+
+    it('honors an explicit page and size', () => {
+      service.orgEvents$(9, 2, 5).subscribe();
+
+      const request = httpMock.expectOne(`${orgUrl}/9/events?page=2&size=5`);
+      expect(request.request.method).toBe('GET');
+      request.flush({ data: { events: [], totalEvents: 0 } });
+    });
+  });
+
+  describe('createInvite$', () => {
+    it('posts the role and ttl and returns the refreshed invite list', () => {
+      let result: unknown;
+      service.createInvite$(9, 'ROLE_USER', 72).subscribe((response) => (result = response.data?.invites));
+
+      const request = httpMock.expectOne(`${orgUrl}/9/invites`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({ roleName: 'ROLE_USER', ttlHours: 72 });
+      request.flush({ data: { invite: { id: 1, code: 'abc' }, invites: [{ id: 1, code: 'abc' }] } });
+
+      expect(result).toEqual([{ id: 1, code: 'abc' }]);
+    });
+
+    it('omits roleName/ttlHours when not supplied, letting the backend default them', () => {
+      service.createInvite$(9).subscribe();
+
+      const request = httpMock.expectOne(`${orgUrl}/9/invites`);
+      expect(request.request.body).toEqual({ roleName: undefined, ttlHours: undefined });
+      request.flush({ data: { invites: [] } });
+    });
+  });
+
+  describe('activeInvites$', () => {
+    it('fetches the organization\'s outstanding invites', () => {
+      let result: unknown;
+      service.activeInvites$(9).subscribe((response) => (result = response.data?.invites));
+
+      const request = httpMock.expectOne(`${orgUrl}/9/invites`);
+      expect(request.request.method).toBe('GET');
+      request.flush({ data: { invites: [{ id: 1, code: 'abc' }] } });
+
+      expect(result).toEqual([{ id: 1, code: 'abc' }]);
+    });
+  });
+
+  describe('revokeInvite$', () => {
+    it('deletes at the invite-scoped URL and returns the refreshed invite list', () => {
+      let result: unknown;
+      service.revokeInvite$(9, 1).subscribe((response) => (result = response.data?.invites));
+
+      const request = httpMock.expectOne(`${orgUrl}/9/invites/1`);
+      expect(request.request.method).toBe('DELETE');
+      request.flush({ data: { invites: [] } });
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('previewInvite$', () => {
+    it('resolves a live code to its organization name via the /user/organization path', () => {
+      let result: unknown;
+      service.previewInvite$('live').subscribe((response) => (result = response.data?.organizationName));
+
+      const request = httpMock.expectOne(`${environment.apiUrl}/user/organization/invite/live`);
+      expect(request.request.method).toBe('GET');
+      request.flush({ data: { organizationName: 'Acme' } });
+
+      expect(result).toBe('Acme');
+    });
+
+    it('surfaces the generic not-found reason for an unknown or expired code', () => {
+      let error: Error | undefined;
+      service.previewInvite$('bogus').subscribe({ error: (err: Error) => (error = err) });
+
+      httpMock
+        .expectOne(`${environment.apiUrl}/user/organization/invite/bogus`)
+        .flush({ reason: 'This invite link is invalid or has expired.' }, { status: 400, statusText: 'Bad Request' });
+
+      expect(error?.message).toBe('This invite link is invalid or has expired.');
+    });
+  });
+
+  describe('redeemInvite$', () => {
+    it('posts to the redeem URL with no body and returns the joined organization', () => {
+      let result: unknown;
+      service.redeemInvite$('live').subscribe((response) => (result = response.data?.organization));
+
+      const request = httpMock.expectOne(`${environment.apiUrl}/user/organization/invite/live/redeem`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({});
+      request.flush({ data: { organization: { id: 9, name: 'Acme' } } });
+
+      expect(result).toEqual({ id: 9, name: 'Acme' });
+    });
+  });
 });

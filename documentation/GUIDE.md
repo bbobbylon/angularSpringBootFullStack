@@ -1,7 +1,7 @@
 # TesseraApp — The Guide
 
-**Version:** 1.1
-**Last Updated:** 2026-08-19
+**Version:** 1.2
+**Last Updated:** 2026-08-23
 **Status:** Living — the single operational reference for this project.
 
 ## Overview
@@ -1201,9 +1201,14 @@ every role below `ROLE_ADMIN`'s tier is scoped, and self-service organization ma
 end-to-end — `OrganizationController` (`/admin/organization`, `UPDATE:ORGANIZATION`) creates,
 renames, retires, and lists/adds/removes members of an organization, and the Angular `/organizations`
 route (gated the same as `/roles`) gives administrators a UI for all of it, so onboarding a second
-tenant no longer needs an operator touching the database or the raw API. Role *definitions* (the
-catalog itself, not who holds which role) remain shared across every organization rather than
-per-tenant.
+tenant no longer needs an operator touching the database or the raw API. The 2026-08-22 dashboard
+revamp (FUTURE-ENHANCEMENTS §3.2) went further: a per-organization profile (description/contact/
+website), an `organizationevents` audit trail mirroring `userevents`, DB-backed single-use invites
+(`organizationinvites`, same expiring-token shape as `resetpasswordverifications`) with a
+`/organizations/join/:code` self-service redemption page open to any authenticated user, per-
+organization KPI tiles (`GET /admin/organization/:id/stats`), and an organization filter on the
+Analytics hub. Role *definitions* (the catalog itself, not who holds which role) remain shared
+across every organization rather than per-tenant.
 
 **To add a scope-respecting endpoint:** inject `OrganizationService`; call
 `requireOrganizationScope(authentication, targetId)` as the *first* line of a single-target action;
@@ -1757,7 +1762,7 @@ curl -X PATCH http://localhost:8080/admin/user/23/role/ROLE_MODERATOR \
 
 | Domain | Access | Schema owner | Tables |
 |---|---|---|---|
-| **Identity / auth** | `JdbcTemplate` + hand-written SQL | **`schema.sql`** | `users`, `roles`, `userroles`, `events`, `userevents`, `accountverifications`, `resetpasswordverifications`, `twofactorverifications`, `oauthproviderlinks`, `organizations`, `userorganizations`, `totpcredentials`, `totprecoverycodes`, `mfachallenges`, `refreshsessions`, `passkeycredentials` |
+| **Identity / auth** | `JdbcTemplate` + hand-written SQL | **`schema.sql`** | `users`, `roles`, `userroles`, `events`, `userevents`, `accountverifications`, `resetpasswordverifications`, `twofactorverifications`, `oauthproviderlinks`, `organizations`, `userorganizations`, `organizationevents`, `organizationinvites`, `totpcredentials`, `totprecoverycodes`, `mfachallenges`, `refreshsessions`, `passkeycredentials` |
 | **Business** | JPA / Hibernate | **Hibernate** `ddl-auto` | `Customer`, `Invoice`, `Services`, `invoiceserviceitems` |
 
 The identity layer wants precise, auditable SQL and predictable column names; the CRUD-heavy business
@@ -1835,7 +1840,21 @@ idempotent.
 
 **`organizations` / `userorganizations`** — the scoping unit, with an `active` flag on membership. The
 scope check honors only **active** memberships, so deactivating a row immediately removes a user from
-an org admin's reach without destroying history.
+an org admin's reach without destroying history. `organizations` also carries nullable
+`description`/`contact_email`/`website` profile columns (2026-08-22 dashboard revamp), editable only
+by an unscoped tier.
+
+**`organizationevents`** — the org-scoped audit trail added alongside the profile columns; mirrors
+`userevents` exactly (same `events` type catalogue, same `NewOrganizationEvent` →
+`NewOrganizationEventListener` swallow-and-log shape as `NewUserEvent`), just keyed to
+`organization_id` instead of `user_id`. `actor_user_id` is nullable (`ON DELETE SET NULL`) so a
+deleted administrator's past actions stay in the log rather than disappearing with the account.
+
+**`organizationinvites`** — single-use, DB-backed invite tokens, following the exact same expiring-
+token shape as `resetpasswordverifications`: no `used` flag, redemption **deletes the row**, so an
+unknown code, an expired one, and an already-redeemed one all resolve identically to "not found"
+(NFR-SEC-7 — no enumeration). `role_name` is the role granted on redemption, capped at creation time
+by the same `RoleType.canAssign` tier ceiling `AdminUserController` uses for direct reassignment.
 
 **`totpcredentials` / `totprecoverycodes` / `mfachallenges`** — `confirmed` flips true only after the
 user proves possession, so an unconfirmed secret can never satisfy a login. `mfachallenges` is the
@@ -2237,8 +2256,7 @@ real spend is Fargate; see [FUTURE-ENHANCEMENTS §6.6](FUTURE-ENHANCEMENTS.md#66
 
 - [FEATURE-INVENTORY.md](FEATURE-INVENTORY.md) — the exhaustive, verifiable "everything that's built" checklist
 - [IMPLEMENTATION-HISTORY.md](IMPLEMENTATION-HISTORY.md) — what was built, and the problem log
-- [PHASE-2-IMPLEMENTATION.md](PHASE-2-IMPLEMENTATION.md) — everything delivered since the Phase 1 report (Jul 11 → Aug 3, 2026), with the roadmap scorecard and requirement traceability
-- [PHASE-2-ADDITIONS.md](PHASE-2-ADDITIONS.md) — the exhaustive itemized catalog of Phase 2 additions (43 backend classes, 26 frontend files, 221 tests, infrastructure); the self-contained handoff document for deliverable production
+- [legacy/](legacy/README.md) — archived course-deliverable docs (`PHASE-2-IMPLEMENTATION.md`, `PHASE-2-ADDITIONS.md`), superseded by this file and FEATURE-INVENTORY.md; kept for history only
 - [POST-SUBMISSION-UPGRADES.md](POST-SUBMISSION-UPGRADES.md) — work built *after* the course submission, and therefore out of scope for the graded deliverable; the newest features land here first
 - [FUTURE-ENHANCEMENTS.md](FUTURE-ENHANCEMENTS.md) — the backlog and the path to a product
 - [flows/](flows/README.md) — click-to-database traces of every major flow

@@ -170,6 +170,17 @@ export const routes: Routes = [
     data: { deniedAction: 'manage organizations', deniedActionKey: 'permissions.actions.manageOrganizations' },
     loadComponent: () => import('./features/organizations/organizations.component').then((m) => m.OrganizationsComponent),
   },
+  // Invite-redeem landing page (OrganizationJoinComponent's Javadoc) — reachable by ANY
+  // authenticated user, deliberately without adminGuard: the person opening a shared invite
+  // link is by definition not yet a member of (and often not an admin of) the organization
+  // they're joining. The backend's OrganizationInviteController mirrors this with a plain
+  // .authenticated() matcher rather than the UPDATE:ORGANIZATION authority /organizations uses.
+  {
+    path: 'organizations/join/:code',
+    canActivate: [authenticationGuard],
+    loadComponent: () =>
+      import('./features/organizations/organization-join/organization-join.component').then((m) => m.OrganizationJoinComponent),
+  },
   {
     path: 'invoice/:id/:invoiceNumber',
     canActivate: [authenticationGuard],

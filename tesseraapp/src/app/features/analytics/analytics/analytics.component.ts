@@ -3,17 +3,20 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   inject,
   OnInit,
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DecimalPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { AnalyticsService } from '../../../service/analytics.service';
 import { UserService } from '../../../service/user.service';
+import { OrganizationService } from '../../../service/organization.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
@@ -25,6 +28,7 @@ import {
 import { CustomerInterface } from '../../../interface/customer.interface';
 import { InvoiceInterface } from '../../../interface/invoice.interface';
 import { UserInterface } from '../../../interface/user.interface';
+import { OrganizationInterface } from '../../../interface/organization.interface';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 /** One point on the dual-trend SVG line/area chart. */
@@ -91,7 +95,7 @@ interface ServiceUtil {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [NavbarComponent, RouterLink, DecimalPipe, TranslocoDirective],
+  imports: [NavbarComponent, RouterLink, DecimalPipe, FormsModule, TranslocoDirective],
   templateUrl: './analytics.component.html',
   styleUrl: './analytics.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -101,6 +105,7 @@ export class AnalyticsComponent implements OnInit {
 
   private readonly analytics = inject(AnalyticsService);
   private readonly userService = inject(UserService);
+  private readonly organizationService = inject(OrganizationService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -117,6 +122,26 @@ export class AnalyticsComponent implements OnInit {
   readonly user = computed<UserInterface | undefined>(
     () => this.customersState().appData?.data?.user,
   );
+
+  /**
+   * The organization catalog for the org filter {@code <select>}, populated only for an
+   * {@link isUnscopedTier} caller ({@code OrganizationController#requireUnscopedTier}'s frontend
+   * mirror — see {@code OrganizationsComponent}'s Javadoc for why role name, not authority, is
+   * the right check). A scoped caller (e.g. {@code ROLE_ORGANIZATION_ADMIN}) already only ever
+   * sees their own organization's data server-side, so the filter would have nothing to narrow
+   * and is hidden rather than shown with a single, redundant option.
+   */
+  readonly organizations = signal<OrganizationInterface[]>([]);
+  /** The org filter's current selection, or {@code undefined} for "all organizations in scope". */
+  readonly selectedOrganizationId = signal<number | undefined>(undefined);
+  /** Guards {@link organizations} against being re-fetched every time {@link user} recomputes. */
+  private organizationsRequested = false;
+
+  /** Whether the signed-in user may see (and use) the organization filter. */
+  protected get isUnscopedTier(): boolean {
+    const role = this.user()?.roleName;
+    return role === 'ROLE_ADMIN' || role === 'ROLE_APPLICATION_ADMIN';
+  }
 
   private readonly customers = computed<CustomerInterface[]>(
     () => this.customersState().appData?.data?.page?.content ?? [],
@@ -471,9 +496,40 @@ export class AnalyticsComponent implements OnInit {
       });
   }
 
+  constructor() {
+    // Fetches the org catalog for the filter <select> the first (and only the first) time the
+    // caller resolves as an unscoped tier — `user` flips from undefined to populated once
+    // `loadData`'s customers$ call resolves, so this fires once per page visit, not on every
+    // signal recomputation.
+    effect(() => {
+      if (this.isUnscopedTier && !this.organizationsRequested) {
+        this.organizationsRequested = true;
+        this.organizationService
+          .organizations$()
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: (response) => this.organizations.set(response.data?.organizations ?? []),
+            error: (error: string) => this.notification.onError(error),
+          });
+      }
+    });
+  }
+
   ngOnInit(): void {
+    this.loadData();
+  }
+
+  /**
+   * Loads the customer and invoice data sets that back every chart on this page, narrowed to
+   * {@link selectedOrganizationId} when the filter is active. Called once on init and again by
+   * {@link onOrganizationFilterChange} whenever the filter's selection changes — both calls run
+   * through this one method so the two data sets and the filter can never drift out of sync.
+   */
+  private loadData(): void {
+    const organizationId = this.selectedOrganizationId();
+
     this.analytics
-      .customers$(0, 500)
+      .customers$(0, 500, organizationId)
       .pipe(
         map((r) => ({ dataState: DataState.LOADED, appData: r })),
         startWith({ dataState: DataState.LOADING }),
@@ -486,7 +542,7 @@ export class AnalyticsComponent implements OnInit {
       .subscribe((s) => this.customersState.set(s));
 
     this.analytics
-      .invoices$(0, 500)
+      .invoices$(0, 500, organizationId)
       .pipe(
         map((r) => ({ dataState: DataState.LOADED, appData: r })),
         startWith({ dataState: DataState.LOADING }),
@@ -497,5 +553,17 @@ export class AnalyticsComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((s) => this.invoicesState.set(s));
+  }
+
+  /**
+   * Handles the org filter {@code <select>}'s change event, re-loading both data sets scoped to
+   * the newly selected organization (or back to the caller's full scope for the "All
+   * organizations" option).
+   *
+   * @param value - the select's raw string value; empty string means "no filter"
+   */
+  protected onOrganizationFilterChange(value: string): void {
+    this.selectedOrganizationId.set(value ? Number(value) : undefined);
+    this.loadData();
   }
 }

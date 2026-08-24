@@ -519,7 +519,49 @@
     "addMember": "添加成员",
     "searchPlaceholder": "按姓名或电子邮件搜索…",
     "addToOrganization": "添加",
-    "noOrganizations": "未找到组织。"
+    "noOrganizations": "未找到组织。",
+    "kpi": {
+      "total": "组织总数",
+      "active": "已启用组织数",
+      "members": "成员总数"
+    },
+    "tabs": {
+      "members": "成员",
+      "profile": "资料",
+      "activity": "活动",
+      "invites": "邀请"
+    },
+    "profile": {
+      "description": "描述",
+      "contactEmail": "联系邮箱",
+      "website": "网站"
+    },
+    "auditLog": {
+      "error": "无法加载活动记录，请重试。",
+      "empty": "暂无活动记录。",
+      "system": "系统"
+    },
+    "invites": {
+      "error": "无法加载邀请，请重试。",
+      "empty": "暂无待处理的邀请。",
+      "role": "授予角色",
+      "ttlHours": "有效期（小时）",
+      "create": "创建邀请",
+      "expires": "过期时间",
+      "copyLink": "复制链接",
+      "revoke": "撤销"
+    },
+    "join": {
+      "loading": "正在验证您的邀请…",
+      "title": "要加入{{name}}吗？",
+      "subtitle": "您将以该邀请授予的角色成为该组织的成员。",
+      "confirm": "加入组织",
+      "joinedTitle": "加入成功！",
+      "joinedSubtitle": "您已加入{{name}}。",
+      "goHome": "前往仪表盘",
+      "invalidTitle": "该邀请链接无效或已过期",
+      "invalidSubtitle": "请向该组织的管理员索取新的邀请链接。"
+    }
   },
   "charts": {
     "customerAnalytics": "客户分析",
@@ -536,6 +578,8 @@
   "analytics": {
     "eyebrow": "洞察",
     "title": "分析中心",
+    "organizationFilter": "按组织筛选",
+    "allOrganizations": "所有组织",
     "customerGrowth": "客户增长（环比）",
     "revenueGrowth": "收入增长（环比）",
     "collectionRate": "回款率",

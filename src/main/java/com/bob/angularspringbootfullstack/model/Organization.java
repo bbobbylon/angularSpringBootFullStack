@@ -41,5 +41,11 @@ public class Organization {
     @NotEmpty(message = "Organization name is required")
     private String name;
     private String status;
+    /** Free-form description shown on the organization's profile panel; nullable. */
+    private String description;
+    /** Contact email for the organization itself, distinct from any one member's address; nullable. */
+    private String contactEmail;
+    /** Organization website URL; nullable. */
+    private String website;
     private LocalDateTime createdAt;
 }

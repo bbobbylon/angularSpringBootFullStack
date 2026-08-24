@@ -11,6 +11,17 @@
         <p class="sc-analytics__sub">Trends, performance, and growth across your entire platform.</p>
       </div>
       <div class="sc-analytics__actions">
+        @if (isUnscopedTier && organizations().length > 0) {
+          <!-- Org filter (FR-ORG-2, dashboard revamp 2026-08-22) — unscoped tiers only; a scoped
+               caller's data is already narrowed to their own organization server-side. -->
+          <select (change)="onOrganizationFilterChange($any($event.target).value)"
+                  [attr.aria-label]="t('analytics.organizationFilter')" class="form-select form-select-sm w-auto">
+            <option value="">{{ t('analytics.allOrganizations') }}</option>
+            @for (org of organizations(); track org.id) {
+              <option [value]="org.id">{{ org.name }}</option>
+            }
+          </select>
+        }
         @if (isAdmin) {
           <a [routerLink]="['/billing']" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-cash-stack"></i> Billing Overview

@@ -1,15 +1,24 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.EventType;
+import com.bob.angularspringbootfullstack.enumeration.RoleType;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Organization;
+import com.bob.angularspringbootfullstack.model.OrganizationEvent;
+import com.bob.angularspringbootfullstack.model.OrganizationInvite;
+import com.bob.angularspringbootfullstack.model.OrganizationStats;
 import com.bob.angularspringbootfullstack.model.OrganizationSummary;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
+import com.bob.angularspringbootfullstack.rowmapper.OrganizationEventRowMapper;
+import com.bob.angularspringbootfullstack.rowmapper.OrganizationInviteRowMapper;
 import com.bob.angularspringbootfullstack.rowmapper.OrganizationRowMapper;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
+import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
+import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -21,28 +30,42 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Service;
 
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ORGANIZATION_EVENTS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_SHARED_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_USERS_SHARING_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DEACTIVATE_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DELETE_INVITE_BY_CODE_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DELETE_INVITE_BY_ID_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_EVENT_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_INVITE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.REACTIVATE_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_INVITES_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_MEMBERS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATION_IDS_BY_USER_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ALL_ORGANIZATIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_INVITE_BY_CODE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATIONS_BY_IDS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_ADMIN_EMAILS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_BY_ID_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_EVENTS_PAGINATED_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_NAME_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_PROFILE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_STATUS_QUERY;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.StringUtils.isBlank;
@@ -63,6 +86,10 @@ public class OrganizationServiceImpl implements OrganizationService {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final RoleRepo<Role> roleRepo;
+    /** Supplies the {@code *ForOrganizations} rollups {@link #getOrganizationStats} narrows to one id. */
+    private final CustomerService customerService;
+    /** Grants the invite's role on redemption via the same path {@code AdminUserController} uses. */
+    private final UserService userService;
 
     /**
      * Evaluates the FR-ORG-2 scope predicate with a single COUNT over the membership
@@ -334,6 +361,207 @@ public class OrganizationServiceImpl implements OrganizationService {
             log.error("Error listing active members for organization {}: {}", organizationId, exception.getMessage(), exception);
             throw new ApiException("An error occurred while retrieving the organization's members. Please try again.");
         }
+    }
+
+    // ── Organization profile/settings, audit trail, invites, stats (2026-08-22 dashboard revamp) ──
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Organization updateOrganizationProfile(Long id, String description, String contactEmail, String website) {
+        log.info("Updating profile for organization id {}", id);
+        try {
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("description", blankToNull(description))
+                    .addValue("contactEmail", blankToNull(contactEmail))
+                    .addValue("website", blankToNull(website))
+                    .addValue("id", id);
+            int rows = jdbcTemplate.update(UPDATE_ORGANIZATION_PROFILE_QUERY, params);
+            if (rows == 0) {
+                throw new ApiException("Organization not found.");
+            }
+            return getOrganization(id);
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while updating the organization's profile. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void recordOrganizationEvent(Long organizationId, Long actorUserId, EventType eventType, String detail) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("organizationId", organizationId)
+                .addValue("actorUserId", actorUserId)
+                .addValue("type", eventType.name())
+                .addValue("detail", detail);
+        jdbcTemplate.update(INSERT_ORGANIZATION_EVENT_QUERY, params);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection<OrganizationEvent> listOrganizationEvents(Long organizationId, int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        try {
+            return jdbcTemplate.query(SELECT_ORGANIZATION_EVENTS_PAGINATED_QUERY,
+                    Map.of("organizationId", organizationId, "size", safeSize, "offset", safePage * safeSize),
+                    new OrganizationEventRowMapper());
+        } catch (Exception exception) {
+            log.error("Error listing events for organization {}: {}", organizationId, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving the organization's activity log. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long countOrganizationEvents(Long organizationId) {
+        try {
+            Long count = jdbcTemplate.queryForObject(COUNT_ORGANIZATION_EVENTS_QUERY, Map.of("organizationId", organizationId), Long.class);
+            return count == null ? 0 : count;
+        } catch (Exception exception) {
+            log.error("Error counting events for organization {}: {}", organizationId, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving the organization's activity log. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public OrganizationInvite createInvite(Long organizationId, Long invitedByUserId, String roleName, long ttlHours) {
+        log.info("Creating a '{}' invite for organization {}", roleName, organizationId);
+        try {
+            String code = UUID.randomUUID().toString();
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("organizationId", organizationId)
+                    .addValue("invitedByUserId", invitedByUserId)
+                    .addValue("code", code)
+                    .addValue("roleName", roleName)
+                    .addValue("expirationDate", Timestamp.valueOf(LocalDateTime.now().plusHours(ttlHours)));
+            jdbcTemplate.update(INSERT_ORGANIZATION_INVITE_QUERY, params);
+            return getInviteByCode(code)
+                    .orElseThrow(() -> new ApiException("An error occurred while creating the invite. Please try again."));
+        } catch (DataIntegrityViolationException e) {
+            throw new ApiException("That organization or administrator does not exist.");
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while creating the invite. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection<OrganizationInvite> listActiveInvites(Long organizationId) {
+        try {
+            return jdbcTemplate.query(SELECT_ACTIVE_INVITES_QUERY, Map.of("organizationId", organizationId), new OrganizationInviteRowMapper());
+        } catch (Exception exception) {
+            log.error("Error listing invites for organization {}: {}", organizationId, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving the organization's invites. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void revokeInvite(Long organizationId, Long inviteId) {
+        log.info("Revoking invite {} for organization {}", inviteId, organizationId);
+        int rows = jdbcTemplate.update(DELETE_INVITE_BY_ID_QUERY, Map.of("id", inviteId, "organizationId", organizationId));
+        if (rows == 0) {
+            throw new ApiException("Invite not found.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Optional<String> previewInvite(String code) {
+        return getInviteByCode(code)
+                .filter(invite -> invite.getExpirationDate().isAfter(LocalDateTime.now()))
+                .map(OrganizationInvite::getOrganizationId)
+                .map(this::getOrganization)
+                .map(Organization::getName);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The invited role is granted only when it outranks the redeemer's current role — an
+     * existing administrator who stumbles onto (or is deliberately handed) a plain-member invite
+     * link is not silently demoted. Membership is always added regardless, since joining a second
+     * organization is never a privilege reduction.
+     */
+    @Override
+    public Organization redeemInvite(String code, Long userId) {
+        OrganizationInvite invite = getInviteByCode(code)
+                .filter(candidate -> candidate.getExpirationDate().isAfter(LocalDateTime.now()))
+                .orElseThrow(() -> new ApiException("This invite link is invalid or has expired."));
+        addMember(invite.getOrganizationId(), userId);
+        grantInviteRoleIfHigher(userId, invite.getRoleName());
+        jdbcTemplate.update(DELETE_INVITE_BY_CODE_QUERY, Map.of("code", code));
+        log.info("User {} redeemed invite for organization {}", userId, invite.getOrganizationId());
+        return getOrganization(invite.getOrganizationId());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public OrganizationStats getOrganizationStats(Long organizationId) {
+        try {
+            Long memberCount = jdbcTemplate.queryForObject(COUNT_ACTIVE_MEMBERS_QUERY, Map.of("organizationId", organizationId), Long.class);
+            Collection<Long> scope = Set.of(organizationId);
+            return OrganizationStats.builder()
+                    .memberCount(memberCount == null ? 0 : memberCount.intValue())
+                    .stats(customerService.getStatsForOrganizations(scope))
+                    .statusBreakdown(customerService.getCustomerStatusBreakdownForOrganizations(scope))
+                    .build();
+        } catch (Exception exception) {
+            log.error("Error computing stats for organization {}: {}", organizationId, exception.getMessage(), exception);
+            throw new ApiException("An error occurred while retrieving the organization's stats. Please try again.");
+        }
+    }
+
+    /**
+     * Grants {@code roleName} to {@code userId} only when it outranks their current role — see
+     * {@link #redeemInvite}'s Javadoc for why this is one-directional. Falls back to treating the
+     * user as tier-0 (grant unconditionally) if their current role is somehow unrecognized, since a
+     * user must have some resolvable role to have reached this authenticated endpoint at all.
+     */
+    private void grantInviteRoleIfHigher(Long userId, String invitedRoleName) {
+        String currentRoleName = roleRepo.getRoleByUserId(userId).getName();
+        int currentTier = RoleType.from(currentRoleName).map(RoleType::getTier).orElse(0);
+        int invitedTier = RoleType.from(invitedRoleName).map(RoleType::getTier).orElse(0);
+        if (invitedTier > currentTier) {
+            userService.updateUserRole(userId, invitedRoleName, null);
+        }
+    }
+
+    private Optional<OrganizationInvite> getInviteByCode(String code) {
+        try {
+            return Optional.of(jdbcTemplate.queryForObject(SELECT_INVITE_BY_CODE_QUERY, Map.of("code", code), new OrganizationInviteRowMapper()));
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
+
+    private static String blankToNull(String value) {
+        return isBlank(value) ? null : value.trim();
     }
 
     private static final Set<String> VALID_STATUSES = Set.of("ACTIVE", "INACTIVE");

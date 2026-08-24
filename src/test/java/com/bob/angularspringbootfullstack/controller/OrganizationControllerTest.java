@@ -1,12 +1,17 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.EventType;
+import com.bob.angularspringbootfullstack.event.NewOrganizationEvent;
 import com.bob.angularspringbootfullstack.exception.GlobalExceptionHandler;
 import com.bob.angularspringbootfullstack.model.Organization;
+import com.bob.angularspringbootfullstack.model.OrganizationInvite;
+import com.bob.angularspringbootfullstack.model.OrganizationStats;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -17,6 +22,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -47,12 +53,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OrganizationControllerTest {
 
     private OrganizationService organizationService;
+    private ApplicationEventPublisher eventPublisher;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         organizationService = mock(OrganizationService.class);
-        OrganizationController controller = new OrganizationController(organizationService);
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        OrganizationController controller = new OrganizationController(organizationService, eventPublisher);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -286,5 +294,136 @@ class OrganizationControllerTest {
                 .andExpect(status().isOk());
 
         verify(organizationService).listOrganizations(List.of(9L));
+    }
+
+    // ── Profile: unscoped tiers only, same rule as catalog mutation ────────────────────────
+
+    @Test
+    @DisplayName("an admin can update an organization's profile")
+    void adminCanUpdateProfile() throws Exception {
+        Organization updated = Organization.builder().id(1L).name("Acme").description("desc").build();
+        when(organizationService.updateOrganizationProfile(1L, "desc", null, null)).thenReturn(updated);
+
+        mockMvc.perform(patch("/admin/organization/{id}/profile", 1L)
+                        .principal(authAs(1L, "ROLE_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"desc\"}"))
+                .andExpect(status().isOk());
+
+        verify(organizationService).updateOrganizationProfile(1L, "desc", null, null);
+        verify(eventPublisher).publishEvent(any(NewOrganizationEvent.class));
+    }
+
+    @Test
+    @DisplayName("an organization admin cannot update an organization's profile")
+    void orgAdminCannotUpdateProfile() throws Exception {
+        mockMvc.perform(patch("/admin/organization/{id}/profile", 1L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"desc\"}"))
+                .andExpect(status().isForbidden());
+
+        verify(organizationService, never()).updateOrganizationProfile(any(), any(), any(), any());
+    }
+
+    // ── Events / stats: membership-authority, same rule as members ─────────────────────────
+
+    @Test
+    @DisplayName("an organization admin can read the activity log of an organization they belong to")
+    void orgAdminCanReadOwnOrganizationEvents() throws Exception {
+        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(true);
+        when(organizationService.listOrganizationEvents(9L, 0, 20)).thenReturn(List.of());
+        when(organizationService.countOrganizationEvents(9L)).thenReturn(0L);
+
+        mockMvc.perform(get("/admin/organization/{organizationId}/events", 9L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(organizationService).listOrganizationEvents(9L, 0, 20);
+    }
+
+    @Test
+    @DisplayName("an organization admin cannot read the activity log of an organization they do not belong to")
+    void orgAdminCannotReadOtherOrganizationEvents() throws Exception {
+        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(false);
+
+        mockMvc.perform(get("/admin/organization/{organizationId}/events", 9L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isForbidden());
+
+        verify(organizationService, never()).listOrganizationEvents(any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("an admin can read an organization's stats")
+    void adminCanReadStats() throws Exception {
+        when(organizationService.getOrganizationStats(9L)).thenReturn(OrganizationStats.builder().memberCount(3).build());
+
+        mockMvc.perform(get("/admin/organization/{organizationId}/stats", 9L)
+                        .principal(authAs(1L, "ROLE_ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(organizationService).getOrganizationStats(9L);
+    }
+
+    // ── Invites: membership-authority, plus a tier ceiling on the granted role ─────────────
+
+    @Test
+    @DisplayName("an organization admin can create a ROLE_USER invite for their own organization")
+    void orgAdminCanCreateUserInvite() throws Exception {
+        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(true);
+        OrganizationInvite invite = OrganizationInvite.builder().id(1L).organizationId(9L).roleName("ROLE_USER").build();
+        when(organizationService.createInvite(9L, 5L, "ROLE_USER", 168L)).thenReturn(invite);
+        when(organizationService.listActiveInvites(9L)).thenReturn(List.of(invite));
+
+        mockMvc.perform(post("/admin/organization/{organizationId}/invites", 9L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        verify(organizationService).createInvite(9L, 5L, "ROLE_USER", 168L);
+        verify(eventPublisher).publishEvent(any(NewOrganizationEvent.class));
+    }
+
+    @Test
+    @DisplayName("an organization admin cannot create an invite granting a role above their own tier")
+    void orgAdminCannotCreateInviteAboveOwnTier() throws Exception {
+        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(true);
+
+        mockMvc.perform(post("/admin/organization/{organizationId}/invites", 9L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roleName\":\"ROLE_ADMIN\"}"))
+                .andExpect(status().isForbidden());
+
+        verify(organizationService, never()).createInvite(any(), any(), any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("an organization admin cannot create an invite for an organization they do not belong to")
+    void orgAdminCannotCreateInviteForOtherOrganization() throws Exception {
+        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(false);
+
+        mockMvc.perform(post("/admin/organization/{organizationId}/invites", 9L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+
+        verify(organizationService, never()).createInvite(any(), any(), any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("an admin can revoke an invite")
+    void adminCanRevokeInvite() throws Exception {
+        when(organizationService.listActiveInvites(9L)).thenReturn(List.of());
+
+        mockMvc.perform(delete("/admin/organization/{organizationId}/invites/{inviteId}", 9L, 3L)
+                        .principal(authAs(1L, "ROLE_ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(organizationService).revokeInvite(9L, 3L);
+        verify(eventPublisher).publishEvent(any(NewOrganizationEvent.class));
     }
 }

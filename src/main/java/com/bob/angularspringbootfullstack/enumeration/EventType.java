@@ -154,7 +154,54 @@ public enum EventType {
      * and device-bound enough that it is not stacked with risk-based step-up (see
      * {@code PasskeyController#verifyWebAuthn}).
      */
-    PASSKEY_LOGIN("You signed in with a passkey :)");
+    PASSKEY_LOGIN("You signed in with a passkey :)"),
+    /**
+     * Fired when a new organization is created (Organization CRUD, FUTURE-ENHANCEMENTS.md §3.2).
+     * Recorded against the organization itself via {@code organizationevents}, not against a
+     * single user's {@code userevents} row.
+     */
+    ORG_CREATED("A new organization was created :)"),
+    /**
+     * Fired when an organization is renamed.
+     */
+    ORG_RENAMED("The organization was renamed :)"),
+    /**
+     * Fired when an organization is activated or deactivated (the retirement lever — see
+     * {@link com.bob.angularspringbootfullstack.model.Organization}'s Javadoc for why there is no
+     * hard delete).
+     */
+    ORG_STATUS_CHANGED("The organization's status was changed :|"),
+    /**
+     * Fired when an organization's profile fields (description, contact email, website) are
+     * updated.
+     */
+    ORG_PROFILE_UPDATED("The organization's profile was updated :)"),
+    /**
+     * Fired when a member is added to (or reactivated within) an organization.
+     */
+    ORG_MEMBER_ADDED("A member was added to the organization :)"),
+    /**
+     * Fired when a member is removed from an organization.
+     */
+    ORG_MEMBER_REMOVED("A member was removed from the organization :|"),
+    /**
+     * Fired when a member's role is changed from within the organization's own member panel —
+     * distinct from the plain {@link #ROLE_UPDATE} so the organization's own activity log shows
+     * the change alongside its other membership events, not just the target user's personal log.
+     */
+    ORG_MEMBER_ROLE_CHANGED("A member's role within the organization was changed :)"),
+    /**
+     * Fired when an invite link is created for an organization (self-service member onboarding).
+     */
+    ORG_INVITE_CREATED("An invite link was created for the organization :)"),
+    /**
+     * Fired when an invite link is redeemed and its recipient joins the organization.
+     */
+    ORG_INVITE_REDEEMED("An invite link was redeemed to join the organization :)"),
+    /**
+     * Fired when an outstanding invite link is revoked before it is redeemed.
+     */
+    ORG_INVITE_REVOKED("An invite link for the organization was revoked :|");
 
     /**
      * -- GETTER --

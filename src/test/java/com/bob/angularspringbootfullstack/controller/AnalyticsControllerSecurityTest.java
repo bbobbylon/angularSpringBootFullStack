@@ -161,13 +161,13 @@ class AnalyticsControllerSecurityTest {
         authenticateWith("READ:USER", "READ:CUSTOMER");
         UserDTO caller = principal();
 
-        assertThatThrownBy(() -> controller.getSummary(caller))
+        assertThatThrownBy(() -> controller.getSummary(caller, null))
                 .as("summary must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> controller.getCustomers(caller, Optional.empty(), Optional.empty(), Optional.empty()))
+        assertThatThrownBy(() -> controller.getCustomers(caller, Optional.empty(), Optional.empty(), Optional.empty(), null))
                 .as("customers must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> controller.getInvoices(caller, Optional.empty(), Optional.empty(), Optional.empty()))
+        assertThatThrownBy(() -> controller.getInvoices(caller, Optional.empty(), Optional.empty(), Optional.empty(), null))
                 .as("invoices must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
 
@@ -183,7 +183,7 @@ class AnalyticsControllerSecurityTest {
         when(customerService.getInvoices(anyInt(), anyInt(), any())).thenReturn(Page.<Invoice>empty());
 
         ResponseEntity<HttpResponse> response =
-                controller.getInvoices(principal(), Optional.of(0), Optional.of(20), Optional.empty());
+                controller.getInvoices(principal(), Optional.of(0), Optional.of(20), Optional.empty(), null);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
     }
@@ -196,7 +196,7 @@ class AnalyticsControllerSecurityTest {
         when(customerService.getInvoices(anyInt(), anyInt(), any())).thenReturn(Page.<Invoice>empty());
 
         ResponseEntity<HttpResponse> response =
-                controller.getInvoices(principal(), Optional.of(0), Optional.of(20), Optional.empty());
+                controller.getInvoices(principal(), Optional.of(0), Optional.of(20), Optional.empty(), null);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
     }

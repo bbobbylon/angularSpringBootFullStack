@@ -1,4 +1,5 @@
 import { UserInterface } from './user.interface';
+import { StatsInterface } from './stats.interface';
 
 /**
  * Organization catalog row — mirrors the backend's {@code Organization} model
@@ -8,12 +9,19 @@ import { UserInterface } from './user.interface';
  * retirement lever — the backend model's Javadoc explains why a hard delete would cascade
  * away every membership row and orphan any {@code Customer.organization_id} still pointing
  * at the dead organization.
+ *
+ * {@code description}/{@code contactEmail}/{@code website} are the profile fields added by the
+ * dashboard revamp (2026-08-22) — all optional, editable only by an unscoped tier via
+ * {@code OrganizationService.updateOrganizationProfile$}.
  */
 export interface OrganizationInterface {
   id?: number;
   name?: string;
   status?: string;
   createdAt?: string;
+  description?: string;
+  contactEmail?: string;
+  website?: string;
 }
 
 /**
@@ -24,10 +32,66 @@ export interface OrganizationInterface {
  * response except add/remove-member. {@code organizations} is the caller's refreshed in-scope
  * catalog, returned by the list endpoint and by every catalog mutation. {@code members} is
  * populated only by the members-list endpoint — the roster an admin picks a member to remove
- * from, or checks before adding one.
+ * from, or checks before adding one. {@code stats}/{@code events}/{@code totalEvents}/
+ * {@code invite}/{@code invites} are populated only by their respective dashboard-revamp
+ * endpoints (2026-08-22) — the same one-envelope-many-optional-keys shape {@code members}
+ * already established for this interface.
  */
 export interface OrganizationCatalogInterface {
   organization?: OrganizationInterface;
   organizations?: OrganizationInterface[];
   members?: UserInterface[];
+  stats?: OrganizationStatsInterface;
+  events?: OrganizationEventInterface[];
+  totalEvents?: number;
+  invite?: OrganizationInviteInterface;
+  invites?: OrganizationInviteInterface[];
+}
+
+/** The data payload of {@code GET /user/organization/invite/:code} (invite preview). */
+export interface OrganizationInvitePreviewInterface {
+  organizationName?: string;
+}
+
+/**
+ * One organization's KPI row for the dashboard-style Organizations page's card grid
+ * ({@code GET /admin/organization/:id/stats}) — mirrors the backend's {@code OrganizationStats}.
+ * {@code stats}/{@code statusBreakdown} are the exact same shapes the Analytics summary already
+ * returns, just narrowed to this one organization.
+ */
+export interface OrganizationStatsInterface {
+  memberCount: number;
+  stats: StatsInterface;
+  statusBreakdown: Record<string, number>;
+}
+
+/**
+ * One organization's audit-trail row ({@code GET /admin/organization/:id/events}) — mirrors the
+ * backend's {@code OrganizationEvent}. {@code actorEmail} is nullable: an event whose acting
+ * administrator's account was later deleted still keeps its row (the FK is {@code ON DELETE
+ * SET NULL}), so the activity log renders "system" rather than dropping the entry.
+ */
+export interface OrganizationEventInterface {
+  id?: number;
+  type?: string;
+  description?: string;
+  actorEmail?: string;
+  detail?: string;
+  createdAt?: string;
+}
+
+/**
+ * A pending, single-use organization invite ({@code GET/POST/DELETE
+ * /admin/organization/:id/invites}) — mirrors the backend's {@code OrganizationInvite}.
+ * {@code code} is the redeemable token embedded in the shared join link
+ * ({@code /organizations/join/:code}).
+ */
+export interface OrganizationInviteInterface {
+  id?: number;
+  organizationId?: number;
+  invitedByEmail?: string;
+  code?: string;
+  roleName?: string;
+  expirationDate?: string;
+  createdAt?: string;
 }

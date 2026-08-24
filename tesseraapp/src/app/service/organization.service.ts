@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
-import { OrganizationCatalogInterface } from '../interface/organization.interface';
+import { OrganizationCatalogInterface, OrganizationInvitePreviewInterface } from '../interface/organization.interface';
 import { environment } from '../../environments/environment';
 
 /**
@@ -119,6 +119,139 @@ export class OrganizationService {
       .delete<CustomHttpResponseInterface<OrganizationCatalogInterface>>(
         `${this.server}/admin/organization/${organizationId}/members/${userId}`,
       )
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Updates an organization's profile fields ({@code PATCH /admin/organization/:id/profile}).
+   * Refused server-side below the unscoped tiers, same rule as {@link renameOrganization$}. Each
+   * field independently clears to {@code null} server-side when omitted or blank — callers pass
+   * exactly what the form submitted.
+   *
+   * @param id           - the organization's database primary key
+   * @param description  - free-form description, or blank/undefined to clear it
+   * @param contactEmail - organization contact email, or blank/undefined to clear it
+   * @param website      - organization website, or blank/undefined to clear it
+   * @returns Observable of the API envelope carrying the updated organization
+   */
+  updateOrganizationProfile$ = (
+    id: number,
+    description?: string,
+    contactEmail?: string,
+    website?: string,
+  ): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization/${id}/profile`, {
+        description,
+        contactEmail,
+        website,
+      })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Fetches one organization's KPI tiles ({@code GET /admin/organization/:id/stats}) for the
+   * dashboard-style Organizations page's card grid. Same authorization rule as {@link members$}.
+   *
+   * @param organizationId - the organization to summarize
+   * @returns Observable of the API envelope carrying the organization's stats
+   */
+  orgStats$ = (organizationId: number): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization/${organizationId}/stats`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Fetches one page of an organization's audit trail, newest first
+   * ({@code GET /admin/organization/:id/events}). Same authorization rule as {@link members$}.
+   *
+   * @param organizationId - the organization whose activity to retrieve
+   * @param page           - zero-based page index (defaults to 0)
+   * @param size           - rows per page (defaults to 20)
+   * @returns Observable of the API envelope carrying the page of events and a total count
+   */
+  orgEvents$ = (organizationId: number, page = 0, size = 20): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<OrganizationCatalogInterface>>(
+        `${this.server}/admin/organization/${organizationId}/events?page=${page}&size=${size}`,
+      )
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Creates a single-use invite for an organization ({@code POST
+   * /admin/organization/:id/invites}). Same authorization rule as {@link members$}, plus a
+   * server-side role-tier ceiling: the invite can never grant a role the creator could not
+   * otherwise assign directly.
+   *
+   * @param organizationId - the organization the invite joins its redeemer to
+   * @param roleName       - the role granted on redemption; omit for the server default (ROLE_USER)
+   * @param ttlHours       - how many hours the invite remains redeemable; omit for the server default (168)
+   * @returns Observable of the API envelope carrying the created invite and the refreshed active-invite list
+   */
+  createInvite$ = (
+    organizationId: number,
+    roleName?: string,
+    ttlHours?: number,
+  ): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization/${organizationId}/invites`, {
+        roleName,
+        ttlHours,
+      })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Lists an organization's outstanding invites ({@code GET /admin/organization/:id/invites}).
+   * Same authorization rule as {@link members$}.
+   *
+   * @param organizationId - the organization whose invites to list
+   * @returns Observable of the API envelope carrying the organization's active invites
+   */
+  activeInvites$ = (organizationId: number): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization/${organizationId}/invites`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Revokes an outstanding invite before it is redeemed ({@code DELETE
+   * /admin/organization/:id/invites/:inviteId}). Same authorization rule as {@link members$}.
+   *
+   * @param organizationId - the organization the invite belongs to
+   * @param inviteId       - the invite to revoke
+   * @returns Observable of the API envelope carrying the organization's refreshed active invites
+   */
+  revokeInvite$ = (organizationId: number, inviteId: number): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .delete<CustomHttpResponseInterface<OrganizationCatalogInterface>>(
+        `${this.server}/admin/organization/${organizationId}/invites/${inviteId}`,
+      )
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Previews an invite's organization name ({@code GET /user/organization/invite/:code}) so the
+   * join page can ask "Join {name}?" before the user commits. Unlike every other method on this
+   * service, this hits {@code /user/organization/**} — reachable by any authenticated user, not
+   * just an administrator, since the person opening a shared invite link is by definition not yet
+   * a member of the organization they're joining. Resolves to the same generic error for an
+   * unknown or expired code either way (NFR-SEC-7).
+   *
+   * @param code - the invite code from the join link
+   * @returns Observable of the API envelope carrying the organization's name
+   */
+  previewInvite$ = (code: string): Observable<CustomHttpResponseInterface<OrganizationInvitePreviewInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<OrganizationInvitePreviewInterface>>(`${this.server}/user/organization/invite/${code}`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Redeems an invite ({@code POST /user/organization/invite/:code/redeem}): joins the caller to
+   * the invite's organization with its granted role, then consumes the invite so it cannot be
+   * redeemed twice. Same {@code /user/organization/**} reachability as {@link previewInvite$}.
+   *
+   * @param code - the invite code from the join link
+   * @returns Observable of the API envelope carrying the organization the caller just joined
+   */
+  redeemInvite$ = (code: string): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .post<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/user/organization/invite/${code}/redeem`, {})
       .pipe(catchError(this.handleError));
 
   /**

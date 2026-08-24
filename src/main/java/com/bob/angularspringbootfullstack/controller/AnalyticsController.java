@@ -112,13 +112,18 @@ public class AnalyticsController {
      * customer breakdown. Mirrors the {@code stats}/{@code statusBreakdown} keys of
      * {@code GET /customer/stats}, but admin-gated.
      *
-     * @param user the authenticated (admin) principal, embedded in the envelope
+     * @param user           the authenticated (admin) principal, embedded in the envelope
+     * @param organizationId optional org-filter dropdown selection (dashboard revamp,
+     *                       2026-08-22): narrows the rollups to one organization. Silently has no
+     *                       effect if the id falls outside the caller's own scope — see
+     *                       {@link #resolveScope(UserDTO, Long)}.
      * @return 200 OK with {@code user}, {@code stats}, and {@code statusBreakdown}
      */
     @GetMapping("/summary")
     @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
-    public ResponseEntity<HttpResponse> getSummary(@AuthenticationPrincipal UserDTO user) {
-        Collection<Long> scope = resolveScope(user);
+    public ResponseEntity<HttpResponse> getSummary(@AuthenticationPrincipal UserDTO user,
+                                                    @RequestParam(required = false) Long organizationId) {
+        Collection<Long> scope = resolveScope(user, organizationId);
         Stats stats;
         Map<String, Integer> statusBreakdown;
         if (scope == null) {
@@ -152,6 +157,8 @@ public class AnalyticsController {
      * @param size number of records per page (defaults to 20)
      * @param sort the column to order by as {@code field,direction}; unset or unrecognized falls
      *             back to unsorted
+     * @param organizationId optional org-filter dropdown selection; see
+     *                       {@link #getSummary(UserDTO, Long)}.
      * @return 200 OK with {@code user}, {@code page}, {@code stats}, {@code statusBreakdown}
      */
     @GetMapping("/customers")
@@ -159,8 +166,9 @@ public class AnalyticsController {
     public ResponseEntity<HttpResponse> getCustomers(@AuthenticationPrincipal UserDTO user,
                                                      @RequestParam Optional<Integer> page,
                                                      @RequestParam Optional<Integer> size,
-                                                     @RequestParam Optional<String> sort) {
-        Collection<Long> scope = resolveScope(user);
+                                                     @RequestParam Optional<String> sort,
+                                                     @RequestParam(required = false) Long organizationId) {
+        Collection<Long> scope = resolveScope(user, organizationId);
         int pageIndex = page.orElse(0);
         int pageSize = size.orElse(20);
         Sort resolvedSort = SortUtils.resolveSort(sort, CUSTOMER_SORT_FIELDS);
@@ -202,6 +210,8 @@ public class AnalyticsController {
      * @param size number of records per page (defaults to 20)
      * @param sort the column to order by as {@code field,direction}; unset or unrecognized falls
      *             back to unsorted
+     * @param organizationId optional org-filter dropdown selection; see
+     *                       {@link #getSummary(UserDTO, Long)}.
      * @return 200 OK with {@code user} and {@code invoices}
      */
     @GetMapping("/invoices")
@@ -209,8 +219,9 @@ public class AnalyticsController {
     public ResponseEntity<HttpResponse> getInvoices(@AuthenticationPrincipal UserDTO user,
                                                     @RequestParam Optional<Integer> page,
                                                     @RequestParam Optional<Integer> size,
-                                                    @RequestParam Optional<String> sort) {
-        Collection<Long> scope = resolveScope(user);
+                                                    @RequestParam Optional<String> sort,
+                                                    @RequestParam(required = false) Long organizationId) {
+        Collection<Long> scope = resolveScope(user, organizationId);
         int pageIndex = page.orElse(0);
         int pageSize = size.orElse(20);
         Sort resolvedSort = SortUtils.resolveSort(sort, INVOICE_SORT_FIELDS);
@@ -341,5 +352,34 @@ public class AnalyticsController {
             return null;
         }
         return organizationService.findActiveOrganizationIds(caller.getId());
+    }
+
+    /**
+     * {@link #resolveScope(UserDTO)}, additionally narrowed to one organization for the Analytics
+     * page's org-filter dropdown (dashboard revamp, 2026-08-22).
+     *
+     * <p>A {@code null} {@code organizationId} (no filter selected) defers entirely to
+     * {@link #resolveScope(UserDTO)}. Otherwise the requested id is intersected with the caller's
+     * own scope rather than substituted for it: an unscoped caller may filter to any organization,
+     * but a scoped caller filtering to an organization outside {@link #resolveScope(UserDTO)}
+     * resolves to an <em>empty</em> scope (zero rows), never to that other organization's data —
+     * the same fail-closed direction {@link #resolveScope(UserDTO)}'s own Javadoc already commits
+     * to for an empty result. This keeps the filter a pure narrowing control; it can only shrink
+     * what a caller already sees, never widen it.
+     *
+     * @param caller         the authenticated principal from the JWT
+     * @param organizationId the org-filter dropdown's selection, or {@code null} for "all"
+     * @return {@code null} when unscoped and unfiltered; otherwise the effective organization id
+     *         set, possibly empty
+     */
+    private Collection<Long> resolveScope(UserDTO caller, Long organizationId) {
+        Collection<Long> scope = resolveScope(caller);
+        if (organizationId == null) {
+            return scope;
+        }
+        if (scope == null) {
+            return Set.of(organizationId);
+        }
+        return scope.contains(organizationId) ? Set.of(organizationId) : Set.of();
     }
 }

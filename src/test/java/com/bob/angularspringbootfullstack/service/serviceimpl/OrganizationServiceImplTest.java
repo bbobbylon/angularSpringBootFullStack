@@ -1,13 +1,21 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.EventType;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Organization;
+import com.bob.angularspringbootfullstack.model.OrganizationInvite;
+import com.bob.angularspringbootfullstack.model.OrganizationStats;
 import com.bob.angularspringbootfullstack.model.Role;
+import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
+import com.bob.angularspringbootfullstack.rowmapper.OrganizationEventRowMapper;
+import com.bob.angularspringbootfullstack.rowmapper.OrganizationInviteRowMapper;
 import com.bob.angularspringbootfullstack.rowmapper.OrganizationRowMapper;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
+import com.bob.angularspringbootfullstack.service.CustomerService;
+import com.bob.angularspringbootfullstack.service.UserService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,28 +26,42 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.jdbc.support.KeyHolder;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ORGANIZATION_EVENTS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DEACTIVATE_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DELETE_INVITE_BY_CODE_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DELETE_INVITE_BY_ID_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_EVENT_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_INVITE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.REACTIVATE_MEMBERSHIP_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_INVITES_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_MEMBERS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ALL_ORGANIZATIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_INVITE_BY_CODE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_BY_ID_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_EVENTS_PAGINATED_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_NAME_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_PROFILE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_STATUS_QUERY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -66,6 +88,10 @@ class OrganizationServiceImplTest {
     private NamedParameterJdbcTemplate jdbcTemplate;
     @Mock
     private RoleRepo<Role> roleRepo;
+    @Mock
+    private CustomerService customerService;
+    @Mock
+    private UserService userService;
 
     @InjectMocks
     private OrganizationServiceImpl service;
@@ -248,5 +274,201 @@ class OrganizationServiceImplTest {
 
         assertThat(members).hasSize(1);
         assertThat(members.get(0).getEmail()).isEqualTo("member@example.com");
+    }
+
+    // ── updateOrganizationProfile ────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("updateOrganizationProfile throws when no organization has that id")
+    void updateOrganizationProfileThrowsWhenNotFound() {
+        when(jdbcTemplate.update(eq(UPDATE_ORGANIZATION_PROFILE_QUERY), any(SqlParameterSource.class))).thenReturn(0);
+
+        assertThatThrownBy(() -> service.updateOrganizationProfile(99L, "desc", "a@b.com", "https://a.com"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("not found");
+    }
+
+    @Test
+    @DisplayName("updateOrganizationProfile persists and re-reads the updated organization")
+    void updateOrganizationProfileUpdatesAndReReads() {
+        when(jdbcTemplate.update(eq(UPDATE_ORGANIZATION_PROFILE_QUERY), any(SqlParameterSource.class))).thenReturn(1);
+        Organization updated = Organization.builder().id(1L).name("Acme").description("desc").build();
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORGANIZATION_BY_ID_QUERY), eq(Map.of("id", 1L)), any(OrganizationRowMapper.class)))
+                .thenReturn(updated);
+
+        Organization result = service.updateOrganizationProfile(1L, "desc", "", "  ");
+
+        assertThat(result.getDescription()).isEqualTo("desc");
+    }
+
+    // ── recordOrganizationEvent / listOrganizationEvents / countOrganizationEvents ──────
+
+    @Test
+    @DisplayName("recordOrganizationEvent inserts a row carrying the event type and detail")
+    void recordOrganizationEventInserts() {
+        service.recordOrganizationEvent(9L, 5L, EventType.ORG_CREATED, "Acme");
+
+        verify(jdbcTemplate).update(eq(INSERT_ORGANIZATION_EVENT_QUERY), any(SqlParameterSource.class));
+    }
+
+    @Test
+    @DisplayName("listOrganizationEvents clamps a negative page to zero and an oversized page size to 100")
+    void listOrganizationEventsClampsPaging() {
+        service.listOrganizationEvents(9L, -1, 500);
+
+        verify(jdbcTemplate).query(eq(SELECT_ORGANIZATION_EVENTS_PAGINATED_QUERY),
+                eq(Map.of("organizationId", 9L, "size", 100, "offset", 0)), any(OrganizationEventRowMapper.class));
+    }
+
+    @Test
+    @DisplayName("countOrganizationEvents returns zero rather than null")
+    void countOrganizationEventsNullSafe() {
+        when(jdbcTemplate.queryForObject(eq(COUNT_ORGANIZATION_EVENTS_QUERY), eq(Map.of("organizationId", 9L)), eq(Long.class)))
+                .thenReturn(null);
+
+        assertThat(service.countOrganizationEvents(9L)).isZero();
+    }
+
+    // ── createInvite / listActiveInvites / revokeInvite ──────────────────────────────────
+
+    @Test
+    @DisplayName("createInvite inserts a row, then re-reads it by its generated code")
+    void createInviteInsertsAndReReads() {
+        OrganizationInvite persisted = OrganizationInvite.builder()
+                .id(1L).organizationId(9L).roleName("ROLE_USER").expirationDate(LocalDateTime.now().plusHours(168)).build();
+        when(jdbcTemplate.queryForObject(eq(SELECT_INVITE_BY_CODE_QUERY), anyMap(), any(OrganizationInviteRowMapper.class)))
+                .thenReturn(persisted);
+
+        OrganizationInvite created = service.createInvite(9L, 5L, "ROLE_USER", 168L);
+
+        assertThat(created).isEqualTo(persisted);
+        verify(jdbcTemplate).update(eq(INSERT_ORGANIZATION_INVITE_QUERY), any(SqlParameterSource.class));
+    }
+
+    @Test
+    @DisplayName("createInvite translates a foreign-key violation into a friendly ApiException")
+    void createInviteTranslatesForeignKeyViolation() {
+        doThrow(new DataIntegrityViolationException("fk"))
+                .when(jdbcTemplate).update(eq(INSERT_ORGANIZATION_INVITE_QUERY), any(SqlParameterSource.class));
+
+        assertThatThrownBy(() -> service.createInvite(9L, 5L, "ROLE_USER", 168L)).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    @DisplayName("revokeInvite throws when no invite matches that id within that organization")
+    void revokeInviteThrowsWhenNotFound() {
+        when(jdbcTemplate.update(eq(DELETE_INVITE_BY_ID_QUERY), eq(Map.of("id", 3L, "organizationId", 9L)))).thenReturn(0);
+
+        assertThatThrownBy(() -> service.revokeInvite(9L, 3L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("not found");
+    }
+
+    @Test
+    @DisplayName("listActiveInvites returns whatever the query maps")
+    void listActiveInvitesDelegates() {
+        OrganizationInvite invite = OrganizationInvite.builder().id(1L).organizationId(9L).build();
+        when(jdbcTemplate.query(eq(SELECT_ACTIVE_INVITES_QUERY), eq(Map.of("organizationId", 9L)), any(OrganizationInviteRowMapper.class)))
+                .thenReturn(List.of(invite));
+
+        assertThat(service.listActiveInvites(9L)).containsExactly(invite);
+    }
+
+    // ── previewInvite ─────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("previewInvite resolves an unknown code to empty")
+    void previewInviteUnknownCodeIsEmpty() {
+        when(jdbcTemplate.queryForObject(eq(SELECT_INVITE_BY_CODE_QUERY), eq(Map.of("code", "bogus")), any(OrganizationInviteRowMapper.class)))
+                .thenThrow(new EmptyResultDataAccessException(1));
+
+        assertThat(service.previewInvite("bogus")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("previewInvite resolves an expired code to empty, the same verdict as unknown")
+    void previewInviteExpiredCodeIsEmpty() {
+        OrganizationInvite expired = OrganizationInvite.builder().organizationId(9L).expirationDate(LocalDateTime.now().minusHours(1)).build();
+        when(jdbcTemplate.queryForObject(eq(SELECT_INVITE_BY_CODE_QUERY), eq(Map.of("code", "stale")), any(OrganizationInviteRowMapper.class)))
+                .thenReturn(expired);
+
+        assertThat(service.previewInvite("stale")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("previewInvite resolves a live code to its organization's name")
+    void previewInviteLiveCodeResolvesName() {
+        OrganizationInvite invite = OrganizationInvite.builder().organizationId(9L).expirationDate(LocalDateTime.now().plusHours(1)).build();
+        when(jdbcTemplate.queryForObject(eq(SELECT_INVITE_BY_CODE_QUERY), eq(Map.of("code", "live")), any(OrganizationInviteRowMapper.class)))
+                .thenReturn(invite);
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORGANIZATION_BY_ID_QUERY), eq(Map.of("id", 9L)), any(OrganizationRowMapper.class)))
+                .thenReturn(Organization.builder().id(9L).name("Acme").build());
+
+        assertThat(service.previewInvite("live")).contains("Acme");
+    }
+
+    // ── redeemInvite ──────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("redeemInvite refuses an unknown or expired code with the same message either way")
+    void redeemInviteRefusesUnknownOrExpiredCode() {
+        when(jdbcTemplate.queryForObject(eq(SELECT_INVITE_BY_CODE_QUERY), eq(Map.of("code", "bogus")), any(OrganizationInviteRowMapper.class)))
+                .thenThrow(new EmptyResultDataAccessException(1));
+
+        assertThatThrownBy(() -> service.redeemInvite("bogus", 42L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("invalid or has expired");
+    }
+
+    @Test
+    @DisplayName("redeemInvite joins the organization, upgrades the role, and deletes the invite")
+    void redeemInviteHappyPathUpgradesRole() {
+        OrganizationInvite invite = OrganizationInvite.builder()
+                .organizationId(9L).roleName("ROLE_ORGANIZATION_ADMIN").expirationDate(LocalDateTime.now().plusHours(1)).build();
+        when(jdbcTemplate.queryForObject(eq(SELECT_INVITE_BY_CODE_QUERY), eq(Map.of("code", "live")), any(OrganizationInviteRowMapper.class)))
+                .thenReturn(invite);
+        when(roleRepo.getRoleByUserId(42L)).thenReturn(Role.builder().name("ROLE_USER").build());
+        Organization organization = Organization.builder().id(9L).name("Acme").build();
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORGANIZATION_BY_ID_QUERY), eq(Map.of("id", 9L)), any(OrganizationRowMapper.class)))
+                .thenReturn(organization);
+
+        Organization joined = service.redeemInvite("live", 42L);
+
+        assertThat(joined).isEqualTo(organization);
+        verify(jdbcTemplate).update(eq(INSERT_MEMBERSHIP_QUERY), eq(Map.of("userId", 42L, "organizationId", 9L)));
+        verify(userService).updateUserRole(eq(42L), eq("ROLE_ORGANIZATION_ADMIN"), isNull());
+        verify(jdbcTemplate).update(eq(DELETE_INVITE_BY_CODE_QUERY), eq(Map.of("code", "live")));
+    }
+
+    @Test
+    @DisplayName("redeemInvite never demotes a redeemer who already outranks the invite's role")
+    void redeemInviteNeverDemotesAHigherRole() {
+        OrganizationInvite invite = OrganizationInvite.builder()
+                .organizationId(9L).roleName("ROLE_USER").expirationDate(LocalDateTime.now().plusHours(1)).build();
+        when(jdbcTemplate.queryForObject(eq(SELECT_INVITE_BY_CODE_QUERY), eq(Map.of("code", "live")), any(OrganizationInviteRowMapper.class)))
+                .thenReturn(invite);
+        when(roleRepo.getRoleByUserId(42L)).thenReturn(Role.builder().name("ROLE_ADMIN").build());
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORGANIZATION_BY_ID_QUERY), eq(Map.of("id", 9L)), any(OrganizationRowMapper.class)))
+                .thenReturn(Organization.builder().id(9L).name("Acme").build());
+
+        service.redeemInvite("live", 42L);
+
+        verify(userService, never()).updateUserRole(any(), any(), any());
+    }
+
+    // ── getOrganizationStats ──────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("getOrganizationStats combines the member count with the customer/invoice rollups")
+    void getOrganizationStatsCombinesRollups() {
+        when(jdbcTemplate.queryForObject(eq(COUNT_ACTIVE_MEMBERS_QUERY), eq(Map.of("organizationId", 9L)), eq(Long.class)))
+                .thenReturn(4L);
+        Stats stats = new Stats();
+        when(customerService.getStatsForOrganizations(Set.of(9L))).thenReturn(stats);
+        when(customerService.getCustomerStatusBreakdownForOrganizations(Set.of(9L))).thenReturn(Map.of("ACTIVE", 3));
+
+        OrganizationStats result = service.getOrganizationStats(9L);
+
+        assertThat(result).isEqualTo(OrganizationStats.builder().memberCount(4).stats(stats).statusBreakdown(Map.of("ACTIVE", 3)).build());
     }
 }

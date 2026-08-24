@@ -23,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_ADMIN;
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_APPLICATION_ADMIN;
@@ -102,7 +103,7 @@ class AnalyticsControllerOrgScopeTest {
         when(customerService.getStatsForOrganizations(ORG_IDS)).thenReturn(new Stats());
         when(customerService.getCustomerStatusBreakdownForOrganizations(ORG_IDS)).thenReturn(Map.of("ACTIVE", 3));
 
-        controller.getSummary(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()));
+        controller.getSummary(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), null);
 
         verify(customerService).getStatsForOrganizations(ORG_IDS);
         verify(customerService).getCustomerStatusBreakdownForOrganizations(ORG_IDS);
@@ -119,7 +120,7 @@ class AnalyticsControllerOrgScopeTest {
         when(customerService.getStatsForOrganizations(ORG_IDS)).thenReturn(new Stats());
         when(customerService.getCustomerStatusBreakdownForOrganizations(ORG_IDS)).thenReturn(Map.of());
 
-        controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
+        controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty(), null);
 
         verify(customerService).getCustomersForOrganizations(ORG_IDS, 0, 20, Sort.unsorted());
         verify(customerService, never()).getCustomers(anyInt(), anyInt(), any());
@@ -131,7 +132,7 @@ class AnalyticsControllerOrgScopeTest {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
         when(customerService.getInvoicesForOrganizations(ORG_IDS, 0, 20, Sort.unsorted())).thenReturn(new PageImpl<>(List.of(new Invoice())));
 
-        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
+        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty(), null);
 
         verify(customerService).getInvoicesForOrganizations(ORG_IDS, 0, 20, Sort.unsorted());
         verify(customerService, never()).getInvoices(anyInt(), anyInt(), any());
@@ -143,7 +144,7 @@ class AnalyticsControllerOrgScopeTest {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
         when(customerService.getInvoicesForOrganizations(ORG_IDS, 3, 50, Sort.unsorted())).thenReturn(Page.empty());
 
-        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(3), Optional.of(50), Optional.empty());
+        controller.getInvoices(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(3), Optional.of(50), Optional.empty(), null);
 
         verify(customerService).getInvoicesForOrganizations(ORG_IDS, 3, 50, Sort.unsorted());
     }
@@ -160,7 +161,7 @@ class AnalyticsControllerOrgScopeTest {
         when(customerService.getStatsForOrganizations(ORG_IDS)).thenReturn(new Stats());
         when(customerService.getCustomerStatusBreakdownForOrganizations(ORG_IDS)).thenReturn(Map.of("ACTIVE", 3));
 
-        controller.getSummary(callerWithRole(ROLE_HELP_DESK_ADMIN.name()));
+        controller.getSummary(callerWithRole(ROLE_HELP_DESK_ADMIN.name()), null);
 
         verify(customerService).getStatsForOrganizations(ORG_IDS);
         verify(customerService, never()).getStats();
@@ -175,7 +176,7 @@ class AnalyticsControllerOrgScopeTest {
         when(customerService.getStats()).thenReturn(new Stats());
         when(customerService.getCustomerStatusBreakdown()).thenReturn(Map.of("ACTIVE", 9));
 
-        controller.getSummary(callerWithRole(ROLE_ADMIN.name()));
+        controller.getSummary(callerWithRole(ROLE_ADMIN.name()), null);
 
         verify(customerService).getStats();
         // An unscoped tier must not even be asked which organizations it belongs to — its answer
@@ -188,7 +189,7 @@ class AnalyticsControllerOrgScopeTest {
     void applicationAdminIsUnscoped() {
         when(customerService.getInvoices(0, 20, Sort.unsorted())).thenReturn(Page.empty());
 
-        controller.getInvoices(callerWithRole(ROLE_APPLICATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty());
+        controller.getInvoices(callerWithRole(ROLE_APPLICATION_ADMIN.name()), Optional.empty(), Optional.empty(), Optional.empty(), null);
 
         verify(customerService).getInvoices(0, 20, Sort.unsorted());
         verify(customerService, never()).getInvoicesForOrganizations(any(), anyInt(), anyInt(), any());
@@ -201,7 +202,7 @@ class AnalyticsControllerOrgScopeTest {
     void orgAdminWithNoMembershipsSeesNothing() {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(List.of());
 
-        ResponseEntity<HttpResponse> response = controller.getSummary(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()));
+        ResponseEntity<HttpResponse> response = controller.getSummary(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), null);
 
         // "No memberships" has two possible readings — see everything, or see nothing. Treating an
         // empty scope as "unscoped" would hand the global view to the least-established account,
@@ -221,11 +222,51 @@ class AnalyticsControllerOrgScopeTest {
         when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(List.of());
 
         ResponseEntity<HttpResponse> response =
-                controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(2), Optional.of(10), Optional.empty());
+                controller.getCustomers(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), Optional.of(2), Optional.of(10), Optional.empty(), null);
 
         // The service fails closed on an empty scope (an empty SQL `IN ()` is invalid anyway), so
         // the controller must short-circuit rather than let that surface as a 500.
         verify(customerService, never()).getCustomersForOrganizations(any(), anyInt(), anyInt(), any());
         assertTrue(((Page<?>) dataOf(response).get("page")).isEmpty());
+    }
+
+    // ── The org-filter dropdown (dashboard revamp, 2026-08-22) ──────────────────────────────
+
+    @Test
+    @DisplayName("an unscoped caller filtering to one organization is narrowed to exactly that id")
+    void unscopedCallerFilterNarrowsToOneOrganization() {
+        when(customerService.getStatsForOrganizations(Set.of(4L))).thenReturn(new Stats());
+        when(customerService.getCustomerStatusBreakdownForOrganizations(Set.of(4L))).thenReturn(Map.of());
+
+        controller.getSummary(callerWithRole(ROLE_ADMIN.name()), 4L);
+
+        verify(customerService).getStatsForOrganizations(Set.of(4L));
+        verify(customerService, never()).getStats();
+    }
+
+    @Test
+    @DisplayName("a scoped caller filtering to an organization they belong to is narrowed further")
+    void scopedCallerFilterNarrowsWithinTheirOwnScope() {
+        when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
+        when(customerService.getStatsForOrganizations(Set.of(4L))).thenReturn(new Stats());
+        when(customerService.getCustomerStatusBreakdownForOrganizations(Set.of(4L))).thenReturn(Map.of());
+
+        controller.getSummary(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), 4L);
+
+        verify(customerService).getStatsForOrganizations(Set.of(4L));
+        verify(customerService, never()).getStatsForOrganizations(ORG_IDS);
+    }
+
+    @Test
+    @DisplayName("a scoped caller filtering to an organization OUTSIDE their scope sees zeros, never that org's data")
+    void scopedCallerFilterOutsideOwnScopeSeesNothing() {
+        when(organizationService.findActiveOrganizationIds(ORG_ADMIN_ID)).thenReturn(ORG_IDS);
+
+        ResponseEntity<HttpResponse> response = controller.getSummary(callerWithRole(ROLE_ORGANIZATION_ADMIN.name()), 999L);
+
+        verify(customerService, never()).getStatsForOrganizations(any());
+        verify(customerService, never()).getStats();
+        Stats stats = (Stats) dataOf(response).get("stats");
+        assertEquals(0, stats.getTotalCustomers());
     }
 }

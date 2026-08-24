@@ -66,20 +66,33 @@ export class AdminUserService {
    * {@code UPDATE:ROLE} authority and rejects self-targeting, and records the change
    * as an audit event on the target user.
    *
-   * @param id        - the managed user's primary key
-   * @param roleName  - the role to assign (e.g. {@code 'ROLE_MODERATOR'})
-   * @param expiresAt - optional {@code YYYY-MM-DD} date the assignment auto-reverts to
-   *                    {@code ROLE_USER} at (end of that calendar day); omitted for an
-   *                    unlimited assignment
+   * @param id             - the managed user's primary key
+   * @param roleName       - the role to assign (e.g. {@code 'ROLE_MODERATOR'})
+   * @param expiresAt      - optional {@code YYYY-MM-DD} date the assignment auto-reverts to
+   *                         {@code ROLE_USER} at (end of that calendar day); omitted for an
+   *                         unlimited assignment
+   * @param organizationId - optional hint identifying which shared organization this
+   *                         reassignment was made from (dashboard revamp, 2026-08-22); the
+   *                         backend verifies the caller and target are both active members of
+   *                         it before recording an org-level audit event, so a stale or forged
+   *                         id can only suppress that event, never corrupt another organization's
+   *                         trail. Omit when reassigning from the plain Users directory.
    * @returns Observable of the API envelope carrying the refreshed selectedUser
    */
-  updateUserRole$ = (id: number, roleName: string, expiresAt?: string): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> =>
-    this.http
-      .patch<CustomHttpResponseInterface<AdminUserDetailInterface>>(
-        `${this.server}/admin/user/${id}/role/${roleName}${expiresAt ? `?expiresAt=${encodeURIComponent(expiresAt)}` : ''}`,
-        {},
-      )
+  updateUserRole$ = (
+    id: number,
+    roleName: string,
+    expiresAt?: string,
+    organizationId?: number,
+  ): Observable<CustomHttpResponseInterface<AdminUserDetailInterface>> => {
+    const params: string[] = [];
+    if (expiresAt) params.push(`expiresAt=${encodeURIComponent(expiresAt)}`);
+    if (organizationId) params.push(`organizationId=${organizationId}`);
+    const query = params.length ? `?${params.join('&')}` : '';
+    return this.http
+      .patch<CustomHttpResponseInterface<AdminUserDetailInterface>>(`${this.server}/admin/user/${id}/role/${roleName}${query}`, {})
       .pipe(/* tap(console.log), */ catchError(this.handleError));
+  };
 
   /**
    * Changes another user's account state — enabled and not-locked flags (FR-ADMIN-4).

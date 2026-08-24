@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Guards the boot-time warning added for the documented-but-previously-unguarded gap: a federated
  * provider whose client id in Secrets Manager is still the literal {@code CHANGE_ME} placeholder
- * (see {@code documentation/PHASE-2-ADDITIONS.md} §8.2/8.3). Deliberately a warning, not a
+ * (see {@code documentation/legacy/PHASE-2-ADDITIONS.md} §8.2/8.3). Deliberately a warning, not a
  * fail-fast guard like {@code JwtSecretGuard} — see {@link OAuth2ClientConfig#warnIfPlaceholder}'s
  * Javadoc for why refusing to boot over an optional feature would be the wrong trade.
  *
