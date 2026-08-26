@@ -207,11 +207,16 @@ public interface UserRepo<T extends User> {
     /**
      * Flips the user's MFA (two-factor authentication) flag on or off.
      * A phone number must be present on the account — MFA codes are delivered via SMS.
+     * <p>
+     * Identified by primary key rather than email so callers can pass the ID they
+     * already hold on the authenticated {@code UserDTO} principal without a lookup
+     * to translate an email into a row — see the resolution convention documented
+     * on {@code UserController}.
      *
-     * @param email the email address of the user toggling MFA
+     * @param id the primary key of the user toggling MFA
      * @return the updated user entity with the new MFA state reflected
      */
-    T toggleMFA(String email);
+    T toggleMFA(Long id);
 
     /**
      * Saves a new profile image to disk and updates the {@code image_url} column

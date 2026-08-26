@@ -795,23 +795,24 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * <p>
      * Requires the user to have a phone number on their profile; throws
      * {@link ApiException} if the phone number is blank, since 2FA codes are
-     * delivered via SMS. Reads the current flag value, inverts it in memory, then
-     * persists the new value with
-     * {@link com.bob.angularspringbootfullstack.query.UserQuery#TOGGLE_USER_2FA_QUERY}.
+     * delivered via SMS. Loads the row by primary key via {@link #get(Long)}, reads the
+     * current flag value, inverts it in memory, then persists the new value with
+     * {@link com.bob.angularspringbootfullstack.query.UserQuery#TOGGLE_USER_2FA_QUERY},
+     * which is keyed on {@code id} to match.
      *
-     * @param email the email address of the user toggling MFA
+     * @param id the primary key of the user toggling MFA
      * @return the updated {@link User} entity with the new {@code using2FA} value
      * @throws ApiException if no phone number is set, or if any database error occurs
      */
     @Override
-    public User toggleMFA(String email) {
-        User user = getUserByEmail(email);
+    public User toggleMFA(Long id) {
+        User user = get(id);
         if (isBlank(user.getPhoneNumber())) {
             throw new ApiException("A phone number is required to enable 2FA/MFA. Please add a phone number to your profile and try again.");
         }
         user.setUsing2FA(!user.isUsing2FA());
         try {
-            jdbcTemplate.update(TOGGLE_USER_2FA_QUERY, of("using2FA", user.isUsing2FA(), "email", email));
+            jdbcTemplate.update(TOGGLE_USER_2FA_QUERY, of("using2FA", user.isUsing2FA(), "userId", id));
             return user;
         } catch (Exception exception) {
             log.error(exception.getMessage());

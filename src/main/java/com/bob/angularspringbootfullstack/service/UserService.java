@@ -174,11 +174,15 @@ public interface UserService {
 
     /**
      * Toggles a user's multifactor authentication status.
+     * <p>
+     * Takes the primary key rather than an email so callers can pass the ID carried
+     * on the authenticated {@code UserDTO} principal directly. See the resolution
+     * convention documented on {@code UserController}.
      *
-     * @param email The email of the user.
+     * @param id The primary key of the user.
      * @return The updated UserDTO.
      */
-    UserDTO toggleMFA(String email);
+    UserDTO toggleMFA(Long id);
 
     /**
      * Saves a new profile image for the user and records the updated image URL in the database.
