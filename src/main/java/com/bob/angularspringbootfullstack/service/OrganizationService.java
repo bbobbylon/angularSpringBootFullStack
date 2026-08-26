@@ -8,7 +8,10 @@ import com.bob.angularspringbootfullstack.model.OrganizationInvite;
 import com.bob.angularspringbootfullstack.model.OrganizationStats;
 import com.bob.angularspringbootfullstack.model.OrganizationSummary;
 
+import com.bob.angularspringbootfullstack.enumeration.OrgRole;
+
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -165,15 +168,33 @@ public interface OrganizationService {
     boolean isActiveMemberOfOrganization(Long userId, Long organizationId);
 
     /**
-     * Adds a user to an organization, or reactivates their membership if they previously
-     * belonged and were removed.
+     * Adds a user to an organization with a given capacity, or reactivates their membership if
+     * they previously belonged and were removed.
+     *
+     * <p>The role is re-asserted on reactivation rather than inherited: a member removed as an
+     * {@code ORG_ADMIN} and later re-added comes back as whatever this call says, so re-adding
+     * somebody is never a silent re-grant of the authority they used to hold.
+     *
+     * @param organizationId the organization to add the user to
+     * @param userId         the user to add
+     * @param orgRole        the capacity to grant within this organization
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if either id does not
+     *         exist
+     */
+    void addMember(Long organizationId, Long userId, OrgRole orgRole);
+
+    /**
+     * Adds a user to an organization as an ordinary {@link OrgRole#DEFAULT} member — the common
+     * case, and the shape every pre-{@code org_role} caller used.
      *
      * @param organizationId the organization to add the user to
      * @param userId         the user to add
      * @throws com.bob.angularspringbootfullstack.exception.ApiException if either id does not
      *         exist
      */
-    void addMember(Long organizationId, Long userId);
+    default void addMember(Long organizationId, Long userId) {
+        addMember(organizationId, userId, OrgRole.DEFAULT);
+    }
 
     /**
      * Removes a user from an organization by deactivating their membership row — see
@@ -298,6 +319,71 @@ public interface OrganizationService {
      * @return the organization the user just joined
      */
     Organization redeemInvite(String code, Long userId);
+
+    // ── Per-organization roles (2026-08-26, TODO(org-roles)) ────────────────────────────────
+
+    /**
+     * The capacity {@code userId} holds within {@code organizationId}, or empty when they hold no
+     * ACTIVE membership there.
+     *
+     * <p>Empty is the "not a member here" answer and every authorization caller must read it as a
+     * denial — it is deliberately not conflated with {@link OrgRole#ORG_VIEWER}, which is a real,
+     * granted capacity.
+     *
+     * @param userId         the member whose capacity is being read
+     * @param organizationId the organization to read it in
+     * @return the member's org role, or empty when there is no active membership
+     */
+    Optional<OrgRole> findOrgRole(Long userId, Long organizationId);
+
+    /**
+     * Every organization the user actively belongs to, mapped to the capacity they hold in each —
+     * the {@code getOrgRolesForUser} projection, for surfaces that need capacity across all of a
+     * user's organizations without one query per organization.
+     *
+     * @param userId the user whose memberships to resolve
+     * @return organization id → org role, possibly empty, never {@code null}
+     */
+    Map<Long, OrgRole> findOrgRoles(Long userId);
+
+    /**
+     * Whether the user administers this one organization — {@link #findOrgRole} narrowed to the
+     * {@link OrgRole#ORG_ADMIN} question that membership management actually asks.
+     *
+     * <p>Fails closed: no membership, an unrecognized stored role, or a read error all answer
+     * {@code false}, the same direction {@link #isWithinOrganizationScope} takes.
+     *
+     * @param userId         the member to test
+     * @param organizationId the organization to test them in
+     * @return true only when the user holds an active {@code ORG_ADMIN} membership there
+     */
+    boolean isOrgAdminOf(Long userId, Long organizationId);
+
+    /**
+     * Reassigns one active member's capacity within one organization.
+     *
+     * <p>Refuses to demote the organization's last remaining administrator — an organization with
+     * no {@code ORG_ADMIN} can only be repaired by an unscoped platform tier, so the demotion is
+     * rejected rather than silently stranding it.
+     *
+     * @param organizationId the organization the membership belongs to
+     * @param userId         the member being reassigned
+     * @param orgRole        the capacity to grant
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if the user holds no active
+     *         membership in that organization, or the change would remove its last administrator
+     */
+    void setMemberOrgRole(Long organizationId, Long userId, OrgRole orgRole);
+
+    /**
+     * Whether {@code organizationId} would still have at least one active {@code ORG_ADMIN} if
+     * {@code excludedUserId} were demoted or removed — the guard behind
+     * {@link #setMemberOrgRole} and {@link #removeMember}.
+     *
+     * @param organizationId the organization to check
+     * @param excludedUserId the member being demoted or removed, excluded from the count
+     * @return true when another active administrator remains
+     */
+    boolean hasOtherActiveOrgAdmin(Long organizationId, Long excludedUserId);
 
     /**
      * The per-organization KPI row for the dashboard-style Organizations page: member count plus

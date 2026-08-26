@@ -1,7 +1,9 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.OrgRole;
 import com.bob.angularspringbootfullstack.enumeration.RoleType;
+import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.event.NewOrganizationEvent;
 import com.bob.angularspringbootfullstack.form.OrganizationForm;
 import com.bob.angularspringbootfullstack.form.OrganizationInviteForm;
@@ -36,6 +38,7 @@ import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_INVIT
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_INVITE_REVOKED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_MEMBER_ADDED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_MEMBER_REMOVED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_MEMBER_ROLE_CHANGED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_PROFILE_UPDATED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_RENAMED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_STATUS_CHANGED;
@@ -56,12 +59,22 @@ import static org.springframework.http.HttpStatus.OK;
  *       {@code ROLE_APPLICATION_ADMIN}), checked by {@link #requireUnscopedTier}, mirroring
  *       {@link RoleController#requireApplicationAdmin}'s shape for the analogous Role CRUD
  *       decision.</li>
- *   <li><b>Membership mutation</b> (add/remove a member) only changes who belongs to <em>one</em>
- *       organization, so a {@code ROLE_ORGANIZATION_ADMIN} may perform it for an organization
- *       they themselves actively belong to — checked by {@link #requireMembershipAuthority},
- *       which additionally consults {@link OrganizationService#isActiveMemberOfOrganization}.
- *       An unscoped tier may manage any organization's membership.</li>
+ *   <li><b>Membership mutation</b> (add/remove a member, change a member's org role) only
+ *       changes who belongs to <em>one</em> organization, so a scoped caller may perform it for an
+ *       organization they administer — checked by {@link #requireMembershipAuthority}, which
+ *       consults {@link OrganizationService#isOrgAdminOf}. An unscoped tier may manage any
+ *       organization's membership.</li>
  * </ul>
+ * <p>
+ * <b>Per-organization roles (2026-08-26).</b> The membership rule above is keyed on
+ * {@code userorganizations.org_role} — the caller's capacity in <em>that one</em> organization —
+ * not on their global {@link RoleType}. Before this, "organization admin" was the global
+ * {@code ROLE_ORGANIZATION_ADMIN} tier and its reach was every organization the holder belonged to,
+ * so there was no way to be an administrator of one organization and an ordinary member of another.
+ * The global role still gates the endpoint (via {@code UPDATE:ORGANIZATION}) and still decides
+ * whether org scoping applies at all ({@link RoleType#isOrganizationScoped}); the org role decides
+ * <em>which</em> organizations a scoped caller may act on. See
+ * {@link com.bob.angularspringbootfullstack.enumeration.OrgRole} for how the two compose.
  * <p>
  * Authorization is enforced at two levels, per FR-RBAC-2, matching {@link RoleController}'s
  * convention:
@@ -194,20 +207,27 @@ public class OrganizationController {
 
     /**
      * Adds (or reactivates) a member of an organization — an unscoped tier may do this for any
-     * organization; a {@code ROLE_ORGANIZATION_ADMIN} only for one they actively belong to.
+     * organization; a scoped caller only for one they administer.
+     *
+     * <p>{@code orgRole} is optional and defaults to {@link OrgRole#DEFAULT}. When supplied it is
+     * bounded by {@link #requireAssignableOrgRole}, so a scoped caller cannot add somebody at a
+     * capacity above their own.
      *
      * @param authentication the calling administrator's authentication
      * @param organizationId the organization to add the member to
      * @param userId         the user to add
+     * @param orgRole        the capacity to grant, or null for {@code ORG_MEMBER}
      * @return 200 OK
      */
     @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
     @PostMapping("/{organizationId}/members/{userId}")
     public ResponseEntity<HttpResponse> addMember(Authentication authentication,
                                                    @PathVariable Long organizationId,
-                                                   @PathVariable Long userId) {
+                                                   @PathVariable Long userId,
+                                                   @RequestParam(required = false) String orgRole) {
         requireMembershipAuthority(authentication, organizationId);
-        organizationService.addMember(organizationId, userId);
+        OrgRole granted = requireAssignableOrgRole(authentication, organizationId, orgRole);
+        organizationService.addMember(organizationId, userId, granted);
         UserDTO caller = getAuthenticatedUser(authentication);
         eventPublisher.publishEvent(new NewOrganizationEvent(organizationId, caller.getId(), ORG_MEMBER_ADDED, "user " + userId));
         log.info("'{}' added user {} to organization {}", caller.getEmail(), userId, organizationId);
@@ -242,6 +262,49 @@ public class OrganizationController {
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .message("Member removed successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Changes an existing member's capacity within one organization — the promote/demote lever
+     * that makes per-organization roles usable, and the path by which an organization gains its
+     * first {@code ORG_ADMIN} after an unscoped tier creates it and adds people.
+     *
+     * <p>Same authorization rule as {@link #addMember}, plus the assignment ceiling in
+     * {@link #requireAssignableOrgRole}. The service additionally refuses to demote an
+     * organization's last remaining administrator.
+     *
+     * <p>Audited as {@code ORG_MEMBER_ROLE_CHANGED}, the event type the catalog already carried for
+     * the global-role reassignment hint on {@code AdminUserController#updateUserRole} — this is the
+     * organization-scoped counterpart of that action, so it shares the type rather than inventing
+     * a near-duplicate one.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param organizationId the organization the membership belongs to
+     * @param userId         the member being reassigned
+     * @param orgRole        the capacity to grant — {@code ORG_ADMIN}, {@code ORG_MEMBER} or
+     *                       {@code ORG_VIEWER}
+     * @return 200 OK
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @PatchMapping("/{organizationId}/members/{userId}/role")
+    public ResponseEntity<HttpResponse> setMemberOrgRole(Authentication authentication,
+                                                         @PathVariable Long organizationId,
+                                                         @PathVariable Long userId,
+                                                         @RequestParam String orgRole) {
+        requireMembershipAuthority(authentication, organizationId);
+        OrgRole granted = requireAssignableOrgRole(authentication, organizationId, orgRole);
+        organizationService.setMemberOrgRole(organizationId, userId, granted);
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(organizationId, caller.getId(), ORG_MEMBER_ROLE_CHANGED,
+                "user " + userId + " → " + granted.name()));
+        log.info("'{}' set user {}'s role in organization {} to {}", caller.getEmail(), userId, organizationId, granted);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .message("Member role updated successfully.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
@@ -485,16 +548,65 @@ public class OrganizationController {
      *
      * @throws AccessDeniedException if the caller may not manage this organization's membership
      */
+    /**
+     * Resolves and bounds the org role a caller is trying to grant within one organization.
+     *
+     * <p>Two rules, both fail-closed:
+     * <ul>
+     *   <li>An unrecognized name is rejected outright rather than defaulted — silently downgrading
+     *       a typo to {@code ORG_MEMBER} would make a failed promotion look like a successful one.
+     *       A {@code null}/absent value is different, and legitimately means "the default".</li>
+     *   <li>A scoped caller may not grant a capacity above their own, mirroring
+     *       {@link RoleType#canAssign}'s ceiling on global roles and existing for the same reason:
+     *       without it, {@link #requireMembershipAuthority} bounds <em>who</em> a caller may act on
+     *       while leaving <em>what they may grant</em> unbounded, so an {@code ORG_ADMIN} could
+     *       mint capacity they do not hold. Unscoped platform tiers are exempt — they already
+     *       bypass every organization check.</li>
+     * </ul>
+     *
+     * @param authentication the calling administrator's authentication
+     * @param organizationId the organization the grant applies within
+     * @param orgRoleName    the requested capacity, or null/blank for {@link OrgRole#DEFAULT}
+     * @return the resolved role, guaranteed to be within the caller's ceiling
+     * @throws ApiException         if the name is non-blank but unrecognized
+     * @throws AccessDeniedException if the caller may not grant that capacity
+     */
+    private OrgRole requireAssignableOrgRole(Authentication authentication, Long organizationId, String orgRoleName) {
+        if (orgRoleName == null || orgRoleName.isBlank()) {
+            return OrgRole.DEFAULT;
+        }
+        OrgRole requested = OrgRole.from(orgRoleName)
+                .orElseThrow(() -> new ApiException("'" + orgRoleName + "' is not a valid organization role."));
+        UserDTO caller = getAuthenticatedUser(authentication);
+        if (!RoleType.isOrganizationScoped(caller.getRoleName())) {
+            return requested;
+        }
+        String callerOrgRole = organizationService.findOrgRole(caller.getId(), organizationId)
+                .map(OrgRole::name)
+                .orElse(null);
+        if (!OrgRole.canAssign(callerOrgRole, requested.name())) {
+            log.warn("Caller '{}' (org role {}) denied granting {} in organization {}",
+                    caller.getEmail(), callerOrgRole, requested, organizationId);
+            throw new AccessDeniedException("You may not grant an organization role above your own.");
+        }
+        return requested;
+    }
+
     private void requireMembershipAuthority(Authentication authentication, Long organizationId) {
         UserDTO caller = getAuthenticatedUser(authentication);
         if (!RoleType.isOrganizationScoped(caller.getRoleName())) {
             return;
         }
-        boolean isOrgAdmin = RoleType.ROLE_ORGANIZATION_ADMIN.name().equals(caller.getRoleName());
-        if (isOrgAdmin && organizationService.isActiveMemberOfOrganization(caller.getId(), organizationId)) {
+        // NOTE(org-roles): resolved 2026-08-26. This used to read
+        //   ROLE_ORGANIZATION_ADMIN.equals(globalRole) && isActiveMemberOfOrganization(...)
+        // — a GLOBAL tier plus bare membership, which made "organization admin" mean admin of
+        // EVERY organization the caller belonged to. The capacity now lives on the membership row
+        // itself, so administering org A grants nothing in org B.
+        if (organizationService.isOrgAdminOf(caller.getId(), organizationId)) {
             return;
         }
-        log.warn("Caller '{}' (role {}) denied a membership operation on organization {}", caller.getEmail(), caller.getRoleName(), organizationId);
-        throw new AccessDeniedException("You may only manage membership for organizations you belong to.");
+        log.warn("Caller '{}' (role {}) denied a membership operation on organization {} — not an ORG_ADMIN there",
+                caller.getEmail(), caller.getRoleName(), organizationId);
+        throw new AccessDeniedException("You may only manage membership for organizations you administer.");
     }
 }
