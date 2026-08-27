@@ -161,7 +161,8 @@ public class OrganizationQuery {
      * userId, organizationId.
      */
     public static final String INSERT_MEMBERSHIP_QUERY =
-            "INSERT INTO userorganizations (user_id, organization_id, active) VALUES (:userId, :organizationId, TRUE)";
+            "INSERT INTO userorganizations (user_id, organization_id, org_role, active) " +
+            "VALUES (:userId, :organizationId, :orgRole, TRUE)";
 
     /**
      * Reactivates a membership row {@link #INSERT_MEMBERSHIP_QUERY} could not insert because one
@@ -170,7 +171,8 @@ public class OrganizationQuery {
      * Parameters: userId, organizationId.
      */
     public static final String REACTIVATE_MEMBERSHIP_QUERY =
-            "UPDATE userorganizations SET active = TRUE WHERE user_id = :userId AND organization_id = :organizationId";
+            "UPDATE userorganizations SET active = TRUE, org_role = :orgRole " +
+            "WHERE user_id = :userId AND organization_id = :organizationId";
 
     /**
      * Removes a user's membership in an organization by deactivating the row rather than
@@ -200,6 +202,79 @@ public class OrganizationQuery {
      */
     public static final String COUNT_ACTIVE_MEMBERS_QUERY =
             "SELECT COUNT(*) FROM userorganizations WHERE organization_id = :organizationId AND active = TRUE";
+
+    // ── Per-organization roles (2026-08-26, TODO(org-roles)) ────────────────────────────────
+
+    /**
+     * The caller's capacity within one organization — the single row
+     * {@code OrganizationServiceImpl#findOrgRole} reads to answer "may this member administer
+     * <em>this</em> organization?".
+     * <p>
+     * Restricted to ACTIVE memberships deliberately: a deactivated row keeps its {@code org_role}
+     * so that re-adding a former administrator does not silently lose what they were, but an
+     * inactive membership must never satisfy an authorization check. Returning no row for it is
+     * what makes the service's {@code Optional.empty()} mean "not a member here", which every
+     * caller treats as denial.
+     * Parameters: userId, organizationId.
+     */
+    public static final String SELECT_ORG_ROLE_QUERY =
+            "SELECT org_role FROM userorganizations " +
+            "WHERE user_id = :userId AND organization_id = :organizationId AND active = TRUE";
+
+    /**
+     * Every organization the user actively belongs to, paired with the capacity they hold in it —
+     * the {@code getOrgRolesForUser} projection the {@code TODO(org-roles)} design called for.
+     * <p>
+     * Complements {@link #SELECT_ACTIVE_ORGANIZATION_IDS_BY_USER_QUERY}, which answers the narrower
+     * "which organizations" question that data scoping needs: this one is for surfaces that must
+     * also render or reason about the capacity, and it exists so those callers do not issue one
+     * {@link #SELECT_ORG_ROLE_QUERY} per organization.
+     * Parameter: userId.
+     */
+    public static final String SELECT_ORG_ROLES_BY_USER_QUERY =
+            "SELECT organization_id, org_role FROM userorganizations " +
+            "WHERE user_id = :userId AND active = TRUE " +
+            "ORDER BY organization_id";
+
+    /**
+     * Reassigns one member's capacity within one organization. Scoped to an ACTIVE membership so a
+     * caller cannot promote somebody who was removed from the organization back into relevance
+     * without going through {@code addMember} — which is the path that re-activates the row and
+     * records an audit event.
+     * Parameters: orgRole, userId, organizationId.
+     */
+    public static final String UPDATE_ORG_ROLE_QUERY =
+            "UPDATE userorganizations SET org_role = :orgRole " +
+            "WHERE user_id = :userId AND organization_id = :organizationId AND active = TRUE";
+
+    /**
+     * Lists one organization's active members together with the capacity each holds — the
+     * {@code SELECT_ACTIVE_MEMBERS_QUERY} roster, extended with the column the Members tab needs to
+     * render a per-member role selector. Kept as a separate constant rather than widening that one:
+     * its {@code SELECT u.*} feeds a {@code UserRowMapper}, and appending a column that is not a
+     * {@code users} column would break that mapper's contract.
+     * Parameter: organizationId.
+     */
+    public static final String SELECT_ACTIVE_MEMBERS_WITH_ROLE_QUERY =
+            "SELECT u.id AS user_id, uo.org_role AS org_role FROM users u " +
+            "JOIN userorganizations uo ON uo.user_id = u.id " +
+            "WHERE uo.organization_id = :organizationId AND uo.active = TRUE " +
+            "ORDER BY u.first_name, u.last_name";
+
+    /**
+     * Counts the ACTIVE {@code ORG_ADMIN} members of an organization <em>other than</em> one given
+     * user — the last-administrator guard.
+     * <p>
+     * Demoting or removing the only administrator of an organization would leave it with no member
+     * able to manage its membership, recoverable solely by an unscoped platform tier. That is a
+     * support ticket waiting to happen, so both paths consult this first and refuse when it returns
+     * zero.
+     * Parameters: organizationId, userId (the member being demoted or removed, excluded from the count).
+     */
+    public static final String COUNT_OTHER_ACTIVE_ORG_ADMINS_QUERY =
+            "SELECT COUNT(*) FROM userorganizations " +
+            "WHERE organization_id = :organizationId AND active = TRUE " +
+            "AND org_role = 'ORG_ADMIN' AND user_id <> :userId";
 
     // ── Organization profile/settings (2026-08-22, dashboard revamp) ─────────────────────────
 

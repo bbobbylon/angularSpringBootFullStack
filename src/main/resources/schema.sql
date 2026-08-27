@@ -564,6 +564,73 @@ CREATE TABLE IF NOT EXISTS userorganizations
     CONSTRAINT UQ_UserOrganizations_User_Org UNIQUE (user_id, organization_id)
 );
 
+-- ── Per-organization role on the membership row (2026-08-26, TODO(org-roles)) ───────────
+--
+-- Until now a membership row recorded only THAT a user belongs to an organization, never in what
+-- capacity. "Organization admin" was a property of the user's single GLOBAL role
+-- (`ROLE_ORGANIZATION_ADMIN` in `userroles`, which is UNIQUE per user), and its scope was "every
+-- organization I actively belong to". There was no way to express admin of one organization and
+-- ordinary member of another — the thing a genuine multi-tenant deployment needs — and the invite
+-- flow made that concrete: redeeming an invite granted a GLOBAL role, so an invite issued by one
+-- organization elevated the redeemer everywhere they held a membership.
+--
+-- `org_role` moves that capacity onto the membership row, where it is per-organization by
+-- construction. ORG_VIEWER < ORG_MEMBER < ORG_ADMIN; `OrgRole` is the compile-time mirror, and it
+-- is deliberately NOT read from this table for its ordering, for the same reason `RoleType` pins
+-- its tiers in code rather than reading `roles.id` — an authorization decision must not depend on
+-- what a seed script happened to write.
+--
+-- The global tiers keep their existing meaning and are unchanged: ROLE_ADMIN and
+-- ROLE_APPLICATION_ADMIN remain unscoped platform operators who bypass org checks entirely.
+SET @add_uo_org_role := (
+    SELECT COUNT(*) = 0
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'userorganizations' AND COLUMN_NAME = 'org_role');
+
+SET @add_uo_org_role_sql := IF(@add_uo_org_role,
+    'ALTER TABLE userorganizations ADD COLUMN org_role VARCHAR(20) NOT NULL DEFAULT ''ORG_MEMBER'' AFTER organization_id',
+    'DO 0');
+PREPARE add_uo_org_role_stmt FROM @add_uo_org_role_sql;
+EXECUTE add_uo_org_role_stmt;
+DEALLOCATE PREPARE add_uo_org_role_stmt;
+
+-- Backfill, so existing deployments behave EXACTLY as they did before this column existed: whoever
+-- could administer an organization yesterday (a global tier at or above ROLE_ORGANIZATION_ADMIN,
+-- holding an active membership) becomes ORG_ADMIN of the organizations they belong to. Everyone
+-- else takes the column default, ORG_MEMBER.
+--
+-- Guarded on @add_uo_org_role — the flag captured BEFORE the ALTER above, not re-read after it —
+-- so this runs exactly once, on the run that introduces the column. Re-reading the column's
+-- existence here would make the backfill run on every subsequent `schema.sql` execution and stomp
+-- every later demotion an administrator had made through the UI, the same "never overwrite a live
+-- edit" property `securitysettings`' INSERT IGNORE seed protects.
+SET @backfill_uo_org_role_sql := IF(@add_uo_org_role,
+    'UPDATE userorganizations uo
+         JOIN userroles ur ON ur.user_id = uo.user_id
+         JOIN roles r ON r.id = ur.role_id
+     SET uo.org_role = ''ORG_ADMIN''
+     WHERE uo.active = TRUE
+       AND r.name IN (''ROLE_ORGANIZATION_ADMIN'', ''ROLE_ADMIN'', ''ROLE_APPLICATION_ADMIN'')',
+    'DO 0');
+PREPARE backfill_uo_org_role_stmt FROM @backfill_uo_org_role_sql;
+EXECUTE backfill_uo_org_role_stmt;
+DEALLOCATE PREPARE backfill_uo_org_role_stmt;
+
+-- Same idempotent CHECK-rebuild pattern as events.type and organizations.status (see the events
+-- block for the full rationale): drop whatever CHECK this table currently carries and re-apply the
+-- current one, so a database created before a new org role shipped cannot reject it on INSERT.
+SET @uo_chk := (SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'userorganizations'
+                  AND CONSTRAINT_TYPE = 'CHECK' LIMIT 1);
+SET @drop_uo_chk := IF(@uo_chk IS NULL, 'DO 0',
+                       CONCAT('ALTER TABLE userorganizations DROP CHECK `', @uo_chk, '`'));
+PREPARE drop_uo_chk_stmt FROM @drop_uo_chk;
+EXECUTE drop_uo_chk_stmt;
+DEALLOCATE PREPARE drop_uo_chk_stmt;
+
+ALTER TABLE userorganizations
+    ADD CONSTRAINT CK_UserOrganizations_OrgRole CHECK (org_role IN ('ORG_ADMIN', 'ORG_MEMBER', 'ORG_VIEWER'));
+
 -- Idempotent add of organizations.description/contact_email/website (2026-08-22, self-service
 -- organization profile/settings). All three ship together, so checking for the absence of one
 -- (description) guards the whole ALTER — same information_schema pattern as every other

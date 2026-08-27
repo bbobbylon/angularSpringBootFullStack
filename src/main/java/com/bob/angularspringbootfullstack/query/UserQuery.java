@@ -133,9 +133,15 @@ public class UserQuery {
     /**
      * Flips the {@code using_mfa} column for a user — if MFA was on, this turns it off,
      * and vice versa. Invoked when the user toggles two-factor authentication from their settings.
-     * Parameters: using2FA, email.
+     * <p>
+     * Keyed on the primary key rather than {@code email}, matching the ID-based lookup
+     * convention documented on {@code UserController}: the caller already holds the
+     * authenticated user's ID (the JWT principal carries it), and {@code id} is the
+     * cheapest predicate available for the row being updated. Emails are mutable and
+     * merely unique — the primary key is the stable identity.
+     * Parameters: using2FA, userId.
      */
-    public static final String TOGGLE_USER_2FA_QUERY = "UPDATE users SET using_mfa = :using2FA WHERE email = :email";
+    public static final String TOGGLE_USER_2FA_QUERY = "UPDATE users SET using_mfa = :using2FA WHERE id = :userId";
     /**
      * Stores the URL where the user's profile image can be fetched.
      * The URL points to the backend image-serving endpoint ({@code /user/image/{email}.png}),

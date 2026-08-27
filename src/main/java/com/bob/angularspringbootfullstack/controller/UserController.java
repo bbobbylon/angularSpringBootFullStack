@@ -59,29 +59,48 @@ import static org.springframework.security.authentication.UsernamePasswordAuthen
  * consistent JSON shape.
  *
  * <p>-----------------------------------------------------------------------
- * TODO(refactor-user-fetch): Standardize how the authenticated user is
- * resolved across all endpoints. Currently three inconsistent patterns exist:
+ * <b>How the authenticated user is resolved (one convention, applied throughout)</b>
  * -----------------------------------------------------------------------
  *
+ * <p>Every secured endpoint here starts from
+ * {@link com.bob.angularspringbootfullstack.utils.UserUtils#getAuthenticatedUser(Authentication)},
+ * which casts the principal that {@code CustomAuthFilter} installed. That principal is
+ * <i>not</i> a stale copy of claims decoded from the token: {@code CustomAuthFilter}
+ * calls {@code TokenProvider#getAuthentication(userID, ...)}, which builds it with
+ * {@code userService.getUserById(...)}. Every authenticated request therefore already
+ * carries one freshly-read user row by the time a handler runs.
+ *
+ * <p>Two rules follow from that, and both hold across this class:
+ *
  * <ol>
- *   <li><b>Re-fetch by email</b> — {@code getProfile} and {@code toggleMFA}
- *       call {@code getAuthenticatedUser(authentication).getEmail()} then do a
- *       secondary DB lookup by email.</li>
- *   <li><b>Re-fetch by ID</b> — {@code updateUserPassword}
- *       and {@code updateAccountSettings} call
- *       {@code getAuthenticatedUser(authentication).getId()} then do a secondary
- *       DB lookup by ID.</li>
- *   <li><b>ID directly from token</b> — {@code refreshToken} skips
- *       {@code getAuthenticatedUser} entirely and reads the subject straight from
- *       the token via {@code tokenProvider.getSubject(...)}.</li>
+ *   <li><b>Read-only handlers take the principal and stop there.</b> {@code getProfile}
+ *       returns the principal directly, and {@code getUserEvents} takes only its ID.
+ *       Both previously issued a {@code getUserByEmail} query that reproduced the row
+ *       the filter had just loaded.</li>
+ *   <li><b>Mutating handlers re-read once, after the write, keyed on the primary key.</b>
+ *       A write can move the very fields the response reports, which leaves the pre-write
+ *       principal stale for the payload — so {@code updateUserPassword} (which shifts
+ *       {@code passwordChangedAt}), {@code updateAccountSettings} (which flips
+ *       {@code enabled} / {@code non_locked}) and {@code updateProfileImage} (which
+ *       rewrites {@code image_url}) each re-read by ID once the write has landed. Where
+ *       the service already hands back the post-write user — {@code toggleMFA},
+ *       {@code updateUser} — that return value is the fresh copy and no second query is
+ *       issued at all.</li>
  * </ol>
  *
- * <p><b>Recommended approach:</b> standardize on ID-based lookups for all
- * secondary DB fetches (primary key = fastest lookup) and only perform a
- * secondary DB fetch when fresh data is actually needed after a mutation.
- * For passing context to a service call, {@code getAuthenticatedUser(authentication)}
- * already returns a {@link com.bob.angularspringbootfullstack.dto.UserDTO} from
- * the JWT — no extra DB round-trip is needed.
+ * <p>Lookups are keyed on {@code id} rather than {@code email} throughout, down through
+ * the service and repository layers ({@code UserService#toggleMFA} and
+ * {@code UserQuery#TOGGLE_USER_2FA_QUERY} were converted for this): the primary key is
+ * the cheapest predicate available, and it is the account's stable identity where an
+ * email is merely unique and changeable.
+ *
+ * <p><b>Endpoints outside the convention, by necessity.</b> {@code sendNewRefreshToken}
+ * has no {@code Authentication} to read — it is reached with an expired access token, so
+ * the refresh token in the {@code Authorization} header is the only identity available.
+ * It delegates the whole exchange to {@link SessionService#rotate}, which validates the
+ * token and returns the user with the rotated pair. The unauthenticated endpoints
+ * (registration, login, verification, password reset) likewise identify the account from
+ * their own payload.
  * -----------------------------------------------------------------------
  */
 @RestController
@@ -240,11 +259,19 @@ public class UserController {
     }
 
     /**
-     * Updates the authenticated user's password. Reloads the user from the DB
-     * to ensure the operation is scoped to the authenticated principal. On
-     * success, issues a fresh token pair so the user's session remains valid
-     * despite the {@code passwordChangedAt} invalidation check in
+     * Updates the authenticated user's password. The operation is scoped to the
+     * authenticated principal's ID, which the JWT-backed {@link UserDTO} already
+     * carries. On success, issues a fresh token pair so the user's session remains
+     * valid despite the {@code passwordChangedAt} invalidation check in
      * {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider#isTokenValid}.
+     *
+     * <p>The user is re-read <i>after</i> the update — this is the case the resolution
+     * convention on this class reserves a secondary fetch for. The write moves
+     * {@code passwordChangedAt}, so the principal captured before it is stale for the
+     * response body and for the {@link UserPrincipal} the new token pair is minted from.
+     * The previous ordering read the row before the mutation and then compared that row's
+     * ID against the ID it had just been fetched by — a check that could not fail, since
+     * {@code getUserById} either returns the requested row or throws.
      *
      * @param authentication     the current Spring Security authentication
      * @param updatePasswordForm the current password plus the new password and confirmation
@@ -253,10 +280,8 @@ public class UserController {
     @PatchMapping("/update/password")
     public ResponseEntity<HttpResponse> updateUserPassword(Authentication authentication, @RequestBody @Valid UpdatePasswordForm updatePasswordForm) {
         UserDTO authUser = getAuthenticatedUser(authentication);
+        userService.updatePassword(authUser.getId(), updatePasswordForm.getCurrentPassword(), updatePasswordForm.getNewPassword(), updatePasswordForm.getConfirmPassword());
         UserDTO dbUser = userService.getUserById(authUser.getId());
-        if (!authUser.getId().equals(dbUser.getId()))
-            throw new ApiException("Unauthorized request.");
-        userService.updatePassword(dbUser.getId(), updatePasswordForm.getCurrentPassword(), updatePasswordForm.getNewPassword(), updatePasswordForm.getConfirmPassword());
         eventPublisher.publishEvent(new NewUserEvent(authUser.getEmail(), PASSWORD_UPDATE));
         // The passwordChangedAt check already kills every outstanding JWT (FR-JWT-6);
         // revoking the session rows keeps the Security Center's device list truthful,
@@ -293,6 +318,12 @@ public class UserController {
      * Reads both flags from the validated {@link SettingsForm} body and persists them
      * via the service. Returns the refreshed user alongside the full roles list.
      *
+     * <p>The principal supplies the ID for the write, and the user is re-read once
+     * afterwards — the write changes the very flags the response reports, so this is a
+     * secondary fetch the resolution convention on this class calls for. It is hoisted
+     * into a local rather than inlined in the response map so the post-mutation read is
+     * visible at the point it happens.
+     *
      * @param authentication the current Spring Security authentication
      * @param settingsForm   the validated payload carrying {@code enabled} and {@code notLocked}
      * @return 200 OK with the updated user and the full roles list
@@ -301,13 +332,14 @@ public class UserController {
     public ResponseEntity<HttpResponse> updateAccountSettings(Authentication authentication, @RequestBody @Valid SettingsForm settingsForm) {
         UserDTO userDTO = getAuthenticatedUser(authentication);
         userService.updateAccountSettings(userDTO.getId(), settingsForm.getEnabled(), settingsForm.getNotLocked());
+        UserDTO updatedUser = userService.getUserById(userDTO.getId());
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), ACCOUNT_SETTINGS_UPDATE));
         long settingsTotalElements = eventService.countEventsByUserId(userDTO.getId());
         int settingsTotalPages = (int) Math.ceil((double) settingsTotalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("user", userService.getUserById(userDTO.getId()),
+                        .data(of("user", updatedUser,
                                 "events", eventService.getEventsByUserId(userDTO.getId(), 0, DEFAULT_PAGE_SIZE),
                                 "eventsTotalElements", settingsTotalElements,
                                 "eventsTotalPages", settingsTotalPages,
@@ -323,12 +355,16 @@ public class UserController {
      * Requires a phone number to be set on the account; the service throws if one
      * is missing.
      *
+     * <p>Scoped by the principal's ID rather than its email: the service returns the
+     * post-toggle user, so the mutation's own return value supplies the fresh state
+     * and no follow-up read is needed.
+     *
      * @param authentication the current Spring Security authentication
      * @return 200 OK with the updated user and the full roles list
      */
     @PatchMapping("/update/togglemfa")
     public ResponseEntity<HttpResponse> toggleMFA(Authentication authentication) {
-        UserDTO userDTO = userService.toggleMFA(getAuthenticatedUser(authentication).getEmail());
+        UserDTO userDTO = userService.toggleMFA(getAuthenticatedUser(authentication).getId());
         eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), MFA_UPDATE));
         long mfaTotalElements = eventService.countEventsByUserId(userDTO.getId());
         int mfaTotalPages = (int) Math.ceil((double) mfaTotalElements / DEFAULT_PAGE_SIZE);
@@ -457,9 +493,16 @@ public class UserController {
      * <p>The {@link Authentication} was installed by {@code CustomAuthFilter}, which stores a
      * {@link UserDTO} directly as the principal (see {@code TokenProvider#getAuthentication}).
      * {@link com.bob.angularspringbootfullstack.utils.UserUtils#getAuthenticatedUser(Authentication)}
-     * casts it back so we can read the email and reload the full profile — this avoids
-     * {@code Authentication#getName()}, which would fall back to {@code UserDTO#toString()}.
-     * The full roles list is included, so the frontend can populate the role selector in
+     * casts it back — this avoids {@code Authentication#getName()}, which would fall back to
+     * {@code UserDTO#toString()}.
+     *
+     * <p>No secondary lookup runs here: {@code TokenProvider#getAuthentication} builds that
+     * principal with {@code userService.getUserById(...)} on every request, so the DTO is
+     * already this request's freshly-read row, and this endpoint mutates nothing that could
+     * stale it. Re-reading would only repeat the filter's query. See the resolution
+     * convention on this class.
+     *
+     * <p>The full roles list is included, so the frontend can populate the role selector in
      * the Authorization tab without a separate request.
      *
      * @param authentication the current Authentication injected by Spring Security
@@ -467,7 +510,7 @@ public class UserController {
      */
     @GetMapping("/profile")
     public ResponseEntity<HttpResponse> getProfile(Authentication authentication) {
-        UserDTO userDTO = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
+        UserDTO userDTO = getAuthenticatedUser(authentication);
         long totalElements = eventService.countEventsByUserId(userDTO.getId());
         int totalPages = (int) Math.ceil((double) totalElements / DEFAULT_PAGE_SIZE);
         return ResponseEntity.ok(
@@ -490,6 +533,11 @@ public class UserController {
      * <p>Called by the frontend pagination controls on the Profile page after the initial
      * load — keeps page navigation from re-fetching the user object and roles list.
      *
+     * <p>Only the user's ID is needed to scope the query, and the authenticated principal
+     * already carries it, so no user row is read here at all — the previous
+     * {@code getUserByEmail} round-trip loaded a whole record to reach one field the JWT
+     * principal already held.
+     *
      * @param authentication the current Spring Security authentication
      * @param page           zero-based page index (default 0)
      * @param size           page size (default {@value DEFAULT_PAGE_SIZE})
@@ -500,13 +548,13 @@ public class UserController {
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        UserDTO userDTO = userService.getUserByEmail(getAuthenticatedUser(authentication).getEmail());
-        long totalElements = eventService.countEventsByUserId(userDTO.getId());
+        Long userId = getAuthenticatedUser(authentication).getId();
+        long totalElements = eventService.countEventsByUserId(userId);
         int totalPages = (int) Math.ceil((double) totalElements / size);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("events", eventService.getEventsByUserId(userDTO.getId(), page, size),
+                        .data(of("events", eventService.getEventsByUserId(userId, page, size),
                                 "eventsTotalElements", totalElements,
                                 "eventsTotalPages", totalPages))
                         .message("Retrieved user events!")

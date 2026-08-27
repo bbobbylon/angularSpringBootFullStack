@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.9
-**Last Updated:** 2026-08-23
+**Version:** 3.11
+**Last Updated:** 2026-08-26
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -137,6 +137,35 @@ with account access to flip a toggle (here: AWS Billing console → Cost Explore
 CloudWatch billing alarm + SNS topic), not a pull request. Called out explicitly (POST-SUBMISSION-
 UPGRADES.md #10) so it doesn't get mistaken for code-workable backlog sitting idle.
 
+### 2.6 ⬜ Run `schema.sql` against a live MySQL to verify the `org_role` DDL
+
+**The per-organization role DDL added on 2026-08-26 (§3.2) has never been executed.** It was written
+in a container with neither a MySQL server nor a Docker daemon, so it is verified only by inspection
+and by matching the idempotent patterns already proven elsewhere in the file. Everything *above* the
+database line is tested — 466 backend tests green — but no test in this suite exercises `schema.sql`
+itself, and the one class that would (`contextLoads`) cannot run without a database.
+
+**What to check, in order, on a database that already has data** (a fresh one is the easy case):
+
+1. Run `schema.sql` once. Confirm `userorganizations` gains `org_role VARCHAR(20) NOT NULL DEFAULT
+   'ORG_MEMBER'` and the `CK_UserOrganizations_OrgRole` check constraint.
+2. Confirm the backfill did what it claims: every active membership held by a user whose global role
+   is `ROLE_ORGANIZATION_ADMIN`/`ROLE_ADMIN`/`ROLE_APPLICATION_ADMIN` should now read `ORG_ADMIN`,
+   and everyone else `ORG_MEMBER`. This is what preserves existing behaviour — get it wrong and
+   whoever administered an organization yesterday silently cannot today.
+3. **Demote somebody through the UI, then run `schema.sql` again.** The demotion must survive. The
+   backfill is guarded on a flag captured *before* the `ALTER`, precisely so a re-run cannot
+   re-promote them — that guard is the part most worth proving, because getting it wrong is silent
+   and only shows up as an administrator quietly regaining access.
+4. Re-run once more and confirm the whole file is still idempotent end to end (the CHECK-rebuild
+   block drops and re-adds its constraint every run by design).
+
+Two specific things inspection cannot settle: whether MySQL accepts the multi-line `UPDATE … JOIN`
+string inside the `IF(...)` prepared statement, and whether the `CHECK` add fails on a database whose
+existing check constraint is named differently than the `information_schema` lookup expects.
+
+---
+
 ---
 
 ## 3. Enhancement backlog
@@ -157,7 +186,79 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | ✅ **Single CORS source of truth** | Done — verified in code 2026-08-12. `SecurityConfig#corsConfigurationSource()` is now the single bean, built from `app.cors.allowed-origin-patterns`; `AngularSpringBootFullStackApplication#corsFilter` takes that same `CorsConfigurationSource` as a constructor argument instead of building its own rival config. No hardcoded origin list remains | |
 | ✅ **Anomaly signal tuning UI** | Done (2026-08-14) — new pinned-singleton `securitysettings` row (id=1, seeded via `INSERT IGNORE` so a re-run of `schema.sql` never stomps a live admin edit) with nullable `anomaly_enabled`/`anomaly_history_limit` override columns, `null` meaning "use the env default". `SecuritySettingsService`/`Impl` (JDBC, no Repo/RepoImpl — one row, same service-owns-its-SQL shape as `OrganizationServiceImpl`) is consulted **live** inside `LoginRiskServiceImpl#assess` on every login rather than cached, so a change from the panel takes effect on the very next sign-in with no redeploy; the `@Value` fields stay as the fallback default. New `GET`/`PATCH /admin/security/anomaly-settings` on `SecurityDashboardController` (reuses the existing `UPDATE:USER`/`UPDATE:ROLE` gate — no `SecurityConfig` matcher change), `AnomalySettingsForm` (both fields nullable by design — `null` clears an override, not a validation failure), and a `CapabilityCatalog` rule so the PATCH gets its own 403 message ("change security settings") ahead of the broader `/admin/security` rule. Frontend: a settings panel added to `/security-overview` (three-way default/enabled/disabled selector + history-limit input with a "use default" clear button, dirty-state gated Save), full 6-locale i18n. New tests: `SecuritySettingsServiceImplTest`, `SecurityDashboardControllerSecurityTest`, plus two new `LoginRiskServiceImplTest` cases proving a DB override wins over the env default | |
 | ⬜ **Access tokens have no revocation path** | Raised 2026-08-21 after a Postman-captured `access_token` kept authenticating well after it was captured, which read as a bug at first — it is not. `TokenProvider` documents this precisely: the `sid` claim does not gate validation, so access tokens stay fully stateless (NFR-PERF-2). Logging in again, revoking a session from the Security Center, and even "log out everywhere else" only stop a refresh token from minting a *new* access token — an access token already issued keeps authenticating for the rest of its 30-minute TTL regardless of what the account does afterward. A token pasted into Postman behaves identically to a token still sitting in the SPA on another device, because nothing server-side distinguishes them | Two independent, partial mitigations — neither free: (1) shorten `ACCESS_TOKEN_EXPIRE_TIME` below 30 minutes, cheap but pushes more traffic onto the refresh endpoint; (2) add a real revocation check — e.g. a `token_version` column on `users`, bumped on logout/password-change/admin-revoke and compared against a claim in `CustomAuthFilter` — which reintroduces exactly the per-request DB hit NFR-PERF-2 was written to avoid, so it is a deliberate tradeoff decision, not a drop-in fix |
+| ⬜ **A role change does not take effect until the next token refresh** | Raised 2026-08-26 from the question "if I update a user's role, why doesn't the JWT in local storage change?". It cannot change — a JWT is signed and immutable, so nothing can rewrite one in place. The real issue is what the stale token still *authorizes*. `TokenProvider#createAccessToken` bakes the authority strings into the token's `authorities` claim at mint time, and `CustomAuthFilter` reads authorities **back out of the token**, not from the database — so a demoted user keeps staff authority for the remainder of their 30-minute access TTL. The frontend agrees with the backend for the same reason: `UserService#grantedAuthorities` decodes that same claim out of `localStorage`, so `adminGuard` and the navbar stay stale in lockstep. **This self-heals on the next refresh** — `SessionServiceImpl#rotate` re-reads `roleService.getRoleByUserId(userId)` when it mints, so rotation carries the new role — which makes promotions merely delayed, but leaves demotions a real, if bounded, window. **Note there is a split-brain worth knowing about:** the `UserDTO` *principal* is fresh on every request (`TokenProvider#getAuthentication` calls `getUserById`), so anything reading `user.getRoleName()` — including all of §3.2's org scoping and `RoleType.isOrganizationScoped` — is already immediate. Only the coarse `hasAuthority` gate is stale | Cheaper than it looks, and cheaper than the sibling row below claims for the general case. `isTokenValid` **already** calls `userService.getUserById(userID)` on every authenticated request to read `passwordChangedAt`, and `getAuthentication` reads the user again — so the per-request DB hit NFR-PERF-2 was written to avoid is already being paid, twice. Mirroring the existing `passwordChangedAt` mechanism with a `roles_changed_at` column, bumped by `AdminUserController#updateUserRole` and compared against the token's `iat` in that same already-happening read, would make role changes take effect immediately at ~zero additional cost. Revoking the target's sessions on role change is **not** a substitute: per the row below, the `sid` claim does not gate validation, so revocation stops the next refresh but leaves the outstanding access token working |
 | ⬜ **P2-3 — Machine-to-machine API access** | Lets scripts and CI authenticate without a browser. Deferred deliberately: it adds a second authentication front door, the highest-risk change on this list | **Option A — API keys:** an `X-API-Key` filter ahead of `CustomAuthFilter` resolving a **hashed** key to an `Authentication` carrying authority strings, so every existing `hasAnyAuthority`/`@PreAuthorize` rule applies unchanged. **Option B — OAuth2 client-credentials:** `POST /oauth/token`. Both converge on "a request arrives already carrying authorities". Needs `service_accounts` + hashed `api_keys` tables, new audit event types, and `PUBLIC_URLS` ↔ `PUBLIC_ROUTES` lockstep. **Large, higher risk — do last, with dedicated review** |
+| ⬜ **External identity platform (IdM/IdP) — build vs. buy** | Recurring question, previously answered from memory each time it came up. Evaluated properly 2026-08-26 and recorded below so it stops being re-litigated: the verdict is **do not migrate**, and the reasoning is written down rather than the conclusion alone | Ping/ForgeRock ruled out on licensing before any technical comparison; Keycloak is the only realistic free path if the answer ever changes. Migration means deleting ~1,500 lines of working, tested auth — see the notes below |
+
+#### External identity platform — evaluation notes (2026-08-26)
+
+Recorded because this question keeps returning and has so far been answered from memory. The
+verdict is **do not migrate**; what follows is why, so the next person to ask gets the reasoning
+rather than the conclusion.
+
+**Ping and ForgeRock are one vendor.** Thoma Bravo acquired ForgeRock in August 2023 and folded it
+into Ping Identity. ForgeRock Identity Cloud and PingOne remain distinct platforms with cross-product
+integration still in progress, and Ping steers new deployments to PingOne. Evaluating "Ping vs.
+ForgeRock" is evaluating one company's two legacy product lines.
+
+**Neither has a usable free tier.** PingOne offers a 30-day trial — up to 1,000 active identities
+and up to five environments in one geography — after which the environment is *disabled* pending a
+purchased licence. Past the trial both platforms are quote-based enterprise sales with five-figure
+annual minimums typical. Third-party aggregators list a "$3/user/month freemium" tier; that does not
+match Ping's own pricing page, which is a contact-sales form, and it should not be planned against.
+This rules both out on commercial grounds before any technical comparison starts.
+
+**The more important finding: this application already is one.** The identity surface built here
+covers most of what a CIAM product sells —
+
+| Concern | Where it lives |
+|---|---|
+| Token issuance, refresh rotation, reuse detection | `SessionServiceImpl` (220 lines), `TokenProvider` (320) |
+| WebAuthn / passkeys | `PasskeyServiceImpl` (361), `WebAuthnChallengeStore` |
+| Authenticator-app MFA + recovery codes | `TotpServiceImpl` (281), `totpcredentials`, `totprecoverycodes` |
+| Login-anomaly scoring and step-up | `LoginRiskServiceImpl` (268), `securitysettings` |
+| Federated login and account linking | `OAuth2ClientConfig`, `FederatedIdentityServiceImpl`, `oauthproviderlinks` |
+| Multi-tenant membership, invites, per-org audit | `organizations`, `userorganizations`, `organizationinvites`, `organizationevents` |
+| Brute-force lockout, rate limiting | `UserController` (M6 window), `RateLimitFilter` |
+
+Adopting an external IdP means **deleting** most of that, not adding to it.
+
+**"IdM" is ambiguous, and the distinction matters.** ForgeRock split these into two products, and the
+split is the useful way to think about the gap here:
+
+- **Access Management** — authentication, SSO, MFA, tokens. *Built, and working.*
+- **Identity Management** — provisioning, lifecycle state machines, reconciliation between an
+  authoritative source and downstream targets, SCIM, access certification. *Not built* — and
+  `documentation/flows/README.md` records SCIM provisioning as explicitly out of scope per SRS §1.4.
+
+So the honest gap is the second one, and the SRS already declined it deliberately. Anyone reopening
+this should say which of the two they mean before reaching for a vendor.
+
+**If the answer ever changes, the free options, ranked for this stack:**
+
+| Option | Fit | Caveat |
+|---|---|---|
+| **Keycloak** | The default for a Spring Boot shop — Apache 2.0, Red Hat-backed, Java/Quarkus, deepest SPI extension model and the largest open-source IAM ecosystem. Covers passkeys, TOTP, groups, federation, rotation natively | Self-hosted: it becomes another service to run, patch and back up |
+| **Zitadel** | Architecturally the closest match to what exists — multi-tenant native (mirrors `userorganizations`) and event-sourced audit logs (mirrors `organizationevents`) | v3 relicensed from Apache 2.0 to **AGPL 3.0** in 2025 — a real consideration if this is ever shipped commercially |
+| **Ory** (Kratos/Hydra), **Logto**, **Authentik** | Viable; headless/composable, good DX, and self-hostable respectively | Smaller ecosystems than Keycloak |
+| **Auth0**, **AWS Cognito** | Managed, no ops burden; Cognito is adjacent given the existing ECS/S3 deployment | Vendor lock-in. Cognito's pricing was restructured into Lite/Essentials/Plus tiers — the remembered 50k-MAU free allowance no longer applies as people expect |
+
+**What the migration would actually involve**, if it is ever taken: the app stops issuing tokens and
+becomes a pure OIDC Resource Server (`spring-boot-starter-oauth2-resource-server`, validating against
+the IdP's JWKS). `TokenProvider`, `CustomAuthFilter`, `SessionService`'s issuance and rotation, and
+the TOTP/passkey services all go. IdP roles map onto the existing `READ:USER` / `UPDATE:ROLE`
+authority strings so `SecurityConfig`'s matchers survive unchanged, and `users` stays as a local
+profile table keyed by the IdP subject — `userfavorites` and `Customer.organization_id` still need
+it. **The sharp edge is password migration:** these are BCrypt hashes, so it needs either a custom
+hash provider through Keycloak's pluggable hashing SPI or lazy migration (verify against the old hash
+on first login, rewrite to the new format). Neither is hard; it is the step that gets underestimated.
+
+**Verdict.** The reasons to adopt an external IdP are needing SAML, needing SCIM provisioning,
+needing enterprise SSO for B2B customers, or not wanting to own auth security patches. The SRS has
+already ruled out the first two, and the third is not a current requirement. Owning this stack is a
+real maintenance liability, but replacing it is a larger, riskier project than finishing the access
+model work already queued in §3.2 — which is where the effort should go instead.
+
 
 ### 3.2 Access model
 
@@ -169,7 +270,10 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | ✅ **Org scope for business data** | Done (2026-08-08), extended to every scoped tier 2026-08-21 — every `/customer/**` read (`stats`, list, single get, search, invoice list/get, the new-invoice picker, both XLSX exports) is restricted to customers/invoices owned by the caller's active organizations, reusing the exact `*ForOrganizations` service methods `AnalyticsController` already had. Originally scoped `ROLE_ORGANIZATION_ADMIN` only, leaving every other role (including plain `ROLE_USER`) on a system-wide view "by design" — that turned out to be the same literal-role-name bug the row below fixed on the analytics/admin surfaces on 2026-08-13/08-14, just never propagated to `CustomerController`, so it wasn't a design decision, it was the gap resurfacing a third time. Now delegates to `RoleType.isOrganizationScoped`, same as everywhere else. Found and fixed two pre-existing bugs along the way in the original pass: `List.of(...).contains(null)` throws instead of returning `false` (would have crashed the scope check on any unowned row), and `GET /customer/invoice/get/{id}` 500'd unconditionally on a draft invoice (`Map.of` rejects a null value). Suites: `CustomerControllerOrgScopeTest` (16 tests) | |
 | ✅ **Scope every `UPDATE:USER` holder, not just one role name** | Done (2026-08-14), and the same literal-name check found and re-fixed on two more controllers 2026-08-21 — `RoleType.isOrganizationScoped(roleName)` is the one capability check; `AdminUserController#isOrganizationScoped`, `AnalyticsController#resolveScope`, `CustomerController#resolveScope`, and `SecurityDashboardController#resolveScope` all delegate to it instead of independently hardcoding `ROLE_ORGANIZATION_ADMIN.name().equals(...)`. `ROLE_HELP_DESK_ADMIN` (which also carries `UPDATE:USER`) is now correctly scoped everywhere instead of seeing every organization unscoped on whichever surface hadn't been fixed yet. New suite: `SecurityDashboardControllerOrgScopeTest` (5 tests) | |
 | ✅ **Organization dashboard revamp: profile, audit trail, invites, per-org stats, analytics filter** | The 2026-08-21/22 CRUD baseline above worked but stayed "plain jane" — a bare table with no visual identity, no way to see an organization's activity, no self-service way to join one, and no analytics awareness of organizations at all | Done (2026-08-22), fully additive to the row above — nothing from that commit was replaced. **Schema:** `organizations` gains nullable `description`/`contact_email`/`website` columns; `CK_Events_Type` extended with `ORG_CREATED`/`ORG_RENAMED`/`ORG_STATUS_CHANGED`/`ORG_PROFILE_UPDATED`/`ORG_MEMBER_ADDED`/`ORG_MEMBER_REMOVED`/`ORG_MEMBER_ROLE_CHANGED`/`ORG_INVITE_CREATED`/`ORG_INVITE_REDEEMED`/`ORG_INVITE_REVOKED`; new `organizationevents` table (mirrors `userevents` exactly — same `NewOrganizationEvent`/listener/swallow-and-log shape as `NewUserEvent`); new `organizationinvites` table (mirrors `resetpasswordverifications` — single-use, redemption deletes the row, so an unknown/expired/redeemed code all collapse to the same "not found" per NFR-SEC-7). **Backend:** `OrganizationController` gains `PATCH /{id}/profile` (unscoped-tier-only), `GET /{id}/events` (paginated audit trail), `GET /{id}/stats` (per-org KPI tiles, delegating to the same `CustomerService` `*ForOrganizations` methods `AnalyticsController` uses), and `POST`/`GET`/`DELETE /{id}/invites` (all membership-authority-gated; an invite's granted role is capped by the same `RoleType.canAssign` tier ceiling `AdminUserController` uses, so an invite can never mint a role above what its creator could assign directly). New `OrganizationInviteController` (`/user/organization`, `.authenticated()` only — not `UPDATE:ORGANIZATION` — since the person redeeming a shared link is by definition not yet a member) exposes `GET /invite/{code}` (name-only preview) and `POST /invite/{code}/redeem`. `AdminUserController#updateUserRole` gains an optional `organizationId` query param so a Members-tab role reassignment can also record an `ORG_MEMBER_ROLE_CHANGED` audit event, verified server-side against actual membership before it's recorded. `AnalyticsController#getSummary/getCustomers/getInvoices` gain an optional `organizationId` filter that intersects with the caller's own scope (fails closed to an empty result for a scoped caller filtering outside their own org, never leaks). New/extended tests: `OrganizationServiceImplTest` +20, `OrganizationControllerTest` +8, new `OrganizationInviteControllerTest` (3), `AnalyticsControllerOrgScopeTest`/`AnalyticsControllerSecurityTest` updated for the new param — full backend suite green throughout. **Frontend:** `OrganizationsComponent` rebuilt from a plain table into a dashboard — a catalog-wide KPI row (org count / active count / total members, a page-local `.sc-metric`-styled variant since the shared `app-stats` component's three tiles are hardcoded to customers/invoices/billed) over a responsive card grid, one `.sc-panel` per organization with its own mini stat row (reusing `app-stats` here, since a per-org `stats` payload genuinely is that same shape) fetched once for every organization in parallel right after the catalog loads. Expanding a card replaces the old single inline member row with four tabs: **Members** (existing add/remove/search plus a per-member role `<select>` wired to `AdminUserService#updateUserRole$`'s new `organizationId` hint param), **Profile** (unscoped-tier-only), **Activity** (paginated), **Invites** (create/copy-link/revoke). New `OrganizationJoinComponent` at `organizations/join/:code` — reachable by any authenticated user (`authenticationGuard` only, no `adminGuard`) — previews the invite's organization name before redeeming. `AnalyticsComponent` gains an org filter `<select>`, visible only to unscoped tiers, threading `organizationId` through to `customers$`/`invoices$`. i18n added across all 6 locales. New tests: `organization.service.spec.ts` +8. `ng lint`/`ng build`/full Vitest suite all green |
-| ⬜ **Per-organization role definitions** | `RoleRepoImpl.java` `TODO(org-roles)`. FR-ORG scopes *administration*, not role *definitions* — every org shares one role catalogue | Only worth it for genuine multi-tenancy; it changes the authority-string model, so not a small change |
+| ✅ **Per-organization role assignment** | `RoleRepoImpl.java` `TODO(org-roles)`. "Organization admin" was the *global* `ROLE_ORGANIZATION_ADMIN` tier, and its reach was every organization the holder belonged to — there was no way to administer org A while being an ordinary member of org B, which is the distinction multi-tenancy rests on | Done (2026-08-26) — new `userorganizations.org_role` column (idempotent ALTER + one-time backfill: whoever could administer an org yesterday, a global tier ≥ `ROLE_ORGANIZATION_ADMIN` holding an active membership, becomes `ORG_ADMIN`, so existing deployments behave identically) and `OrgRole` (ORG_VIEWER &lt; ORG_MEMBER &lt; ORG_ADMIN), built on `RoleType`'s proven shape — tiers pinned in code, `from()`/`canAssign()` fail closed. `OrganizationService` gains `findOrgRole`/`findOrgRoles`/`isOrgAdminOf`/`setMemberOrgRole`/`hasOtherActiveOrgAdmin`; `addMember` takes a capacity and re-asserts it on reactivation, so re-adding a former admin is never a silent re-grant. `OrganizationController#requireMembershipAuthority` now consults `isOrgAdminOf` instead of *global tier + bare membership*, and a new `requireAssignableOrgRole` caps what a scoped caller may grant (the org-level mirror of `RoleType.canAssign` — without it, scope bounds *who* but not *what*). New `PATCH /admin/organization/{id}/members/{userId}/role`, audited as the already-existing `ORG_MEMBER_ROLE_CHANGED`. Both demotion and removal refuse to strand an organization without its last `ORG_ADMIN`. **Closed a real escalation:** `redeemInvite` used to raise the redeemer's *global* role, so one organization's invite link elevated them in every organization they belonged to — `grantInviteRoleIfHigher` is deleted, and redemption writes an org role onto the membership row instead. New tests: `OrgRoleTest` (33), `OrganizationServiceImplTest` +11, `OrganizationControllerTest` +7 — 466 backend tests green. **The DDL itself is unverified against a live server — see §2.6 before merging** |
+| ⬜ **Per-organization role *definitions*** | The row above makes a fixed set of capacities per-organization; it does not make the *catalogue* per-tenant. Every organization still shares one `roles` table and one authority-string vocabulary | Only worth it for genuine multi-tenancy; it changes the authority-string model, so still not a small change |
+| ⬜ **Org roles in the JWT** | Spun out of the org-roles work: the original `TODO(org-roles)` sketch proposed injecting resolved org authorities into the token's `authorities` claim at login. Deliberately not done — a token minted before a membership change would carry stale authority for its full 30-minute TTL, the same staleness as the open "access tokens have no revocation path" row in §3.1 | Org roles are resolved per-request from the database instead. Revisit only alongside a real token-revocation mechanism |
+| ⬜ **Frontend for per-organization roles** | The backend endpoints exist and are tested; the Organizations page's Members tab does not expose them yet | Add a per-member org-role `<select>` (mirroring the existing global-role selector) and an org-role choice on the add-member and invite forms; i18n across all 6 locales |
 | ✅ **P2-1 — User type classification** | Done (2026-08-08) — badge shows `INTERNAL` / `EXTERNAL` / `FEDERATED` on the admin Users list and detail pages. `users.origin` is an immutable fact stamped once, at account creation, by `FederatedIdentityServiceImpl#insertFederatedUser` (`"FEDERATED_" + provider`) — never touched again, including when an existing password account later links a federated identity. `UserTypeResolver` derives `INTERNAL`/`EXTERNAL` fresh on every read from the email domain against the env-driven `INTERNAL_DOMAINS` allowlist (`AdminUserController`). `AZURE_B2B` was dropped from scope — this app has no actual Azure B2B guest integration, only consumer OAuth via Google/GitHub/Microsoft, and fabricating a category for a provider that isn't built would misrepresent capability | |
 
 #### Role CRUD — design session notes (2026-08-14), implemented 2026-08-19
@@ -279,22 +383,20 @@ opposed to the product itself. None of it is started.
 
 ## 4. Code TODO audit
 
-**6 `TODO` comments — 5 backend, 1 frontend — across 4 distinct work items.** Re-verified by
-grepping the tree on 2026-08-23; line numbers are from that grep (`RoleRepoImpl.java`'s TODO drifted
-from line 25 to line 33 since the last audit — comment unchanged, just later in the file). That is
-down from 17 (7 backend, 10 frontend) at the 2026-08-02 audit.
+**4 `TODO` comments — 3 backend, 1 frontend — across 3 distinct work items.** Re-verified by
+grepping the tree on 2026-08-26. That is down from 17 (7 backend, 10 frontend) at the 2026-08-02
+audit, and from 6 at the 2026-08-23 one: `UserController.java:62`'s `TODO(refactor-user-fetch)` and
+`RoleRepoImpl.java:33`'s `TODO(org-roles)` were both closed on 2026-08-26.
 
 None is a defect. Every one is either a cosmetic rename or a refactor that works correctly today and
 would simply be tidier done differently.
 
-### Backend (5)
+### Backend (3)
 
 | Location | Intent | Notes |
 |---|---|---|
 | `UserQuery.java:36` + `UserRepoImpl.java:187` | Rename the `url` column → `verification_key` | Cosmetic — it holds a bare UUID, not a URL. Needs a guarded idempotent rename |
-| `UserController.java:62` | `TODO(refactor-user-fetch)` — standardize the authenticated-user fetch | Refactor |
 | `UserRepoImpl.java:64` | `TODO(refactor-architecture)` — SRP violation | It is a repo, a `UserDetailsService`, **and** a business-logic holder |
-| `RoleRepoImpl.java:33` | `TODO(org-roles)` — org-scoped role system | §3.2 |
 
 Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/getById` throw
 `UnsupportedOperationException` (roles are seed-only).
@@ -305,6 +407,24 @@ Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/
 |---|---|---|
 | `profile.component.ts:22` | Reactive forms for profile | Refactor |
 
+> **Closed on 2026-08-26** — two, both replaced in place by a note recording what landed and what
+> was deliberately left:
+>
+> - `UserController.java`'s `TODO(refactor-user-fetch)` — the three inconsistent authenticated-user
+>   patterns are now one convention. `CustomAuthFilter` builds the principal via
+>   `TokenProvider#getAuthentication`, which already calls `getUserById`, so the controller's
+>   secondary fetches were re-reading a row it held: read-only handlers (`getProfile`,
+>   `getUserEvents`) now take the principal, and mutating ones re-read once *after* the write,
+>   keyed on the primary key. Also removed a check in `updateUserPassword` that compared a row's id
+>   against the id it had just been fetched by, and moved that fetch after the mutation so the
+>   response and the re-minted token pair see the updated `passwordChangedAt`. Pattern 3
+>   (`refreshToken` reading the subject straight from the token) had already been resolved by the
+>   `SessionService` refactor — `sendNewRefreshToken` sits outside the convention by necessity,
+>   since it is reached with an expired access token and has no `Authentication` to read.
+> - `RoleRepoImpl.java`'s `TODO(org-roles)` — see §3.2. Scoped to per-organization role
+>   *assignment*; role *definitions*, JWT injection, and the frontend are separately tracked rows
+>   there rather than a lingering comment.
+>
 > **Closed since the 2026-08-02 audit** — eleven `TODO`s, all verified gone from the tree rather than
 > merely un-commented:
 >

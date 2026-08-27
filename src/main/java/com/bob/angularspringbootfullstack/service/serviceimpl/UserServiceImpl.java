@@ -238,12 +238,12 @@ public class UserServiceImpl implements UserService {
     /**
      * Toggles a user's multifactor authentication status.
      *
-     * @param email the email of the user
+     * @param id the primary key of the user
      * @return the updated UserDTO
      */
     @Override
-    public UserDTO toggleMFA(String email) {
-        return mapToUserDTO(userRepo.toggleMFA(email));
+    public UserDTO toggleMFA(Long id) {
+        return mapToUserDTO(userRepo.toggleMFA(id));
     }
 
     /**

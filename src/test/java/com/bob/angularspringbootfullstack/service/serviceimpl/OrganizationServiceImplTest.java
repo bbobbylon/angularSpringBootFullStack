@@ -2,6 +2,7 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.EventType;
+import com.bob.angularspringbootfullstack.enumeration.OrgRole;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Organization;
 import com.bob.angularspringbootfullstack.model.OrganizationInvite;
@@ -38,6 +39,7 @@ import java.util.Set;
 
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERSHIP_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_OTHER_ACTIVE_ORG_ADMINS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ORGANIZATION_EVENTS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DEACTIVATE_MEMBERSHIP_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DELETE_INVITE_BY_CODE_QUERY;
@@ -50,6 +52,8 @@ import static com.bob.angularspringbootfullstack.query.OrganizationQuery.REACTIV
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_INVITES_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_MEMBERS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ALL_ORGANIZATIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORG_ROLE_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORG_ROLE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_INVITE_BY_CODE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_BY_ID_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_EVENTS_PAGINATED_QUERY;
@@ -229,7 +233,8 @@ class OrganizationServiceImplTest {
     void addMemberInsertsNewRow() {
         service.addMember(9L, 42L);
 
-        verify(jdbcTemplate).update(eq(INSERT_MEMBERSHIP_QUERY), eq(Map.of("userId", 42L, "organizationId", 9L)));
+        verify(jdbcTemplate).update(eq(INSERT_MEMBERSHIP_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L, "orgRole", "ORG_MEMBER")));
         verify(jdbcTemplate, never()).update(eq(REACTIVATE_MEMBERSHIP_QUERY), anyMap());
     }
 
@@ -240,7 +245,23 @@ class OrganizationServiceImplTest {
 
         service.addMember(9L, 42L);
 
-        verify(jdbcTemplate).update(eq(REACTIVATE_MEMBERSHIP_QUERY), eq(Map.of("userId", 42L, "organizationId", 9L)));
+        verify(jdbcTemplate).update(eq(REACTIVATE_MEMBERSHIP_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L, "orgRole", "ORG_MEMBER")));
+    }
+
+    @Test
+    @DisplayName("addMember writes the requested org role, and re-asserts it when reactivating")
+    void addMemberCarriesTheOrgRole() {
+        service.addMember(9L, 42L, OrgRole.ORG_ADMIN);
+        verify(jdbcTemplate).update(eq(INSERT_MEMBERSHIP_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L, "orgRole", "ORG_ADMIN")));
+
+        // A member removed as an ORG_ADMIN and re-added as an ORG_VIEWER must come back as a
+        // viewer, not silently inherit the capacity their dormant row still carries.
+        doThrow(new DuplicateKeyException("dup")).when(jdbcTemplate).update(eq(INSERT_MEMBERSHIP_QUERY), anyMap());
+        service.addMember(9L, 42L, OrgRole.ORG_VIEWER);
+        verify(jdbcTemplate).update(eq(REACTIVATE_MEMBERSHIP_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L, "orgRole", "ORG_VIEWER")));
     }
 
     @Test
@@ -421,13 +442,12 @@ class OrganizationServiceImplTest {
     }
 
     @Test
-    @DisplayName("redeemInvite joins the organization, upgrades the role, and deletes the invite")
-    void redeemInviteHappyPathUpgradesRole() {
+    @DisplayName("redeemInvite grants an ORG_ADMIN membership — never a global role — for an admin invite")
+    void redeemInviteGrantsOrgAdminNotGlobalRole() {
         OrganizationInvite invite = OrganizationInvite.builder()
                 .organizationId(9L).roleName("ROLE_ORGANIZATION_ADMIN").expirationDate(LocalDateTime.now().plusHours(1)).build();
         when(jdbcTemplate.queryForObject(eq(SELECT_INVITE_BY_CODE_QUERY), eq(Map.of("code", "live")), any(OrganizationInviteRowMapper.class)))
                 .thenReturn(invite);
-        when(roleRepo.getRoleByUserId(42L)).thenReturn(Role.builder().name("ROLE_USER").build());
         Organization organization = Organization.builder().id(9L).name("Acme").build();
         when(jdbcTemplate.queryForObject(eq(SELECT_ORGANIZATION_BY_ID_QUERY), eq(Map.of("id", 9L)), any(OrganizationRowMapper.class)))
                 .thenReturn(organization);
@@ -435,25 +455,143 @@ class OrganizationServiceImplTest {
         Organization joined = service.redeemInvite("live", 42L);
 
         assertThat(joined).isEqualTo(organization);
-        verify(jdbcTemplate).update(eq(INSERT_MEMBERSHIP_QUERY), eq(Map.of("userId", 42L, "organizationId", 9L)));
-        verify(userService).updateUserRole(eq(42L), eq("ROLE_ORGANIZATION_ADMIN"), isNull());
+        // The capacity lands on the membership row for THIS organization only. Before per-org
+        // roles this raised the redeemer's single global role, which reached every organization
+        // they belonged to — the cross-tenant escalation this replaces.
+        verify(jdbcTemplate).update(eq(INSERT_MEMBERSHIP_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L, "orgRole", "ORG_ADMIN")));
         verify(jdbcTemplate).update(eq(DELETE_INVITE_BY_CODE_QUERY), eq(Map.of("code", "live")));
     }
 
     @Test
-    @DisplayName("redeemInvite never demotes a redeemer who already outranks the invite's role")
-    void redeemInviteNeverDemotesAHigherRole() {
+    @DisplayName("redeemInvite grants an ordinary membership for a non-admin invite role")
+    void redeemInviteGrantsOrdinaryMembershipForLowerRoles() {
         OrganizationInvite invite = OrganizationInvite.builder()
                 .organizationId(9L).roleName("ROLE_USER").expirationDate(LocalDateTime.now().plusHours(1)).build();
         when(jdbcTemplate.queryForObject(eq(SELECT_INVITE_BY_CODE_QUERY), eq(Map.of("code", "live")), any(OrganizationInviteRowMapper.class)))
                 .thenReturn(invite);
-        when(roleRepo.getRoleByUserId(42L)).thenReturn(Role.builder().name("ROLE_ADMIN").build());
         when(jdbcTemplate.queryForObject(eq(SELECT_ORGANIZATION_BY_ID_QUERY), eq(Map.of("id", 9L)), any(OrganizationRowMapper.class)))
                 .thenReturn(Organization.builder().id(9L).name("Acme").build());
 
         service.redeemInvite("live", 42L);
 
-        verify(userService, never()).updateUserRole(any(), any(), any());
+        verify(jdbcTemplate).update(eq(INSERT_MEMBERSHIP_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L, "orgRole", "ORG_MEMBER")));
+    }
+
+    // ── Per-organization roles (TODO(org-roles)) ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("findOrgRole resolves the stored capacity for an active membership")
+    void findOrgRoleResolvesStoredCapacity() {
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORG_ROLE_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L)), eq(String.class))).thenReturn("ORG_ADMIN");
+
+        assertThat(service.findOrgRole(42L, 9L)).contains(OrgRole.ORG_ADMIN);
+    }
+
+    @Test
+    @DisplayName("findOrgRole is empty for a non-member, and for a capacity this app does not recognize")
+    void findOrgRoleFailsClosed() {
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORG_ROLE_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L)), eq(String.class)))
+                .thenThrow(new EmptyResultDataAccessException(1));
+        assertThat(service.findOrgRole(42L, 9L)).isEmpty();
+
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORG_ROLE_QUERY),
+                eq(Map.of("userId", 7L, "organizationId", 9L)), eq(String.class))).thenReturn("ORG_OVERLORD");
+        assertThat(service.findOrgRole(7L, 9L)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("isOrgAdminOf is true only for an ORG_ADMIN membership in that same organization")
+    void isOrgAdminOfIsPerOrganization() {
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORG_ROLE_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L)), eq(String.class))).thenReturn("ORG_ADMIN");
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORG_ROLE_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 10L)), eq(String.class))).thenReturn("ORG_MEMBER");
+
+        // The whole point of the feature: administering org 9 confers nothing in org 10.
+        assertThat(service.isOrgAdminOf(42L, 9L)).isTrue();
+        assertThat(service.isOrgAdminOf(42L, 10L)).isFalse();
+    }
+
+    @Test
+    @DisplayName("setMemberOrgRole writes the new capacity for an active membership")
+    void setMemberOrgRoleWritesCapacity() {
+        when(jdbcTemplate.update(eq(UPDATE_ORG_ROLE_QUERY), anyMap())).thenReturn(1);
+
+        service.setMemberOrgRole(9L, 42L, OrgRole.ORG_ADMIN);
+
+        verify(jdbcTemplate).update(eq(UPDATE_ORG_ROLE_QUERY),
+                eq(Map.of("orgRole", "ORG_ADMIN", "userId", 42L, "organizationId", 9L)));
+    }
+
+    @Test
+    @DisplayName("setMemberOrgRole rejects a member who is not in the organization")
+    void setMemberOrgRoleRejectsNonMember() {
+        when(jdbcTemplate.update(eq(UPDATE_ORG_ROLE_QUERY), anyMap())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.setMemberOrgRole(9L, 42L, OrgRole.ORG_MEMBER))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("not an active member");
+    }
+
+    @Test
+    @DisplayName("setMemberOrgRole refuses to demote an organization's last administrator")
+    void setMemberOrgRoleRefusesToStrandAnOrganization() {
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORG_ROLE_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L)), eq(String.class))).thenReturn("ORG_ADMIN");
+        when(jdbcTemplate.queryForObject(eq(COUNT_OTHER_ACTIVE_ORG_ADMINS_QUERY),
+                eq(Map.of("organizationId", 9L, "userId", 42L)), eq(Long.class))).thenReturn(0L);
+
+        assertThatThrownBy(() -> service.setMemberOrgRole(9L, 42L, OrgRole.ORG_MEMBER))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("only administrator");
+        verify(jdbcTemplate, never()).update(eq(UPDATE_ORG_ROLE_QUERY), anyMap());
+    }
+
+    @Test
+    @DisplayName("setMemberOrgRole allows demotion once another administrator exists")
+    void setMemberOrgRoleAllowsDemotionWithAnotherAdmin() {
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORG_ROLE_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L)), eq(String.class))).thenReturn("ORG_ADMIN");
+        when(jdbcTemplate.queryForObject(eq(COUNT_OTHER_ACTIVE_ORG_ADMINS_QUERY),
+                eq(Map.of("organizationId", 9L, "userId", 42L)), eq(Long.class))).thenReturn(1L);
+        when(jdbcTemplate.update(eq(UPDATE_ORG_ROLE_QUERY), anyMap())).thenReturn(1);
+
+        service.setMemberOrgRole(9L, 42L, OrgRole.ORG_MEMBER);
+
+        verify(jdbcTemplate).update(eq(UPDATE_ORG_ROLE_QUERY), anyMap());
+    }
+
+    @Test
+    @DisplayName("setMemberOrgRole does not block re-asserting ORG_ADMIN on the only administrator")
+    void setMemberOrgRoleAllowsNoOpOnLastAdmin() {
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORG_ROLE_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L)), eq(String.class))).thenReturn("ORG_ADMIN");
+        when(jdbcTemplate.queryForObject(eq(COUNT_OTHER_ACTIVE_ORG_ADMINS_QUERY),
+                eq(Map.of("organizationId", 9L, "userId", 42L)), eq(Long.class))).thenReturn(0L);
+        when(jdbcTemplate.update(eq(UPDATE_ORG_ROLE_QUERY), anyMap())).thenReturn(1);
+
+        // Not a demotion, so the last-administrator guard must not fire.
+        service.setMemberOrgRole(9L, 42L, OrgRole.ORG_ADMIN);
+
+        verify(jdbcTemplate).update(eq(UPDATE_ORG_ROLE_QUERY), anyMap());
+    }
+
+    @Test
+    @DisplayName("removeMember refuses to remove an organization's last administrator")
+    void removeMemberRefusesToStrandAnOrganization() {
+        when(jdbcTemplate.queryForObject(eq(SELECT_ORG_ROLE_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L)), eq(String.class))).thenReturn("ORG_ADMIN");
+        when(jdbcTemplate.queryForObject(eq(COUNT_OTHER_ACTIVE_ORG_ADMINS_QUERY),
+                eq(Map.of("organizationId", 9L, "userId", 42L)), eq(Long.class))).thenReturn(0L);
+
+        assertThatThrownBy(() -> service.removeMember(9L, 42L))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("only administrator");
+        verify(jdbcTemplate, never()).update(eq(DEACTIVATE_MEMBERSHIP_QUERY), anyMap());
     }
 
     // ── getOrganizationStats ──────────────────────────────────────────────────────────────

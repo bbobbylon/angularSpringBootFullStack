@@ -2,6 +2,7 @@ package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.EventType;
+import com.bob.angularspringbootfullstack.enumeration.OrgRole;
 import com.bob.angularspringbootfullstack.event.NewOrganizationEvent;
 import com.bob.angularspringbootfullstack.exception.GlobalExceptionHandler;
 import com.bob.angularspringbootfullstack.model.Organization;
@@ -20,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -170,32 +172,133 @@ class OrganizationControllerTest {
                         .principal(authAs(1L, "ROLE_ADMIN")))
                 .andExpect(status().isOk());
 
-        verify(organizationService).addMember(9L, 42L);
+        verify(organizationService).addMember(9L, 42L, OrgRole.ORG_MEMBER);
         verify(organizationService, never()).isActiveMemberOfOrganization(any(), any());
     }
 
     @Test
     @DisplayName("an organization admin who actively belongs to the target org can add a member")
     void orgAdminCanAddMemberToOwnOrganization() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(true);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
 
         mockMvc.perform(post("/admin/organization/{organizationId}/members/{userId}", 9L, 42L)
                         .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
                 .andExpect(status().isOk());
 
-        verify(organizationService).addMember(9L, 42L);
+        verify(organizationService).addMember(9L, 42L, OrgRole.ORG_MEMBER);
+    }
+
+    @Test
+    @DisplayName("a member holding ORG_ADMIN in one organization cannot manage a different one")
+    void orgAdminAuthorityDoesNotCrossOrganizations() throws Exception {
+        // The heart of TODO(org-roles): the same caller, the same global tier, two organizations.
+        // Before per-org roles this pair was indistinguishable — a global ROLE_ORGANIZATION_ADMIN
+        // reached every organization it belonged to.
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
+        when(organizationService.isOrgAdminOf(5L, 10L)).thenReturn(false);
+
+        mockMvc.perform(post("/admin/organization/{organizationId}/members/{userId}", 9L, 42L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/admin/organization/{organizationId}/members/{userId}", 10L, 42L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isForbidden());
+
+        verify(organizationService).addMember(9L, 42L, OrgRole.ORG_MEMBER);
+        verify(organizationService, never()).addMember(eq(10L), any(), any());
+    }
+
+    @Test
+    @DisplayName("an org admin can add a member at an explicit capacity within their own ceiling")
+    void orgAdminCanAddMemberAtRequestedCapacity() throws Exception {
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
+        when(organizationService.findOrgRole(5L, 9L)).thenReturn(Optional.of(OrgRole.ORG_ADMIN));
+
+        mockMvc.perform(post("/admin/organization/{organizationId}/members/{userId}", 9L, 42L)
+                        .param("orgRole", "ORG_ADMIN")
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(organizationService).addMember(9L, 42L, OrgRole.ORG_ADMIN);
+    }
+
+    @Test
+    @DisplayName("an org admin can change a member's org role in an organization they administer")
+    void orgAdminCanChangeMemberOrgRole() throws Exception {
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
+        when(organizationService.findOrgRole(5L, 9L)).thenReturn(Optional.of(OrgRole.ORG_ADMIN));
+
+        mockMvc.perform(patch("/admin/organization/{organizationId}/members/{userId}/role", 9L, 42L)
+                        .param("orgRole", "ORG_VIEWER")
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(organizationService).setMemberOrgRole(9L, 42L, OrgRole.ORG_VIEWER);
+        verify(eventPublisher).publishEvent(any(NewOrganizationEvent.class));
+    }
+
+    @Test
+    @DisplayName("an ORG_VIEWER cannot change anyone's org role, even in their own organization")
+    void orgViewerCannotChangeMemberOrgRole() throws Exception {
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(false);
+
+        mockMvc.perform(patch("/admin/organization/{organizationId}/members/{userId}/role", 9L, 42L)
+                        .param("orgRole", "ORG_ADMIN")
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isForbidden());
+
+        verify(organizationService, never()).setMemberOrgRole(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a scoped caller cannot grant an org role above their own capacity")
+    void scopedCallerCannotGrantAboveOwnOrgRole() throws Exception {
+        // Passes the membership gate, then fails the assignment ceiling — the org-level mirror of
+        // RoleType.canAssign, without which scope bounds who but not what.
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
+        when(organizationService.findOrgRole(5L, 9L)).thenReturn(Optional.of(OrgRole.ORG_MEMBER));
+
+        mockMvc.perform(patch("/admin/organization/{organizationId}/members/{userId}/role", 9L, 42L)
+                        .param("orgRole", "ORG_ADMIN")
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isForbidden());
+
+        verify(organizationService, never()).setMemberOrgRole(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("an unscoped tier may set any org role in any organization")
+    void unscopedTierMaySetAnyOrgRole() throws Exception {
+        mockMvc.perform(patch("/admin/organization/{organizationId}/members/{userId}/role", 9L, 42L)
+                        .param("orgRole", "ORG_ADMIN")
+                        .principal(authAs(1L, "ROLE_APPLICATION_ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(organizationService).setMemberOrgRole(9L, 42L, OrgRole.ORG_ADMIN);
+        verify(organizationService, never()).isOrgAdminOf(any(), any());
+    }
+
+    @Test
+    @DisplayName("an unrecognized org role is rejected rather than silently defaulted")
+    void unrecognizedOrgRoleIsRejected() throws Exception {
+        mockMvc.perform(patch("/admin/organization/{organizationId}/members/{userId}/role", 9L, 42L)
+                        .param("orgRole", "ORG_OVERLORD")
+                        .principal(authAs(1L, "ROLE_APPLICATION_ADMIN")))
+                .andExpect(status().isBadRequest());
+
+        verify(organizationService, never()).setMemberOrgRole(any(), any(), any());
     }
 
     @Test
     @DisplayName("an organization admin who does NOT belong to the target org cannot add a member")
     void orgAdminCannotAddMemberToOtherOrganization() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(false);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(false);
 
         mockMvc.perform(post("/admin/organization/{organizationId}/members/{userId}", 9L, 42L)
                         .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
                 .andExpect(status().isForbidden());
 
-        verify(organizationService, never()).addMember(any(), any());
+        verify(organizationService, never()).addMember(any(), any(), any());
     }
 
     @Test
@@ -205,14 +308,14 @@ class OrganizationControllerTest {
                         .principal(authAs(3L, "ROLE_HELP_DESK_ADMIN")))
                 .andExpect(status().isForbidden());
 
-        verify(organizationService, never()).addMember(any(), any());
+        verify(organizationService, never()).addMember(any(), any(), any());
         verify(organizationService, never()).isActiveMemberOfOrganization(any(), any());
     }
 
     @Test
     @DisplayName("membership removal follows the same authorization rule as adding a member")
     void orgAdminCannotRemoveMemberFromOtherOrganization() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(false);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(false);
 
         mockMvc.perform(delete("/admin/organization/{organizationId}/members/{userId}", 9L, 42L)
                         .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
@@ -238,7 +341,7 @@ class OrganizationControllerTest {
     @Test
     @DisplayName("an organization admin can list members of an organization they actively belong to")
     void orgAdminCanListMembersOfOwnOrganization() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(true);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
         when(organizationService.listActiveMembers(9L)).thenReturn(List.of());
 
         mockMvc.perform(get("/admin/organization/{organizationId}/members", 9L)
@@ -251,7 +354,7 @@ class OrganizationControllerTest {
     @Test
     @DisplayName("an organization admin cannot list members of an organization they do not belong to")
     void orgAdminCannotListMembersOfOtherOrganization() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(false);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(false);
 
         mockMvc.perform(get("/admin/organization/{organizationId}/members", 9L)
                         .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
@@ -331,7 +434,7 @@ class OrganizationControllerTest {
     @Test
     @DisplayName("an organization admin can read the activity log of an organization they belong to")
     void orgAdminCanReadOwnOrganizationEvents() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(true);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
         when(organizationService.listOrganizationEvents(9L, 0, 20)).thenReturn(List.of());
         when(organizationService.countOrganizationEvents(9L)).thenReturn(0L);
 
@@ -345,7 +448,7 @@ class OrganizationControllerTest {
     @Test
     @DisplayName("an organization admin cannot read the activity log of an organization they do not belong to")
     void orgAdminCannotReadOtherOrganizationEvents() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(false);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(false);
 
         mockMvc.perform(get("/admin/organization/{organizationId}/events", 9L)
                         .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
@@ -371,7 +474,7 @@ class OrganizationControllerTest {
     @Test
     @DisplayName("an organization admin can create a ROLE_USER invite for their own organization")
     void orgAdminCanCreateUserInvite() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(true);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
         OrganizationInvite invite = OrganizationInvite.builder().id(1L).organizationId(9L).roleName("ROLE_USER").build();
         when(organizationService.createInvite(9L, 5L, "ROLE_USER", 168L)).thenReturn(invite);
         when(organizationService.listActiveInvites(9L)).thenReturn(List.of(invite));
@@ -389,7 +492,7 @@ class OrganizationControllerTest {
     @Test
     @DisplayName("an organization admin cannot create an invite granting a role above their own tier")
     void orgAdminCannotCreateInviteAboveOwnTier() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(true);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
 
         mockMvc.perform(post("/admin/organization/{organizationId}/invites", 9L)
                         .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN"))
@@ -403,7 +506,7 @@ class OrganizationControllerTest {
     @Test
     @DisplayName("an organization admin cannot create an invite for an organization they do not belong to")
     void orgAdminCannotCreateInviteForOtherOrganization() throws Exception {
-        when(organizationService.isActiveMemberOfOrganization(5L, 9L)).thenReturn(false);
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(false);
 
         mockMvc.perform(post("/admin/organization/{organizationId}/invites", 9L)
                         .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN"))

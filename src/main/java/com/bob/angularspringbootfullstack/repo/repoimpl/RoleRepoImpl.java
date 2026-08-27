@@ -30,62 +30,62 @@ import static java.util.Objects.requireNonNull;
  * <p>In this project roles hold the permission string used to construct authorities.
  *
  * <p>-----------------------------------------------------------------------
- * TODO(org-roles): Implement organization-scoped role system (real-world RBAC)
+ * <b>Organization-scoped roles — implemented 2026-08-26 (was {@code TODO(org-roles)})</b>
  * -----------------------------------------------------------------------
  *
- * <p><b>Schema additions required:</b>
- * <pre>
- *   organizations
- *     id          BIGINT PK AUTO_INCREMENT
- *     name        VARCHAR NOT NULL
- *     slug        VARCHAR UNIQUE NOT NULL   -- URL-safe identifier
- *     created_at  TIMESTAMP DEFAULT NOW()
+ * <p>The capacity a user holds <em>within one organization</em> now lives on the membership row
+ * as {@code userorganizations.org_role}, mirrored in code by
+ * {@link com.bob.angularspringbootfullstack.enumeration.OrgRole} (ORG_VIEWER &lt; ORG_MEMBER &lt;
+ * ORG_ADMIN). This class is unchanged by that work and stays what it was: the repository for the
+ * <b>global</b> role catalogue, one role per user, which is what supplies the authority strings
+ * Spring Security matches on.
  *
- *   user_organizations -- many-to-many junction
- *     user_id BIGINT FK -> 'users.id'
- *     org_id BIGINT FK -> 'organizations.id'
- *     org_role    VARCHAR NOT NULL           -- e.g., ORG_ADMIN, ORG_MEMBER, ORG_VIEWER
- *     status      VARCHAR DEFAULT 'ACTIVE'   -- ACTIVE | SUSPENDED | PENDING_INVITE
- *     joined_at   TIMESTAMP DEFAULT NOW()
- *     PRIMARY KEY (user_id, org_id)
- * </pre>
- *
- * <p><b>Role precedence (layered — org roles stack on top of global roles):</b>
+ * <p><b>How the two compose</b> — the split this TODO existed to introduce:
  * <ol>
- *   <li>GLOBAL SUPER_ADMIN — bypasses all org checks; full access everywhere.</li>
- *   <li>GLOBAL ADMIN — full access within any org they explicitly belong to.</li>
- *   <li>ORG_ADMIN — admin rights scoped to orgs where this role is assigned.</li>
- *   <li>ORG_MEMBER — standard member rights within their orgs.</li>
- *   <li>ORG_VIEWER — read-only within their orgs.</li>
- *   <li>GLOBAL ROLE_USER — baseline; no org-level elevation.</li>
+ *   <li>The global {@link com.bob.angularspringbootfullstack.enumeration.RoleType} gates the
+ *       endpoint (via authority strings) and decides <em>whether</em> org scoping applies at all —
+ *       {@code ROLE_ADMIN} and {@code ROLE_APPLICATION_ADMIN} remain unscoped platform
+ *       operators.</li>
+ *   <li>For every scoped tier, {@code OrgRole} decides <em>which</em> organizations they may act
+ *       on. Administering organization A now confers nothing in organization B.</li>
  * </ol>
  *
- * <p><b>Permission resolution algorithm:</b>
- * <ol>
- *   <li>Load the user's global role from the existing {@code user_roles} table.</li>
- *   <li>If SUPER_ADMIN → grant all; short-circuit.</li>
- *   <li>Load all rows for this user from {@code user_organizations}.</li>
- *   <li>Merge global permissions UNION org-scoped permissions for the active org context.</li>
- *   <li>Inject the resolved authority set into the JWT "authorities" claim at login.</li>
- * </ol>
+ * <p>Before this, "organization admin" was the global {@code ROLE_ORGANIZATION_ADMIN} tier and its
+ * reach was every organization the holder belonged to, so the distinction genuine multi-tenancy
+ * rests on could not be expressed. It also made invite redemption a cross-tenant escalation: an
+ * invite raised the redeemer's single global role, so one organization's link elevated them
+ * everywhere they held a membership. Redemption now writes an org role onto the membership row
+ * instead — see {@code OrganizationServiceImpl#redeemInvite} and the {@code NOTE(org-roles)} beside
+ * it.
  *
- * <p><b>Cross-org admin update check (for PATCH /user/admin/update/{userId}):</b>
- * <pre>
- *   SELECT COUNT(*) FROM user_organizations a
- *   JOIN user_organizations b ON a.org_id = b.org_id
- *   WHERE a.user_id =: adminId AND b.user_id =: targetUserId
- *   AND a.org_role IN ('ORG_ADMIN') AND a.status = 'ACTIVE'
- * </pre>
- * If count == 0 AND admin is not SUPER_ADMIN → throw 403 Forbidden.
- *
- * <p><b>New repo methods needed:</b>
+ * <p>The membership-side operations the original note sketched live on
+ * {@link com.bob.angularspringbootfullstack.service.OrganizationService}, not here — that class
+ * already owned membership and its own SQL, so adding a second home for it would have split one
+ * concern across two components. The mapping, for anyone following the old note:
  * <ul>
- *   <li>{@code addUserToOrg(Long userId, Long orgId, String orgRole)}</li>
- *   <li>{@code getOrgRolesForUser(Long userId)} → List of (orgId, orgRole)</li>
- *   <li>{@code getUsersInOrg(Long orgId)} → for the admin Users list page</li>
- *   <li>{@code adminSharesOrgWithUser(Long adminId, Long targetUserId)} → boolean guard</li>
- *   <li>{@code updateUserOrgRole(Long userId, Long orgId, String newRole)}</li>
- *   <li>{@code removeUserFromOrg(Long userId, Long orgId)}</li>
+ *   <li>{@code addUserToOrg} → {@code addMember(orgId, userId, OrgRole)}</li>
+ *   <li>{@code getOrgRolesForUser} → {@code findOrgRoles(userId)}</li>
+ *   <li>{@code getUsersInOrg} → {@code listActiveMembers(orgId)} (already existed)</li>
+ *   <li>{@code adminSharesOrgWithUser} → {@code isWithinOrganizationScope} (already existed);
+ *       the per-organization question is {@code isOrgAdminOf}</li>
+ *   <li>{@code updateUserOrgRole} → {@code setMemberOrgRole(orgId, userId, OrgRole)}</li>
+ *   <li>{@code removeUserFromOrg} → {@code removeMember(orgId, userId)} (already existed)</li>
+ * </ul>
+ *
+ * <p><b>Deliberately not done</b>, and tracked in FUTURE-ENHANCEMENTS.md §3.2 rather than left as
+ * a comment here:
+ * <ul>
+ *   <li><b>Org roles are not in the JWT.</b> The original note's step 5 proposed injecting a
+ *       resolved authority set into the token's {@code authorities} claim at login. They are
+ *       resolved per request from the database instead, because a token minted before a membership
+ *       change would otherwise carry stale authority for its full 30-minute TTL — the same
+ *       staleness already recorded as the open "access tokens have no revocation path" item.</li>
+ *   <li><b>Per-organization role <em>definitions</em></b> (each organization with its own role
+ *       catalogue and permission strings) remain unbuilt. This work makes an existing, fixed set
+ *       of capacities per-organization; it does not make the catalogue itself per-tenant.</li>
+ *   <li><b>No frontend.</b> The {@code PATCH /admin/organization/&#123;id&#125;/members/&#123;userId&#125;/role}
+ *       endpoint and the {@code orgRole} parameter on add-member exist and are tested, but the
+ *       Organizations page's Members tab does not yet expose them.</li>
  * </ul>
  * -----------------------------------------------------------------------
  */

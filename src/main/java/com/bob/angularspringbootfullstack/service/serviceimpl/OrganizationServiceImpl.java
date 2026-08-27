@@ -2,7 +2,7 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.EventType;
-import com.bob.angularspringbootfullstack.enumeration.RoleType;
+import com.bob.angularspringbootfullstack.enumeration.OrgRole;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Organization;
 import com.bob.angularspringbootfullstack.model.OrganizationEvent;
@@ -18,7 +18,6 @@ import com.bob.angularspringbootfullstack.rowmapper.OrganizationRowMapper;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
-import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -33,6 +32,7 @@ import org.springframework.stereotype.Service;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +43,7 @@ import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUse
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERSHIP_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ORGANIZATION_EVENTS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_OTHER_ACTIVE_ORG_ADMINS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_SHARED_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_USERS_SHARING_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DEACTIVATE_MEMBERSHIP_QUERY;
@@ -58,6 +59,9 @@ import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATION_IDS_BY_USER_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ALL_ORGANIZATIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORG_ROLES_BY_USER_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORG_ROLE_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORG_ROLE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_INVITE_BY_CODE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATIONS_BY_IDS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORGANIZATION_ADMIN_EMAILS_QUERY;
@@ -88,8 +92,6 @@ public class OrganizationServiceImpl implements OrganizationService {
     private final RoleRepo<Role> roleRepo;
     /** Supplies the {@code *ForOrganizations} rollups {@link #getOrganizationStats} narrows to one id. */
     private final CustomerService customerService;
-    /** Grants the invite's role on redemption via the same path {@code AdminUserController} uses. */
-    private final UserService userService;
 
     /**
      * Evaluates the FR-ORG-2 scope predicate with a single COUNT over the membership
@@ -319,9 +321,10 @@ public class OrganizationServiceImpl implements OrganizationService {
      * case would never reach the reactivation branch.
      */
     @Override
-    public void addMember(Long organizationId, Long userId) {
-        log.info("Adding user {} to organization {}", userId, organizationId);
-        Map<String, Long> params = Map.of("userId", userId, "organizationId", organizationId);
+    public void addMember(Long organizationId, Long userId, OrgRole orgRole) {
+        OrgRole granted = orgRole == null ? OrgRole.DEFAULT : orgRole;
+        log.info("Adding user {} to organization {} as {}", userId, organizationId, granted);
+        Map<String, Object> params = Map.of("userId", userId, "organizationId", organizationId, "orgRole", granted.name());
         try {
             jdbcTemplate.update(INSERT_MEMBERSHIP_QUERY, params);
         } catch (DuplicateKeyException e) {
@@ -339,6 +342,11 @@ public class OrganizationServiceImpl implements OrganizationService {
      */
     @Override
     public void removeMember(Long organizationId, Long userId) {
+        // Removing the last ORG_ADMIN leaves an organization nobody scoped can manage — same guard,
+        // and same reasoning, as the demotion path in setMemberOrgRole.
+        if (isOrgAdminOf(userId, organizationId) && !hasOtherActiveOrgAdmin(organizationId, userId)) {
+            throw new ApiException("This is the organization's only administrator. Promote another member before removing them.");
+        }
         log.info("Removing user {} from organization {}", userId, organizationId);
         try {
             jdbcTemplate.update(DEACTIVATE_MEMBERSHIP_QUERY, Map.of("userId", userId, "organizationId", organizationId));
@@ -511,11 +519,119 @@ public class OrganizationServiceImpl implements OrganizationService {
         OrganizationInvite invite = getInviteByCode(code)
                 .filter(candidate -> candidate.getExpirationDate().isAfter(LocalDateTime.now()))
                 .orElseThrow(() -> new ApiException("This invite link is invalid or has expired."));
-        addMember(invite.getOrganizationId(), userId);
-        grantInviteRoleIfHigher(userId, invite.getRoleName());
+        addMember(invite.getOrganizationId(), userId, OrgRole.fromInvitedGlobalRole(invite.getRoleName()));
         jdbcTemplate.update(DELETE_INVITE_BY_CODE_QUERY, Map.of("code", code));
         log.info("User {} redeemed invite for organization {}", userId, invite.getOrganizationId());
         return getOrganization(invite.getOrganizationId());
+    }
+
+    // ── Per-organization roles (2026-08-26, TODO(org-roles)) ────────────────────────────────
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>An unrecognized stored value resolves to empty rather than throwing: the column carries a
+     * CHECK constraint, so this can only happen on a database whose constraint was dropped by hand,
+     * and "we do not recognize this capacity" must read as no capacity, not as an error that some
+     * caller might swallow into a grant.
+     */
+    @Override
+    public Optional<OrgRole> findOrgRole(Long userId, Long organizationId) {
+        try {
+            String stored = jdbcTemplate.queryForObject(SELECT_ORG_ROLE_QUERY,
+                    Map.of("userId", userId, "organizationId", organizationId), String.class);
+            return OrgRole.from(stored);
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        } catch (Exception exception) {
+            log.error("Org-role lookup failed for user {} in organization {}: {}", userId, organizationId, exception.getMessage(), exception);
+            // Fail closed, same direction as isActiveMemberOfOrganization.
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Rows whose stored capacity this application does not recognize are dropped rather than
+     * defaulted, keeping this consistent with {@link #findOrgRole}: an unreadable capacity is
+     * absent, never assumed.
+     */
+    @Override
+    public Map<Long, OrgRole> findOrgRoles(Long userId) {
+        try {
+            Map<Long, OrgRole> resolved = new LinkedHashMap<>();
+            jdbcTemplate.query(SELECT_ORG_ROLES_BY_USER_QUERY, Map.of("userId", userId), resultSet -> {
+                // Both columns are read here, in the RowCallbackHandler itself, rather than inside
+                // the Optional consumer below: that consumer is a plain Consumer and cannot throw
+                // the SQLException a ResultSet accessor declares.
+                long organizationId = resultSet.getLong("organization_id");
+                String storedRole = resultSet.getString("org_role");
+                OrgRole.from(storedRole).ifPresent(orgRole -> resolved.put(organizationId, orgRole));
+            });
+            return resolved;
+        } catch (Exception exception) {
+            log.error("Org-roles lookup failed for user {}: {}", userId, exception.getMessage(), exception);
+            return Map.of();
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isOrgAdminOf(Long userId, Long organizationId) {
+        return findOrgRole(userId, organizationId)
+                .map(orgRole -> orgRole.isAtLeast(OrgRole.ORG_ADMIN))
+                .orElse(false);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The last-administrator guard runs before the write and only when the change is an actual
+     * demotion — reassigning an administrator to {@code ORG_ADMIN} again is a no-op that must not
+     * be refused merely because they are the only one.
+     */
+    @Override
+    public void setMemberOrgRole(Long organizationId, Long userId, OrgRole orgRole) {
+        OrgRole granted = requireNonNull(orgRole, "orgRole");
+        boolean isDemotionOfAdmin = !granted.isAtLeast(OrgRole.ORG_ADMIN) && isOrgAdminOf(userId, organizationId);
+        if (isDemotionOfAdmin && !hasOtherActiveOrgAdmin(organizationId, userId)) {
+            throw new ApiException("This is the organization's only administrator. Promote another member before changing this role.");
+        }
+        log.info("Setting user {}'s role in organization {} to {}", userId, organizationId, granted);
+        try {
+            int rows = jdbcTemplate.update(UPDATE_ORG_ROLE_QUERY,
+                    Map.of("orgRole", granted.name(), "userId", userId, "organizationId", organizationId));
+            if (rows == 0) {
+                throw new ApiException("That user is not an active member of this organization.");
+            }
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while updating the member's role. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Fails <em>closed for the caller's intent</em>, which here means returning {@code false}:
+     * both callers read {@code false} as "this is the last administrator" and refuse the mutation,
+     * so a read error blocks the change rather than allowing one that could strand an organization.
+     */
+    @Override
+    public boolean hasOtherActiveOrgAdmin(Long organizationId, Long excludedUserId) {
+        try {
+            Long count = jdbcTemplate.queryForObject(COUNT_OTHER_ACTIVE_ORG_ADMINS_QUERY,
+                    Map.of("organizationId", organizationId, "userId", excludedUserId), Long.class);
+            return count != null && count > 0;
+        } catch (Exception exception) {
+            log.error("Org-admin count failed for organization {}: {}", organizationId, exception.getMessage(), exception);
+            return false;
+        }
     }
 
     /**
@@ -537,20 +653,22 @@ public class OrganizationServiceImpl implements OrganizationService {
         }
     }
 
-    /**
-     * Grants {@code roleName} to {@code userId} only when it outranks their current role — see
-     * {@link #redeemInvite}'s Javadoc for why this is one-directional. Falls back to treating the
-     * user as tier-0 (grant unconditionally) if their current role is somehow unrecognized, since a
-     * user must have some resolvable role to have reached this authenticated endpoint at all.
-     */
-    private void grantInviteRoleIfHigher(Long userId, String invitedRoleName) {
-        String currentRoleName = roleRepo.getRoleByUserId(userId).getName();
-        int currentTier = RoleType.from(currentRoleName).map(RoleType::getTier).orElse(0);
-        int invitedTier = RoleType.from(invitedRoleName).map(RoleType::getTier).orElse(0);
-        if (invitedTier > currentTier) {
-            userService.updateUserRole(userId, invitedRoleName, null);
-        }
-    }
+    // NOTE(org-roles, 2026-08-26): grantInviteRoleIfHigher was REMOVED here, not refactored.
+    //
+    // Redeeming an invite used to raise the redeemer's single GLOBAL role (userroles) to the
+    // invite's role_name whenever that outranked what they already held. Because
+    // ROLE_ORGANIZATION_ADMIN's scope is "every organization I actively belong to", one
+    // organization's invite therefore elevated the redeemer in EVERY organization they were a
+    // member of: a plain ROLE_USER who belonged to org B and redeemed an ORGANIZATION_ADMIN invite
+    // from org A came out able to administer B's users too. The tier ceiling on invite creation
+    // (RoleType.canAssign, applied in OrganizationController) bounded which role an invite could
+    // carry, but nothing bounded WHERE the granted role applied — that is exactly the gap
+    // per-organization roles close.
+    //
+    // Redemption now writes OrgRole.fromInvitedGlobalRole(role_name) onto the membership row, so an
+    // invite grants authority inside the inviting organization and nowhere else. The redeemer's
+    // global role is left untouched; raising that is an administrative act with its own audited
+    // endpoint (AdminUserController#updateUserRole), not a side effect of following a link.
 
     private Optional<OrganizationInvite> getInviteByCode(String code) {
         try {
