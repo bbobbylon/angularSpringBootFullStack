@@ -1,12 +1,15 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.OrgMfaMethod;
+import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.UpdateForm;
 import com.bob.angularspringbootfullstack.model.Role;
 import com.bob.angularspringbootfullstack.model.User;
 import com.bob.angularspringbootfullstack.repo.RoleRepo;
 import com.bob.angularspringbootfullstack.repo.UserRepo;
 import com.bob.angularspringbootfullstack.service.NotificationService;
+import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -35,6 +38,7 @@ public class UserServiceImpl implements UserService {
      * Delivery c./shannel for the FR-TPF-1 step-up code (email, not SMS — see {@link #sendStepUpCode}).
      */
     private final NotificationService notificationService;
+    private final OrganizationService organizationService;
 
     /**
      * Creates a new user.
@@ -237,12 +241,25 @@ public class UserServiceImpl implements UserService {
 
     /**
      * Toggles a user's multifactor authentication status.
+     * <p>
+     * Turning MFA <b>off</b> is never gated. Turning it <b>on</b> is refused if every
+     * organization the user actively belongs to has configured a policy that excludes
+     * both {@link OrgMfaMethod#SMS} and {@link OrgMfaMethod#PHONE_CALL} — SMS delivery
+     * automatically falls back to a voice call ({@code NotificationServiceImpl}), so this
+     * one toggle is gated on either being permitted, not both independently.
      *
      * @param id the primary key of the user
      * @return the updated UserDTO
      */
     @Override
     public UserDTO toggleMFA(Long id) {
+        User current = userRepo.get(id);
+        boolean turningOn = !current.isUsing2FA();
+        if (turningOn
+                && !organizationService.isMfaMethodAllowed(id, OrgMfaMethod.SMS)
+                && !organizationService.isMfaMethodAllowed(id, OrgMfaMethod.PHONE_CALL)) {
+            throw new ApiException("Your organization does not allow SMS/phone MFA. Contact your admin for allowed options.");
+        }
         return mapToUserDTO(userRepo.toggleMFA(id));
     }
 

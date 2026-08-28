@@ -2,6 +2,7 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.EventType;
+import com.bob.angularspringbootfullstack.enumeration.OrgMfaMethod;
 import com.bob.angularspringbootfullstack.enumeration.OrgRole;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Organization;
@@ -38,6 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.fromUser;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.COUNT_ACTIVE_MEMBERSHIP_QUERY;
@@ -71,7 +73,9 @@ import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_USERS_SHARING_ORGANIZATIONS_PAGED_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_NAME_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_PROFILE_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_SETTINGS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_STATUS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORGANIZATION_TENANT_UUID_QUERY;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 
@@ -206,16 +210,31 @@ public class OrganizationServiceImpl implements OrganizationService {
      * {@inheritDoc}
      */
     @Override
-    public Organization createOrganization(String name) {
+    public Organization createOrganization(String name, String description, String contactEmail, String website,
+                                            String tenantUuid, Set<OrgMfaMethod> mfaAllowedMethods, List<String> featureFlags) {
         String trimmed = requireNonBlankName(name);
+        String normalizedTenantUuid = requireValidTenantUuidOrNull(tenantUuid);
         log.info("Creating organization '{}'", trimmed);
         try {
-            MapSqlParameterSource params = new MapSqlParameterSource().addValue("name", trimmed);
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("name", trimmed)
+                    .addValue("description", blankToNull(description))
+                    .addValue("contactEmail", blankToNull(contactEmail))
+                    .addValue("website", blankToNull(website))
+                    .addValue("tenantUuid", normalizedTenantUuid)
+                    .addValue("mfaAllowedMethods", blankToNull(OrgMfaMethod.toCsv(mfaAllowedMethods)))
+                    .addValue("featureFlags", blankToNull(joinFeatureFlags(featureFlags)));
             KeyHolder keyHolder = new GeneratedKeyHolder();
             jdbcTemplate.update(INSERT_ORGANIZATION_QUERY, params, keyHolder);
             return getOrganization(requireNonNull(keyHolder.getKey()).longValue());
         } catch (DuplicateKeyException e) {
-            throw new ApiException("An organization named '" + trimmed + "' already exists.");
+            // Two unique constraints can fire the same exception type (organizations.name,
+            // UQ_Organizations_TenantUuid) — one honest message naming both possibilities beats
+            // parsing the driver's exception text to guess which one, which would be brittle across
+            // MySQL versions and is not a pattern used elsewhere in this class.
+            throw new ApiException(normalizedTenantUuid == null
+                    ? "An organization named '" + trimmed + "' already exists."
+                    : "An organization named '" + trimmed + "' already exists, or that tenant UUID is already in use.");
         } catch (Exception e) {
             log.error(e.getMessage());
             throw new ApiException("An error occurred while creating the organization. Please try again.");
@@ -370,6 +389,88 @@ public class OrganizationServiceImpl implements OrganizationService {
             log.error("Error listing active members for organization {}: {}", organizationId, exception.getMessage(), exception);
             throw new ApiException("An error occurred while retrieving the organization's members. Please try again.");
         }
+    }
+
+    // ── Org setup: tenant UUID, MFA policy, feature flags (2026-08-28) ─────────────────────
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Read-check-then-write, the same shape {@link #renameOrganization} uses for its not-found
+     * check: the database's own {@code UQ_Organizations_TenantUuid} constraint backstops
+     * uniqueness, but "already set" cannot be expressed as a database constraint at all — a
+     * settable-once column is a business rule, not a schema one.
+     */
+    @Override
+    public Organization setTenantUuid(Long id, String tenantUuid) {
+        String normalized = requireValidTenantUuidOrNull(tenantUuid);
+        if (normalized == null) {
+            throw new ApiException("Tenant UUID is required.");
+        }
+        Organization existing = getOrganization(id);
+        if (existing.getTenantUuid() != null) {
+            throw new ApiException("This organization already has a tenant UUID set.");
+        }
+        log.info("Setting tenant UUID for organization id {}", id);
+        try {
+            jdbcTemplate.update(UPDATE_ORGANIZATION_TENANT_UUID_QUERY, Map.of("tenantUuid", normalized, "id", id));
+            return getOrganization(id);
+        } catch (DuplicateKeyException e) {
+            throw new ApiException("That tenant UUID is already in use by another organization.");
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while setting the tenant UUID. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Organization updateOrganizationSettings(Long id, Set<OrgMfaMethod> mfaAllowedMethods, List<String> featureFlags) {
+        log.info("Updating settings for organization id {}", id);
+        try {
+            // null means "leave unchanged" — re-serialize the already-resolved current value read
+            // back by the row mapper rather than touching it; an empty (non-null) collection is the
+            // caller's deliberate "clear this" and falls through to the mfaAllowedMethods/featureFlags
+            // branch below, which blankToNull collapses to NULL for an empty CSV.
+            Organization existing = mfaAllowedMethods == null || featureFlags == null ? getOrganization(id) : null;
+            String resolvedMfaCsv = mfaAllowedMethods == null
+                    ? blankToNull(String.join(",", existing.getMfaAllowedMethods()))
+                    : blankToNull(OrgMfaMethod.toCsv(mfaAllowedMethods));
+            String resolvedFlagsCsv = featureFlags == null
+                    ? blankToNull(String.join(",", existing.getFeatureFlags()))
+                    : blankToNull(joinFeatureFlags(featureFlags));
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("mfaAllowedMethods", resolvedMfaCsv)
+                    .addValue("featureFlags", resolvedFlagsCsv)
+                    .addValue("id", id);
+            jdbcTemplate.update(UPDATE_ORGANIZATION_SETTINGS_QUERY, params);
+            return getOrganization(id);
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            throw new ApiException("An error occurred while updating the organization's settings. Please try again.");
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isMfaMethodAllowed(Long userId, OrgMfaMethod method) {
+        Collection<Long> activeOrganizationIds = findActiveOrganizationIds(userId);
+        if (activeOrganizationIds.isEmpty()) {
+            return true;
+        }
+        for (Organization organization : listOrganizations(activeOrganizationIds)) {
+            Set<String> configured = organization.getMfaAllowedMethods();
+            if (configured != null && !configured.isEmpty() && !configured.contains(method.name())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // ── Organization profile/settings, audit trail, invites, stats (2026-08-22 dashboard revamp) ──
@@ -705,6 +806,35 @@ public class OrganizationServiceImpl implements OrganizationService {
 
     private static String blankToNull(String value) {
         return isBlank(value) ? null : value.trim();
+    }
+
+    /**
+     * Validates a caller-supplied tenant UUID string, or returns {@code null} for a blank/absent
+     * one — blank is not an error here, since the field is optional at creation.
+     *
+     * @throws ApiException if a non-blank value is not a syntactically valid UUID
+     */
+    private static String requireValidTenantUuidOrNull(String tenantUuid) {
+        if (isBlank(tenantUuid)) return null;
+        try {
+            return UUID.fromString(tenantUuid.trim()).toString();
+        } catch (IllegalArgumentException e) {
+            throw new ApiException("'" + tenantUuid + "' is not a valid UUID.");
+        }
+    }
+
+    /**
+     * Joins free-form feature-flag labels into their stored CSV form: trimmed, blanks dropped,
+     * deduplicated while preserving first-seen order — unlike {@link OrgMfaMethod#toCsv}, nothing
+     * here is validated against a fixed vocabulary, since these are free labels.
+     */
+    private static String joinFeatureFlags(List<String> featureFlags) {
+        if (featureFlags == null || featureFlags.isEmpty()) return "";
+        return featureFlags.stream()
+                .filter(label -> !isBlank(label))
+                .map(String::trim)
+                .distinct()
+                .collect(Collectors.joining(","));
     }
 
     private static final Set<String> VALID_STATUSES = Set.of("ACTIVE", "INACTIVE");

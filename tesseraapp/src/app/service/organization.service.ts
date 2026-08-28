@@ -38,14 +38,30 @@ export class OrganizationService {
 
   /**
    * Creates a new organization ({@code POST /admin/organization}). Refused server-side below the
-   * unscoped tiers.
+   * unscoped tiers. {@code options} covers the org-setup payload (2026-08-28) — profile, tenant
+   * UUID, MFA policy, feature flags, customers to attach, and an opt-in creation confirmation
+   * email — all optional, mirroring the backend's {@code OrganizationForm}; omit entirely for the
+   * plain "just a name" create.
    *
-   * @param name - the organization's display name
+   * @param name    - the organization's display name
+   * @param options - the optional org-setup fields
    * @returns Observable of the API envelope carrying the created organization and refreshed catalog
    */
-  createOrganization$ = (name: string): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+  createOrganization$ = (
+    name: string,
+    options?: {
+      description?: string;
+      contactEmail?: string;
+      website?: string;
+      tenantUuid?: string;
+      mfaAllowedMethods?: string[];
+      featureFlags?: string[];
+      customerIds?: number[];
+      sendConfirmationEmail?: boolean;
+    },
+  ): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
     this.http
-      .post<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization`, { name })
+      .post<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization`, { name, ...options })
       .pipe(catchError(this.handleError));
 
   /**
@@ -179,6 +195,73 @@ export class OrganizationService {
         contactEmail,
         website,
       })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Sets an organization's external tenant UUID — exactly once
+   * ({@code PATCH /admin/organization/:id/tenant-uuid}). Refused server-side below the unscoped
+   * tiers, same rule as {@link updateOrganizationProfile$}, and refused if the organization
+   * already has one set — there is no "change" call.
+   *
+   * @param id         - the organization's database primary key
+   * @param tenantUuid - the UUID to set
+   * @returns Observable of the API envelope carrying the updated organization
+   */
+  setTenantUuid$ = (id: number, tenantUuid: string): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization/${id}/tenant-uuid`, { tenantUuid })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Updates an organization's enforcement-relevant settings — MFA-allowed-methods policy and
+   * feature-flag labels ({@code PATCH /admin/organization/:id/settings}). Refused server-side
+   * below the unscoped tiers, same rule as {@link updateOrganizationProfile$}.
+   *
+   * <p>Both arguments are always sent as the caller's full, explicit replacement value (an empty
+   * array clears that setting back to "not configured") — unlike the backend's own
+   * {@code null}-means-"leave unchanged" contract, this app's Settings tab always has the current
+   * value loaded before it lets an admin submit, so there is never a partial update to express.
+   *
+   * @param id                - the organization's database primary key
+   * @param mfaAllowedMethods - the full replacement MFA policy; empty clears it
+   * @param featureFlags      - the full replacement feature-flag labels; empty clears them
+   * @returns Observable of the API envelope carrying the updated organization
+   */
+  updateOrganizationSettings$ = (
+    id: number,
+    mfaAllowedMethods: string[],
+    featureFlags: string[],
+  ): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization/${id}/settings`, {
+        mfaAllowedMethods,
+        featureFlags,
+      })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Lists the customers attached to one organization ({@code GET
+   * /admin/organization/:id/customers}) — the read side of {@link createOrganization$}'s
+   * {@code customerIds} attachment. Same authorization rule as {@link members$}.
+   *
+   * @param organizationId - the organization whose customers to list
+   * @returns Observable of the API envelope carrying the organization's attached customers
+   */
+  orgCustomers$ = (organizationId: number): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization/${organizationId}/customers`)
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Lists the invoices belonging to one organization's attached customers ({@code GET
+   * /admin/organization/:id/invoices}). Same authorization rule as {@link members$}.
+   *
+   * @param organizationId - the organization whose invoices to list
+   * @returns Observable of the API envelope carrying the organization's invoices
+   */
+  orgInvoices$ = (organizationId: number): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<OrganizationCatalogInterface>>(`${this.server}/admin/organization/${organizationId}/invoices`)
       .pipe(catchError(this.handleError));
 
   /**

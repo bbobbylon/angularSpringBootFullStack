@@ -281,6 +281,30 @@ public class EmailServiceImpl implements EmailService {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void sendOrganizationCreatedEmail(String adminFirstName, String adminEmail, String organizationName) {
+        String subject = "TesseraApp - Organization '" + organizationName + "' created";
+
+        String plain = "Hello " + adminFirstName + "\n\n"
+                + "You created the organization \"" + organizationName + "\" on TesseraApp.\n\n"
+                + "You can manage its settings, members, and roles from the Organizations screen at any time.";
+
+        String html = EmailTemplate.builder()
+                .preheader("You created \"" + organizationName + "\" on TesseraApp.")
+                .eyebrow("Organization created")
+                .heading(organizationName)
+                .paragraph("Hello " + adminFirstName + ",")
+                .paragraph("You created the organization \"" + organizationName + "\" on TesseraApp.")
+                .note("You can manage its settings, members, and roles from the Organizations screen at any time.")
+                .build();
+
+        send(adminEmail, subject, plain, html);
+        log.info("Organization-created confirmation dispatched to {} for organization '{}'", adminEmail, organizationName);
+    }
+
+    /**
      * Builds and sends one {@code multipart/alternative} message.
      * <p>
      * {@link MimeMessageHelper#setText(String, String)} is what creates the two-part body: the

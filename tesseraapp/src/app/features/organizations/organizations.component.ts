@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, OnInit, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -10,9 +10,12 @@ import { StatsComponent } from '../../shared/stats/stats.component';
 import { UserService } from '../../service/user.service';
 import { OrganizationService } from '../../service/organization.service';
 import { AdminUserService } from '../../service/admin-user.service';
+import { CustomerService } from '../../service/customer.service';
 import { NotificationsService } from '../../service/notifications-service';
 import { DataState } from '../../enumeration/datastate.enum';
 import { UserInterface } from '../../interface/user.interface';
+import { CustomerInterface } from '../../interface/customer.interface';
+import { InvoiceInterface } from '../../interface/invoice.interface';
 import {
   OrganizationEventInterface,
   OrganizationInterface,
@@ -21,8 +24,8 @@ import {
 } from '../../interface/organization.interface';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-/** The four tabs of an expanded organization card, mirroring the endpoint families that back them. */
-type OrgTab = 'members' | 'profile' | 'activity' | 'invites';
+/** The six tabs of an expanded organization card, mirroring the endpoint families that back them. */
+type OrgTab = 'members' | 'profile' | 'settings' | 'customers' | 'activity' | 'invites';
 
 /** Rows per page for an expanded card's Activity tab ({@code OrganizationService#orgEvents$}). */
 const EVENTS_PAGE_SIZE = 10;
@@ -82,11 +85,20 @@ const EVENTS_PAGE_SIZE = 10;
  * Authority gate: only users with {@code UPDATE:USER} or {@code UPDATE:ROLE} reach this route
  * (adminGuard) — every tier {@code UPDATE:ORGANIZATION} was granted to already holds one of
  * those two (schema.sql's 2026-08-21 grant note), so this is not an additional restriction.
+ *
+ * <h3>Org setup: tenant UUID, MFA policy, feature flags, attached customers (2026-08-28)</h3>
+ * The create form's advanced-setup section (collapsed by default) and a new Settings tab surface
+ * {@code OrganizationController}'s org-setup endpoints. Settings gets the same
+ * {@link isUnscopedTier} gate as Profile, since a policy change affects every member, not just the
+ * caller; the tenant-UUID sub-form only renders while unset, since the backend refuses to change
+ * one that already exists. The new Customers tab is read-only and open to every loaded
+ * organization row, the same rule Members/Activity/Invites already use. {@link MFA_METHODS}
+ * intentionally omits {@code EMAIL_OTP} — see its own doc comment for why.
  */
 @Component({
   selector: 'app-organizations',
   standalone: true,
-  imports: [FormsModule, RouterLink, NavbarComponent, StatsComponent, DatePipe, TranslocoDirective],
+  imports: [FormsModule, RouterLink, NavbarComponent, StatsComponent, DatePipe, CurrencyPipe, TranslocoDirective],
   templateUrl: './organizations.component.html',
   styleUrl: './organizations.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -104,6 +116,15 @@ export class OrganizationsComponent implements OnInit {
    * surfaced as a toast on refusal exactly like the global-role picker's tier ceiling.
    */
   readonly ASSIGNABLE_ORG_ROLES: readonly string[] = ['ORG_VIEWER', 'ORG_MEMBER', 'ORG_ADMIN'];
+  /**
+   * MFA methods offered by the create form's and Settings tab's policy checkboxes — mirrors the
+   * backend's {@code OrgMfaMethod}, deliberately narrowed to the methods actually enrollment-gated
+   * ({@code PasskeyServiceImpl}/{@code TotpServiceImpl}/{@code UserServiceImpl#toggleMFA}).
+   * {@code EMAIL_OTP} exists server-side but is not offered here: it is not a deliberate
+   * enrollment, only the automatic step-up fallback, so a checkbox for it would toggle a setting
+   * that changes nothing — see {@code OrgMfaMethod}'s Javadoc.
+   */
+  readonly MFA_METHODS: readonly string[] = ['TOTP', 'PASSKEY', 'SMS', 'PHONE_CALL'];
   /** Page load state. */
   protected readonly dataState = signal<DataState>(DataState.LOADING);
   /** The signed-in user — passed to the navbar and used to gate the catalog-mutation panel. */
@@ -148,6 +169,27 @@ export class OrganizationsComponent implements OnInit {
   protected readonly orgInvites = signal<OrganizationInviteInterface[]>([]);
   /** Load state of the Invites tab. */
   protected readonly orgInvitesState = signal<DataState>(DataState.LOADING);
+  /** The MFA methods selected in the create form's advanced-setup checkboxes. */
+  protected readonly createMfaMethods = signal<Set<string>>(new Set());
+  /** Customers chosen to attach in the create form's advanced-setup picker. */
+  protected readonly createSelectedCustomers = signal<CustomerInterface[]>([]);
+  /** Directory matches for the create form's customer-search input. */
+  protected readonly createCustomerCandidates = signal<CustomerInterface[]>([]);
+  /** Customers attached to {@link expandedOrgId}'s organization, for the Customers tab. */
+  protected readonly orgCustomers = signal<CustomerInterface[]>([]);
+  /** Invoices belonging to {@link orgCustomers}, for the Customers tab. */
+  protected readonly orgInvoices = signal<InvoiceInterface[]>([]);
+  /** Load state of the Customers tab. */
+  protected readonly orgCustomersState = signal<DataState>(DataState.LOADING);
+  /**
+   * The Settings tab's editable MFA-policy checkboxes, seeded from the expanded organization's
+   * current {@code mfaAllowedMethods} each time the tab is opened ({@link seedSettingsForm}) —
+   * always an explicit full replacement, never a partial one, so {@link saveSettings} never needs
+   * the backend's {@code null}-means-"leave unchanged" branch.
+   */
+  protected readonly settingsMfaMethods = signal<Set<string>>(new Set());
+  /** The Settings tab's editable feature-flags field, comma-separated, seeded the same way. */
+  protected readonly settingsFeatureFlagsText = signal('');
 
   /**
    * Catalog-wide KPI row: organization count, active count, and total members across every
@@ -183,11 +225,14 @@ export class OrganizationsComponent implements OnInit {
   private readonly userService = inject(UserService);
   private readonly organizationService = inject(OrganizationService);
   private readonly adminUserService = inject(AdminUserService);
+  private readonly customerService = inject(CustomerService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
 
   /** Raw keystrokes from the add-member search input; debounced below before hitting the API. */
   private readonly memberSearchInput$ = new Subject<string>();
+  /** Raw keystrokes from the create form's customer-search input; debounced the same way. */
+  private readonly createCustomerSearchInput$ = new Subject<string>();
 
   /**
    * Loads the signed-in user (for the navbar and {@link isUnscopedTier}) and the organization
@@ -226,6 +271,19 @@ export class OrganizationsComponent implements OnInit {
         next: (response) => this.memberCandidates.set(response.data?.users ?? []),
         error: (error: string) => this.notification.onError(error),
       });
+
+    this.createCustomerSearchInput$
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(),
+        filter((term) => term.length >= 2),
+        switchMap((term) => this.customerService.searchCustomers$(term, 0, 5)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (response) => this.createCustomerCandidates.set(response.data?.page?.content ?? []),
+        error: (error: string) => this.notification.onError(error),
+      });
   }
 
   /**
@@ -259,15 +317,32 @@ export class OrganizationsComponent implements OnInit {
   }
 
   /**
-   * Submits the "new organization" form ({@code POST /admin/organization}).
+   * Submits the "new organization" form ({@code POST /admin/organization}), including whatever
+   * the collapsed advanced-setup section carries — profile fields, tenant UUID, MFA policy
+   * checkboxes, feature-flag labels, attached customers, and the confirmation-email checkbox all
+   * ride along in one call, matching {@code OrganizationController#createOrganization}'s single-
+   * INSERT design. The advanced fields are plain form fields except {@link createMfaMethods} and
+   * {@link createSelectedCustomers}, which are held as component state rather than {@code ngModel}
+   * (checkboxes and a multi-pick list don't map cleanly onto a single form value each).
    *
-   * @param form - the NgForm carrying {@code name}
+   * @param form - the NgForm carrying {@code name} and the advanced-setup text/URL/email fields
    */
   protected createOrganization(form: NgForm): void {
     if (!form.valid) return;
     this.isMutating.set(true);
+    const featureFlags = this.splitFeatureFlags(form.value.featureFlags);
+    const customerIds = this.createSelectedCustomers().map((customer) => customer.id);
     this.organizationService
-      .createOrganization$(form.value.name)
+      .createOrganization$(form.value.name, {
+        description: form.value.description || undefined,
+        contactEmail: form.value.contactEmail || undefined,
+        website: form.value.website || undefined,
+        tenantUuid: form.value.tenantUuid || undefined,
+        mfaAllowedMethods: this.createMfaMethods().size > 0 ? Array.from(this.createMfaMethods()) : undefined,
+        featureFlags: featureFlags.length > 0 ? featureFlags : undefined,
+        customerIds: customerIds.length > 0 ? customerIds : undefined,
+        sendConfirmationEmail: !!form.value.sendConfirmationEmail,
+      })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
@@ -276,10 +351,50 @@ export class OrganizationsComponent implements OnInit {
           this.isMutating.set(false);
           this.notification.onSuccess(response.message ?? 'Organization created successfully');
           form.resetForm();
+          this.createMfaMethods.set(new Set());
+          this.createSelectedCustomers.set([]);
+          this.createCustomerCandidates.set([]);
           this.loadAllStats(organizations);
         },
         error: (error: string) => this.failMutation(error),
       });
+  }
+
+  /** Toggles one MFA method in the create form's advanced-setup policy checkboxes. */
+  protected toggleCreateMfaMethod(method: string): void {
+    const next = new Set(this.createMfaMethods());
+    if (next.has(method)) next.delete(method);
+    else next.add(method);
+    this.createMfaMethods.set(next);
+  }
+
+  /** Pushes each keystroke from the create form's customer-search input into the debounced pipeline. */
+  protected onCreateCustomerSearchInput(term: string): void {
+    this.createCustomerSearchInput$.next(term);
+  }
+
+  /** Adds a search result to the create form's selected-customers list, if not already chosen. */
+  protected addCreateCustomer(candidate: CustomerInterface): void {
+    if (this.createSelectedCustomers().some((customer) => customer.id === candidate.id)) return;
+    this.createSelectedCustomers.set([...this.createSelectedCustomers(), candidate]);
+  }
+
+  /** Removes a customer from the create form's selected-customers list. */
+  protected removeCreateCustomer(candidate: CustomerInterface): void {
+    this.createSelectedCustomers.set(this.createSelectedCustomers().filter((customer) => customer.id !== candidate.id));
+  }
+
+  /**
+   * Splits a comma-separated feature-flags field into its trimmed, non-blank labels — the
+   * frontend counterpart of the backend's {@code joinFeatureFlags}, since the raw list travels
+   * over the wire as a JSON array either way.
+   */
+  private splitFeatureFlags(text: string | undefined | null): string[] {
+    if (!text) return [];
+    return text
+      .split(',')
+      .map((label) => label.trim())
+      .filter((label) => label.length > 0);
   }
 
   /** Opens the rename form for one catalog row. */
@@ -373,6 +488,10 @@ export class OrganizationsComponent implements OnInit {
     this.orgEvents.set([]);
     this.orgEventsPage.set(0);
     this.orgInvites.set([]);
+    this.orgCustomers.set([]);
+    this.orgInvoices.set([]);
+    this.settingsMfaMethods.set(new Set());
+    this.settingsFeatureFlagsText.set('');
     this.loadMembers(org.id);
   }
 
@@ -389,6 +508,18 @@ export class OrganizationsComponent implements OnInit {
     if (!organizationId) return;
     if (tab === 'activity') this.loadEvents(organizationId, 0);
     if (tab === 'invites') this.loadInvites(organizationId);
+    if (tab === 'customers') this.loadCustomers(organizationId);
+    if (tab === 'settings') this.seedSettingsForm();
+  }
+
+  /**
+   * Loads the currently expanded organization's current settings into the Settings tab's editable
+   * signals — the full-replacement seed {@link saveSettings} relies on.
+   */
+  private seedSettingsForm(): void {
+    const org = this.expandedOrg();
+    this.settingsMfaMethods.set(new Set(org?.mfaAllowedMethods ?? []));
+    this.settingsFeatureFlagsText.set((org?.featureFlags ?? []).join(', '));
   }
 
   /** Pushes each keystroke from the add-member search input into the debounced pipeline. */
@@ -547,6 +678,88 @@ export class OrganizationsComponent implements OnInit {
           this.notification.onSuccess(response.message ?? 'Organization profile updated successfully');
         },
         error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
+   * Submits the Settings tab's tenant-UUID form ({@code PATCH
+   * /admin/organization/:id/tenant-uuid}) — settable exactly once, so this form only renders while
+   * {@code org.tenantUuid} is still unset (see the template).
+   *
+   * @param org  - the expanded organization the UUID is being set on
+   * @param form - the NgForm carrying {@code tenantUuid}
+   */
+  protected saveTenantUuid(org: OrganizationInterface, form: NgForm): void {
+    if (!org.id || !form.valid || this.isMutating()) return;
+    this.isMutating.set(true);
+    this.organizationService
+      .setTenantUuid$(org.id, form.value.tenantUuid)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isMutating.set(false);
+          const updated = response.data?.organization;
+          if (updated) {
+            this.organizations.set(this.organizations().map((existing) => (existing.id === org.id ? updated : existing)));
+          }
+          this.notification.onSuccess(response.message ?? 'Tenant UUID set successfully');
+        },
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /** Toggles one MFA method in the Settings tab's editable policy checkboxes. */
+  protected toggleSettingsMfaMethod(method: string): void {
+    const next = new Set(this.settingsMfaMethods());
+    if (next.has(method)) next.delete(method);
+    else next.add(method);
+    this.settingsMfaMethods.set(next);
+  }
+
+  /**
+   * Submits the Settings tab ({@code PATCH /admin/organization/:id/settings}) — always the full
+   * current checkbox/text state, since {@link seedSettingsForm} guarantees it already reflects the
+   * organization's saved settings before any edit.
+   *
+   * @param org - the expanded organization whose settings are being saved
+   */
+  protected saveSettings(org: OrganizationInterface): void {
+    if (!org.id || this.isMutating()) return;
+    this.isMutating.set(true);
+    this.organizationService
+      .updateOrganizationSettings$(org.id, Array.from(this.settingsMfaMethods()), this.splitFeatureFlags(this.settingsFeatureFlagsText()))
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isMutating.set(false);
+          const updated = response.data?.organization;
+          if (updated) {
+            this.organizations.set(this.organizations().map((existing) => (existing.id === org.id ? updated : existing)));
+          }
+          this.notification.onSuccess(response.message ?? 'Organization settings updated successfully');
+        },
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /** Fetches the Customers tab's attached-customers and their invoices, in parallel. */
+  protected loadCustomers(organizationId: number): void {
+    this.orgCustomersState.set(DataState.LOADING);
+    forkJoin({
+      customers: this.organizationService.orgCustomers$(organizationId),
+      invoices: this.organizationService.orgInvoices$(organizationId),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ customers, invoices }) => {
+          this.orgCustomers.set(customers.data?.customers ?? []);
+          this.orgInvoices.set(invoices.data?.invoices ?? []);
+          this.orgCustomersState.set(DataState.LOADED);
+        },
+        error: (error: string) => {
+          this.notification.onError(error);
+          this.orgCustomersState.set(DataState.ERROR);
+        },
       });
   }
 

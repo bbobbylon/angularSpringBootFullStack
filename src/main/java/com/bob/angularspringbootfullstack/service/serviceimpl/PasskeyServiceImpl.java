@@ -1,6 +1,8 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
+import com.bob.angularspringbootfullstack.enumeration.OrgMfaMethod;
 import com.bob.angularspringbootfullstack.exception.ApiException;
+import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.PasskeyService;
 import com.webauthn4j.WebAuthnManager;
 import com.webauthn4j.converter.exception.DataConversionException;
@@ -75,6 +77,7 @@ public class PasskeyServiceImpl implements PasskeyService {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final WebAuthnChallengeStore challengeStore;
+    private final OrganizationService organizationService;
 
     private final WebAuthnManager webAuthnManager = WebAuthnManager.createNonStrictWebAuthnManager();
     private final ObjectConverter objectConverter = new ObjectConverter();
@@ -178,6 +181,9 @@ public class PasskeyServiceImpl implements PasskeyService {
 
         if (!jdbcTemplate.queryForList(SELECT_PASSKEY_CREDENTIAL_BY_CREDENTIAL_ID_QUERY, Map.of("credentialId", credentialId)).isEmpty()) {
             throw new ApiException("This passkey is already registered on an account.");
+        }
+        if (!organizationService.isMfaMethodAllowed(userId, OrgMfaMethod.PASSKEY)) {
+            throw new ApiException("Your organization does not allow passkey MFA. Contact your admin for allowed options.");
         }
 
         jdbcTemplate.update(INSERT_PASSKEY_CREDENTIAL_QUERY, Map.of(

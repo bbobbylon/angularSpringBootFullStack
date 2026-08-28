@@ -36,7 +36,8 @@
     "pageXofY": "Seite {{page}} von {{total}}",
     "nTotal": "{{count}} insgesamt",
     "acrossNPages": "über {{count}} Seiten",
-    "viewAll": "Alle anzeigen"
+    "viewAll": "Alle anzeigen",
+    "add": "Hinzufügen"
   },
   "nav": {
     "customers": "Kunden",
@@ -531,7 +532,9 @@
       "members": "Mitglieder",
       "profile": "Profil",
       "activity": "Aktivität",
-      "invites": "Einladungen"
+      "invites": "Einladungen",
+      "settings": "Einstellungen",
+      "customers": "Kunden"
     },
     "profile": {
       "description": "Beschreibung",
@@ -563,6 +566,35 @@
       "goHome": "Zum Dashboard",
       "invalidTitle": "Dieser Einladungslink ist ungültig oder abgelaufen",
       "invalidSubtitle": "Bitten Sie einen Administrator der Organisation um einen neuen Einladungslink."
+    },
+    "createAdvanced": "Erweiterte Einrichtung (optional)",
+    "setup": {
+      "tenantUuid": "Externe Tenant-UUID",
+      "tenantUuidHint": "Optional; kann auch später festgelegt werden. Kann nach dem Festlegen nicht mehr geändert werden.",
+      "featureFlags": "Feature-Flags",
+      "featureFlagsHint": "Durch Kommas getrennte Bezeichnungen.",
+      "mfaAllowedMethods": "Zulässige MFA-Methoden",
+      "mfaAllHint": "Lassen Sie alle Kästchen leer, um jede Methode zuzulassen (keine Einschränkung konfiguriert).",
+      "customerIds": "Bestehende Kunden anhängen",
+      "customerSearchPlaceholder": "Kunden nach Namen suchen…",
+      "sendConfirmationEmail": "Mir eine Bestätigung senden, wenn diese Organisation erstellt wird"
+    },
+    "mfaMethods": {
+      "TOTP": "Authenticator-App (TOTP)",
+      "PASSKEY": "Passkey",
+      "SMS": "SMS",
+      "PHONE_CALL": "Telefonanruf"
+    },
+    "settings": {
+      "setTenantUuid": "Tenant-UUID festlegen",
+      "tenantUuidImmutable": "Einmalig festlegbar — kann nach dem Festlegen nicht geändert werden.",
+      "save": "Einstellungen speichern"
+    },
+    "customers": {
+      "error": "Kunden konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
+      "empty": "Dieser Organisation sind noch keine Kunden zugeordnet.",
+      "invoicesTitle": "Rechnungen",
+      "invoicesEmpty": "Noch keine Rechnungen."
     }
   },
   "charts": {

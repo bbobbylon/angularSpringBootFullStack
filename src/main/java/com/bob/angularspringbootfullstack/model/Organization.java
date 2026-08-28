@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT;
 
@@ -47,5 +49,23 @@ public class Organization {
     private String contactEmail;
     /** Organization website URL; nullable. */
     private String website;
+    /**
+     * External tenant identifier, distinct from {@link #id} — admin-supplied, settable exactly
+     * once (see {@code OrganizationService#setTenantUuid}); nullable until set.
+     */
+    private String tenantUuid;
+    /**
+     * The MFA methods this organization's members may enroll in, resolved from the stored CSV via
+     * {@link com.bob.angularspringbootfullstack.enumeration.OrgMfaMethod#parseCsv}. Empty means the
+     * organization has not configured a policy — not "no methods allowed" — so no restriction is
+     * imposed; see {@code OrganizationService#isMfaMethodAllowed}.
+     */
+    private Set<String> mfaAllowedMethods;
+    /**
+     * Free-form feature-flag labels attached to this organization. Nothing in the application reads
+     * these yet — see FUTURE-ENHANCEMENTS.md for the known gap this deliberately leaves open rather
+     * than inventing gates for behavior that doesn't exist.
+     */
+    private List<String> featureFlags;
     private LocalDateTime createdAt;
 }

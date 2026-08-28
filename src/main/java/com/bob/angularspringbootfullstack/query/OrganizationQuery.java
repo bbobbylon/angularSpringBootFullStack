@@ -93,11 +93,17 @@ public class OrganizationQuery {
     /**
      * Inserts a new organization, always starting {@code ACTIVE} — there is no "create inactive"
      * case, since nothing can be a member of an org before it exists. {@code organizations.name}
-     * carries a unique constraint, so a collision surfaces as {@code DuplicateKeyException}.
-     * Parameter: name.
+     * and {@code organizations.tenant_uuid} each carry a unique constraint, so a collision on
+     * either surfaces as {@code DuplicateKeyException}. Every field beyond {@code name} is the
+     * org-setup payload (profile, tenant UUID, MFA policy, feature flags) — a single INSERT rather
+     * than create-then-several-PATCHes, so an admin's initial setup is one atomic write. Parameters:
+     * name, description, contactEmail, website, tenantUuid, mfaAllowedMethods, featureFlags — all
+     * except name may be {@code null}.
      */
     public static final String INSERT_ORGANIZATION_QUERY =
-            "INSERT INTO organizations (name, status) VALUES (:name, 'ACTIVE')";
+            "INSERT INTO organizations " +
+            "(name, status, description, contact_email, website, tenant_uuid, mfa_allowed_methods, feature_flags) " +
+            "VALUES (:name, 'ACTIVE', :description, :contactEmail, :website, :tenantUuid, :mfaAllowedMethods, :featureFlags)";
 
     /**
      * Lists every organization regardless of status, for the unscoped-tier catalog view
@@ -286,6 +292,30 @@ public class OrganizationQuery {
      */
     public static final String UPDATE_ORGANIZATION_PROFILE_QUERY =
             "UPDATE organizations SET description = :description, contact_email = :contactEmail, website = :website WHERE id = :id";
+
+    /**
+     * Updates an organization's enforcement-relevant settings (MFA-allowed-methods policy,
+     * feature-flag labels) — the counterpart of {@link #UPDATE_ORGANIZATION_PROFILE_QUERY} for the
+     * fields {@code OrganizationSettingsForm} carries rather than {@code OrganizationProfileForm}'s
+     * display-only ones. Both values are always written (never independently skipped at the SQL
+     * layer); {@code OrganizationServiceImpl#updateOrganizationSettings} resolves a {@code null}
+     * field in the request to "leave unchanged" by reading the current row first, so what reaches
+     * this statement is always the final value for both columns. Parameters: mfaAllowedMethods,
+     * featureFlags, id.
+     */
+    public static final String UPDATE_ORGANIZATION_SETTINGS_QUERY =
+            "UPDATE organizations SET mfa_allowed_methods = :mfaAllowedMethods, feature_flags = :featureFlags WHERE id = :id";
+
+    /**
+     * Sets an organization's external tenant UUID. Deliberately unconditional at the SQL layer —
+     * the "only if not already set" rule is enforced by
+     * {@code OrganizationServiceImpl#setTenantUuid} reading the current value first and refusing to
+     * call this statement at all if it is already non-null, the same read-then-refuse shape
+     * {@code renameOrganization} uses for its not-found check. {@code UQ_Organizations_TenantUuid}
+     * still backstops uniqueness at the database layer regardless. Parameters: tenantUuid, id.
+     */
+    public static final String UPDATE_ORGANIZATION_TENANT_UUID_QUERY =
+            "UPDATE organizations SET tenant_uuid = :tenantUuid WHERE id = :id";
 
     // ── Organization-level audit trail (2026-08-22) ───────────────────────────────────────────
 

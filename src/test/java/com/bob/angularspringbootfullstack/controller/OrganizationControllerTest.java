@@ -2,12 +2,17 @@ package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.EventType;
+import com.bob.angularspringbootfullstack.enumeration.OrgMfaMethod;
 import com.bob.angularspringbootfullstack.enumeration.OrgRole;
 import com.bob.angularspringbootfullstack.event.NewOrganizationEvent;
 import com.bob.angularspringbootfullstack.exception.GlobalExceptionHandler;
+import com.bob.angularspringbootfullstack.model.Customer;
+import com.bob.angularspringbootfullstack.model.Invoice;
 import com.bob.angularspringbootfullstack.model.Organization;
 import com.bob.angularspringbootfullstack.model.OrganizationInvite;
 import com.bob.angularspringbootfullstack.model.OrganizationStats;
+import com.bob.angularspringbootfullstack.service.CustomerService;
+import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +28,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -57,14 +63,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OrganizationControllerTest {
 
     private OrganizationService organizationService;
+    private CustomerService customerService;
+    private EmailService emailService;
     private ApplicationEventPublisher eventPublisher;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         organizationService = mock(OrganizationService.class);
+        customerService = mock(CustomerService.class);
+        emailService = mock(EmailService.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
-        OrganizationController controller = new OrganizationController(organizationService, eventPublisher);
+        OrganizationController controller =
+                new OrganizationController(organizationService, customerService, emailService, eventPublisher);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -82,10 +93,11 @@ class OrganizationControllerTest {
     // ── Catalog mutation: unscoped tiers only ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("an admin (unscoped tier) can create an organization")
+    @DisplayName("an admin (unscoped tier) can create an organization with just a name")
     void adminCanCreateOrganization() throws Exception {
         Organization created = Organization.builder().id(1L).name("Acme Partners").status("ACTIVE").build();
-        when(organizationService.createOrganization("Acme Partners")).thenReturn(created);
+        when(organizationService.createOrganization("Acme Partners", null, null, null, null, null, null))
+                .thenReturn(created);
         when(organizationService.listOrganizations(isNull())).thenReturn(List.of());
 
         mockMvc.perform(post("/admin/organization")
@@ -94,7 +106,9 @@ class OrganizationControllerTest {
                         .content("{\"name\":\"Acme Partners\"}"))
                 .andExpect(status().isOk());
 
-        verify(organizationService).createOrganization("Acme Partners");
+        verify(organizationService).createOrganization("Acme Partners", null, null, null, null, null, null);
+        verify(customerService, never()).assignCustomersToOrganization(any(), any());
+        verify(emailService, never()).sendOrganizationCreatedEmail(any(), any(), any());
     }
 
     @Test
@@ -106,7 +120,52 @@ class OrganizationControllerTest {
                         .content("{\"name\":\"Acme Partners\"}"))
                 .andExpect(status().isForbidden());
 
-        verify(organizationService, never()).createOrganization(any());
+        verify(organizationService, never()).createOrganization(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("creating an organization with a full setup payload attaches customers and emails the creator")
+    void adminCanCreateOrganizationWithFullSetup() throws Exception {
+        Organization created = Organization.builder().id(1L).name("Acme Partners").status("ACTIVE").build();
+        when(organizationService.createOrganization(
+                eq("Acme Partners"), eq("A partner org"), eq("contact@acme.test"), eq("https://acme.test"),
+                eq("3fa85f64-5717-4562-b3fc-2c963f66afa6"), eq(Set.of(OrgMfaMethod.TOTP, OrgMfaMethod.PASSKEY)),
+                eq(List.of("beta"))))
+                .thenReturn(created);
+        when(organizationService.listOrganizations(isNull())).thenReturn(List.of());
+        when(customerService.assignCustomersToOrganization(List.of(11L, 12L), 1L)).thenReturn(2);
+
+        mockMvc.perform(post("/admin/organization")
+                        .principal(authAs(1L, "ROLE_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{"
+                                + "\"name\":\"Acme Partners\","
+                                + "\"description\":\"A partner org\","
+                                + "\"contactEmail\":\"contact@acme.test\","
+                                + "\"website\":\"https://acme.test\","
+                                + "\"tenantUuid\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\","
+                                + "\"mfaAllowedMethods\":[\"TOTP\",\"PASSKEY\"],"
+                                + "\"featureFlags\":[\"beta\"],"
+                                + "\"customerIds\":[11,12],"
+                                + "\"sendConfirmationEmail\":true"
+                                + "}"))
+                .andExpect(status().isOk());
+
+        verify(customerService).assignCustomersToOrganization(List.of(11L, 12L), 1L);
+        verify(emailService).sendOrganizationCreatedEmail(null, "role_admin@example.com", "Acme Partners");
+        verify(eventPublisher, times(2)).publishEvent(any(NewOrganizationEvent.class));
+    }
+
+    @Test
+    @DisplayName("an unrecognized MFA method name on create is rejected rather than silently dropped")
+    void createOrganizationRejectsUnrecognizedMfaMethod() throws Exception {
+        mockMvc.perform(post("/admin/organization")
+                        .principal(authAs(1L, "ROLE_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Acme Partners\",\"mfaAllowedMethods\":[\"CARRIER_PIGEON\"]}"))
+                .andExpect(status().isBadRequest());
+
+        verify(organizationService, never()).createOrganization(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -449,6 +508,78 @@ class OrganizationControllerTest {
         verify(organizationService, never()).updateOrganizationProfile(any(), any(), any(), any());
     }
 
+    @Test
+    @DisplayName("an admin can set an organization's tenant UUID")
+    void adminCanSetTenantUuid() throws Exception {
+        Organization updated = Organization.builder().id(1L).name("Acme").tenantUuid("3fa85f64-5717-4562-b3fc-2c963f66afa6").build();
+        when(organizationService.setTenantUuid(1L, "3fa85f64-5717-4562-b3fc-2c963f66afa6")).thenReturn(updated);
+
+        mockMvc.perform(patch("/admin/organization/{id}/tenant-uuid", 1L)
+                        .principal(authAs(1L, "ROLE_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantUuid\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\"}"))
+                .andExpect(status().isOk());
+
+        verify(organizationService).setTenantUuid(1L, "3fa85f64-5717-4562-b3fc-2c963f66afa6");
+        verify(eventPublisher).publishEvent(any(NewOrganizationEvent.class));
+    }
+
+    @Test
+    @DisplayName("an organization admin cannot set an organization's tenant UUID")
+    void orgAdminCannotSetTenantUuid() throws Exception {
+        mockMvc.perform(patch("/admin/organization/{id}/tenant-uuid", 1L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantUuid\":\"3fa85f64-5717-4562-b3fc-2c963f66afa6\"}"))
+                .andExpect(status().isForbidden());
+
+        verify(organizationService, never()).setTenantUuid(any(), any());
+    }
+
+    @Test
+    @DisplayName("an admin can update an organization's MFA policy and feature flags")
+    void adminCanUpdateSettings() throws Exception {
+        Organization updated = Organization.builder().id(1L).name("Acme").build();
+        when(organizationService.updateOrganizationSettings(1L, Set.of(OrgMfaMethod.SMS), List.of("beta")))
+                .thenReturn(updated);
+
+        mockMvc.perform(patch("/admin/organization/{id}/settings", 1L)
+                        .principal(authAs(1L, "ROLE_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaAllowedMethods\":[\"SMS\"],\"featureFlags\":[\"beta\"]}"))
+                .andExpect(status().isOk());
+
+        verify(organizationService).updateOrganizationSettings(1L, Set.of(OrgMfaMethod.SMS), List.of("beta"));
+        verify(eventPublisher).publishEvent(any(NewOrganizationEvent.class));
+    }
+
+    @Test
+    @DisplayName("an organization admin cannot update an organization's settings")
+    void orgAdminCannotUpdateSettings() throws Exception {
+        mockMvc.perform(patch("/admin/organization/{id}/settings", 1L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"featureFlags\":[\"beta\"]}"))
+                .andExpect(status().isForbidden());
+
+        verify(organizationService, never()).updateOrganizationSettings(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("omitting mfaAllowedMethods on settings update leaves the current policy untouched")
+    void updateSettingsOmittedMfaFieldPassesNull() throws Exception {
+        Organization updated = Organization.builder().id(1L).name("Acme").build();
+        when(organizationService.updateOrganizationSettings(1L, null, List.of("beta"))).thenReturn(updated);
+
+        mockMvc.perform(patch("/admin/organization/{id}/settings", 1L)
+                        .principal(authAs(1L, "ROLE_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"featureFlags\":[\"beta\"]}"))
+                .andExpect(status().isOk());
+
+        verify(organizationService).updateOrganizationSettings(1L, null, List.of("beta"));
+    }
+
     // ── Events / stats: membership-authority, same rule as members ─────────────────────────
 
     @Test
@@ -487,6 +618,58 @@ class OrganizationControllerTest {
                 .andExpect(status().isOk());
 
         verify(organizationService).getOrganizationStats(9L);
+    }
+
+    @Test
+    @DisplayName("an organization admin can read the customers attached to their own organization")
+    void orgAdminCanReadOwnOrganizationCustomers() throws Exception {
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
+        Customer customer = Customer.builder().id(11L).customerName("Jane Co").build();
+        when(customerService.getCustomersForOrganizations(Set.of(9L))).thenReturn(List.of(customer));
+
+        mockMvc.perform(get("/admin/organization/{organizationId}/customers", 9L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.customers[0].id").value(11));
+
+        verify(customerService).getCustomersForOrganizations(Set.of(9L));
+    }
+
+    @Test
+    @DisplayName("an organization admin cannot read the customers of an organization they do not belong to")
+    void orgAdminCannotReadOtherOrganizationCustomers() throws Exception {
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(false);
+
+        mockMvc.perform(get("/admin/organization/{organizationId}/customers", 9L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isForbidden());
+
+        verify(customerService, never()).getCustomersForOrganizations(any());
+    }
+
+    @Test
+    @DisplayName("an organization admin can read the invoices of their own organization")
+    void orgAdminCanReadOwnOrganizationInvoices() throws Exception {
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(true);
+        when(customerService.getInvoicesForOrganizations(Set.of(9L))).thenReturn(List.<Invoice>of());
+
+        mockMvc.perform(get("/admin/organization/{organizationId}/invoices", 9L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(customerService).getInvoicesForOrganizations(Set.of(9L));
+    }
+
+    @Test
+    @DisplayName("an organization admin cannot read the invoices of an organization they do not belong to")
+    void orgAdminCannotReadOtherOrganizationInvoices() throws Exception {
+        when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(false);
+
+        mockMvc.perform(get("/admin/organization/{organizationId}/invoices", 9L)
+                        .principal(authAs(5L, "ROLE_ORGANIZATION_ADMIN")))
+                .andExpect(status().isForbidden());
+
+        verify(customerService, never()).getInvoicesForOrganizations(any());
     }
 
     // ── Invites: membership-authority, plus a tier ceiling on the granted role ─────────────

@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static com.bob.angularspringbootfullstack.query.CustomerQuery.CUSTOMER_STATUS_BREAKDOWN_BY_ORGANIZATION_QUERY;
@@ -102,6 +103,22 @@ public class CustomerServiceImpl implements CustomerService {
         existingCustomer.setStatus(customer.getStatus());
         existingCustomer.setImageUrl(customer.getImageUrl());
         return customerRepo.save(existingCustomer);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int assignCustomersToOrganization(Collection<Long> customerIds, Long organizationId) {
+        if (customerIds == null || customerIds.isEmpty()) {
+            return 0;
+        }
+        List<Customer> unassigned = customerRepo.findAllById(customerIds).stream()
+                .filter(customer -> customer.getOrganizationId() == null)
+                .toList();
+        unassigned.forEach(customer -> customer.setOrganizationId(organizationId));
+        customerRepo.saveAll(unassigned);
+        return unassigned.size();
     }
 
     /**

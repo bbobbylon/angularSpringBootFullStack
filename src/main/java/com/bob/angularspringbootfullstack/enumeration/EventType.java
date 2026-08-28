@@ -201,7 +201,25 @@ public enum EventType {
     /**
      * Fired when an outstanding invite link is revoked before it is redeemed.
      */
-    ORG_INVITE_REVOKED("An invite link for the organization was revoked :|");
+    ORG_INVITE_REVOKED("An invite link for the organization was revoked :|"),
+    /**
+     * Fired when an organization's settings (MFA-allowed-methods policy, feature flags) are
+     * updated — distinct from {@link #ORG_PROFILE_UPDATED} (name/description/contact/website),
+     * since these are enforcement-relevant settings rather than display copy.
+     */
+    ORG_SETTINGS_UPDATED("The organization's settings were updated :)"),
+    /**
+     * Fired the one time an organization's external tenant UUID is set. There is no "changed"
+     * counterpart — {@link com.bob.angularspringbootfullstack.service.OrganizationService} refuses
+     * to overwrite an already-set value, so this event can only ever fire once per organization.
+     */
+    ORG_TENANT_UUID_SET("The organization's tenant UUID was set :)"),
+    /**
+     * Fired when one or more existing customers are attached to an organization at creation time
+     * (Organization CRUD — org setup). Their invoices come along implicitly, since an invoice
+     * belongs to a customer, not directly to an organization.
+     */
+    ORG_CUSTOMERS_ASSIGNED("Customers were attached to the organization :)");
 
     /**
      * -- GETTER --

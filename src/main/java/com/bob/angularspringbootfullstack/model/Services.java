@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -74,4 +75,28 @@ public class Services {
      * active — the correct interpretation of a catalog that had no concept of retirement.
      */
     private Boolean active;
+
+    /**
+     * The organization this catalog entry is private to, or {@code null} for a globally shared
+     * entry visible to every caller regardless of organization membership.
+     *
+     * <p><b>This is a deliberately different null-semantic from {@link Customer#getOrganizationId()}.</b>
+     * There, {@code null} means "unowned" and a scoped caller is refused access to it (fail closed,
+     * since an unowned customer is not evidence of shared ownership). Here, {@code null} means
+     * "shared with everyone" and is the default for every pre-existing row — the seeded catalog and
+     * every service created before this field existed are global entries, exactly matching the
+     * behavior the catalog already had. A non-null value narrows a row to one organization's own
+     * offerings; it does not narrow the shared catalog.
+     *
+     * <p>Explicitly mapped to {@code organization_id} for the same reason as {@code Customer}'s
+     * field of the same name: {@code globally_quoted_identifiers: true} suppresses the camelCase →
+     * snake_case strategy, so without this Hibernate would look for a literal {@code
+     * "organizationId"} column.
+     *
+     * <p>Deliberately not a foreign key — see the schema.sql comment beside {@code Customer
+     * .organization_id} for why a constraint spanning the JDBC-owned {@code organizations} table and
+     * this JPA-owned entity would be invisible to {@code JpaSchemaSyncTest}.
+     */
+    @Column(name = "organization_id")
+    private Long organizationId;
 }
