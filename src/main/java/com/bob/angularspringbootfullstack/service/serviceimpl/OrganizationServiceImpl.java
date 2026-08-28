@@ -56,6 +56,7 @@ import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.REACTIVATE_MEMBERSHIP_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_INVITES_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_MEMBERS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_MEMBERS_WITH_ROLE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATIONS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_ORGANIZATION_IDS_BY_USER_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ALL_ORGANIZATIONS_QUERY;
@@ -631,6 +632,30 @@ public class OrganizationServiceImpl implements OrganizationService {
         } catch (Exception exception) {
             log.error("Org-admin count failed for organization {}: {}", organizationId, exception.getMessage(), exception);
             return false;
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Mirrors {@link #findOrgRoles(Long)}'s {@link org.springframework.jdbc.core.RowCallbackHandler}
+     * shape, just keyed by user id instead of organization id: an unrecognized stored role is
+     * skipped rather than defaulted, so a caller can never mistake "we don't know" for
+     * {@link OrgRole#ORG_VIEWER}, a real granted capacity.
+     */
+    @Override
+    public Map<Long, OrgRole> orgRolesForOrganization(Long organizationId) {
+        try {
+            Map<Long, OrgRole> resolved = new LinkedHashMap<>();
+            jdbcTemplate.query(SELECT_ACTIVE_MEMBERS_WITH_ROLE_QUERY, Map.of("organizationId", organizationId), resultSet -> {
+                long userId = resultSet.getLong("user_id");
+                String storedRole = resultSet.getString("org_role");
+                OrgRole.from(storedRole).ifPresent(orgRole -> resolved.put(userId, orgRole));
+            });
+            return resolved;
+        } catch (Exception exception) {
+            log.error("Org-roles lookup failed for organization {}: {}", organizationId, exception.getMessage(), exception);
+            return Map.of();
         }
     }
 

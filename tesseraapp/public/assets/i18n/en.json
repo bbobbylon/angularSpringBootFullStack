@@ -522,6 +522,8 @@
     "searchPlaceholder": "Search by name or email…",
     "addToOrganization": "Add",
     "noOrganizations": "No organizations found.",
+    "globalRole": "Global role",
+    "orgRole": "Organization role",
     "kpi": {
       "total": "Total Organizations",
       "active": "Active Organizations",

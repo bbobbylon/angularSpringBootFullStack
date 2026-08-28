@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -37,6 +38,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -352,6 +354,22 @@ class OrganizationControllerTest {
     }
 
     @Test
+    @DisplayName("getMembers rides orgRoles alongside members, keyed by user id")
+    void getMembersIncludesOrgRolesMap() throws Exception {
+        when(organizationService.listActiveMembers(9L)).thenReturn(List.of());
+        when(organizationService.orgRolesForOrganization(9L))
+                .thenReturn(Map.of(42L, OrgRole.ORG_ADMIN, 43L, OrgRole.ORG_VIEWER));
+
+        mockMvc.perform(get("/admin/organization/{organizationId}/members", 9L)
+                        .principal(authAs(1L, "ROLE_ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.orgRoles.42").value("ORG_ADMIN"))
+                .andExpect(jsonPath("$.data.orgRoles.43").value("ORG_VIEWER"));
+
+        verify(organizationService).orgRolesForOrganization(9L);
+    }
+
+    @Test
     @DisplayName("an organization admin cannot list members of an organization they do not belong to")
     void orgAdminCannotListMembersOfOtherOrganization() throws Exception {
         when(organizationService.isOrgAdminOf(5L, 9L)).thenReturn(false);
@@ -361,6 +379,7 @@ class OrganizationControllerTest {
                 .andExpect(status().isForbidden());
 
         verify(organizationService, never()).listActiveMembers(any());
+        verify(organizationService, never()).orgRolesForOrganization(any());
     }
 
     @Test
@@ -371,6 +390,7 @@ class OrganizationControllerTest {
                 .andExpect(status().isForbidden());
 
         verify(organizationService, never()).listActiveMembers(any());
+        verify(organizationService, never()).orgRolesForOrganization(any());
     }
 
     // ── Catalog read: scoped for org-scoped callers, unscoped for the top tiers ────────────

@@ -95,13 +95,20 @@ export class OrganizationService {
    *
    * @param organizationId - the organization to add the member to
    * @param userId         - the user to add
+   * @param orgRole        - the capacity to grant ({@code ORG_ADMIN}/{@code ORG_MEMBER}/
+   *                         {@code ORG_VIEWER}), or omit for the server default ({@code ORG_MEMBER})
    * @returns Observable of the API envelope (no payload beyond the success message)
    */
-  addMember$ = (organizationId: number, userId: number): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+  addMember$ = (
+    organizationId: number,
+    userId: number,
+    orgRole?: string,
+  ): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
     this.http
       .post<CustomHttpResponseInterface<OrganizationCatalogInterface>>(
         `${this.server}/admin/organization/${organizationId}/members/${userId}`,
         {},
+        orgRole ? { params: { orgRole } } : {},
       )
       .pipe(catchError(this.handleError));
 
@@ -118,6 +125,33 @@ export class OrganizationService {
     this.http
       .delete<CustomHttpResponseInterface<OrganizationCatalogInterface>>(
         `${this.server}/admin/organization/${organizationId}/members/${userId}`,
+      )
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Reassigns a member's capacity within one organization
+   * ({@code PATCH /admin/organization/:id/members/:userId/role}) — the promote/demote lever for
+   * {@code userorganizations.org_role}, distinct from {@link AdminUserService#updateUserRole$}
+   * which reassigns the member's <em>global</em> role. Same authorization rule as
+   * {@link members$}, plus a server-side ceiling: the caller can never grant a capacity above
+   * their own in this organization, and the last active {@code ORG_ADMIN} cannot be demoted.
+   *
+   * @param organizationId - the organization the membership belongs to
+   * @param userId         - the member being reassigned
+   * @param orgRole        - the capacity to grant ({@code ORG_ADMIN}/{@code ORG_MEMBER}/
+   *                         {@code ORG_VIEWER})
+   * @returns Observable of the API envelope (no payload beyond the success message)
+   */
+  setMemberOrgRole$ = (
+    organizationId: number,
+    userId: number,
+    orgRole: string,
+  ): Observable<CustomHttpResponseInterface<OrganizationCatalogInterface>> =>
+    this.http
+      .patch<CustomHttpResponseInterface<OrganizationCatalogInterface>>(
+        `${this.server}/admin/organization/${organizationId}/members/${userId}/role`,
+        {},
+        { params: { orgRole } },
       )
       .pipe(catchError(this.handleError));
 

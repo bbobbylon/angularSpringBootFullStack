@@ -386,6 +386,19 @@ public interface OrganizationService {
     boolean hasOtherActiveOrgAdmin(Long organizationId, Long excludedUserId);
 
     /**
+     * Every active member's capacity within one organization — the Members tab's per-row role
+     * selector needs this alongside {@link #listActiveMembers}, since a {@code UserDTO} carries
+     * only the member's <em>global</em> role. Kept as its own lookup rather than folded into
+     * {@code UserDTO} itself: {@code org_role} is meaningful only in the context of one
+     * organization, and a user can hold a different capacity in each one they belong to.
+     *
+     * @param organizationId the organization whose members' capacities to resolve
+     * @return user id → org role, for every active membership with a recognized stored role;
+     *         possibly empty, never {@code null}
+     */
+    Map<Long, OrgRole> orgRolesForOrganization(Long organizationId);
+
+    /**
      * The per-organization KPI row for the dashboard-style Organizations page: member count plus
      * this organization's customer/invoice/revenue rollups, delegating to
      * {@link com.bob.angularspringbootfullstack.service.CustomerService}'s existing

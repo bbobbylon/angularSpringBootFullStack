@@ -32,15 +32,19 @@ export interface OrganizationInterface {
  * response except add/remove-member. {@code organizations} is the caller's refreshed in-scope
  * catalog, returned by the list endpoint and by every catalog mutation. {@code members} is
  * populated only by the members-list endpoint — the roster an admin picks a member to remove
- * from, or checks before adding one. {@code stats}/{@code events}/{@code totalEvents}/
- * {@code invite}/{@code invites} are populated only by their respective dashboard-revamp
- * endpoints (2026-08-22) — the same one-envelope-many-optional-keys shape {@code members}
- * already established for this interface.
+ * from, or checks before adding one. {@code orgRoles} rides alongside {@code members}, keyed by
+ * user id, since a member's per-organization capacity ({@code userorganizations.org_role}) is
+ * not part of {@code UserInterface} — it is only meaningful in the context of the one
+ * organization being viewed (per-organization roles, 2026-08-26/2026-08-27, FUTURE-ENHANCEMENTS.md
+ * §3.2). {@code stats}/{@code events}/{@code totalEvents}/{@code invite}/{@code invites} are
+ * populated only by their respective dashboard-revamp endpoints (2026-08-22) — the same
+ * one-envelope-many-optional-keys shape {@code members} already established for this interface.
  */
 export interface OrganizationCatalogInterface {
   organization?: OrganizationInterface;
   organizations?: OrganizationInterface[];
   members?: UserInterface[];
+  orgRoles?: Record<number, string>;
   stats?: OrganizationStatsInterface;
   events?: OrganizationEventInterface[];
   totalEvents?: number;

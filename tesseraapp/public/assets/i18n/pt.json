@@ -520,6 +520,8 @@
     "searchPlaceholder": "Buscar por nome ou e-mail…",
     "addToOrganization": "Adicionar",
     "noOrganizations": "Nenhuma organização encontrada.",
+    "globalRole": "Função global",
+    "orgRole": "Função na organização",
     "kpi": {
       "total": "Total de organizações",
       "active": "Organizações ativas",

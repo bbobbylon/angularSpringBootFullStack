@@ -604,6 +604,13 @@ DEALLOCATE PREPARE add_uo_org_role_stmt;
 -- existence here would make the backfill run on every subsequent `schema.sql` execution and stomp
 -- every later demotion an administrator had made through the UI, the same "never overwrite a live
 -- edit" property `securitysettings`' INSERT IGNORE seed protects.
+--
+-- Wrapped in SQL_SAFE_UPDATES=0: the WHERE below (uo.active / r.name) is deliberate and reviewed,
+-- but neither column is a key on userorganizations, so a client with safe-update mode on (e.g.
+-- MySQL Workbench's default) rejects the UPDATE with Error 1175. Captured and restored rather than
+-- hardcoded, so this doesn't change the setting for anything else in the session.
+SET @orig_safe_updates := @@SQL_SAFE_UPDATES;
+SET SQL_SAFE_UPDATES = 0;
 SET @backfill_uo_org_role_sql := IF(@add_uo_org_role,
     'UPDATE userorganizations uo
          JOIN userroles ur ON ur.user_id = uo.user_id
@@ -615,6 +622,7 @@ SET @backfill_uo_org_role_sql := IF(@add_uo_org_role,
 PREPARE backfill_uo_org_role_stmt FROM @backfill_uo_org_role_sql;
 EXECUTE backfill_uo_org_role_stmt;
 DEALLOCATE PREPARE backfill_uo_org_role_stmt;
+SET SQL_SAFE_UPDATES = @orig_safe_updates;
 
 -- Same idempotent CHECK-rebuild pattern as events.type and organizations.status (see the events
 -- block for the full rationale): drop whatever CHECK this table currently carries and re-apply the

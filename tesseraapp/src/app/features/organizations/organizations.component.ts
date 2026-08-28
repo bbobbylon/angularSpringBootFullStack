@@ -67,6 +67,18 @@ const EVENTS_PAGE_SIZE = 10;
  * cannot grant a listed role still gets refused server-side (surfaced as a toast), so this list is
  * a UX narrowing, not a security boundary.
  *
+ * <h3>Per-organization roles (2026-08-27 frontend)</h3>
+ * {@code userorganizations.org_role} — the member's capacity within <em>this one</em>
+ * organization, distinct from the global role the selector above reassigns — gets its own
+ * {@code <select>} in the Members tab ({@link assignOrgRole}) and its own picker in the add-member
+ * panel ({@link addMemberOrgRole}, threaded through {@code addMember$}'s optional {@code orgRole}
+ * param). {@link ASSIGNABLE_ORG_ROLES} always offers all three capacities — unlike
+ * {@link ASSIGNABLE_ROLES} it is not narrowed for UX, since {@code OrgRole.canAssign}'s
+ * ceiling already refuses whatever a scoped caller may not grant. The invite flow deliberately
+ * does <em>not</em> get an independent org-role field: an invite already derives one from its
+ * {@code roleName} at redemption ({@code OrgRole#fromInvitedGlobalRole}), and a second, competing
+ * source of truth on the same invite would only invite drift between them.
+ *
  * Authority gate: only users with {@code UPDATE:USER} or {@code UPDATE:ROLE} reach this route
  * (adminGuard) — every tier {@code UPDATE:ORGANIZATION} was granted to already holds one of
  * those two (schema.sql's 2026-08-21 grant note), so this is not an additional restriction.
@@ -84,6 +96,14 @@ export class OrganizationsComponent implements OnInit {
   readonly DataState = DataState;
   /** Roles offered by the Members-tab reassign control and the Invites-tab role picker. */
   readonly ASSIGNABLE_ROLES: readonly string[] = ['ROLE_USER', 'ROLE_MODERATOR', 'ROLE_ORGANIZATION_ADMIN'];
+  /**
+   * Capacities offered by the Members-tab per-row org-role selector and the add-member panel's
+   * org-role picker ({@code userorganizations.org_role} — {@link OrgRole} server-side). Unlike
+   * {@link ASSIGNABLE_ROLES}, this list is not narrowed for UX — all three are always offered,
+   * and {@code OrgRole.canAssign}'s "not above your own tier" ceiling is the real gate,
+   * surfaced as a toast on refusal exactly like the global-role picker's tier ceiling.
+   */
+  readonly ASSIGNABLE_ORG_ROLES: readonly string[] = ['ORG_VIEWER', 'ORG_MEMBER', 'ORG_ADMIN'];
   /** Page load state. */
   protected readonly dataState = signal<DataState>(DataState.LOADING);
   /** The signed-in user — passed to the navbar and used to gate the catalog-mutation panel. */
@@ -102,10 +122,20 @@ export class OrganizationsComponent implements OnInit {
   protected readonly activeTab = signal<OrgTab>('members');
   /** Active members of {@link expandedOrgId}, once loaded. */
   protected readonly members = signal<UserInterface[]>([]);
+  /**
+   * Each active member's capacity in {@link expandedOrgId}, keyed by user id — loaded alongside
+   * {@link members} rather than folded into {@code UserInterface} (see
+   * {@code OrganizationCatalogInterface#orgRoles}'s Javadoc). Absent for a member the backend
+   * could not resolve a recognized role for; the template falls back to {@code ORG_MEMBER}, the
+   * same default a fresh membership row takes.
+   */
+  protected readonly memberOrgRoles = signal<Record<number, string>>({});
   /** Load state of the Members tab, separate from the page-level {@link dataState}. */
   protected readonly membersState = signal<DataState>(DataState.LOADING);
   /** Directory matches for the current add-member search term. */
   protected readonly memberCandidates = signal<UserInterface[]>([]);
+  /** The org role the add-member panel's picker currently has selected, for the next {@link addMember} call. */
+  protected readonly addMemberOrgRole = signal<string>('ORG_MEMBER');
   /** Audit-trail rows for the Activity tab's current page. */
   protected readonly orgEvents = signal<OrganizationEventInterface[]>([]);
   /** Load state of the Activity tab. */
@@ -339,6 +369,7 @@ export class OrganizationsComponent implements OnInit {
     this.expandedOrgId.set(org.id);
     this.activeTab.set('members');
     this.memberCandidates.set([]);
+    this.addMemberOrgRole.set('ORG_MEMBER');
     this.orgEvents.set([]);
     this.orgEventsPage.set(0);
     this.orgInvites.set([]);
@@ -376,7 +407,7 @@ export class OrganizationsComponent implements OnInit {
     if (!organizationId || this.isMutating()) return;
     this.isMutating.set(true);
     this.organizationService
-      .addMember$(organizationId, candidate.id)
+      .addMember$(organizationId, candidate.id, this.addMemberOrgRole())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
@@ -442,7 +473,7 @@ export class OrganizationsComponent implements OnInit {
       });
   }
 
-  /** Fetches the active member list for one organization into {@link members}. */
+  /** Fetches the active member list, and each member's org role, for one organization. */
   private loadMembers(organizationId: number): void {
     this.membersState.set(DataState.LOADING);
     this.organizationService
@@ -451,12 +482,44 @@ export class OrganizationsComponent implements OnInit {
       .subscribe({
         next: (response) => {
           this.members.set(response.data?.members ?? []);
+          this.memberOrgRoles.set(response.data?.orgRoles ?? {});
           this.membersState.set(DataState.LOADED);
         },
         error: (error: string) => {
           this.notification.onError(error);
           this.membersState.set(DataState.ERROR);
         },
+      });
+  }
+
+  /** Returns one member's org role, defaulting to {@code ORG_MEMBER} — see {@link memberOrgRoles}. */
+  protected orgRoleFor(member: UserInterface): string {
+    return (member.id !== undefined && this.memberOrgRoles()[member.id]) || 'ORG_MEMBER';
+  }
+
+  /**
+   * Reassigns a member's capacity within the currently expanded organization
+   * ({@code PATCH /admin/organization/:id/members/:userId/role}), then refreshes the member list
+   * so {@link memberOrgRoles} reflects the change. Distinct from {@link assignRole}, which
+   * reassigns the member's global role instead.
+   *
+   * @param member  - a row from {@link members}
+   * @param orgRole - the newly selected capacity
+   */
+  protected assignOrgRole(member: UserInterface, orgRole: string): void {
+    const organizationId = this.expandedOrgId();
+    if (!organizationId || !member.id || this.isMutating()) return;
+    this.isMutating.set(true);
+    this.organizationService
+      .setMemberOrgRole$(organizationId, member.id, orgRole)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isMutating.set(false);
+          this.notification.onSuccess(response.message ?? 'Member role updated successfully');
+          this.loadMembers(organizationId);
+        },
+        error: (error: string) => this.failMutation(error),
       });
   }
 

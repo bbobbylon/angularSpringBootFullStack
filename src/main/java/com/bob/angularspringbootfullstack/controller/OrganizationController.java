@@ -315,9 +315,14 @@ public class OrganizationController {
      * {@link #removeMember} needed: an admin cannot pick a member to remove from a roster they
      * can never see. Same authorization rule as those two, via {@link #requireMembershipAuthority}.
      *
+     * <p>{@code orgRoles} rides alongside {@code members}, keyed by user id, rather than being
+     * folded into {@code UserDTO}: a member's capacity is meaningful only in the context of this
+     * one organization, and the Members tab's per-row role selector is the only surface that needs
+     * it (see {@link OrganizationService#orgRolesForOrganization}).
+     *
      * @param authentication the calling administrator's authentication
      * @param organizationId the organization whose members to list
-     * @return 200 OK with the organization's active members
+     * @return 200 OK with the organization's active members and their per-organization roles
      */
     @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
     @GetMapping("/{organizationId}/members")
@@ -326,7 +331,9 @@ public class OrganizationController {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("members", organizationService.listActiveMembers(organizationId)))
+                        .data(of(
+                                "members", organizationService.listActiveMembers(organizationId),
+                                "orgRoles", organizationService.orgRolesForOrganization(organizationId)))
                         .message("Members retrieved successfully.")
                         .status(OK)
                         .statusCode(OK.value())

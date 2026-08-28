@@ -520,6 +520,8 @@
     "searchPlaceholder": "按姓名或电子邮件搜索…",
     "addToOrganization": "添加",
     "noOrganizations": "未找到组织。",
+    "globalRole": "全局角色",
+    "orgRole": "组织角色",
     "kpi": {
       "total": "组织总数",
       "active": "已启用组织数",

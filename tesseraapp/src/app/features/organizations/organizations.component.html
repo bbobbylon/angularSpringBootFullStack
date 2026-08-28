@@ -188,9 +188,17 @@
                                 <span>{{ member.firstName }} {{ member.lastName }} <span class="text-muted">({{ member.email }})</span></span>
                                 <div class="d-flex align-items-center gap-2">
                                   <select (change)="assignRole(member, $any($event.target).value)" [disabled]="isMutating()"
+                                          [title]="t('organizations.globalRole')"
                                           class="form-select form-select-sm" style="width: auto;">
                                     @for (role of ASSIGNABLE_ROLES; track role) {
                                       <option [selected]="member.roleName === role" [value]="role">{{ role }}</option>
+                                    }
+                                  </select>
+                                  <select (change)="assignOrgRole(member, $any($event.target).value)" [disabled]="isMutating()"
+                                          [title]="t('organizations.orgRole')"
+                                          class="form-select form-select-sm" style="width: auto;">
+                                    @for (orgRole of ASSIGNABLE_ORG_ROLES; track orgRole) {
+                                      <option [selected]="orgRoleFor(member) === orgRole" [value]="orgRole">{{ orgRole }}</option>
                                     }
                                   </select>
                                   <button (click)="removeMember(member)" [disabled]="isMutating()"
@@ -205,9 +213,18 @@
                           </ul>
 
                           <label class="form-label" for="memberSearch-{{ org.id }}">{{ t('organizations.addMember') }}</label>
-                          <input (input)="onMemberSearchInput($any($event.target).value)"
-                                 [disabled]="isMutating()" class="form-control form-control-sm mb-2"
-                                 id="memberSearch-{{ org.id }}" [placeholder]="t('organizations.searchPlaceholder')" type="text">
+                          <div class="d-flex gap-2 mb-2">
+                            <input (input)="onMemberSearchInput($any($event.target).value)"
+                                   [disabled]="isMutating()" class="form-control form-control-sm"
+                                   id="memberSearch-{{ org.id }}" [placeholder]="t('organizations.searchPlaceholder')" type="text">
+                            <select (change)="addMemberOrgRole.set($any($event.target).value)" [disabled]="isMutating()"
+                                    [title]="t('organizations.orgRole')"
+                                    class="form-select form-select-sm" style="width: auto;">
+                              @for (orgRole of ASSIGNABLE_ORG_ROLES; track orgRole) {
+                                <option [selected]="addMemberOrgRole() === orgRole" [value]="orgRole">{{ orgRole }}</option>
+                              }
+                            </select>
+                          </div>
                           @if (memberCandidates().length > 0) {
                             <ul class="list-group">
                               @for (candidate of memberCandidates(); track candidate.id) {

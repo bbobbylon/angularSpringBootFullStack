@@ -94,15 +94,20 @@ describe('OrganizationService', () => {
   });
 
   describe('members$', () => {
-    it('fetches the active members of one organization', () => {
-      let result: unknown;
-      service.members$(9).subscribe((response) => (result = response.data?.members));
+    it('fetches the active members of one organization, alongside their org roles', () => {
+      let members: unknown;
+      let orgRoles: unknown;
+      service.members$(9).subscribe((response) => {
+        members = response.data?.members;
+        orgRoles = response.data?.orgRoles;
+      });
 
       const request = httpMock.expectOne(`${orgUrl}/9/members`);
       expect(request.request.method).toBe('GET');
-      request.flush({ data: { members: [{ id: 42, email: 'member@example.com' }] } });
+      request.flush({ data: { members: [{ id: 42, email: 'member@example.com' }], orgRoles: { 42: 'ORG_ADMIN' } } });
 
-      expect(result).toEqual([{ id: 42, email: 'member@example.com' }]);
+      expect(members).toEqual([{ id: 42, email: 'member@example.com' }]);
+      expect(orgRoles).toEqual({ 42: 'ORG_ADMIN' });
     });
   });
 
@@ -114,6 +119,37 @@ describe('OrganizationService', () => {
       expect(request.request.method).toBe('POST');
       expect(request.request.body).toEqual({});
       request.flush({ message: 'Member added successfully.' });
+    });
+
+    it('includes the orgRole query param when a capacity is supplied', () => {
+      service.addMember$(9, 42, 'ORG_VIEWER').subscribe();
+
+      const request = httpMock.expectOne(`${orgUrl}/9/members/42?orgRole=ORG_VIEWER`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({});
+      request.flush({ message: 'Member added successfully.' });
+    });
+  });
+
+  describe('setMemberOrgRole$', () => {
+    it('patches the member-scoped role URL with the orgRole query param', () => {
+      service.setMemberOrgRole$(9, 42, 'ORG_ADMIN').subscribe();
+
+      const request = httpMock.expectOne(`${orgUrl}/9/members/42/role?orgRole=ORG_ADMIN`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({});
+      request.flush({ message: 'Member role updated successfully.' });
+    });
+
+    it('surfaces the server-provided reason on refusal (e.g. the last-admin guard)', () => {
+      let error: Error | undefined;
+      service.setMemberOrgRole$(9, 42, 'ORG_MEMBER').subscribe({ error: (err: Error) => (error = err) });
+
+      httpMock
+        .expectOne(`${orgUrl}/9/members/42/role?orgRole=ORG_MEMBER`)
+        .flush({ reason: 'An organization must keep at least one active administrator.' }, { status: 400, statusText: 'Bad Request' });
+
+      expect(error?.message).toBe('An organization must keep at least one active administrator.');
     });
   });
 
