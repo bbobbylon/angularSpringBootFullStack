@@ -219,7 +219,29 @@ public enum EventType {
      * (Organization CRUD — org setup). Their invoices come along implicitly, since an invoice
      * belongs to a customer, not directly to an organization.
      */
-    ORG_CUSTOMERS_ASSIGNED("Customers were attached to the organization :)");
+    ORG_CUSTOMERS_ASSIGNED("Customers were attached to the organization :)"),
+    /**
+     * Fired when an organization's single sign-on identity provider is configured for the first
+     * time, or its configuration is replaced (FUTURE-ENHANCEMENTS.md §3.1 — per-organization
+     * external IdP). Fired on create and on update; there is only ever one provider row per
+     * organization, so this event does not distinguish the two.
+     */
+    ORG_SSO_CONFIGURED("The organization's single sign-on provider was configured :)"),
+    /**
+     * Fired when an organization's single sign-on identity provider is removed, returning its
+     * members to ordinary password/consumer-OAuth login.
+     */
+    ORG_SSO_REMOVED("The organization's single sign-on provider was removed :|"),
+    /**
+     * Fired when an email domain is added to an organization's SSO routing table, used by the
+     * public email-domain lookup ({@code GET /oauth2/org-sso-lookup}) to send a signing-in user to
+     * the right organization's IdP.
+     */
+    ORG_SSO_DOMAIN_ADDED("An email domain was added to the organization's single sign-on routing :)"),
+    /**
+     * Fired when an email domain is removed from an organization's SSO routing table.
+     */
+    ORG_SSO_DOMAIN_REMOVED("An email domain was removed from the organization's single sign-on routing :|");
 
     /**
      * -- GETTER --

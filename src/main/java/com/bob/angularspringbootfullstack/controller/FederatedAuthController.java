@@ -1,7 +1,9 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.configuration.FederatedProviderCatalog;
+import com.bob.angularspringbootfullstack.dto.OrgSsoLookupResult;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
+import com.bob.angularspringbootfullstack.service.OrganizationIdentityProviderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PathVariable;
 import jakarta.servlet.http.HttpServletRequest;
 import com.bob.angularspringbootfullstack.service.serviceimpl.ProviderLinkTicketService;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
@@ -39,6 +44,7 @@ public class FederatedAuthController {
 
     private final FederatedProviderCatalog catalog;
     private final ProviderLinkTicketService linkTicketService;
+    private final OrganizationIdentityProviderService organizationIdentityProviderService;
 
     /**
      * Lists the configured federated provider ids in render order.
@@ -102,6 +108,43 @@ public class FederatedAuthController {
                         .timeStamp(now().toString())
                         .data(of("providers", catalog.getProviders()))
                         .message("Federated providers retrieved successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * The email-domain discovery lookup for per-organization SSO
+     * (FUTURE-ENHANCEMENTS.md §3.1's email-domain discovery UX): given an email address, reports
+     * whether its domain is routed to an organization's own IdP.
+     *
+     * <p>Anti-enumeration note, same discipline as {@link #providers()}: the response never
+     * distinguishes "no organization claims this domain" from "the organization's SSO is
+     * temporarily disabled" from "the organization itself is inactive" — every one of those
+     * collapses to {@code found: false}, so this endpoint cannot be used to probe an
+     * organization's internal configuration state, only whether SSO is currently reachable for a
+     * given domain.
+     *
+     * @param email the email address the login page's user entered
+     * @return 200 OK with {@code found: false}, or {@code found: true} plus
+     * {@code organizationName}/{@code displayName}/{@code loginUrl}
+     */
+    @GetMapping("/org-sso-lookup")
+    public ResponseEntity<HttpResponse> orgSsoLookup(@RequestParam String email) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        organizationIdentityProviderService.resolveByEmailDomain(email).ifPresentOrElse(
+                result -> {
+                    data.put("found", true);
+                    data.put("organizationName", result.organizationName());
+                    data.put("displayName", result.displayName());
+                    data.put("loginUrl", result.loginUrl());
+                },
+                () -> data.put("found", false));
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(data)
+                        .message("Organization SSO lookup completed.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

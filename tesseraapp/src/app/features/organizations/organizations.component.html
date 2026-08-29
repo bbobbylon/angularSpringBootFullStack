@@ -160,6 +160,13 @@
                           {{ t('organizations.tabs.invites') }}
                         </button>
                       </li>
+                      @if (canManageSso) {
+                        <li class="nav-item">
+                          <button class="nav-link" [class.active]="activeTab() === 'sso'" (click)="selectTab('sso')" type="button">
+                            {{ t('organizations.tabs.sso') }}
+                          </button>
+                        </li>
+                      }
                     </ul>
 
                     <!-- Members tab -->
@@ -432,6 +439,117 @@
                                 {{ t('organizations.invites.create') }}
                               </button>
                             </div>
+                          </form>
+                        }
+                      }
+                    }
+
+                    <!-- SSO tab — organization admins (or unscoped tiers) only -->
+                    @if (activeTab() === 'sso' && canManageSso) {
+                      @switch (ssoState()) {
+                        @case (DataState.LOADING) {
+                          <div class="d-flex align-items-center gap-2 text-muted">
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          </div>
+                        }
+                        @case (DataState.ERROR) {
+                          <div class="alert alert-danger mb-0">{{ t('organizations.sso.error') }}</div>
+                        }
+                        @case (DataState.LOADED) {
+                          @if (ssoConfig(); as config) {
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                              <div class="d-flex gap-2">
+                                <span class="badge" [class.bg-success]="config.status === 'ACTIVE'" [class.bg-secondary]="config.status !== 'ACTIVE'">
+                                  {{ config.status === 'ACTIVE' ? t('organizations.active') : t('organizations.inactive') }}
+                                </span>
+                                <span class="badge bg-info text-dark">
+                                  {{ config.protocol === 'SAML' ? t('organizations.sso.protocolSaml') : t('organizations.sso.protocolOidc') }}
+                                </span>
+                              </div>
+                              <div class="d-flex gap-2">
+                                <button (click)="toggleSsoStatus()" [disabled]="isMutating()"
+                                        class="btn btn-sm btn-outline-secondary" type="button">
+                                  {{ config.status === 'ACTIVE' ? t('organizations.sso.deactivate') : t('organizations.sso.activate') }}
+                                </button>
+                                <button (click)="deleteSsoConfig()" [disabled]="isMutating()"
+                                        class="btn btn-sm btn-outline-danger" type="button">
+                                  {{ t('organizations.sso.remove') }}
+                                </button>
+                              </div>
+                            </div>
+                          }
+
+                          <form #ssoForm="ngForm" (ngSubmit)="saveSsoConfig(ssoForm)">
+                            <div class="mb-2">
+                              <label class="form-label" for="ssoProtocol-{{ org.id }}">{{ t('organizations.sso.protocol') }}</label>
+                              <select [disabled]="isMutating()" [ngModel]="ssoProtocol()" (ngModelChange)="ssoProtocol.set($event)"
+                                      class="form-select form-select-sm" id="ssoProtocol-{{ org.id }}" name="protocol">
+                                <option value="OIDC">{{ t('organizations.sso.protocolOidc') }}</option>
+                                <option value="SAML">{{ t('organizations.sso.protocolSaml') }}</option>
+                              </select>
+                            </div>
+                            <div class="mb-2">
+                              <label class="form-label" for="ssoDisplayName-{{ org.id }}">{{ t('organizations.sso.displayName') }}</label>
+                              <input [disabled]="isMutating()" [ngModel]="ssoConfig()?.displayName" class="form-control form-control-sm"
+                                     id="ssoDisplayName-{{ org.id }}" name="displayName" required type="text">
+                            </div>
+                            @if (ssoProtocol() === 'OIDC') {
+                              <div class="mb-2">
+                                <label class="form-label" for="ssoIssuerUri-{{ org.id }}">{{ t('organizations.sso.issuerUri') }}</label>
+                                <input [disabled]="isMutating()" [ngModel]="ssoConfig()?.oidcIssuerUri" class="form-control form-control-sm"
+                                       id="ssoIssuerUri-{{ org.id }}" name="issuerUri" [placeholder]="t('organizations.sso.issuerUriPlaceholder')"
+                                       required type="url">
+                              </div>
+                              <div class="mb-2">
+                                <label class="form-label" for="ssoClientId-{{ org.id }}">{{ t('organizations.sso.clientId') }}</label>
+                                <input [disabled]="isMutating()" [ngModel]="ssoConfig()?.oidcClientId" class="form-control form-control-sm"
+                                       id="ssoClientId-{{ org.id }}" name="clientId" required type="text">
+                              </div>
+                              <div class="mb-3">
+                                <label class="form-label" for="ssoClientSecret-{{ org.id }}">{{ t('organizations.sso.clientSecret') }}</label>
+                                <input [disabled]="isMutating()" class="form-control form-control-sm" id="ssoClientSecret-{{ org.id }}"
+                                       name="clientSecret" ngModel type="password"
+                                       [placeholder]="ssoConfig()?.secretConfigured ? t('organizations.sso.secretConfiguredPlaceholder') : t('organizations.sso.secretRequiredPlaceholder')">
+                                <div class="form-text">
+                                  {{ ssoConfig()?.secretConfigured ? t('organizations.sso.secretConfiguredHint') : t('organizations.sso.secretRequiredHint') }}
+                                </div>
+                              </div>
+                            } @else {
+                              <div class="mb-3">
+                                <label class="form-label" for="ssoMetadataUri-{{ org.id }}">{{ t('organizations.sso.metadataUri') }}</label>
+                                <input [disabled]="isMutating()" [ngModel]="ssoConfig()?.samlMetadataUri" class="form-control form-control-sm"
+                                       id="ssoMetadataUri-{{ org.id }}" name="metadataUri" [placeholder]="t('organizations.sso.metadataUriPlaceholder')"
+                                       required type="url">
+                                <div class="form-text">{{ t('organizations.sso.metadataUriHint') }}</div>
+                              </div>
+                            }
+                            <button [disabled]="isMutating() || ssoForm.invalid" class="btn btn-sm btn-primary" type="submit">
+                              {{ t('common.save') }}
+                            </button>
+                          </form>
+
+                          <hr class="my-3">
+
+                          <h3 class="h6">{{ t('organizations.sso.domainsTitle') }}</h3>
+                          <ul class="list-group mb-3">
+                            @for (domain of ssoDomains(); track domain.id) {
+                              <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>{{ domain.domain }}</span>
+                                <button (click)="removeSsoDomain(domain)" [disabled]="isMutating()"
+                                        class="btn btn-sm btn-outline-danger" type="button">
+                                  {{ t('organizations.sso.removeDomain') }}
+                                </button>
+                              </li>
+                            } @empty {
+                              <li class="list-group-item text-muted">{{ t('organizations.sso.noDomains') }}</li>
+                            }
+                          </ul>
+                          <form #ssoDomainForm="ngForm" (ngSubmit)="addSsoDomain(ssoDomainForm)" class="d-flex gap-2">
+                            <input [disabled]="isMutating()" class="form-control form-control-sm" name="domain" ngModel
+                                   [placeholder]="t('organizations.sso.domainPlaceholder')" required type="text">
+                            <button [disabled]="isMutating() || ssoDomainForm.invalid" class="btn btn-sm btn-primary text-nowrap" type="submit">
+                              {{ t('organizations.sso.addDomain') }}
+                            </button>
                           </form>
                         }
                       }

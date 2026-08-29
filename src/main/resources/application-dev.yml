@@ -26,3 +26,7 @@ MAIL_PORT: 587
 UI_APP_URL: http://localhost:4200
 
 JWT_SECRET: devOnlySecretKeyDoNotUseInProductionMustBeLongEnough1
+
+# Dev-only AES-256-GCM key for EncryptionUtil (32 random bytes, base64-encoded) — never reused in
+# qa/stage/prod, where OrgIdpEncryptionKeyGuard fails fast if this exact value is still set.
+ORG_IDP_SECRET_ENCRYPTION_KEY: mxaAybb4ZEsJcc7K9MbK/rENPp7s+NvcHkYRVpaJAXA=

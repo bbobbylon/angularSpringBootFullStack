@@ -5,6 +5,7 @@ import { catchError, tap } from 'rxjs/operators';
 import { AccountType, NewPasswordFormInterface, ProfileInterface } from '../interface/appstates.interface';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
 import {
+  OrgSsoLookupDataInterface,
   PasskeysDataInterface,
   ProviderLinksDataInterface,
   RecoveryCodesInterface,
@@ -532,6 +533,34 @@ export class UserService {
    */
   initiateFederatedLogin(provider: string): void {
     window.location.assign(`${this.server}/oauth2/authorization/${provider}`);
+  }
+
+  /**
+   * Looks up whether the given email's domain is claimed by an organization's SSO configuration
+   * ({@code GET /oauth2/org-sso-lookup}, public) — the email-domain discovery UX (FUTURE-ENHANCEMENTS.md
+   * §3.1). Deliberately a lookup, not a redirect: the caller decides what to do with {@code found}
+   * (see {@link OrgSsoLookupDataInterface} for the anti-enumeration contract this mirrors).
+   *
+   * @param email - the address the user typed on the login screen
+   * @returns Observable of the API envelope carrying {@code found} and, only when true, the redirect fields
+   */
+  orgSsoLookup$ = (email: string): Observable<CustomHttpResponseInterface<OrgSsoLookupDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<OrgSsoLookupDataInterface>>(
+        `${this.server}/oauth2/org-sso-lookup`,
+        { params: { email } },
+      )
+      .pipe(/* tap(console.log), */ catchError(this.handleError));
+
+  /**
+   * Full-page-navigates to the org-specific SSO login URL returned by {@link orgSsoLookup$} — same
+   * rationale as {@link initiateFederatedLogin}: the Authorization Code flow is a redirect chain, not
+   * an XHR-able request.
+   *
+   * @param loginUrl - the backend-relative path from a {@code found: true} lookup response
+   */
+  initiateOrgSsoLogin(loginUrl: string): void {
+    window.location.assign(`${this.server}${loginUrl}`);
   }
 
   /**

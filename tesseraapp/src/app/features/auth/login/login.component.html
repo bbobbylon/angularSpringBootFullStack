@@ -120,6 +120,40 @@
             </button>
           </form>
 
+          <!-- Email-domain SSO discovery (FUTURE-ENHANCEMENTS.md §3.1): a person may belong to
+               several organizations, so this is a lookup keyed on the email they type here rather
+               than a bookmarkable per-org link. A found:false result never implies anything about
+               whether the email itself is a known account — only that its domain has no org SSO. -->
+          <div class="sc-fed-divider" role="separator"><span>{{ t('login.orgSsoDivider') }}</span></div>
+
+          <form #orgSsoEmailForm="ngForm" (ngSubmit)="lookupOrgSso(orgSsoEmailForm)" class="sc-form" novalidate>
+            <div class="sc-field">
+              <label class="form-label" for="orgSsoEmail">{{ t('login.orgSsoLabel') }}</label>
+              <span class="sc-field__icon"><i class="bi bi-building"></i></span>
+              <input id="orgSsoEmail" name="orgSsoEmail" ngModel type="email"
+                     autocomplete="email" [placeholder]="t('login.orgSsoPlaceholder')"
+                     [disabled]="orgSsoLookupInProgress()"
+                     (ngModelChange)="orgSsoNotFound.set(false)"
+                     class="form-control sc-input" />
+            </div>
+
+            <button
+              [disabled]="orgSsoLookupInProgress() || orgSsoEmailForm.invalid || orgSsoEmailForm.pristine"
+              class="btn btn-outline-primary sc-submit" type="submit">
+              @if (orgSsoLookupInProgress()) {
+                <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"></span>
+                <span>{{ t('login.orgSsoChecking') }}</span>
+              } @else {
+                <i class="bi bi-building"></i>
+                <span>{{ t('login.orgSsoContinue') }}</span>
+              }
+            </button>
+
+            @if (orgSsoNotFound()) {
+              <p class="sc-auth__hint">{{ t('login.orgSsoNotFound') }}</p>
+            }
+          </form>
+
           <!-- Alternative sign-in methods: passkey + federated entry points (SRS FR-FED / EIR-UI-1),
                sharing one "or continue with" section since both bypass risk-based step-up on the
                backend the same way (see PasskeyController's class doc) — neither is "weaker" than

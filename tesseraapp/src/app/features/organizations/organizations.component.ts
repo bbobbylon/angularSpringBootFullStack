@@ -9,6 +9,7 @@ import { NavbarComponent } from '../../shared/navbar/navbar.component';
 import { StatsComponent } from '../../shared/stats/stats.component';
 import { UserService } from '../../service/user.service';
 import { OrganizationService } from '../../service/organization.service';
+import { OrganizationSsoService } from '../../service/organization-sso.service';
 import { AdminUserService } from '../../service/admin-user.service';
 import { NotificationsService } from '../../service/notifications-service';
 import { DataState } from '../../enumeration/datastate.enum';
@@ -17,14 +18,16 @@ import { CustomerInterface } from '../../interface/customer.interface';
 import { InvoiceInterface } from '../../interface/invoice.interface';
 import {
   OrganizationEventInterface,
+  OrganizationIdentityProviderInterface,
   OrganizationInterface,
   OrganizationInviteInterface,
   OrganizationStatsInterface,
+  OrgSsoDomainInterface,
 } from '../../interface/organization.interface';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-/** The six tabs of an expanded organization card, mirroring the endpoint families that back them. */
-type OrgTab = 'members' | 'profile' | 'settings' | 'customers' | 'activity' | 'invites';
+/** The seven tabs of an expanded organization card, mirroring the endpoint families that back them. */
+type OrgTab = 'members' | 'profile' | 'settings' | 'customers' | 'activity' | 'invites' | 'sso';
 
 /** Rows per page for an expanded card's Activity tab ({@code OrganizationService#orgEvents$}). */
 const EVENTS_PAGE_SIZE = 10;
@@ -99,6 +102,16 @@ const EVENTS_PAGE_SIZE = 10;
  * Creating a new organization is {@code NewOrganizationComponent} at {@code /organizations/new},
  * not a form on this page — this component is the catalog only, matching the
  * {@code /customer/new}/{@code /invoice/new} precedent the rest of the app already follows.
+ *
+ * <h3>SSO tab: a third, stricter gate (FUTURE-ENHANCEMENTS.md §3.1 Stage 1)</h3>
+ * Unlike every other tab, the SSO tab is not open to bare membership at all — it mirrors
+ * {@code OrganizationIdentityProviderController#requireOrgAdmin}, which requires an unscoped tier
+ * or an {@code ORG_ADMIN} of this specific organization, since a misconfigured or malicious IdP
+ * can auto-join an attacker as a member (Stage 2). {@link canManageSso} checks
+ * {@link isUnscopedTier} first, then falls back to the caller's own row in {@link memberOrgRoles}
+ * — which is safe to read here because {@link toggleCard} loads the Members tab (and therefore
+ * {@link memberOrgRoles}) eagerly on every card expansion, so the caller's own capacity is already
+ * known by the time the tab strip renders, without a dedicated "am I an admin here" endpoint.
  */
 @Component({
   selector: 'app-organizations',
@@ -190,6 +203,19 @@ export class OrganizationsComponent implements OnInit {
   protected readonly settingsMfaMethods = signal<Set<string>>(new Set());
   /** The Settings tab's editable feature-flags field, comma-separated, seeded the same way. */
   protected readonly settingsFeatureFlagsText = signal('');
+  /** {@link expandedOrgId}'s SSO configuration, or {@code undefined} if none is configured. */
+  protected readonly ssoConfig = signal<OrganizationIdentityProviderInterface | undefined>(undefined);
+  /** Email domains claimed for {@link expandedOrgId}'s SSO routing. */
+  protected readonly ssoDomains = signal<OrgSsoDomainInterface[]>([]);
+  /** Load state of the SSO tab. */
+  protected readonly ssoState = signal<DataState>(DataState.LOADING);
+  /**
+   * The SSO form's currently-selected protocol (Stage 3) — separate from {@link ssoConfig}'s own
+   * {@code protocol} field because the admin must be able to switch OIDC ↔ SAML in the form
+   * *before* saving, to reveal the right fields; seeded from the loaded configuration (or
+   * {@code 'OIDC'} for an unconfigured organization) each time {@link loadSso} runs.
+   */
+  protected readonly ssoProtocol = signal<'OIDC' | 'SAML'>('OIDC');
 
   /**
    * Catalog-wide KPI row: organization count, active count, and total members across every
@@ -222,8 +248,20 @@ export class OrganizationsComponent implements OnInit {
     return role === 'ROLE_ADMIN' || role === 'ROLE_APPLICATION_ADMIN';
   }
 
+  /**
+   * Whether the signed-in user may see and manage the SSO tab for {@link expandedOrgId} — see the
+   * class Javadoc's "SSO tab: a third, stricter gate" section for why this is not simply
+   * {@link isUnscopedTier}.
+   */
+  protected get canManageSso(): boolean {
+    if (this.isUnscopedTier) return true;
+    const userId = this.user()?.id;
+    return userId !== undefined && this.memberOrgRoles()[userId] === 'ORG_ADMIN';
+  }
+
   private readonly userService = inject(UserService);
   private readonly organizationService = inject(OrganizationService);
+  private readonly organizationSsoService = inject(OrganizationSsoService);
   private readonly adminUserService = inject(AdminUserService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
@@ -408,6 +446,9 @@ export class OrganizationsComponent implements OnInit {
     this.orgInvoices.set([]);
     this.settingsMfaMethods.set(new Set());
     this.settingsFeatureFlagsText.set('');
+    this.ssoConfig.set(undefined);
+    this.ssoDomains.set([]);
+    this.ssoProtocol.set('OIDC');
     this.loadMembers(org.id);
   }
 
@@ -426,6 +467,7 @@ export class OrganizationsComponent implements OnInit {
     if (tab === 'invites') this.loadInvites(organizationId);
     if (tab === 'customers') this.loadCustomers(organizationId);
     if (tab === 'settings') this.seedSettingsForm();
+    if (tab === 'sso') this.loadSso(organizationId);
   }
 
   /**
@@ -808,6 +850,164 @@ export class OrganizationsComponent implements OnInit {
       .writeText(link)
       .then(() => this.notification.onSuccess('Invite link copied to clipboard'))
       .catch(() => this.notification.onError('Could not copy the invite link'));
+  }
+
+  /**
+   * Fetches the SSO tab's configuration and claimed domains together
+   * ({@code GET /admin/organization/:id/sso}). A missing {@code config} in the response is not an
+   * error — it means this organization has never configured SSO.
+   */
+  private loadSso(organizationId: number): void {
+    this.ssoState.set(DataState.LOADING);
+    this.organizationSsoService
+      .getConfig$(organizationId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.ssoConfig.set(response.data?.config);
+          this.ssoDomains.set(response.data?.domains ?? []);
+          this.ssoProtocol.set(response.data?.config?.protocol === 'SAML' ? 'SAML' : 'OIDC');
+          this.ssoState.set(DataState.LOADED);
+        },
+        error: (error: string) => {
+          this.notification.onError(error);
+          this.ssoState.set(DataState.ERROR);
+        },
+      });
+  }
+
+  /**
+   * Submits the SSO tab's configuration form ({@code PUT /admin/organization/:id/sso}) — creates
+   * the configuration on first save, replaces it on every later one, and switches protocol (OIDC ↔
+   * SAML) whenever {@link ssoProtocol} differs from what is currently stored, exactly like any
+   * other field edit. For OIDC, the client secret field is left blank on an edit to keep whatever
+   * secret is already stored server-side; an empty string is sent as {@code undefined}, not as a
+   * literal blank secret, so the backend's "omitted means keep the current one" branch is the one
+   * that runs. SAML's metadata URI has no such rule — it is always sent as entered.
+   *
+   * @param form - the NgForm carrying {@code displayName} and, depending on {@link ssoProtocol},
+   *               either {@code issuerUri}/{@code clientId}/{@code clientSecret} or {@code metadataUri}
+   */
+  protected saveSsoConfig(form: NgForm): void {
+    const organizationId = this.expandedOrgId();
+    if (!organizationId || !form.valid || this.isMutating()) return;
+    this.isMutating.set(true);
+    const protocol = this.ssoProtocol();
+    const clientSecret: string | undefined = form.value.clientSecret ? form.value.clientSecret : undefined;
+    this.organizationSsoService
+      .upsertConfig$(
+        organizationId,
+        protocol,
+        form.value.displayName,
+        protocol === 'OIDC' ? form.value.issuerUri : undefined,
+        protocol === 'OIDC' ? form.value.clientId : undefined,
+        protocol === 'OIDC' ? clientSecret : undefined,
+        protocol === 'SAML' ? form.value.metadataUri : undefined,
+      )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isMutating.set(false);
+          this.ssoConfig.set(response.data?.config);
+          this.notification.onSuccess(response.message ?? 'Identity provider configuration saved successfully');
+        },
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
+   * Toggles the SSO configuration between {@code ACTIVE} and {@code INACTIVE} without deleting it
+   * ({@code PATCH /admin/organization/:id/sso/status}).
+   */
+  protected toggleSsoStatus(): void {
+    const organizationId = this.expandedOrgId();
+    const config = this.ssoConfig();
+    if (!organizationId || !config || this.isMutating()) return;
+    this.isMutating.set(true);
+    const nextStatus = config.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    this.organizationSsoService
+      .setStatus$(organizationId, nextStatus)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isMutating.set(false);
+          this.ssoConfig.set(response.data?.config);
+          this.notification.onSuccess(response.message ?? 'Identity provider status updated successfully');
+        },
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
+   * Removes the SSO configuration entirely ({@code DELETE /admin/organization/:id/sso}); its
+   * members fall back to ordinary password or consumer-OAuth login on their next sign-in. No
+   * confirmation dialog, matching {@link removeMember}/{@link toggleStatus}'s reversibility bar —
+   * an admin can immediately reconfigure SSO from a blank form.
+   */
+  protected deleteSsoConfig(): void {
+    const organizationId = this.expandedOrgId();
+    if (!organizationId || !this.ssoConfig() || this.isMutating()) return;
+    this.isMutating.set(true);
+    this.organizationSsoService
+      .deleteConfig$(organizationId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isMutating.set(false);
+          this.ssoConfig.set(undefined);
+          this.notification.onSuccess(response.message ?? 'Identity provider configuration removed successfully');
+        },
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
+   * Claims a new email domain for this organization's SSO routing
+   * ({@code POST /admin/organization/:id/sso/domains}). Refused server-side if the domain is
+   * already claimed by another organization.
+   *
+   * @param form - the NgForm carrying {@code domain}
+   */
+  protected addSsoDomain(form: NgForm): void {
+    const organizationId = this.expandedOrgId();
+    if (!organizationId || !form.valid || this.isMutating()) return;
+    this.isMutating.set(true);
+    this.organizationSsoService
+      .addDomain$(organizationId, form.value.domain)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isMutating.set(false);
+          const created = response.data?.domain;
+          if (created) this.ssoDomains.set([...this.ssoDomains(), created]);
+          this.notification.onSuccess(response.message ?? 'Domain added successfully');
+          form.resetForm();
+        },
+        error: (error: string) => this.failMutation(error),
+      });
+  }
+
+  /**
+   * Releases a domain from this organization's SSO routing
+   * ({@code DELETE /admin/organization/:id/sso/domains/:domainId}).
+   *
+   * @param domain - a row from {@link ssoDomains}
+   */
+  protected removeSsoDomain(domain: OrgSsoDomainInterface): void {
+    const organizationId = this.expandedOrgId();
+    if (!organizationId || !domain.id || this.isMutating()) return;
+    this.isMutating.set(true);
+    this.organizationSsoService
+      .removeDomain$(organizationId, domain.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isMutating.set(false);
+          this.ssoDomains.set(this.ssoDomains().filter((existing) => existing.id !== domain.id));
+          this.notification.onSuccess(response.message ?? 'Domain removed successfully');
+        },
+        error: (error: string) => this.failMutation(error),
+      });
   }
 
   /** Surfaces a mutation failure as a toast without touching whichever signal was being changed. */

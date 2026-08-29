@@ -281,6 +281,38 @@ class OrganizationServiceImplTest {
         verify(jdbcTemplate).update(eq(DEACTIVATE_MEMBERSHIP_QUERY), eq(Map.of("userId", 42L, "organizationId", 9L)));
     }
 
+    // ── ensureAutoJoinMembership (FUTURE-ENHANCEMENTS.md §3.1, Stage 2 SSO auto-join) ──────
+
+    @Test
+    @DisplayName("ensureAutoJoinMembership adds a first-time member as ORG_MEMBER and reports a new join")
+    void ensureAutoJoinMembershipJoinsFirstTimeMember() {
+        when(jdbcTemplate.queryForObject(eq(COUNT_ACTIVE_MEMBERSHIP_QUERY), anyMap(), eq(Long.class))).thenReturn(0L);
+
+        boolean joined = service.ensureAutoJoinMembership(9L, 42L);
+
+        assertThat(joined).isTrue();
+        verify(jdbcTemplate).update(eq(INSERT_MEMBERSHIP_QUERY),
+                eq(Map.of("userId", 42L, "organizationId", 9L, "orgRole", "ORG_MEMBER")));
+    }
+
+    /**
+     * The property this test guards: {@code addMember}'s reactivation path re-asserts {@code orgRole}
+     * even for an already-active member, so calling it unconditionally on every SSO login would
+     * silently demote a returning {@code ORG_ADMIN} back to {@code ORG_MEMBER}. Confirms the
+     * membership check short-circuits before any write is attempted.
+     */
+    @Test
+    @DisplayName("ensureAutoJoinMembership never touches an already-active member's role")
+    void ensureAutoJoinMembershipLeavesExistingMemberUntouched() {
+        when(jdbcTemplate.queryForObject(eq(COUNT_ACTIVE_MEMBERSHIP_QUERY), anyMap(), eq(Long.class))).thenReturn(1L);
+
+        boolean joined = service.ensureAutoJoinMembership(9L, 42L);
+
+        assertThat(joined).isFalse();
+        verify(jdbcTemplate, never()).update(eq(INSERT_MEMBERSHIP_QUERY), anyMap());
+        verify(jdbcTemplate, never()).update(eq(REACTIVATE_MEMBERSHIP_QUERY), anyMap());
+    }
+
     // ── listActiveMembers ────────────────────────────────────────────────────────────────
 
     @Test
