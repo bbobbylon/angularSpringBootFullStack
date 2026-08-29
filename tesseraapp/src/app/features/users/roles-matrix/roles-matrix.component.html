@@ -6,9 +6,9 @@
   Cell    = checkmark when the role carries that permission, dash when not.
 
   The grid itself is read-only. Role ASSIGNMENT (which user holds which existing role) lives
-  in the admin user-detail view. Role CRUD (create / edit-permission / delete a catalog row) is
-  the panel below the grid, visible only to an application administrator (see
-  RolesMatrixComponent#isApplicationAdmin).
+  in the admin user-detail view. Editing/deleting a catalog row is the panel below the grid,
+  visible only to an application administrator (see RolesMatrixComponent#isApplicationAdmin).
+  Creating a new role is its own screen at /roles/new (NewRoleComponent).
 -->
 <app-navbar></app-navbar>
 <main class="sc-page" *transloco="let t">
@@ -30,6 +30,13 @@
           A checkmark means the role grants it; a dash means it does not.
         </p>
       </div>
+      @if (isApplicationAdmin) {
+        <div class="sc-head__actions">
+          <a [routerLink]="['/roles/new']" class="btn btn-primary btn-sm sc-panel__action">
+            <i class="bi bi-shield-plus"></i> {{ t('rolesMatrix.newRoleLink') }}
+          </a>
+        </div>
+      }
     </header>
 
     @switch (dataState()) {
@@ -107,38 +114,14 @@
         </p>
 
         @if (isApplicationAdmin) {
-          <!-- Role CRUD (create / edit-permission / delete a catalog row). Gated to exactly
-               ROLE_APPLICATION_ADMIN — see RolesMatrixComponent#isApplicationAdmin. -->
+          <!-- Role edit/delete. Gated to exactly ROLE_APPLICATION_ADMIN — see
+               RolesMatrixComponent#isApplicationAdmin. Creating a new role lives at /roles/new
+               (NewRoleComponent), not here — see the header's "New Role" link above. -->
           <div class="sc-panel sc-reveal mt-4" style="--d: 120ms;">
             <div class="p-3">
               <h2 class="h5 mb-3">
                 <i class="bi bi-shield-plus me-2"></i>{{ t('rolesMatrix.catalogTitle') }}
               </h2>
-
-              <!-- Create -->
-              <form #createForm="ngForm" (ngSubmit)="createRole(createForm)" class="row g-2 align-items-end mb-4">
-                <div class="col-md-4">
-                  <label class="form-label" for="newRoleName">{{ t('rolesMatrix.newRoleName') }}</label>
-                  <input [disabled]="isMutating()" class="form-control" id="newRoleName" name="name"
-                         ngModel pattern="^ROLE_[A-Za-z_]+$" placeholder="ROLE_BILLING_REVIEWER" required type="text">
-                </div>
-                <div class="col-md-5">
-                  <label class="form-label" for="newRolePermission">{{ t('rolesMatrix.newRolePermission') }}</label>
-                  <input [disabled]="isMutating()" class="form-control" id="newRolePermission" name="permission"
-                         ngModel placeholder="READ:CUSTOMER,UPDATE:CUSTOMER" required type="text">
-                </div>
-                <div class="col-md-3">
-                  <button [disabled]="isMutating() || createForm.invalid" class="btn btn-primary w-100" type="submit">
-                    @if (isMutating()) {
-                      <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
-                    }
-                    {{ t('rolesMatrix.createRole') }}
-                  </button>
-                </div>
-                <div class="col-12">
-                  <small class="text-secondary">{{ t('rolesMatrix.createRoleHint') }}</small>
-                </div>
-              </form>
 
               <!-- Per-row edit / delete -->
               <div class="table-responsive">

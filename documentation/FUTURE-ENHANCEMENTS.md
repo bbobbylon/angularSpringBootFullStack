@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.11
-**Last Updated:** 2026-08-26
+**Version:** 3.12
+**Last Updated:** 2026-08-28
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -38,7 +38,7 @@ operability**, not features.
 | Dimension | State |
 |---|---|
 | Functional scope | ✅ Complete — auth, MFA, passkeys, federation (login **and** link/unlink), real SMS 2FA, sessions (self-service **and** granular admin revoke), RBAC, org scoping, user-type classification, anomaly detection + step-up, security dashboard, business CRUD, i18n |
-| Tests | ✅ **312 backend / 90 frontend**, all green (re-verified 2026-08-19 via actual Surefire and Vitest execution counts; the one DB-bound class, `contextLoads`, needs a live MySQL) |
+| Tests | ✅ **490 backend / 139 frontend**, all green (re-verified 2026-08-28 via actual Surefire (`./mvnw test`, 490/490) and Vitest (`ng test`, 12 files/139 tests) execution — the growth since the 2026-08-19 count of 312/90 tracks the org-role and services-catalog org-scoping work landed since; the one DB-bound class, `contextLoads`, needs a live MySQL and passed against local `db2`) |
 | Lint | ✅ `ng lint` clean and gating in CI |
 | Dependency audit | ✅ `npm audit --audit-level=high` exit 0; OWASP `dependency-check` wired at `failBuildOnCVSS=7` |
 | CI | ✅ Gating on lint + audit + both test suites against a MySQL service container |
@@ -390,29 +390,38 @@ opposed to the product itself. None of it is started.
 
 ## 4. Code TODO audit
 
-**4 `TODO` comments — 3 backend, 1 frontend — across 3 distinct work items.** Re-verified by
-grepping the tree on 2026-08-26. That is down from 17 (7 backend, 10 frontend) at the 2026-08-02
-audit, and from 6 at the 2026-08-23 one: `UserController.java:62`'s `TODO(refactor-user-fetch)` and
-`RoleRepoImpl.java:33`'s `TODO(org-roles)` were both closed on 2026-08-26.
+**0 `TODO` comments remain in the tree.** The last 4 (3 backend, 1 frontend) were closed 2026-08-29
+— see below. Down from 17 (7 backend, 10 frontend) at the 2026-08-02 audit.
 
-None is a defect. Every one is either a cosmetic rename or a refactor that works correctly today and
-would simply be tidier done differently.
+### Closed 2026-08-29
 
-### Backend (3)
-
-| Location | Intent | Notes |
-|---|---|---|
-| `UserQuery.java:36` + `UserRepoImpl.java:187` | Rename the `url` column → `verification_key` | Cosmetic — it holds a bare UUID, not a URL. Needs a guarded idempotent rename |
-| `UserRepoImpl.java:64` | `TODO(refactor-architecture)` — SRP violation | It is a repo, a `UserDetailsService`, **and** a business-logic holder |
+- **`UserQuery.java`/`UserRepoImpl.java` — `url` → `verification_key` rename.** Done: a guarded,
+  idempotent `RENAME COLUMN` added to `schema.sql` for both `accountverifications` and
+  `resetpasswordverifications` (same `information_schema` guard pattern as every other conditional
+  `ALTER` in the file), the SQL constants and bind-parameter names updated (`:url` →
+  `:verificationKey`) in `UserQuery`/`UserRepoImpl`. Verified live against local `db2`: the rename
+  applied cleanly on the first run, a second consecutive run was a true no-op (both columns already
+  `verification_key`), and the full backend suite — 490/490, including the live-DB `contextLoads` —
+  stayed green throughout.
+- **`UserRepoImpl.java` — `TODO(refactor-architecture)` SRP violation.** Evaluated, deliberately
+  **not** attempted: neither `UserRepoImplTest` nor `UserServiceImplTest` exists anywhere in the
+  tree, so this class's password encoding, verification-key minting, and 2FA-code generation have no
+  direct unit coverage today, only whatever a controller-level test happens to exercise indirectly.
+  Mechanically relocating business logic out of the class every password-reset and 2FA path runs
+  through, with no unit-test net to catch a behavioral slip, is not a change to make blind — the
+  Javadoc now records this and points at writing `UserRepoImplTest`/`UserServiceImplTest` first (see
+  the new engineering-debt row in §5) before ever revisiting the extraction itself.
+- **`profile.component.ts` — Reactive Forms.** Evaluated, declined: this TODO predates the app
+  settling on template-driven forms (`NgForm`/`ngModel`/`(ngSubmit)`) as the deliberate, app-wide
+  convention — every other form in the codebase (customers, invoices, organizations, roles,
+  services, security settings) uses it, none use Reactive Forms. Converting only this component
+  would make it the one outlier, for a component whose one piece of cross-field validation
+  (`newPassword === confirmPassword`) is already handled inline. If Reactive Forms are ever adopted,
+  it should be an app-wide convention change, not a one-off — the component's TODO comment now
+  records this reasoning in place.
 
 Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/getById` throw
 `UnsupportedOperationException` (roles are seed-only).
-
-### Frontend (1)
-
-| Location | Intent | Notes |
-|---|---|---|
-| `profile.component.ts:22` | Reactive forms for profile | Refactor |
 
 > **Closed on 2026-08-26** — two, both replaced in place by a note recording what landed and what
 > was deliberately left:
@@ -506,15 +515,28 @@ the unscoped tiers and membership mutation (plus the members-list read that make
 to a `ROLE_ORGANIZATION_ADMIN` acting on their own organization too. The `/organizations` route and
 its Admin-menu entry are wired in the SPA, gated by the same `adminGuard` as `/roles` — every tier
 `UPDATE:ORGANIZATION` was granted to already holds `UPDATE:USER`/`UPDATE:ROLE`, so that guard is not
-a narrower gate than the backend's. What is *not* closed:
-the services catalog (`Services`) has no `organization_id` at all and is deliberately a single
-shared reference table — see its `schema.sql` seed comment on why prices/names are copied into
-each invoice's own line item rather than referenced live — so per-tenant service catalogs remain a
-distinct, unstarted feature (§3.2's "Per-organization role definitions" row has the same shape of
-gap for the role catalog). For a single business running its own instance the current state is
-fine. For a product serving several businesses as genuinely separate tenants, that services-catalog
-gap — not organization self-service, which this section used to track — is now the decision
-everything else hangs off:
+a narrower gate than the backend's.
+
+**Update 2026-08-28 (`dcede54`/PR #53):** the services-catalog gap this paragraph used to flag as
+the one thing not closed is now closed too. `Services` gained a nullable `organization_id` (idempotent
+`ALTER`, same pattern as `Customer.organization_id` above) with semantics **inverted** from
+`Customer`'s: `NULL` means globally shared (visible to and usable by every organization, the seeded
+catalog's current shape), a non-null id means private to that one organization.
+`ServicesCatalogController#requireManageable` enforces it — a `null`-owned entry can only be
+mutated by an unscoped tier (`ROLE_ADMIN`/`ROLE_APPLICATION_ADMIN`), while a non-null one additionally
+admits a scoped caller acting within their own organization's set, mirroring
+`OrganizationController#requireMembershipAuthority`'s shape. `PublicServicesController` and
+`CustomerController`'s invoice-service picker were updated so a scoped caller's browse/pick views
+only ever show the global catalog plus their own organizations' private entries, never another
+tenant's. Frontend: `services-admin.component` gained an organization-scope column/filter. No
+dedicated frontend spec was added for it — matching the app-wide pattern that no `*-admin`-style
+list/create page (`OrganizationsComponent`, `RolesMatrixComponent`, `ServicesAdminComponent`) has
+one, not a coverage gap specific to this change. Per-tenant *role* catalogs (§3.2's "Per-organization
+role definitions" row) remain the one outstanding piece of this shape — that gap is about the role
+vocabulary, not services, and is unrelated to what just closed here.
+
+For a single business running its own instance the current state was already fine. For a product
+serving several businesses as genuinely separate tenants, the decision below is what remains:
 
 | Model | What it means here | Effort |
 |---|---|---|

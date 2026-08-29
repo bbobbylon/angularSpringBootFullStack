@@ -19,7 +19,13 @@ import { TranslocoService } from '@jsverse/transloco';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../../constants/password-policy';
 import { PHONE_HINT, PHONE_PATTERN } from '../../../constants/phone-policy';
 
-// TODO - add Reactive forms to bind the form data to the component properties and handle form validation more effectively. This will allow for better user experience and more robust form handling in the profile component. Also it will help with binding directly to the values on the backend for explicit handling instead of implicit.
+// Evaluated 2026-08-29, declined: this TODO predates the app settling on template-driven forms
+// (NgForm/ngModel/(ngSubmit)) as the deliberate, app-wide convention — every other form in the
+// codebase (customers, invoices, organizations, roles, services, security settings) uses it, none
+// use Reactive Forms. Converting only this component would make it the one outlier rather than
+// make the app more robust, for a component whose one piece of cross-field validation
+// (newPassword === confirmPassword in updatePassword) is already handled inline. If Reactive Forms
+// are ever adopted here, it should be an app-wide convention change, not a one-off.
 
 /**
  * Profile view for authenticated users.

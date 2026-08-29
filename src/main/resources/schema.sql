@@ -320,24 +320,50 @@ DEALLOCATE PREPARE widen_image_url_stmt;
 -- email link from it.
 CREATE TABLE IF NOT EXISTS accountverifications
 (
-    id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
-    url     VARCHAR(255) NOT NULL,
+    id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id           BIGINT UNSIGNED NOT NULL,
+    verification_key  VARCHAR(255) NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT UQ_AccountVerifications_User_Id UNIQUE (user_id),
-    CONSTRAINT UQ_AccountVerifications_Url UNIQUE (url)
+    CONSTRAINT UQ_AccountVerifications_Url UNIQUE (verification_key)
 );
+
+-- Idempotent rename of accountverifications.url -> verification_key (UserQuery.java's former TODO).
+-- The column has only ever stored a bare UUID key, never a full URL — see UserQuery's Javadoc.
+-- MySQL has no `RENAME COLUMN IF EXISTS`, so guard on information_schema the same way every other
+-- conditional ALTER in this file does; a rerun after the column is already renamed is a no-op.
+SET @rename_accountverifications_key := (
+    SELECT IF(COUNT(*) = 1,
+        'ALTER TABLE accountverifications RENAME COLUMN url TO verification_key',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'accountverifications' AND COLUMN_NAME = 'url');
+PREPARE rename_accountverifications_key_stmt FROM @rename_accountverifications_key;
+EXECUTE rename_accountverifications_key_stmt;
+DEALLOCATE PREPARE rename_accountverifications_key_stmt;
 
 CREATE TABLE IF NOT EXISTS resetpasswordverifications
 (
-    id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id         BIGINT UNSIGNED NOT NULL,
-    url             VARCHAR(255) NOT NULL,
-    expiration_date DATETIME     NOT NULL,
+    id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id           BIGINT UNSIGNED NOT NULL,
+    verification_key  VARCHAR(255) NOT NULL,
+    expiration_date   DATETIME     NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT UQ_ResetPasswordVerifications_User_Id UNIQUE (user_id),
-    CONSTRAINT UQ_ResetPasswordVerifications_Url UNIQUE (url)
+    CONSTRAINT UQ_ResetPasswordVerifications_Url UNIQUE (verification_key)
 );
+
+-- Idempotent rename of resetpasswordverifications.url -> verification_key. Same guard shape as
+-- accountverifications above; see that block's comment for why.
+SET @rename_resetpasswordverifications_key := (
+    SELECT IF(COUNT(*) = 1,
+        'ALTER TABLE resetpasswordverifications RENAME COLUMN url TO verification_key',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'resetpasswordverifications' AND COLUMN_NAME = 'url');
+PREPARE rename_resetpasswordverifications_key_stmt FROM @rename_resetpasswordverifications_key;
+EXECUTE rename_resetpasswordverifications_key_stmt;
+DEALLOCATE PREPARE rename_resetpasswordverifications_key_stmt;
 
 CREATE TABLE IF NOT EXISTS twofactorverifications
 (
