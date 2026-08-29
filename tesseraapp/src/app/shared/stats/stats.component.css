@@ -12,15 +12,16 @@
   display: block;
 }
 
+/* auto-fit/minmax, not a fixed repeat(3, 1fr): this component is now reused inside the
+   Organizations page's per-organization cards (as narrow as 360px), not just the full-width home
+   dashboard it was originally built for. A 768px *viewport* media query can't detect that a
+   *container* is too narrow — three tiles at minmax(150px, 1fr) still sit comfortably side by
+   side at dashboard widths, but wrap to fewer per row wherever the available width shrinks,
+   instead of squeezing three tiles' labels past .sc-metric's overflow:hidden edge. */
 .sc-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-4);
-}
-@media (max-width: 768px) {
-  .sc-metrics {
-    grid-template-columns: 1fr;
-  }
 }
 
 .sc-metric {
