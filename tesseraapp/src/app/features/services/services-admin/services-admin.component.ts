@@ -6,11 +6,13 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith } from 'rxjs';
 import { NavbarComponent } from '../../../shared/navbar/navbar.component';
 import { ServicesCatalogService, ServicesListDataInterface } from '../../../service/services-catalog.service';
+import { OrganizationService } from '../../../service/organization.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import { ServicesInterface } from '../../../interface/services.interface';
+import { OrganizationInterface } from '../../../interface/organization.interface';
 import { UserInterface } from '../../../interface/user.interface';
 import { PAGE_SIZE_OPTIONS, PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 import { TranslocoDirective } from '@jsverse/transloco';
@@ -38,6 +40,18 @@ import { TranslocoDirective } from '@jsverse/transloco';
  * Every mutation refreshes from the server rather than patching the local list. The catalog is a
  * short list read once, so the extra round trip is invisible, and it removes a whole category of
  * bug where the screen and the database quietly disagree after a partial failure.
+ *
+ * <h3>Per-organization catalogs (2026-08-28)</h3>
+ * {@code GET /admin/services/list} now returns a mix of globally shared entries and entries
+ * privately owned by one organization — see {@code ServicesCatalogController}'s class Javadoc. The
+ * table shows each row's ownership so the two are never confused for one flat list, and the create
+ * form asks {@link isUnscopedTier} to decide what it offers: an unscoped caller may leave the new
+ * entry global or pick any organization; a scoped caller ({@code ROLE_ORGANIZATION_ADMIN}/
+ * {@code ROLE_HELP_DESK_ADMIN}, the only org-scoped roles that can even reach this
+ * {@code UPDATE:USER}-gated page) must pick one of their own active organizations — there is no
+ * "leave it global" option, matching the backend's refusal. Ownership is immutable after creation,
+ * so the edit form has no organization control at all, matching {@code ServicesCatalogServiceImpl
+ * #updateService}'s deliberate exclusion of the field.
  */
 @Component({
   selector: 'app-services-admin',
@@ -51,6 +65,7 @@ export class ServicesAdminComponent implements OnInit {
   readonly DataState = DataState;
 
   private readonly catalog = inject(ServicesCatalogService);
+  private readonly organizationService = inject(OrganizationService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
@@ -62,6 +77,52 @@ export class ServicesAdminComponent implements OnInit {
   protected readonly user = computed<UserInterface | undefined>(() => this.pageState().appData?.data?.user);
 
   protected readonly services = computed<ServicesInterface[]>(() => this.pageState().appData?.data?.services ?? []);
+
+  /**
+   * Whether the signed-in user may create a globally shared catalog entry, mirroring
+   * {@code ServicesCatalogController#requireManageable}'s refusal of a scoped caller creating one.
+   * Spelled out by role name rather than authority, the same reasoning
+   * {@code OrganizationsComponent#isUnscopedTier} documents: the narrower server-side rule cannot be
+   * expressed by the {@code UPDATE:USER}/{@code UPDATE:ROLE} authority strings alone.
+   */
+  protected get isUnscopedTier(): boolean {
+    const role = this.user()?.roleName;
+    return role === 'ROLE_ADMIN' || role === 'ROLE_APPLICATION_ADMIN';
+  }
+
+  /**
+   * The organizations the signed-in user may create a service for: every active organization for
+   * an unscoped caller, or only the ones they actively belong to for a scoped caller — exactly what
+   * {@code GET /admin/organization} already returns per-caller, reused here rather than re-derived.
+   */
+  protected readonly myOrganizations = signal<OrganizationInterface[]>([]);
+
+  /** {@link myOrganizations} id → name, for rendering each catalog row's ownership. */
+  protected readonly organizationNameById = computed<Record<number, string>>(() => {
+    const map: Record<number, string> = {};
+    for (const org of this.myOrganizations()) {
+      if (org.id !== undefined) map[org.id] = org.name ?? `Organization #${org.id}`;
+    }
+    return map;
+  });
+
+  /**
+   * Renders a catalog row's ownership: the owning organization's name when known, a generic
+   * fallback when it is owned by an organization outside {@link myOrganizations} (an unscoped
+   * caller viewing another organization's entry before that organization's name has loaded), or
+   * {@code undefined} for a globally shared entry — the template treats {@code undefined} as
+   * "Shared".
+   *
+   * @param service - the row being rendered
+   * @returns the owning organization's display name, or undefined when the entry is global
+   */
+  protected ownerLabel(service: ServicesInterface): string | undefined {
+    if (service.organizationId === undefined) return undefined;
+    return this.organizationNameById()[service.organizationId] ?? `Organization #${service.organizationId}`;
+  }
+
+  /** The organization selected on the create form; undefined means "global/shared". */
+  protected readonly createOrganizationId = signal<number | undefined>(undefined);
 
   protected readonly activeServices = computed(() => this.services().filter((service) => service.active !== false));
   protected readonly retiredServices = computed(() => this.services().filter((service) => service.active === false));
@@ -201,6 +262,16 @@ export class ServicesAdminComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.organizationService
+      .organizations$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.myOrganizations.set(response.data?.organizations ?? []),
+        // Silent: this list only feeds the create form's organization picker and the table's
+        // ownership labels, both of which degrade gracefully (generic "Organization #n" fallback)
+        // rather than blocking the page a reader came here for.
+        error: () => this.myOrganizations.set([]),
+      });
     // Lets the navbar's "New Service" link and the command palette's matching entry land the
     // reader directly in the create form instead of just the list, mirroring how /invoice/new and
     // /customer/new are dedicated create destinations. This page has no separate create route —
@@ -211,10 +282,21 @@ export class ServicesAdminComponent implements OnInit {
     }
   }
 
-  /** Opens the create form and closes any open edit, so only one form is ever live. */
+  /**
+   * Opens the create form and closes any open edit, so only one form is ever live.
+   *
+   * <p>Defaults {@link createOrganizationId} to the caller's own organization when a scoped caller
+   * belongs to exactly one — the common case — so the form opens ready to submit rather than making
+   * every scoped admin re-pick the one organization they administer. An unscoped caller, or a scoped
+   * caller belonging to several organizations, opens with no default and must choose explicitly.
+   */
   protected startCreate(): void {
     this.editingId.set(null);
     this.isCreating.set(true);
+    const myOrgs = this.myOrganizations();
+    this.createOrganizationId.set(
+      !this.isUnscopedTier && myOrgs.length === 1 && myOrgs[0].id !== undefined ? myOrgs[0].id : undefined,
+    );
   }
 
   /** Opens an inline edit for one row, closing the create form. */
@@ -227,6 +309,18 @@ export class ServicesAdminComponent implements OnInit {
   protected cancel(): void {
     this.isCreating.set(false);
     this.editingId.set(null);
+    this.createOrganizationId.set(undefined);
+  }
+
+  /**
+   * Whether the create form can be submitted as currently configured: an unscoped caller may always
+   * submit (global is a valid default), but a scoped caller must have picked one of their own
+   * organizations — there is no global option for them, mirroring
+   * {@code ServicesCatalogController#requireManageable}'s refusal of a null-owned entry from a
+   * scoped caller.
+   */
+  protected get canSubmitCreate(): boolean {
+    return this.isUnscopedTier || this.createOrganizationId() !== undefined;
   }
 
   /**
@@ -235,7 +329,7 @@ export class ServicesAdminComponent implements OnInit {
    * @param form - the submitted form carrying name, description and price
    */
   protected create(form: NgForm): void {
-    if (this.isSaving()) return;
+    if (this.isSaving() || !this.canSubmitCreate) return;
     this.isSaving.set(true);
 
     this.catalog
@@ -243,12 +337,14 @@ export class ServicesAdminComponent implements OnInit {
         name: form.value.name,
         description: form.value.description,
         price: Number(form.value.price) || 0,
+        organizationId: this.createOrganizationId(),
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
           this.isSaving.set(false);
           this.isCreating.set(false);
+          this.createOrganizationId.set(undefined);
           form.resetForm();
           this.notification.onSuccess(response.message ?? 'Service added to the catalog.');
           this.load();

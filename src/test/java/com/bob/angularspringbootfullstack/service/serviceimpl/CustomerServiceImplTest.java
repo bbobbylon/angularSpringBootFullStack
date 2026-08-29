@@ -3,6 +3,7 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.Invoice;
+import com.bob.angularspringbootfullstack.model.Services;
 import com.bob.angularspringbootfullstack.repo.CustomerRepo;
 import com.bob.angularspringbootfullstack.repo.InvoiceRepo;
 import com.bob.angularspringbootfullstack.repo.ServicesRepo;
@@ -15,11 +16,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -102,5 +106,36 @@ class CustomerServiceImplTest {
         assertThat(persisted.getId()).isEqualTo(1L);                 // id preserved
         assertThat(persisted.getCustomerName()).isEqualTo("New");    // editable field applied
         assertThat(persisted.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    // ── getServicesForOrganizations (per-organization service catalogs, 2026-08-28) ─────────
+
+    @Test
+    @DisplayName("getServicesForOrganizations unions global entries with the given organizations' entries")
+    void getServicesForOrganizations_unionsGlobalAndOwned() {
+        Services global = new Services();
+        global.setId(1L);
+        Services owned = new Services();
+        owned.setId(2L);
+        owned.setOrganizationId(4L);
+        when(servicesRepo.findByActiveTrueAndOrganizationIdIsNull()).thenReturn(List.of(global));
+        when(servicesRepo.findByActiveTrueAndOrganizationIdIn(List.of(4L))).thenReturn(List.of(owned));
+
+        Iterable<Services> visible = customerService.getServicesForOrganizations(List.of(4L));
+
+        assertThat(visible).containsExactly(global, owned);
+    }
+
+    @Test
+    @DisplayName("getServicesForOrganizations with an empty scope still returns the global entries")
+    void getServicesForOrganizations_emptyScope_returnsGlobalOnly() {
+        Services global = new Services();
+        global.setId(1L);
+        when(servicesRepo.findByActiveTrueAndOrganizationIdIsNull()).thenReturn(List.of(global));
+
+        Iterable<Services> visible = customerService.getServicesForOrganizations(List.of());
+
+        assertThat(visible).containsExactly(global);
+        verify(servicesRepo, never()).findByActiveTrueAndOrganizationIdIn(any());
     }
 }

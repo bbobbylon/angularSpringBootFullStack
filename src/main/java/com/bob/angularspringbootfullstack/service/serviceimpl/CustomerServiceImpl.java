@@ -18,6 +18,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -259,6 +260,18 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     public Iterable<Services> getServices() {
         return servicesRepo.findByActiveTrue();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Iterable<Services> getServicesForOrganizations(Collection<Long> organizationIds) {
+        List<Services> visible = new ArrayList<>(servicesRepo.findByActiveTrueAndOrganizationIdIsNull());
+        if (!organizationIds.isEmpty()) {
+            visible.addAll(servicesRepo.findByActiveTrueAndOrganizationIdIn(organizationIds));
+        }
+        return visible;
     }
 
     /**

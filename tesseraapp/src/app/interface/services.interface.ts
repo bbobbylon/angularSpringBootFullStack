@@ -27,4 +27,14 @@ export interface ServicesInterface {
    * destroy the catalog's history and make reinstating an offering a retyping exercise.
    */
   active?: boolean;
+  /**
+   * The organization this entry is private to, or absent/undefined for a globally shared entry
+   * visible to every caller regardless of organization membership.
+   *
+   * `undefined`/absent here means "shared with everyone", not "unowned" — every pre-existing
+   * catalog entry and the public catalog are global by default. Immutable after creation: the admin
+   * edit form has no field for it, matching the backend, which excludes it from
+   * `PUT /admin/services/update/{id}`.
+   */
+  organizationId?: number;
 }

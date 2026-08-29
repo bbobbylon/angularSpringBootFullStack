@@ -7,6 +7,7 @@ import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.Invoice;
+import com.bob.angularspringbootfullstack.model.Services;
 import com.bob.angularspringbootfullstack.model.Stats;
 import com.bob.angularspringbootfullstack.report.CustomerReport;
 import com.bob.angularspringbootfullstack.report.InvoicePdfReport;
@@ -571,12 +572,18 @@ public class CustomerController {
         Iterable<Customer> customers = scope == null ? customerService.getCustomers()
                 : scope.isEmpty() ? List.of()
                 : customerService.getCustomersForOrganizations(scope);
+        // Unlike the customer list above, an empty scope does not collapse to List.of() here — the
+        // globally shared services must still be offered to a caller who belongs to zero active
+        // organizations. See CustomerService#getServicesForOrganizations for why this method's
+        // empty-scope handling deliberately differs from its *ForOrganizations siblings.
+        Iterable<Services> availableServices = scope == null ? customerService.getServices()
+                : customerService.getServicesForOrganizations(scope);
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
                                 "customers", customers,
-                                "availableServices", customerService.getServices()))
+                                "availableServices", availableServices))
                         .message("New invoice page reached and Customers have been retrieved!")
                         .status(OK)
                         .statusCode(OK.value())

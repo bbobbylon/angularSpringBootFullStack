@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
 import static org.springframework.http.HttpStatus.OK;
@@ -24,10 +26,14 @@ import static org.springframework.http.HttpStatus.OK;
  * carving one {@code permitAll} exception into a class whose every other method is gated.
  *
  * <h3>What it returns, and why it reuses rather than re-queries</h3>
- * Delegates to {@link CustomerService#getServices()} — the same active-only query the authenticated
- * new-invoice form already relies on — so there is exactly one definition of "what's currently for
- * sale" in the codebase, not two that could silently drift apart. The response carries no customer
- * data and no user echo: the caller may not have a principal at all.
+ * Delegates to {@link CustomerService#getServicesForOrganizations} with an empty organization set —
+ * an anonymous visitor belongs to none — rather than the unfiltered {@link CustomerService#getServices()}.
+ * Per-organization private catalog entries (2026-08-28) mean the two are no longer equivalent:
+ * {@code getServices()} returns every active entry regardless of ownership, which would leak a
+ * private organization's catalog to an anonymous visitor. Passing an empty scope collapses
+ * {@code getServicesForOrganizations} to exactly the globally shared entries, which is what public
+ * browsing has always meant. The response carries no customer data and no user echo: the caller may
+ * not have a principal at all.
  */
 @RestController
 @RequestMapping(path = "/services")
@@ -45,7 +51,7 @@ public class PublicServicesController {
     public ResponseEntity<HttpResponse> listPublicServices() {
         return ResponseEntity.ok(HttpResponse.builder()
                 .timeStamp(now().toString())
-                .data(of("services", customerService.getServices()))
+                .data(of("services", customerService.getServicesForOrganizations(List.of())))
                 .message("Service catalog retrieved successfully!")
                 .status(OK)
                 .statusCode(OK.value())
