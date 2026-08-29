@@ -32,6 +32,15 @@
         <spring-security.version>7.0.5</spring-security.version>
         <tomcat.version>11.0.22</tomcat.version>
     </properties>
+    <!-- OpenSAML (a transitive dependency of spring-security-saml2-service-provider, below) is not
+         published to Maven Central — Shibboleth publishes it only to its own Nexus repository. -->
+    <repositories>
+        <repository>
+            <id>shibboleth</id>
+            <name>Shibboleth Releases</name>
+            <url>https://build.shibboleth.net/nexus/content/repositories/releases/</url>
+        </repository>
+    </repositories>
     <dependencyManagement>
         <dependencies>
             <!-- jjwt removed: only com.auth0:java-jwt is used in TokenProvider.
@@ -90,6 +99,17 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-oauth2-client</artifactId>
+        </dependency>
+        <!-- SAML 2.0 service provider (FUTURE-ENHANCEMENTS.md §3.1 "Per-organization external IdP",
+             Stage 3): the sibling of the OAuth2 client above for organizations whose IdP only speaks
+             SAML. A genuinely separate dependency, not an extension of oauth2-client — SAML's
+             RelyingPartyRegistration/RelyingPartyRegistrationRepository types share no machinery with
+             OAuth2's ClientRegistration/ClientRegistrationRepository. No version pinned here — like
+             every other spring-security-* artifact in this file, it is managed by the
+             ${spring-security.version} property above via spring-boot-dependencies. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-saml2-service-provider</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -247,6 +267,42 @@
             <groupId>com.webauthn4j</groupId>
             <artifactId>webauthn4j-test</artifactId>
             <version>0.29.1.RELEASE</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Caffeine (FUTURE-ENHANCEMENTS.md §3.1 "Per-organization external IdP", Stage 2):
+             short-TTL cache for OrgAwareClientRegistrationRepository's resolved ClientRegistration
+             objects. ClientRegistrations.fromIssuerLocation(...) makes a live HTTP call to the IdP's
+             .well-known/openid-configuration on every invocation, and this resolver runs on every
+             single SSO redirect. Used directly rather than Spring's cache abstraction/@Cacheable,
+             since only one method needs manual eviction-by-key when an admin edits a configuration.
+             Version is managed by spring-boot-dependencies (this artifact backs Boot's own cache
+             auto-configuration), so no explicit version is pinned here. -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!-- Testcontainers (FUTURE-ENHANCEMENTS.md §5 "contextLoads needs a live local MySQL"):
+             AngularSpringBootFullStackApplicationTests boots the full Spring context against a
+             throwaway containerized MySQL instead of requiring a specific always-running local/CI
+             MySQL (db2, Aiven, or a CI service container). spring-boot-testcontainers supplies
+             @ServiceConnection, which derives spring.datasource.* from the started container
+             automatically — no manual @DynamicPropertySource wiring needed. Versions are managed by
+             spring-boot-dependencies, which imports the Testcontainers BOM, so none are pinned here. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-mysql</artifactId>
             <scope>test</scope>
         </dependency>
 

@@ -99,9 +99,15 @@ public class OAuth2ClientConfig {
      * {@code CommonOAuth2Provider}, which is exactly the kind of split that lets one provider be
      * quietly fixed and the others left broken.
      *
+     * <p>Package-private (not {@code private}) so {@link OrgAwareClientRegistrationRepository} can
+     * reuse it verbatim when building an org's dynamic OIDC registration — the whole point of this
+     * method existing is that every registration shares one redirect-URI decision, so a second,
+     * independently-written copy for org registrations would reintroduce the exact drift risk this
+     * method's own Javadoc warns about.
+     *
      * @return the redirect-URI template, with {@code {registrationId}} still unexpanded
      */
-    private String redirectUriTemplate() {
+    String redirectUriTemplate() {
         String path = "/login/oauth2/code/{registrationId}";
         return isNotBlank(redirectBaseUrl)
                 ? redirectBaseUrl.replaceAll("/+$", "") + path
@@ -161,14 +167,22 @@ public class OAuth2ClientConfig {
     }
 
     /**
-     * Builds the registration repository from whichever providers are configured,
-     * falling back to the boot-only placeholder when none are.
+     * Builds the fixed, boot-time registration repository from whichever consumer providers are
+     * configured, falling back to the boot-only placeholder when none are.
+     *
+     * <p>Not the bean Spring Security's {@code .oauth2Login()} actually resolves —
+     * {@link OrgAwareClientRegistrationRepository} is the {@code @Primary} public
+     * {@link ClientRegistrationRepository}, wrapping this one as its delegate for every
+     * registration id that isn't a per-organization {@code org-oidc-*} id. Named explicitly (rather
+     * than left as the implicit {@code clientRegistrationRepository}) so the qualifier
+     * {@code OrgAwareClientRegistrationRepository} injects by is unambiguous now that two beans of
+     * this type exist.
      *
      * @param catalog the configured-provider catalog from {@link #federatedProviderCatalog()}
-     * @return the repository backing Spring Security's OAuth2 login filters
+     * @return the fixed repository of consumer-provider registrations
      */
     @Bean
-    public ClientRegistrationRepository clientRegistrationRepository(FederatedProviderCatalog catalog) {
+    public ClientRegistrationRepository staticClientRegistrationRepository(FederatedProviderCatalog catalog) {
         List<ClientRegistration> registrations = new ArrayList<>();
         if (catalog.getProviders().contains("google")) {
             registrations.add(CommonOAuth2Provider.GOOGLE.getBuilder("google")

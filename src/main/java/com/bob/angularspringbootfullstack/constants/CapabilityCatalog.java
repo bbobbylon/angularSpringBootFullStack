@@ -81,6 +81,7 @@ public final class CapabilityCatalog {
             new Rule(null, "/admin/security", "capability.viewSecurityMonitoring"),
             new Rule(null, "/admin/analytics", "capability.viewBillingAnalytics"),
             new Rule(null, "/admin/services", "capability.manageServicesCatalog"),
+            new Rule(null, "/admin/organization/*/sso", "capability.manageOrganizationSso"),
             new Rule(null, "/admin/user", "capability.manageUsers"),
             new Rule(null, "/admin", "capability.accessAdministrativeFeatures"),
 

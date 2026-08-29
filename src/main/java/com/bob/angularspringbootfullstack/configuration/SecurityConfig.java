@@ -4,6 +4,7 @@ import com.bob.angularspringbootfullstack.filter.CustomAuthFilter;
 import com.bob.angularspringbootfullstack.handler.CustomAccessDeniedHandler;
 import com.bob.angularspringbootfullstack.handler.CustomAuthenticationEntryPoint;
 import com.bob.angularspringbootfullstack.handler.OAuth2LoginSuccessHandler;
+import com.bob.angularspringbootfullstack.handler.OrgSamlLoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
@@ -93,6 +94,12 @@ class SecurityConfig {
      * redirects the browser back to the Angular SPA.
      */
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+
+    /**
+     * The SAML sibling of {@link #oAuth2LoginSuccessHandler} (FUTURE-ENHANCEMENTS.md §3.1, Stage 3):
+     * converts a verified per-organization SAML assertion into the application's own JWTs.
+     */
+    private final OrgSamlLoginSuccessHandler orgSamlLoginSuccessHandler;
 
     /**
      * SPA origin used when a federated login attempt fails mid-flow: the browser is
@@ -343,6 +350,24 @@ class SecurityConfig {
                             .successHandler(oAuth2LoginSuccessHandler)
                             .failureHandler((request, response, exception) -> {
                                 log.warn("Federated login failed: {}", exception.getMessage());
+                                response.sendRedirect(uiAppUrl + "/login?error=federated");
+                            })
+                    )
+                    // Per-organization SAML 2.0 login (FUTURE-ENHANCEMENTS.md §3.1, Stage 3),
+                    // coexisting with oauth2Login above rather than replacing it: the two protocols
+                    // use disjoint URL prefixes, so both DSLs can be installed side by side.
+                    // /saml2/authenticate/{registrationId} initiates the flow (an AuthnRequest to
+                    // the org's IdP) and /login/saml2/sso/{registrationId} is the Assertion Consumer
+                    // Service the IdP posts the signed assertion back to (both are in PUBLIC_URLS).
+                    // Registration resolution is dynamic per-organization via
+                    // OrgAwareRelyingPartyRegistrationRepository (the only
+                    // RelyingPartyRegistrationRepository bean in the context, so Spring Security's
+                    // DSL picks it up without an explicit reference here) — there is no static,
+                    // config-file-defined SAML registration, unlike the three OAuth2 providers.
+                    .saml2Login(saml -> saml
+                            .successHandler(orgSamlLoginSuccessHandler)
+                            .failureHandler((request, response, exception) -> {
+                                log.warn("SAML federated login failed: {}", exception.getMessage());
                                 response.sendRedirect(uiAppUrl + "/login?error=federated");
                             })
                     )

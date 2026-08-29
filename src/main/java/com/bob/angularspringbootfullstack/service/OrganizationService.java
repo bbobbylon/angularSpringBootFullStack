@@ -227,6 +227,31 @@ public interface OrganizationService {
     }
 
     /**
+     * Auto-joins a user to an organization on the strength of a successful external IdP login
+     * (FUTURE-ENHANCEMENTS.md §3.1 "Per-organization external IdP", Stage 2) — the org's own SSO
+     * configuration is the vouching mechanism, in place of an admin-issued invite.
+     *
+     * <p><b>Checks membership first rather than calling {@link #addMember} unconditionally.</b>
+     * {@code addMember}'s reactivation path re-asserts {@code orgRole} even for an already-active
+     * member (see its Javadoc above) — calling it on every single SSO login would silently demote a
+     * returning {@link OrgRole#ORG_ADMIN} back to {@link OrgRole#DEFAULT} each time they signed in.
+     * This method exists specifically so {@code OAuth2LoginSuccessHandler} never needs to make that
+     * mistake: an already-active member is left alone entirely.
+     *
+     * @param organizationId the organization the login was authenticated against
+     * @param userId         the local user id the login resolved to
+     * @return {@code true} if this call just created a brand-new membership, {@code false} if the
+     * user was already an active member (a no-op)
+     */
+    default boolean ensureAutoJoinMembership(Long organizationId, Long userId) {
+        if (isActiveMemberOfOrganization(userId, organizationId)) {
+            return false;
+        }
+        addMember(organizationId, userId, OrgRole.DEFAULT);
+        return true;
+    }
+
+    /**
      * Removes a user from an organization by deactivating their membership row — see
      * {@link Organization}'s Javadoc for why membership removal is a soft flag, not a delete.
      *

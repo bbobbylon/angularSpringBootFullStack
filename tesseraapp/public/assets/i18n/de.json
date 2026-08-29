@@ -343,7 +343,13 @@
     "codeEyebrow": "Zwei-Faktor",
     "codeTitle": "Geben Sie Ihren Code ein",
     "codeLabel": "Bestätigungscode",
-    "verifyContinue": "Bestätigen und fortfahren"
+    "verifyContinue": "Bestätigen und fortfahren",
+    "orgSsoDivider": "oder mit Ihrer Organisation anmelden",
+    "orgSsoLabel": "Geschäftliche E-Mail",
+    "orgSsoPlaceholder": "sie@ihrunternehmen.de",
+    "orgSsoContinue": "Weiter",
+    "orgSsoChecking": "Wird geprüft…",
+    "orgSsoNotFound": "Für diese E-Mail wurde keine Organisations-Anmeldung gefunden. Nutzen Sie Ihr Passwort oder einen Anbieter oben."
   },
   "register": {
     "eyebrow": "Konto erstellen",
@@ -543,7 +549,8 @@
       "activity": "Aktivität",
       "invites": "Einladungen",
       "settings": "Einstellungen",
-      "customers": "Kunden"
+      "customers": "Kunden",
+      "sso": "Single Sign-On"
     },
     "profile": {
       "description": "Beschreibung",
@@ -604,6 +611,32 @@
       "empty": "Dieser Organisation sind noch keine Kunden zugeordnet.",
       "invoicesTitle": "Rechnungen",
       "invoicesEmpty": "Noch keine Rechnungen."
+    },
+    "sso": {
+      "error": "Die Single-Sign-On-Konfiguration konnte nicht geladen werden. Bitte erneut versuchen.",
+      "activate": "Aktivieren",
+      "deactivate": "Deaktivieren",
+      "remove": "Konfiguration entfernen",
+      "displayName": "Anzeigename",
+      "protocol": "Protokoll",
+      "protocolOidc": "OIDC",
+      "protocolSaml": "SAML",
+      "issuerUri": "Aussteller-URI",
+      "issuerUriPlaceholder": "https://ihr-idp.beispiel.com",
+      "clientId": "Client-ID",
+      "clientSecret": "Client-Secret",
+      "secretConfiguredPlaceholder": "•••••••• (unverändert)",
+      "secretRequiredPlaceholder": "Erforderlich",
+      "secretConfiguredHint": "Es ist bereits ein Secret gespeichert. Lassen Sie dieses Feld leer, um es zu behalten, oder geben Sie ein neues ein, um es zu ersetzen.",
+      "secretRequiredHint": "Bei der erstmaligen Konfiguration dieser Organisation erforderlich.",
+      "metadataUri": "SAML-Metadaten-URL",
+      "metadataUriPlaceholder": "https://ihr-idp.beispiel.com/metadata",
+      "metadataUriHint": "Der Speicherort des SAML-Metadatendokuments des IdP.",
+      "domainsTitle": "E-Mail-Domains",
+      "domainPlaceholder": "acme.com",
+      "addDomain": "Domain hinzufügen",
+      "removeDomain": "Entfernen",
+      "noDomains": "Noch keine Domains beansprucht."
     }
   },
   "charts": {

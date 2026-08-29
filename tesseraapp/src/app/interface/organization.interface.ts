@@ -52,7 +52,11 @@ export interface OrganizationInterface {
  * one-envelope-many-optional-keys shape {@code members} already established for this interface.
  * {@code customers}/{@code invoices} are populated only by the org setup read endpoints
  * ({@code GET /admin/organization/:id/customers}/{@code /invoices}, 2026-08-28) — an invoice is
- * scoped to an organization only through the customer it belongs to.
+ * scoped to an organization only through the customer it belongs to. {@code config}/{@code domains}/
+ * {@code domain} are populated only by the per-organization SSO endpoints
+ * ({@code GET/PUT/PATCH/DELETE /admin/organization/:id/sso} and its {@code /domains} sub-resource,
+ * FUTURE-ENHANCEMENTS.md §3.1 Stage 1) — {@code config} is nullable even on success, since a
+ * not-yet-configured organization legitimately has no IdP row.
  */
 export interface OrganizationCatalogInterface {
   organization?: OrganizationInterface;
@@ -66,6 +70,9 @@ export interface OrganizationCatalogInterface {
   invites?: OrganizationInviteInterface[];
   customers?: CustomerInterface[];
   invoices?: InvoiceInterface[];
+  config?: OrganizationIdentityProviderInterface;
+  domains?: OrgSsoDomainInterface[];
+  domain?: OrgSsoDomainInterface;
 }
 
 /** The data payload of {@code GET /user/organization/invite/:code} (invite preview). */
@@ -113,5 +120,44 @@ export interface OrganizationInviteInterface {
   code?: string;
   roleName?: string;
   expirationDate?: string;
+  createdAt?: string;
+}
+
+/**
+ * One organization's external IdP configuration for enterprise single sign-on
+ * ({@code GET/PUT/PATCH/DELETE /admin/organization/:id/sso}) — mirrors the backend's
+ * {@code OrganizationIdentityProvider} (FUTURE-ENHANCEMENTS.md §3.1 "Per-organization external
+ * IdP", Stage 1). The client secret itself is never returned by any endpoint: {@code
+ * secretConfigured} is a presence flag only, the same non-enumeration-of-secrets discipline this
+ * app already applies to passwords/tokens — a form editing an existing configuration must treat a
+ * blank secret field as "keep the current one," never as "clear it." {@code samlMetadataUri} is
+ * populated only when {@code protocol} is {@code "SAML"} (Stage 3); {@code oidcIssuerUri}/
+ * {@code oidcClientId} only when it is {@code "OIDC"} — the backend nulls out the other protocol's
+ * fields whenever an organization switches between them.
+ */
+export interface OrganizationIdentityProviderInterface {
+  id?: number;
+  organizationId?: number;
+  protocol?: string;
+  displayName?: string;
+  status?: string;
+  oidcIssuerUri?: string;
+  oidcClientId?: string;
+  secretConfigured?: boolean;
+  samlMetadataUri?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * One email domain routed to an organization's SSO configuration
+ * ({@code GET/POST/DELETE /admin/organization/:id/sso/domains}) — mirrors the backend's
+ * {@code OrgSsoDomain}. Domain uniqueness is global ({@code UQ_OrgSsoDomains_Domain}), so a domain
+ * claimed by one organization can never simultaneously be claimed by another.
+ */
+export interface OrgSsoDomainInterface {
+  id?: number;
+  organizationId?: number;
+  domain?: string;
   createdAt?: string;
 }

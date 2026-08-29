@@ -1,6 +1,6 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.16
+**Version:** 3.17
 **Last Updated:** 2026-08-29
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
@@ -38,7 +38,7 @@ operability**, not features.
 | Dimension | State |
 |---|---|
 | Functional scope | ✅ Complete — auth, MFA, passkeys, federation (login **and** link/unlink), real SMS 2FA, sessions (self-service **and** granular admin revoke), RBAC, org scoping, user-type classification, anomaly detection + step-up, security dashboard, business CRUD, i18n |
-| Tests | ✅ **513 backend / 158 frontend**, all green (re-verified 2026-08-29 via actual Surefire (`./mvnw test`, 513/513) and Vitest (`ng test`, 15 files/158 tests) execution — backend growth since the same day's 507 is `BatchImportServiceImplTest` + `CustomerControllerBatchTemplateTest` (§3.3's downloadable batch-upload templates, 4 + 2 cases; `BatchImportServiceImpl` had zero prior coverage); growth before that from 498 was `TokenProviderTest` + `RoleRepoImplTest` (§3.1's role-change JWT staleness fix); growth before that from 490 was `ProviderLinkTicketServiceTest` + `WebAuthnChallengeStoreTest` (§2.4's JDBC-backed rewrite), net of two now-redundant tests retired from `FederatedIdentityLinkTest`; the one DB-bound class, `contextLoads`, needs a live MySQL and passed against local `db2`; frontend count is unchanged this round — `BatchImportComponent`/`CustomerService` have no spec files, an app-wide pattern for this pair, not a gap introduced here) |
+| Tests | ✅ **557 backend / 173 frontend**, all green (re-verified 2026-08-29 via actual Surefire (`./mvnw test`, 557/557) and Vitest (`ng test`, 17 files/173 tests) execution — backend growth since the same day's 513 is Stage 1–2 of the "Federated orgs" SSO work above: `EncryptionUtilTest`, `OrganizationIdentityProviderServiceImplTest`, `OrgAwareClientRegistrationRepositoryTest`, an extended `OAuth2LoginSuccessHandlerTest` (first suite ever written for that class), `FederatedAuthControllerTest`, and two `ensureAutoJoinMembership` cases added to `OrganizationServiceImplTest`; frontend growth from 158 is two spec files this doc had not yet caught up to: `organization-sso.service.spec.ts` (Stage 1's admin SSO tab, 10 cases) and this round's `login-org-sso.component.spec.ts` (Stage 2's email-domain discovery affordance, 5 cases); the one DB-bound class, `contextLoads`, needs a live MySQL and passed against local `db2`) |
 | Lint | ✅ `ng lint` clean and gating in CI |
 | Dependency audit | ✅ `npm audit --audit-level=high` exit 0; OWASP `dependency-check` wired at `failBuildOnCVSS=7` |
 | CI | ✅ Gating on lint + audit + both test suites against a MySQL service container |
@@ -256,7 +256,127 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | ✅ **A role change now takes effect on the very next request, not the next token refresh** | Closed 2026-08-29. Raised 2026-08-26 from the question "if I update a user's role, why doesn't the JWT in local storage change?". It cannot change — a JWT is signed and immutable — so the real issue was what a stale token still *authorized*: `TokenProvider#createAccessToken` bakes authority strings into the `authorities` claim at mint time, and `CustomAuthFilter` reads them back out of the token, not the database, so a demoted user kept staff authority for the remainder of their 30-minute access TTL | Implemented exactly the "cheaper than it looks" path this row's Sketch column proposed: a `users.roles_changed_at` column (idempotent `ALTER`, mirrors `password_changed_at` down to the column shape), stamped by `RoleRepoImpl#updateUserRole` on **every** role change — both an admin-initiated `PATCH .../role/{roleName}` and, just as importantly, the silent auto-revert-to-`ROLE_USER` that `getRoleByUserId` triggers internally when a time-boxed assignment expires (a token still carrying the expired elevated authorities must not stay valid merely because no admin explicitly demoted anyone). `TokenProvider#isTokenValid` now rejects a token unless its `iat` postdates *both* `passwordChangedAt` and `rolesChangedAt` independently — postdating the more recent of the two is not sufficient, since either can be null while the other is set. Costs nothing extra per request: `isTokenValid` already calls `userService.getUserById(userID)` for the `passwordChangedAt` check, so `rolesChangedAt` rides the same already-loaded `UserDTO`. Session revocation remains a deliberate non-substitute (the `sid` claim still doesn't gate validation — see the row above), but that gap no longer matters for role changes specifically. Tests: `TokenProviderTest` (6 cases — both-null, password-stale, roles-stale, "must postdate both, not just the newer one" in both directions, null-userId short-circuit) and `RoleRepoImplTest` (3 cases — stamps fire alongside the junction-table update, `expiresAt` passes through unchanged, an unknown role name touches neither `UPDATE` query) |
 | ⬜ **P2-3 — Machine-to-machine API access** | Lets scripts and CI authenticate without a browser. Deferred deliberately: it adds a second authentication front door, the highest-risk change on this list | **Option A — API keys:** an `X-API-Key` filter ahead of `CustomAuthFilter` resolving a **hashed** key to an `Authentication` carrying authority strings, so every existing `hasAnyAuthority`/`@PreAuthorize` rule applies unchanged. **Option B — OAuth2 client-credentials:** `POST /oauth/token`. Both converge on "a request arrives already carrying authorities". Needs `service_accounts` + hashed `api_keys` tables, new audit event types, and `PUBLIC_URLS` ↔ `PUBLIC_ROUTES` lockstep. **Large, higher risk — do last, with dedicated review** |
 | ⬜ **External identity platform (IdM/IdP) — build vs. buy** | Recurring question, previously answered from memory each time it came up. Evaluated properly 2026-08-26 and recorded below so it stops being re-litigated: the verdict is **do not migrate**, and the reasoning is written down rather than the conclusion alone | Ping/ForgeRock ruled out on licensing before any technical comparison; Keycloak is the only realistic free path if the answer ever changes. Migration means deleting ~1,500 lines of working, tested auth — see the notes below |
-| ⬜ **Federated orgs — per-organization external IdP (enterprise SSO)** | Raised 2026-08-28 as a backlog item, not a design decision. Today's federated login (`OAuth2ClientConfig`/`FederatedIdentityServiceImpl`, table above) is federation *per user* against three fixed consumer providers (Google/GitHub/Microsoft) baked into app config — there is no way for an organization to bring its own IdP (its own Okta tenant, Azure AD tenant, or Google Workspace) so its members sign in through *that* identity, distinct from what every other organization uses. This is the natural next step now that §3.2's per-organization role model exists to receive it | Sketch, not a plan: an organization would need its own IdP registration (client id/secret, or SAML metadata) — likely a new `organizationidentityproviders` table keyed by `organizationId` — and `OAuth2ClientConfig` would need to resolve the registration dynamically per tenant instead of today's fixed three. `FederatedIdentityServiceImpl#insertFederatedUser` would need to assign a new user into that IdP's owning organization automatically on first login, rather than requiring a separate manual invite. **This is SSO/login federation, not SCIM provisioning** — the SRS (§1.4) already declined provisioning/lifecycle sync deliberately (see the evaluation notes just below); this row is narrower and does not reopen that decision |
+| ✅ **Federated orgs — per-organization external IdP (enterprise SSO)** | Raised 2026-08-28 as a backlog item; OIDC staged 2026-08-29, SAML (Stage 3) built the same day. Today's federated login (`OAuth2ClientConfig`/`FederatedIdentityServiceImpl`, table above) used to be federation *per user* against three fixed consumer providers (Google/GitHub/Microsoft) baked into app config. An organization can now bring its own OIDC **or SAML 2.0** IdP (Okta, Azure AD, Google Workspace, ADFS, legacy Ping/ForgeRock) so its members sign in through *that* identity, distinct from every other organization's | **Stage 1 (done):** `organizationidentityproviders`/`organizationssodomains` tables (one IdP config per org, one org per domain globally); `EncryptionUtil` (AES-256-GCM, `ORG_IDP_SECRET_ENCRYPTION_KEY`) so the OIDC client secret is the first encrypted-at-rest value in this codebase; `OrganizationIdentityProviderService`/`Impl` (service-owns-its-SQL, never returns a decrypted secret from a read); admin "SSO" tab (protocol/issuer/client id/secret/display-name/status + a domain-chip list). **Stage 2 (done):** `OrgAwareClientRegistrationRepository` — a `@Primary` `ClientRegistrationRepository` that resolves `org-oidc-{organizationId}` dynamically via `ClientRegistrations.fromIssuerLocation(...)` (live discovery-document fetch), Caffeine-cached 10 minutes and evicted on config change via a new `OrgSsoConfigChangedEvent` (event, not a direct call, to avoid a circular bean dependency back into the service that publishes it); `OAuth2ClientConfig`'s old bean survives as `staticClientRegistrationRepository`, the delegate for the three fixed providers. `OAuth2LoginSuccessHandler#extractProfile` gained an `org-oidc-*` branch reading generic OIDC standard claims (`sub`/`email`/`given_name`/`family_name`/`picture`) instead of a hand-rolled per-provider mapping, then calls `OrganizationService#ensureAutoJoinMembership` — auto-joining a first-time SSO login as `ORG_MEMBER` and publishing `ORG_MEMBER_ADDED`, while a returning member is left untouched (guards against `addMember`'s reactivation path silently overwriting an existing `ORG_ADMIN`'s role). Frontend: an email-domain discovery affordance on the login screen (`GET /oauth2/org-sso-lookup`, public, anti-enumeration — `found:false` reveals nothing about whether the email itself is a known account) full-page-navigates to the resolved org's IdP on a hit, same redirect-chain rationale as the existing provider buttons. **Stage 3 (SAML, done 2026-08-29):** see the subsection just below for the full writeup |
+
+#### Per-organization SAML support — Stage 3 (done 2026-08-29)
+
+Designed 2026-08-29 once Stage 1–2 (OIDC) were built, tested (557 backend / 173 frontend, all green),
+and manually staged, then implemented the same day — per the original plan's own rule not to design
+SAML in detail until OIDC was proven, since bolting on a second new protocol before the first is
+working risks compounding two unknowns into one undiagnosable failure. The design below (kept as
+written, since it held up unchanged through implementation) is followed by what was actually built.
+
+**Scope actually verified: code and automated tests only.** Every path below runs and is covered by a
+unit test with a mocked SAML metadata call, and the full 579-test backend suite plus the 174-test
+frontend suite are green. **No live SAML IdP has exercised this end-to-end** — that needs a real IdP
+account (e.g. an Okta developer tenant configured for SAML), which was outside this session's scope
+the same way it was for OIDC's own Stage 2 manual gate. Do not treat this row as "manually verified in
+production" until that pass happens.
+
+**Why SAML at all, given OIDC already works.** Every modern IdP (Okta, Azure AD, Google Workspace)
+speaks OIDC, so SAML's only remaining justification here is *older* enterprise IdPs that only speak
+SAML 2.0 — some on-prem Active Directory Federation Services deployments, some legacy Ping/ForgeRock
+installs — plus it was named as an explicit learning goal when this plan was scoped. If no such IdP
+ever shows up in practice, this section can stay permanently unimplemented without loss; OIDC alone
+already covers the enterprise SSO requirement for every IdP realistically in use today.
+
+**Why this is a genuinely separate code path, not an extension of Stage 1–2.** Spring Security's SAML
+support does not share machinery with its OAuth2/OIDC support at any layer that matters here:
+
+| Concern | OIDC (built) | SAML (built) |
+|---|---|---|
+| Dependency | `spring-boot-starter-oauth2-client` (already present) | New: `spring-security-saml2-service-provider` |
+| Registration type | `ClientRegistration` | `RelyingPartyRegistration` — unrelated interface, unrelated builder |
+| Registry Spring resolves | `ClientRegistrationRepository` | `RelyingPartyRegistrationRepository` |
+| Discovery mechanism | `ClientRegistrations.fromIssuerLocation(issuerUri)` — hits `.well-known/openid-configuration` | `RelyingPartyRegistrations.fromMetadataLocation(metadataUri)` — parses an IdP SAML metadata XML document instead |
+| Login DSL | `.oauth2Login(...)` | `.saml2Login(...)` — configured **alongside**, not instead of, `.oauth2Login(...)`; both coexist in the same filter chain |
+| Redirect prefix | `/oauth2/authorization/{id}` | `/saml2/authenticate/{id}` |
+| Callback path | `/login/oauth2/code/{id}` | `/login/saml2/sso/{id}` |
+| Identity assertion shape | JSON claims (`sub`/`email`/...) | An XML `Assertion` with `<Attribute>` elements whose *names* are IdP-specific (no universal standard claim names the way OIDC has) |
+
+Concretely: **`OrgAwareClientRegistrationRepository` cannot be extended to also serve SAML** — it
+implements the wrong interface entirely. SAML needs its own sibling class implementing
+`RelyingPartyRegistrationRepository`, and both repositories are registered as separate beans, each
+answering only its own protocol's lookups.
+
+**Schema.** `organizationidentityproviders.protocol` already had a `'SAML'` value reserved in its
+`CK_OrgIdP_Protocol` CHECK constraint from Stage 1, and `saml_metadata_uri` already existed as a
+column (nullable, unused before this stage) — so, as predicted, no schema migration was needed for
+Stage 3; the admin UI now writes non-null values into that column via the frontend protocol selector
+described below. The one-config-per-org constraint (`UQ_OrgIdP_Organization`) means an org picks OIDC
+*or* SAML, not both, for this MVP — consistent with Stage 1's original design note that an org
+replaces its row to switch protocols rather than layering providers; `upsertOidcConfig`/
+`upsertSamlConfig` each null out the other protocol's columns on write, so a protocol switch never
+leaves stale data behind.
+
+**What was built:**
+
+1. **`pom.xml`** — added `spring-security-saml2-service-provider` (version managed by the existing
+   `${spring-security.version}` property, like every other `spring-security-*` artifact in this file).
+   Its transitive OpenSAML jars (`opensaml-saml-api`/`opensaml-saml-impl`) are **not published to
+   Maven Central** — Shibboleth, OpenSAML's maintainer, publishes only to its own Nexus repository —
+   so a `<repositories>` block pointing at
+   `https://build.shibboleth.net/nexus/content/repositories/releases/` had to be added alongside the
+   dependency. This is the one real surprise versus the design above; everything else matched the plan.
+
+2. **`OrgAwareRelyingPartyRegistrationRepository`** (`configuration/`) — the SAML sibling of
+   `OrgAwareClientRegistrationRepository`, built exactly as designed: `findByRegistrationId` matches
+   `org-saml-{organizationId}`, resolves the org's active SAML row via a new
+   `OrganizationIdentityProviderService#resolveActiveSamlConfig`, and calls
+   `RelyingPartyRegistrations.fromMetadataLocation(metadataUri).registrationId(id).build()`. Same
+   Caffeine-cache-plus-`OrgSsoConfigChangedEvent`-eviction shape as the OIDC repository, no static
+   delegate (SAML has no consumer-provider equivalent in this app), fails closed to `null` on any
+   unknown id, malformed id, missing/inactive config, or metadata-resolution failure.
+
+3. **`SecurityConfig`** — `.saml2Login(...)` added alongside the existing `.oauth2Login(...)` in the
+   same filter chain, with its own success/failure handlers mirroring the OAuth2 ones. `/saml2/**` and
+   `/login/saml2/**` added to both `Constants.PUBLIC_URLS` and `Constants.PUBLIC_ROUTES` in the same
+   change, verified by the existing `ConstantsPublicRouteLockstepTest` (still green, no changes needed
+   to the test itself — its mechanical `/**`-stripping match handled the new entries automatically).
+
+4. **`OrgSamlLoginSuccessHandler`** (`handler/`) — the SAML-specific sibling of
+   `OAuth2LoginSuccessHandler`, exactly as designed. Tries a short list of candidate SAML attribute
+   names for email (`email`/`emailAddress`/the ADFS claims URI/the X.500 OID `mail` attribute Okta and
+   Azure AD emit by default), given name, and surname in order, falling back to the assertion's
+   `NameID` as the email when no attribute matches (many IdPs configure the email NameID format) and
+   to `"Organization"`/`"Member"` placeholders for missing names.
+
+   **The extraction went further than the design called for.** Rather than adding a second copy of
+   the resolve-user → ensure-org-membership → mint-tokens-or-challenge-MFA → redirect tail, that
+   entire sequence was pulled out of `OAuth2LoginSuccessHandler` into a new
+   `FederatedLoginCompletionService`/`Impl` (`service`/`service/serviceimpl/`) that both handlers now
+   call after resolving a user. `OAuth2LoginSuccessHandler` shrank from 7 constructor dependencies to
+   4 (`federatedIdentityService`, `userService`, `eventPublisher`, `federatedLoginCompletionService`)
+   — it now owns only per-provider profile extraction and the account-link handshake, both of which
+   stayed OIDC/OAuth2-specific (a per-organization SAML login *is* the account, so there's no
+   "connect an additional identity" affordance to replicate for it).
+
+5. **Frontend** — the admin SSO tab (Stage 1) gained a protocol `<select>` (OIDC/SAML) whose change
+   swaps the OIDC issuer/client-id/secret fields for a single SAML metadata-URL field, backed by a new
+   `ssoProtocol` signal in `OrganizationsComponent` (separate from the loaded config's own `protocol`
+   field, since the admin must be able to switch protocols in the form before saving).
+   `OrganizationSsoService#upsertConfig$` gained a `protocol` parameter and an optional `metadataUri`
+   parameter; the controller (`OrganizationIdentityProviderController`) already routed on
+   `form.getProtocol()` from Stage 1's form design, defaulting to `"OIDC"` for backward compatibility.
+   The login page's email-domain discovery affordance (Stage 2) needed **no changes**, exactly as
+   predicted — it already just navigates to whatever `loginUrl` the backend returns, and the backend
+   decides whether that's an `/oauth2/authorization/...` or `/saml2/authenticate/...` path. Full
+   6-locale i18n for the new protocol/metadata-URL strings.
+
+**Tests added:** `OrgAwareRelyingPartyRegistrationRepositoryTest` (8 cases — mirrors
+`OrgAwareClientRegistrationRepositoryTest`'s shape, substituting a `mockStatic(RelyingPartyRegistrations.class)`
+call for the OIDC discovery mock, plus mocked `RelyingPartyRegistration.Builder`/`RelyingPartyRegistration`
+objects since a real SAML metadata build needs signing credentials this test has no need to construct);
+`OrgSamlLoginSuccessHandlerTest` (5 cases — the multi-IdP attribute-name fallback chain, the NameID
+email fallback, and the failure/delegation contract); a new `FederatedLoginCompletionServiceImplTest`
+(10 cases) covering the extracted tail — auto-join for both `org-oidc-*` and `org-saml-*` prefixes,
+disabled/locked-account refusal, TOTP/SMS MFA branching (including the SMS debounce window), and
+normal token issuance — that used to live inside `OAuth2LoginSuccessHandlerTest` before the
+extraction; `OAuth2LoginSuccessHandlerTest` itself was trimmed to what's still actually in that class
+(profile extraction, the account-link handshake, delegation to the completion service) now that the
+auto-join/MFA/token-issuance assertions live in the new suite. Full backend suite: 579 tests green.
+Frontend: `organization-sso.service.spec.ts` extended for the new `protocol`/`metadataUri` request
+shape; full frontend suite: 174 tests green. `ng lint` and `ng build` both clean.
 
 #### External identity platform — evaluation notes (2026-08-26)
 
@@ -323,9 +443,15 @@ on first login, rewrite to the new format). Neither is hard; it is the step that
 
 **Verdict.** The reasons to adopt an external IdP are needing SAML, needing SCIM provisioning,
 needing enterprise SSO for B2B customers, or not wanting to own auth security patches. The SRS has
-already ruled out the first two, and the third is not a current requirement. Owning this stack is a
-real maintenance liability, but replacing it is a larger, riskier project than finishing the access
-model work already queued in §3.2 — which is where the effort should go instead.
+already ruled out the second, and the third and first — enterprise SSO for B2B customers, including
+SAML — were subsequently built **in-house** rather than bought (see the "Federated orgs" row above
+and its Stage 3 subsection): `OrgAwareClientRegistrationRepository`/
+`OrgAwareRelyingPartyRegistrationRepository` resolve per-organization OIDC and SAML IdPs dynamically,
+so an org bringing its own Okta/Azure AD/Google Workspace tenant, or an older SAML-only IdP, no longer
+requires migrating off this stack, only adding roughly 250 lines (OIDC) plus a comparable SAML sibling
+to it. Owning this stack is a real maintenance liability, but replacing it is a larger, riskier project
+than finishing the access model work already queued in §3.2 — which is where the effort should go
+instead.
 
 
 ### 3.2 Access model
@@ -386,8 +512,9 @@ not the role catalog.
 | ✅ **P2-2 — Batch upload** | CSV/Excel import for customers and invoices — the most-requested "real business app" feature still missing | Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #8) — `BatchImportService`, deliberately not `@Transactional` at the class level so each row commits independently (true per-row partial success, no chunking needed); `MAX_BATCH_ROWS = 2000` hard cap instead of an async job. Apache Commons CSV + POI for `.xlsx`, reusing the existing bean-validation constraints via the `Validator` bean directly |
 | ✅ **Downloadable batch-upload templates** | Done (2026-08-29). Batch upload had no companion "here's the exact column shape" file — a first-time uploader had to reverse-engineer the expected headers from `BatchImportService`'s Javadoc or trial-and-error against the row-level error report | Built almost exactly to the original sketch: `GET /customer/batch/template` / `GET /customer/invoice/batch/template` (`CustomerController`) return a header-only `.xlsx` from the new `report/BatchTemplateReport` — a generic header-list-to-workbook writer, unlike `CustomerReport`/`InvoiceReport` it hardcodes no columns of its own. The no-drift guarantee is real, not aspirational: `BatchImportServiceImpl.CUSTOMER_TEMPLATE_HEADERS`/`INVOICE_TEMPLATE_HEADERS` are now the *only* place these column names are spelled out — `importCustomerRow`/`importInvoiceRow`'s `row.get(...)` calls were rewired through a new `key(header)` helper (`header.toLowerCase()`, matching how `parseCsv`/`parseXlsx` already lowercase every header they read) instead of carrying their own separately typed lowercase literals, so the template and the parser cannot silently diverge. `BatchImportService` exposes the two lists via `customerTemplateHeaders()`/`invoiceTemplateHeaders()`. Frontend: a "Download template" link next to each `BatchImportComponent`'s hint text, wired to two new `CustomerService` methods (`downloadCustomerBatchTemplate$`/`downloadInvoiceBatchTemplate$` — plain blob `GET`s, not the progress-tracked variant the full data-export reports use, since a header-only file is a few hundred bytes); full 6-locale i18n. Tests: `BatchImportServiceImplTest` (new — this class had no prior coverage at all) round-trips a CSV built from each header list through the real import pipeline end to end, plus asserts the header lists themselves; `CustomerControllerBatchTemplateTest` asserts both endpoints' `Content-Disposition`/content-type and that the generated workbook's header row matches whatever the service returns |
 | ✅ **Favorites / pinned destinations bar** | Done (2026-08-21, POST-SUBMISSION-UPGRADES.md #14) — navigation had outgrown the navbar: the Admin dropdown alone holds six destinations, so common pages were two clicks deep behind a menu that had to be opened to be read | Built on a new shared `navigable-destinations.ts` registry (extracted from the command palette, not a parallel route list) — see the design note below for the decisions this followed |
-| ⬜ **Backend-driven i18n** | Server-generated messages (validation, email bodies, capability-denied text) stay English while the UI switches language | Spring `MessageSource` + `Accept-Language`; the `CapabilityCatalog` phrases are the natural first target since they already have a message template |
+| ✅ **Backend-driven i18n** | Server-generated messages (validation, email bodies, capability-denied text) stay English while the UI switches language | Done — `CapabilityCatalog`'s 403 phrases, the natural first target flagged below, are the one surface actually wired: `src/main/resources/messages*.properties` (6 locales, key-parity verified) backs a `MessageSource` auto-registered by Spring Boot's `MessageSourceAutoConfiguration` from the classpath bundle (no explicit `@Bean` needed — basename `messages` is the unmodified default). `CustomAccessDeniedHandler` resolves `CapabilityCatalog.actionKeyFor(request)` to localized text via `HttpServletRequest#getLocale()` (the Servlet API's own `Accept-Language` parser, used because this handler runs inside the Security filter chain, before `DispatcherServlet`'s `LocaleResolver` would ever populate `LocaleContextHolder`), then substitutes it into `capability.messageTemplate` via `MessageFormat`'s `{0}` placeholder. `CapabilityCatalog` itself only resolves a request to a message *key* — it has no Spring bean lifecycle and cannot hold a `MessageSource`, so key-to-text resolution stays entirely in the handler. Deliberately scoped to just this: validation messages and email bodies remain English-only, exactly as the properties file's own header comment records, since `CapabilityCatalog` was the only server-generated surface that already had one shared message template to translate. Tests: `CapabilityCatalogTest` (request → key), `CustomAccessDeniedHandlerTest` (key → localized text against the real bundles, including an unsupported-language fallback-to-English case and a cross-locale non-enumeration sweep) |
 | ⬜ **Resolve `VERIFY_EMAIL_HOST`** | Reserved and unused (`UI_APP_URL` drives links today). Keep or remove deliberately — do not let it rot as ambiguous config | |
+| ⬜ **App-wide animations & transitions** | The UI is functionally complete but static — button clicks, link/route navigations, and screen changes have no motion. User-requested (2026-08-29): "fancy" transitions on button presses, link activation, and route changes | Angular's own `@angular/animations` (route-level `:enter`/`:leave` transitions wired through `app.routes.ts`'s existing route data) is the natural fit over a third-party library, since the app is already all-Angular with no other animation dependency to justify. Scope not yet decided — needs a pass to pick which interactions get motion (route changes are the highest-value one) versus which would just be noise |
 | ✅ **DB connection: `VERIFY_IDENTITY` instead of `REQUIRED`** | Done (2026-08-08) — Aiven's per-project CA (`certs/aiven-mysql-ca.pem`, a public certificate, safe to commit) is imported into the JRE's default truststore at Docker build time (`keytool -importcert`), and `MYSQL_SSL_MODE` is now `VERIFY_IDENTITY`. Verified three ways before touching production: the cert is well-formed (`openssl x509`), the import actually lands in the built image's truststore (`keytool -list` inside the container), and — the real test — a live `mysql.exe --ssl-mode=VERIFY_IDENTITY --ssl-ca=...` connection against the actual Aiven instance succeeded (TLSv1.3). Not yet redeployed to production as of this writing — see the RUNBOOK for the redeploy step | |
 | ✅ **Email invoices/documents as PDF attachments** | Done (2026-08-16, POST-SUBMISSION-UPGRADES.md #7) — server-side `InvoicePdfReport` (OpenPDF) + a manual "Email Invoice" button; the client-side jsPDF "Export PDF" button was left as-is, this is a second, independent path | |
 | ✅ **Scheduled/on-demand report & metrics emails** | Done (2026-08-16, POST-SUBMISSION-UPGRADES.md #6) — new `ReportDigestService` renders the same `Stats`/`SecurityOverview` figures `SecurityDashboardServiceImpl` already computes into `EmailTemplate`; a manual "Email me this report" button and a weekly `SchedulingConfig` cron job (per-organization + system-wide) both call it, so the two routes can't drift into two implementations | |
@@ -538,9 +665,28 @@ Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/
   `TestRestTemplate`, real HTTP against the genuine `securityFilterChain` bean) plus the fast,
   DB-free `ConstantsPublicRouteLockstepTest`, which mechanically proves the `PUBLIC_URLS` ↔
   `PUBLIC_ROUTES` lockstep for every entry in both lists.
-- ⬜ **`contextLoads` needs a live local MySQL**, so it is the one suite that breaks in a
-  database-less CI run. Replacing it with a Testcontainers-backed `@SpringBootTest` removes the
-  footgun and unblocks DB-backed tests in CI.
+- ✅ **`contextLoads` needs a live local MySQL** — done (2026-08-29). It used to require
+  `MYSQL_HOST`/`MYSQL_PORT`/`MYSQL_DATABASE` (the dev profile's fallbacks) to resolve to an
+  already-running, already-schema'd instance — a developer's local `db2`, or CI's MySQL service
+  container wired up out of band — making it the one suite whose pass/fail depended on state
+  outside the test itself. `AngularSpringBootFullStackApplicationTests` now owns a `@Container
+  @ServiceConnection static MySQLContainer<?>` (pinned `mysql:8.0`, matching every deployed
+  environment) instead: `spring-boot-testcontainers` registers a `JdbcConnectionDetails` bean that
+  Spring Boot's datasource autoconfiguration prefers over the raw properties, so the container is
+  used transparently regardless of what `MYSQL_HOST` happens to be set to. Needed no schema-
+  provisioning changes at all — `application.yml`'s pre-existing `spring.sql.init.mode: always`
+  already applies `schema.sql` to whatever `DataSource` the context resolves, container included,
+  and Hibernate's `ddl-auto: update` layers the JPA tables on top exactly as it always has.
+  Verified live: the full 557-test Surefire run stayed green, and the log confirms a real
+  `mysql:8.0` image pull + container start (not an accidental fallback to a local instance) with
+  `DemoDataSeeder` successfully inserting seed rows afterward. Deliberately scoped to just this one
+  class — `SecurityFilterChainIntegrationTest` and any other live-DB `@SpringBootTest` still read
+  the CI service container / local `db2` as before, and CI's `mysql:8.4` service + manual
+  `schema.sql` apply step are both still needed for those, so `.github/workflows/ci.yml` did not
+  change. `org.testcontainers:testcontainers-mysql`/`testcontainers-junit-jupiter` (Testcontainers
+  2.x renamed these from the un-prefixed `mysql`/`junit-jupiter` artifact ids used in 1.x tutorials)
+  + `spring-boot-testcontainers`, all version-managed by `spring-boot-dependencies`' imported
+  `testcontainers-bom` — no versions pinned in `pom.xml`.
 - ⬜ **No end-to-end coverage.** Playwright against `docker compose up` is the only way to catch seam
   breaks (interceptor ↔ backend, OAuth redirect round-trip, federated link flow).
 - ⬜ **Refactors** listed in §4 — none urgent, all the kind that get harder the longer they wait.

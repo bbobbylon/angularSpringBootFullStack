@@ -70,7 +70,7 @@ class OAuth2ClientConfigRedirectUriTest {
 
     /** Runs the two beans in the same order the container does. */
     private static ClientRegistrationRepository registrationsFrom(OAuth2ClientConfig config) {
-        return config.clientRegistrationRepository(config.federatedProviderCatalog());
+        return config.staticClientRegistrationRepository(config.federatedProviderCatalog());
     }
 
     private static String redirectUriOf(ClientRegistrationRepository repository, String registrationId) {
@@ -153,7 +153,7 @@ class OAuth2ClientConfigRedirectUriTest {
             ReflectionTestUtils.setField(config, "redirectBaseUrl", "");
 
             FederatedProviderCatalog catalog = config.federatedProviderCatalog();
-            ClientRegistrationRepository repository = config.clientRegistrationRepository(catalog);
+            ClientRegistrationRepository repository = config.staticClientRegistrationRepository(catalog);
 
             assertTrue(catalog.getProviders().isEmpty(),
                     "an empty catalog is what keeps dead buttons off the login screen");

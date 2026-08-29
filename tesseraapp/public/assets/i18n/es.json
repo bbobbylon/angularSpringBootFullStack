@@ -343,7 +343,13 @@
     "codeEyebrow": "Doble factor",
     "codeTitle": "Introduce tu código",
     "codeLabel": "Código de verificación",
-    "verifyContinue": "Verificar y continuar"
+    "verifyContinue": "Verificar y continuar",
+    "orgSsoDivider": "o inicia sesión con tu organización",
+    "orgSsoLabel": "Correo del trabajo",
+    "orgSsoPlaceholder": "tu@tuempresa.com",
+    "orgSsoContinue": "Continuar",
+    "orgSsoChecking": "Comprobando…",
+    "orgSsoNotFound": "No se encontró inicio de sesión de organización para este correo. Usa tu contraseña o un proveedor de los de arriba."
   },
   "register": {
     "eyebrow": "Crear cuenta",
@@ -543,7 +549,8 @@
       "activity": "Actividad",
       "invites": "Invitaciones",
       "settings": "Configuración",
-      "customers": "Clientes"
+      "customers": "Clientes",
+      "sso": "Inicio de sesión único"
     },
     "profile": {
       "description": "Descripción",
@@ -604,6 +611,32 @@
       "empty": "Todavía no hay clientes vinculados a esta organización.",
       "invoicesTitle": "Facturas",
       "invoicesEmpty": "Todavía no hay facturas."
+    },
+    "sso": {
+      "error": "No se pudo cargar la configuración de inicio de sesión único. Inténtelo de nuevo.",
+      "activate": "Activar",
+      "deactivate": "Desactivar",
+      "remove": "Eliminar configuración",
+      "displayName": "Nombre para mostrar",
+      "protocol": "Protocolo",
+      "protocolOidc": "OIDC",
+      "protocolSaml": "SAML",
+      "issuerUri": "URI del emisor",
+      "issuerUriPlaceholder": "https://su-idp.ejemplo.com",
+      "clientId": "ID de cliente",
+      "clientSecret": "Secreto de cliente",
+      "secretConfiguredPlaceholder": "•••••••• (sin cambios)",
+      "secretRequiredPlaceholder": "Obligatorio",
+      "secretConfiguredHint": "Ya hay un secreto almacenado. Deje esto en blanco para conservarlo, o ingrese uno nuevo para reemplazarlo.",
+      "secretRequiredHint": "Obligatorio la primera vez que se configura esta organización.",
+      "metadataUri": "URL de metadatos SAML",
+      "metadataUriPlaceholder": "https://su-idp.ejemplo.com/metadata",
+      "metadataUriHint": "La ubicación del documento de metadatos SAML del IdP.",
+      "domainsTitle": "Dominios de correo",
+      "domainPlaceholder": "acme.com",
+      "addDomain": "Agregar dominio",
+      "removeDomain": "Eliminar",
+      "noDomains": "Aún no se ha reclamado ningún dominio."
     }
   },
   "charts": {

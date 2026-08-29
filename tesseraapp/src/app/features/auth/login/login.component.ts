@@ -45,6 +45,15 @@ export class LoginComponent implements OnInit {
   protected readonly webauthnSupported = isWebAuthnSupported();
   /** True while a passkey sign-in ceremony is in flight. */
   protected readonly passkeyLoginInProgress = signal(false);
+  /** True while the email-domain SSO lookup request is in flight (FUTURE-ENHANCEMENTS.md §3.1). */
+  protected readonly orgSsoLookupInProgress = signal(false);
+  /**
+   * Set to {@code true} only after a lookup comes back {@code found: false} — renders the neutral
+   * "no organization SSO found" hint. Never set on any other outcome (success navigates away
+   * immediately; an error is routed to the shared notification toast instead), and cleared as soon
+   * as the user edits the email again so a stale message can't linger against a corrected address.
+   */
+  protected readonly orgSsoNotFound = signal(false);
   private readonly userService = inject(UserService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -144,6 +153,45 @@ export class LoginComponent implements OnInit {
    */
   loginWithProvider(provider: string): void {
     this.userService.initiateFederatedLogin(provider);
+  }
+
+  /**
+   * Looks up whether the given email's domain is claimed by an organization's SSO configuration
+   * (FUTURE-ENHANCEMENTS.md §3.1 email-domain discovery) and, if so, hands the browser off to that
+   * organization's IdP. Deliberately mirrors {@link loginWithProvider}'s full-page-navigation
+   * pattern on success — this is still the OAuth2 Authorization Code flow underneath.
+   *
+   * <p>A {@code found: false} response is not an error — it renders a neutral inline hint and lets
+   * the user fall back to password login or a consumer provider button, without ever confirming or
+   * denying that the email address itself belongs to a known account (only whether its domain has
+   * SSO configured, a materially different and non-enumerating signal).
+   *
+   * @param orgSsoEmailForm - the standalone email-only form for this affordance
+   */
+  lookupOrgSso(orgSsoEmailForm: NgForm): void {
+    const email = orgSsoEmailForm.value.orgSsoEmail;
+    if (!email || this.orgSsoLookupInProgress()) {
+      return;
+    }
+    this.orgSsoNotFound.set(false);
+    this.orgSsoLookupInProgress.set(true);
+    this.userService
+      .orgSsoLookup$(email)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.orgSsoLookupInProgress.set(false);
+          if (response.data?.found) {
+            this.userService.initiateOrgSsoLogin(response.data.loginUrl!);
+          } else {
+            this.orgSsoNotFound.set(true);
+          }
+        },
+        error: (error: string) => {
+          this.orgSsoLookupInProgress.set(false);
+          this.notification.onError(error);
+        },
+      });
   }
 
   /**

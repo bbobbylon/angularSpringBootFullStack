@@ -4,11 +4,8 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.controller.FederatedAuthController;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
-import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.FederatedIdentityService;
-import com.bob.angularspringbootfullstack.service.RoleService;
-import com.bob.angularspringbootfullstack.service.SessionService;
-import com.bob.angularspringbootfullstack.service.TotpService;
+import com.bob.angularspringbootfullstack.service.FederatedLoginCompletionService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,13 +24,8 @@ import static com.bob.angularspringbootfullstack.enumeration.EventType.PROVIDER_
 
 import java.io.IOException;
 import java.net.URLEncoder;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
-import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
-import static com.bob.angularspringbootfullstack.enumeration.EventType.FEDERATED_LOGIN;
+import static com.bob.angularspringbootfullstack.constants.Constants.ORG_OIDC_REGISTRATION_PREFIX;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 
@@ -52,15 +44,9 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
  *       Microsoft each shape their userinfo differently;</li>
  *   <li>find-or-create the local user via {@link FederatedIdentityService}
  *       (FR-FED-3);</li>
- *   <li>apply the SAME account policies as in-house login: disabled/locked accounts
- *       are refused (FR-AUTH-5 parity), and MFA-enabled accounts are sent an SMS code
- *       and must complete the second factor before any token is issued (FR-MFA-2);</li>
- *   <li>issue the application's own access/refresh JWTs (FR-FED-4) and record a
- *       FEDERATED_LOGIN audit event (FR-FED-5);</li>
- *   <li>hand the tokens to the SPA by redirecting to its {@code /oauth2/callback}
- *       route with the tokens in the URL <em>fragment</em> — fragments never leave the
- *       browser (not sent in requests, absent from server/proxy logs), which is why
- *       they are preferred over query parameters for token transport.</li>
+ *   <li>hand off to {@link FederatedLoginCompletionService} for everything after that —
+ *       auto-join, account-state/MFA policy, token issuance, and the SPA redirect — the
+ *       protocol-agnostic tail shared with {@code OrgSamlLoginSuccessHandler} (Stage 3).</li>
  * </ol>
  *
  * <p>Every failure path degrades to a redirect onto the SPA login screen with a coarse
@@ -74,37 +60,21 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final FederatedIdentityService federatedIdentityService;
     private final UserService userService;
-    private final RoleService roleService;
-    private final SessionService sessionService;
     private final ApplicationEventPublisher eventPublisher;
-    private final TotpService totpService;
+    private final FederatedLoginCompletionService federatedLoginCompletionService;
 
     /**
-     * The SPA origin (env {@code UI_APP_URL}); all post-login redirects land on routes
-     * served by the Angular app, mirroring how email verification links are built.
+     * The SPA origin (env {@code UI_APP_URL}); the account-link outcome redirect (the one path this
+     * class still issues directly, rather than through {@link FederatedLoginCompletionService}) lands
+     * on a route served by the Angular app, mirroring how every other redirect in this application is
+     * built.
      */
     @Value("${ui.app.url:http://localhost:4200}")
     private String uiAppUrl;
 
     /**
-     * Debounce window for {@link #sendSmsChallengeOnce}, guarding against a duplicate Twilio
-     * dispatch (and a real charge) when this handler runs twice in quick succession for the same
-     * user — e.g. a provider/proxy-level retry of the {@code /login/oauth2/code/{provider}}
-     * callback, or the caller re-attempting "Sign in with Google" after the previous attempt
-     * appeared to hang. Every {@code onAuthenticationSuccess} invocation issues a brand new
-     * OAuth2 authentication, so this cannot be keyed off anything provider-supplied (state/code are
-     * already consumed by the time this handler runs) — the local user id plus a short wall-clock
-     * window is the only signal available here.
-     */
-    private static final Duration SMS_CHALLENGE_DEBOUNCE = Duration.ofSeconds(15);
-
-    /** Per-user last-dispatch timestamp backing {@link #sendSmsChallengeOnce}. */
-    private final Map<Long, Instant> lastSmsChallengeAt = new ConcurrentHashMap<>();
-
-    /**
-     * Completes a federated login per the class contract: resolve the local user,
-     * enforce account state and MFA policy, then deliver tokens (or the MFA challenge)
-     * to the SPA via redirect.
+     * Completes a federated login per the class contract: resolve the local user, then delegate to
+     * {@link FederatedLoginCompletionService} for account policy, MFA, and token issuance.
      *
      * @param request        the callback request from the provider redirect
      * @param response       the response used for the redirect to the SPA
@@ -134,46 +104,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             UserDTO userDTO = federatedIdentityService.findOrCreateFederatedUser(
                     provider, profile.subject(), profile.email(), profile.firstName(), profile.lastName(), profile.imageUrl());
 
-            // FR-AUTH-5 parity: federated sign-in must not become a side door around
-            // administrative disable/lock decisions on the LOCAL account.
-            if (!userDTO.isEnabled() || !userDTO.isNotLocked()) {
-                log.warn("Federated login refused for disabled/locked account id {}", userDTO.getId());
-                response.sendRedirect(uiAppUrl + "/login?error=account");
-                return;
-            }
-
-            // FR-MFA-2/4: a successful first factor (federated included) does not yield
-            // tokens while MFA is enabled. TOTP takes precedence over SMS, mirroring the
-            // password login path: mint the server-side challenge and bounce the browser
-            // into the login screen's authenticator-code state.
-            if (userDTO.isUsingTotp()) {
-                String challenge = totpService.createLoginChallenge(userDTO.getId());
-                response.sendRedirect(uiAppUrl + "/oauth2/callback#mfa=totp"
-                        + "&challenge=" + URLEncoder.encode(challenge, UTF_8));
-                return;
-            }
-
-            // FR-MFA-2: a successful first factor (federated included) does not yield tokens
-            // while MFA is enabled — send the SMS code and bounce to the SPA's MFA screen.
-            if (userDTO.isUsing2FA()) {
-                sendSmsChallengeOnce(userDTO);
-                String phone = userDTO.getPhoneNumber() == null ? "" : userDTO.getPhoneNumber();
-                response.sendRedirect(uiAppUrl + "/oauth2/callback#mfa=true"
-                        + "&email=" + URLEncoder.encode(userDTO.getEmail(), UTF_8)
-                        + "&phone=" + URLEncoder.encode(phone, UTF_8));
-                return;
-            }
-
-            // FR-FED-5: record WHICH provider authenticated the user (google | github | microsoft)
-            // on the audit row itself, not just in the server log — the detail lands in userevents.detail.
-            eventPublisher.publishEvent(new NewUserEvent(userDTO.getEmail(), FEDERATED_LOGIN, provider));
-            UserPrincipal principal = new UserPrincipal(toUser(userDTO), roleService.getRoleByUserId(userDTO.getId()));
-            // SessionService (plan.md M5) opens a tracked, revocable session — federated
-            // logins appear in the Security Center device list like in-house ones (FR-FED-4).
-            SessionService.TokenPair tokens = sessionService.issueTokenPair(principal, request);
-            response.sendRedirect(uiAppUrl + "/oauth2/callback"
-                    + "#access_token=" + URLEncoder.encode(tokens.accessToken(), UTF_8)
-                    + "&refresh_token=" + URLEncoder.encode(tokens.refreshToken(), UTF_8));
+            federatedLoginCompletionService.completeLogin(provider, userDTO, request, response);
         } catch (Exception exception) {
             // Coarse error code only: the SPA shows a generic failure message, and nothing
             // in the redirect reveals whether an account exists (NFR-SEC-7).
@@ -190,8 +121,25 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
      * private — a deterministic {@code @users.noreply.github.com} address is
      * synthesized so account rows stay valid; the durable identity key is always
      * (provider, subject), never the email.
+     *
+     * <p>An {@code org-oidc-*} provider (Stage 2's per-organization external IdP) is handled before
+     * the three-way switch below rather than as a fourth case, since its registration id is not one
+     * fixed literal but {@code org-oidc-{organizationId}} for any organization — and, unlike the
+     * three hand-rolled consumer providers, it can lean on generic OIDC standard claims instead of a
+     * provider-specific attribute mapping: every registration built by
+     * {@code OrgAwareClientRegistrationRepository} came from a real {@code .well-known/openid-
+     * configuration} discovery document, so {@code sub}/{@code email}/{@code given_name}/
+     * {@code family_name}/{@code picture} are guaranteed to mean what OIDC says they mean.
      */
     private FederatedProfile extractProfile(String provider, OAuth2User principal) {
+        if (provider.startsWith(ORG_OIDC_REGISTRATION_PREFIX)) {
+            return new FederatedProfile(
+                    principal.getName(),
+                    principal.getAttribute("email"),
+                    attributeOr(principal, "given_name", "Organization"),
+                    attributeOr(principal, "family_name", "Member"),
+                    principal.getAttribute("picture"));
+        }
         return switch (provider) {
             case "google" -> new FederatedProfile(
                     principal.getName(),
@@ -288,27 +236,6 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             log.warn("Federated link refused for userId {} provider '{}': {}", userId, provider, exception.getMessage());
             response.sendRedirect(uiAppUrl + "/security?linkError=" + URLEncoder.encode(exception.getMessage(), UTF_8));
         }
-    }
-
-    /**
-     * Dispatches the SMS/voice 2FA challenge via {@link UserService#sendVerificationCode}, unless
-     * one was already dispatched for this exact user within {@link #SMS_CHALLENGE_DEBOUNCE} — see
-     * that field's Javadoc for why a duplicate call here is a real risk despite there being only one
-     * call site. Skipping the resend is safe either way: a code issued moments ago is still valid
-     * and still pending, so the redirect to the MFA screen below proceeds unchanged regardless of
-     * which branch runs.
-     *
-     * @param userDTO the federated user whose phone challenge is being started
-     */
-    private void sendSmsChallengeOnce(UserDTO userDTO) {
-        Instant now = Instant.now();
-        Instant previous = lastSmsChallengeAt.put(userDTO.getId(), now);
-        if (previous != null && Duration.between(previous, now).compareTo(SMS_CHALLENGE_DEBOUNCE) < 0) {
-            log.warn("Suppressed duplicate SMS 2FA dispatch for user id {} — a challenge was already sent {}ms ago",
-                    userDTO.getId(), Duration.between(previous, now).toMillis());
-            return;
-        }
-        userService.sendVerificationCode(userDTO);
     }
 
     private record FederatedProfile(String subject, String email, String firstName, String lastName, String imageUrl) {

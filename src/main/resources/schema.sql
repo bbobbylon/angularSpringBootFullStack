@@ -190,7 +190,8 @@ ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
      'ORG_CREATED', 'ORG_RENAMED', 'ORG_STATUS_CHANGED', 'ORG_PROFILE_UPDATED',
      'ORG_MEMBER_ADDED', 'ORG_MEMBER_REMOVED', 'ORG_MEMBER_ROLE_CHANGED',
      'ORG_INVITE_CREATED', 'ORG_INVITE_REDEEMED', 'ORG_INVITE_REVOKED',
-     'ORG_SETTINGS_UPDATED', 'ORG_TENANT_UUID_SET', 'ORG_CUSTOMERS_ASSIGNED'));
+     'ORG_SETTINGS_UPDATED', 'ORG_TENANT_UUID_SET', 'ORG_CUSTOMERS_ASSIGNED',
+     'ORG_SSO_CONFIGURED', 'ORG_SSO_REMOVED', 'ORG_SSO_DOMAIN_ADDED', 'ORG_SSO_DOMAIN_REMOVED'));
 
 INSERT INTO events (type, description)
 VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
@@ -228,7 +229,11 @@ VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
        ('ORG_INVITE_REVOKED', 'An invite link for the organization was revoked :|'),
        ('ORG_SETTINGS_UPDATED', 'The organization''s settings were updated :)'),
        ('ORG_TENANT_UUID_SET', 'The organization''s tenant UUID was set :)'),
-       ('ORG_CUSTOMERS_ASSIGNED', 'Customers were attached to the organization :)') AS new
+       ('ORG_CUSTOMERS_ASSIGNED', 'Customers were attached to the organization :)'),
+       ('ORG_SSO_CONFIGURED', 'The organization''s single sign-on provider was configured :)'),
+       ('ORG_SSO_REMOVED', 'The organization''s single sign-on provider was removed :|'),
+       ('ORG_SSO_DOMAIN_ADDED', 'An email domain was added to the organization''s single sign-on routing :)'),
+       ('ORG_SSO_DOMAIN_REMOVED', 'An email domain was removed from the organization''s single sign-on routing :|') AS new
 ON DUPLICATE KEY UPDATE description = new.description;
 
 CREATE TABLE IF NOT EXISTS userevents
@@ -848,6 +853,66 @@ CREATE TABLE IF NOT EXISTS organizationinvites
     FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (invited_by_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT UQ_OrganizationInvites_Code UNIQUE (code)
+);
+
+-- ── Per-organization external IdP (enterprise SSO) (2026-08-29) ────────────────────────
+--
+-- One IdP config per organization for this MVP (UQ_OrgIdP_Organization) — an org replaces its row
+-- to switch providers rather than layering several. oidc_client_secret_ciphertext holds the
+-- AES-256-GCM ciphertext produced by EncryptionUtil (IV + ciphertext + auth tag, base64-encoded);
+-- the plaintext secret is never persisted. saml_metadata_uri is reserved for the SAML follow-up
+-- (FUTURE-ENHANCEMENTS.md §3.1 Stage 3) and unused by Stage 1/2.
+CREATE TABLE IF NOT EXISTS organizationidentityproviders
+(
+    id                            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    organization_id               BIGINT UNSIGNED NOT NULL,
+    protocol                      VARCHAR(10)  NOT NULL,
+    display_name                  VARCHAR(100) NOT NULL,
+    status                        VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
+    oidc_issuer_uri               VARCHAR(500) DEFAULT NULL,
+    oidc_client_id                VARCHAR(255) DEFAULT NULL,
+    oidc_client_secret_ciphertext VARCHAR(1000) DEFAULT NULL,
+    saml_metadata_uri             VARCHAR(500) DEFAULT NULL,
+    created_at                    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at                    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT UQ_OrgIdP_Organization UNIQUE (organization_id),
+    FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Same idempotent CHECK-rebuild pattern as organizations.status.
+SET @orgidp_protocol_chk := (SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizationidentityproviders'
+                               AND CONSTRAINT_TYPE = 'CHECK' AND CONSTRAINT_NAME LIKE '%Protocol%' LIMIT 1);
+SET @drop_orgidp_protocol_chk := IF(@orgidp_protocol_chk IS NULL, 'DO 0',
+                                    CONCAT('ALTER TABLE organizationidentityproviders DROP CHECK `', @orgidp_protocol_chk, '`'));
+PREPARE drop_orgidp_protocol_chk_stmt FROM @drop_orgidp_protocol_chk;
+EXECUTE drop_orgidp_protocol_chk_stmt;
+DEALLOCATE PREPARE drop_orgidp_protocol_chk_stmt;
+
+ALTER TABLE organizationidentityproviders ADD CONSTRAINT CK_OrgIdP_Protocol CHECK (protocol IN ('OIDC', 'SAML'));
+
+SET @orgidp_status_chk := (SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizationidentityproviders'
+                             AND CONSTRAINT_TYPE = 'CHECK' AND CONSTRAINT_NAME LIKE '%Status%' LIMIT 1);
+SET @drop_orgidp_status_chk := IF(@orgidp_status_chk IS NULL, 'DO 0',
+                                  CONCAT('ALTER TABLE organizationidentityproviders DROP CHECK `', @orgidp_status_chk, '`'));
+PREPARE drop_orgidp_status_chk_stmt FROM @drop_orgidp_status_chk;
+EXECUTE drop_orgidp_status_chk_stmt;
+DEALLOCATE PREPARE drop_orgidp_status_chk_stmt;
+
+ALTER TABLE organizationidentityproviders ADD CONSTRAINT CK_OrgIdP_Status CHECK (status IN ('ACTIVE', 'INACTIVE'));
+
+-- Email-domain → organization routing for the login page's SSO discovery lookup
+-- (GET /oauth2/org-sso-lookup). UQ_OrgSsoDomains_Domain is the key safety property: a domain can
+-- never be claimed by more than one organization, so the lookup is always unambiguous.
+CREATE TABLE IF NOT EXISTS organizationssodomains
+(
+    id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    organization_id BIGINT UNSIGNED NOT NULL,
+    domain          VARCHAR(255) NOT NULL,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT UQ_OrgSsoDomains_Domain UNIQUE (domain),
+    FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- ── Authenticator-app (TOTP) multi-factor authentication ───────────────────────────────

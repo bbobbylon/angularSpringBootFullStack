@@ -103,3 +103,19 @@ export interface PasskeyInterface {
 export interface PasskeysDataInterface {
   passkeys: PasskeyInterface[];
 }
+
+/**
+ * Payload of {@code GET /oauth2/org-sso-lookup} (public, FUTURE-ENHANCEMENTS.md §3.1 email-domain
+ * discovery). Mirrors the backend's anti-enumeration contract exactly: when {@code found} is
+ * {@code false}, no other key is present — the domain lookup never confirms or denies whether the
+ * email itself belongs to a known user, only whether its domain is claimed by an organization's SSO.
+ */
+export interface OrgSsoLookupDataInterface {
+  found: boolean;
+  /** Present only when {@code found} is true. */
+  organizationName?: string;
+  /** Present only when {@code found} is true — the IdP's display name (e.g. "Acme Okta"). */
+  displayName?: string;
+  /** Present only when {@code found} is true — full-page-navigate here to start the SSO redirect. */
+  loginUrl?: string;
+}

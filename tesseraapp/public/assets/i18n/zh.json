@@ -343,7 +343,13 @@
     "codeEyebrow": "双因素",
     "codeTitle": "请输入验证码",
     "codeLabel": "验证码",
-    "verifyContinue": "验证并继续"
+    "verifyContinue": "验证并继续",
+    "orgSsoDivider": "或使用您的组织登录",
+    "orgSsoLabel": "工作邮箱",
+    "orgSsoPlaceholder": "you@yourcompany.com",
+    "orgSsoContinue": "继续",
+    "orgSsoChecking": "正在检查…",
+    "orgSsoNotFound": "未找到与该邮箱对应的组织登录方式。请使用密码或上方的登录方式。"
   },
   "register": {
     "eyebrow": "创建账户",
@@ -543,7 +549,8 @@
       "activity": "活动",
       "invites": "邀请",
       "settings": "设置",
-      "customers": "客户"
+      "customers": "客户",
+      "sso": "单点登录"
     },
     "profile": {
       "description": "描述",
@@ -604,6 +611,32 @@
       "empty": "该组织尚未关联任何客户。",
       "invoicesTitle": "发票",
       "invoicesEmpty": "暂无发票。"
+    },
+    "sso": {
+      "error": "无法加载单点登录配置，请重试。",
+      "activate": "启用",
+      "deactivate": "停用",
+      "remove": "移除配置",
+      "displayName": "显示名称",
+      "protocol": "协议",
+      "protocolOidc": "OIDC",
+      "protocolSaml": "SAML",
+      "issuerUri": "颁发者 URI",
+      "issuerUriPlaceholder": "https://your-idp.example.com",
+      "clientId": "客户端 ID",
+      "clientSecret": "客户端密钥",
+      "secretConfiguredPlaceholder": "••••••••（保持不变）",
+      "secretRequiredPlaceholder": "必填",
+      "secretConfiguredHint": "已存储密钥。留空以保留原密钥，或输入新密钥以替换它。",
+      "secretRequiredHint": "首次为该组织配置时必填。",
+      "metadataUri": "SAML 元数据 URL",
+      "metadataUriPlaceholder": "https://your-idp.example.com/metadata",
+      "metadataUriHint": "IdP 的 SAML 元数据文档位置。",
+      "domainsTitle": "邮箱域名",
+      "domainPlaceholder": "acme.com",
+      "addDomain": "添加域名",
+      "removeDomain": "移除",
+      "noDomains": "尚未认领任何域名。"
     }
   },
   "charts": {

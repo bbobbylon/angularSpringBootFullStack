@@ -13,6 +13,13 @@
 jwt:
   secret: ${JWT_SECRET}
 
+org:
+  idp:
+    # Base64-encoded 32-byte AES-256-GCM key used by EncryptionUtil to encrypt/decrypt
+    # per-organization SSO client secrets at rest (FUTURE-ENHANCEMENTS.md §3.1). Generate one:
+    # openssl rand -base64 32
+    secret-encryption-key: ${ORG_IDP_SECRET_ENCRYPTION_KEY}
+
 server:
   port: ${CONTAINER_PORT:8080}
   # ── Reverse-proxy awareness ────────────────────────────────────────────────────────────

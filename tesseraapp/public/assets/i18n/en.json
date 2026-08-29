@@ -345,7 +345,13 @@
     "codeEyebrow": "Two-factor",
     "codeTitle": "Enter your code",
     "codeLabel": "Verification code",
-    "verifyContinue": "Verify & continue"
+    "verifyContinue": "Verify & continue",
+    "orgSsoDivider": "or sign in with your organization",
+    "orgSsoLabel": "Work email",
+    "orgSsoPlaceholder": "you@yourcompany.com",
+    "orgSsoContinue": "Continue",
+    "orgSsoChecking": "Checking…",
+    "orgSsoNotFound": "No organization sign-in found for this email. Use your password or a provider above."
   },
   "register": {
     "eyebrow": "Create account",
@@ -545,7 +551,8 @@
       "activity": "Activity",
       "invites": "Invites",
       "settings": "Settings",
-      "customers": "Customers"
+      "customers": "Customers",
+      "sso": "Single Sign-On"
     },
     "profile": {
       "description": "Description",
@@ -606,6 +613,32 @@
       "empty": "No customers attached to this organization yet.",
       "invoicesTitle": "Invoices",
       "invoicesEmpty": "No invoices yet."
+    },
+    "sso": {
+      "error": "Could not load the single sign-on configuration. Please try again.",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "remove": "Remove Configuration",
+      "displayName": "Display name",
+      "protocol": "Protocol",
+      "protocolOidc": "OIDC",
+      "protocolSaml": "SAML",
+      "issuerUri": "Issuer URI",
+      "issuerUriPlaceholder": "https://your-idp.example.com",
+      "clientId": "Client ID",
+      "clientSecret": "Client secret",
+      "secretConfiguredPlaceholder": "•••••••• (unchanged)",
+      "secretRequiredPlaceholder": "Required",
+      "secretConfiguredHint": "A secret is already stored. Leave this blank to keep it, or enter a new one to replace it.",
+      "secretRequiredHint": "Required the first time this organization is configured.",
+      "metadataUri": "SAML metadata URL",
+      "metadataUriPlaceholder": "https://your-idp.example.com/metadata",
+      "metadataUriHint": "The IdP's SAML metadata document location.",
+      "domainsTitle": "Email domains",
+      "domainPlaceholder": "acme.com",
+      "addDomain": "Add Domain",
+      "removeDomain": "Remove",
+      "noDomains": "No domains claimed yet."
     }
   },
   "charts": {

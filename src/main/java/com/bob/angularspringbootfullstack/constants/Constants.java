@@ -42,6 +42,13 @@ public class Constants {
                     // callback, and /oauth2/providers lets the SPA discover which providers
                     // are configured. All are pre-authentication by definition.
                     "/oauth2/**", "/login/oauth2/**",
+                    // Per-organization SAML SSO (FUTURE-ENHANCEMENTS.md §3.1, Stage 3):
+                    // /saml2/authenticate/{id} starts the SAML redirect binding,
+                    // /login/saml2/sso/{id} is the assertion consumer service (ACS) callback, and
+                    // /saml2/service-provider-metadata/{id} (also under /saml2/**) lets an IdP admin
+                    // fetch this application's SP metadata to configure their side. All are
+                    // pre-authentication or metadata-only, same reasoning as /oauth2/** above.
+                    "/saml2/**", "/login/saml2/**",
                     // Public services catalog browsing (PublicServicesController): a prospective
                     // customer looking at what the business offers has no account yet by definition.
                     "/services/public/**",
@@ -96,6 +103,8 @@ public class Constants {
             // Federated login (FR-FED): skipped here so a stale Bearer header from the SPA
             // can never break the browser-redirect OAuth2 dance or provider discovery.
             "/oauth2", "/login/oauth2",
+            // Per-organization SAML SSO — must stay in lockstep with PUBLIC_URLS above.
+            "/saml2", "/login/saml2",
             // Public services catalog browsing — must stay in lockstep with PUBLIC_URLS above.
             "/services/public",
             // Contact Us submission — must stay in lockstep with PUBLIC_URLS above.
@@ -123,4 +132,25 @@ public class Constants {
      * Standard MySQL-compatible timestamp format used when persisting expiration timestamps.
      */
     public static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
+
+    /**
+     * Prefix of every per-organization OIDC registration id (FUTURE-ENHANCEMENTS.md §3.1
+     * "Per-organization external IdP", Stage 2), e.g. {@code "org-oidc-42"} for organization 42.
+     * A single shared constant rather than three independently-typed literals: it is built once
+     * ({@code OrganizationIdentityProviderServiceImpl#resolveByEmailDomain}, constructing the login
+     * URL) and parsed twice ({@code OrgAwareClientRegistrationRepository} resolving a live login,
+     * {@code OAuth2LoginSuccessHandler} recovering the organization id after callback) — a typo'd
+     * duplicate of this string in only one of those three spots would fail closed silently rather
+     * than loudly, since every path here already treats "unrecognized id" as "no SSO configured".
+     */
+    public static final String ORG_OIDC_REGISTRATION_PREFIX = "org-oidc-";
+
+    /**
+     * Prefix of every per-organization SAML registration id (FUTURE-ENHANCEMENTS.md §3.1
+     * "Per-organization external IdP", Stage 3), e.g. {@code "org-saml-42"} for organization 42.
+     * Sibling to {@link #ORG_OIDC_REGISTRATION_PREFIX} — same rationale, one per protocol, since an
+     * organization's registration id must self-describe which {@code RelyingPartyRegistrationRepository}
+     * (SAML) vs. {@code ClientRegistrationRepository} (OIDC) resolves it.
+     */
+    public static final String ORG_SAML_REGISTRATION_PREFIX = "org-saml-";
 }
