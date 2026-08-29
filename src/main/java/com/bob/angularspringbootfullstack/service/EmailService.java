@@ -110,4 +110,18 @@ public interface EmailService {
      * @param overview       the security rollup, already resolved to the same scope as {@code stats}
      */
     void sendReportDigestEmail(String recipientEmail, String scopeLabel, Stats stats, SecurityOverview overview);
+
+    /**
+     * Sends the creating administrator a confirmation that a new organization was created
+     * (Org setup — FUTURE-ENHANCEMENTS.md §3.2), opt-in via
+     * {@code OrganizationForm#sendConfirmationEmail}.
+     * <p>
+     * The recipient is always the admin who created the organization — this is a receipt, not an
+     * invitation, so there is no separate invitee address to address it to.
+     *
+     * @param adminFirstName   the creating administrator's first name, used in the greeting
+     * @param adminEmail       the creating administrator's email address (the {@code To:} header)
+     * @param organizationName the newly created organization's display name
+     */
+    void sendOrganizationCreatedEmail(String adminFirstName, String adminEmail, String organizationName);
 }

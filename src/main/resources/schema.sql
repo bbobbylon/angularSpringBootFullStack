@@ -189,7 +189,8 @@ ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
      'MFA_RESET', 'RECOVERY_CODES_REGENERATED',
      'ORG_CREATED', 'ORG_RENAMED', 'ORG_STATUS_CHANGED', 'ORG_PROFILE_UPDATED',
      'ORG_MEMBER_ADDED', 'ORG_MEMBER_REMOVED', 'ORG_MEMBER_ROLE_CHANGED',
-     'ORG_INVITE_CREATED', 'ORG_INVITE_REDEEMED', 'ORG_INVITE_REVOKED'));
+     'ORG_INVITE_CREATED', 'ORG_INVITE_REDEEMED', 'ORG_INVITE_REVOKED',
+     'ORG_SETTINGS_UPDATED', 'ORG_TENANT_UUID_SET', 'ORG_CUSTOMERS_ASSIGNED'));
 
 INSERT INTO events (type, description)
 VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
@@ -224,7 +225,10 @@ VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
        ('ORG_MEMBER_ROLE_CHANGED', 'A member''s role within the organization was changed :)'),
        ('ORG_INVITE_CREATED', 'An invite link was created for the organization :)'),
        ('ORG_INVITE_REDEEMED', 'An invite link was redeemed to join the organization :)'),
-       ('ORG_INVITE_REVOKED', 'An invite link for the organization was revoked :|') AS new
+       ('ORG_INVITE_REVOKED', 'An invite link for the organization was revoked :|'),
+       ('ORG_SETTINGS_UPDATED', 'The organization''s settings were updated :)'),
+       ('ORG_TENANT_UUID_SET', 'The organization''s tenant UUID was set :)'),
+       ('ORG_CUSTOMERS_ASSIGNED', 'Customers were attached to the organization :)') AS new
 ON DUPLICATE KEY UPDATE description = new.description;
 
 CREATE TABLE IF NOT EXISTS userevents
@@ -422,11 +426,12 @@ DEALLOCATE PREPARE relax_invoice_customer_stmt;
 
 CREATE TABLE IF NOT EXISTS `Services`
 (
-    `price`       float(53),
-    `id`          bigint  NOT NULL AUTO_INCREMENT,
-    `description` varchar(255),
-    `name`        varchar(255),
-    `active`      boolean NOT NULL DEFAULT TRUE,
+    `price`            float(53),
+    `id`               bigint  NOT NULL AUTO_INCREMENT,
+    `description`      varchar(255),
+    `name`             varchar(255),
+    `active`           boolean NOT NULL DEFAULT TRUE,
+    `organization_id`  bigint,
     PRIMARY KEY (`id`)
 ) engine = InnoDB;
 
@@ -442,6 +447,20 @@ SET @add_services_active := (
 PREPARE add_services_active_stmt FROM @add_services_active;
 EXECUTE add_services_active_stmt;
 DEALLOCATE PREPARE add_services_active_stmt;
+
+-- Idempotent add of Services.organization_id for catalogs created before per-organization service
+-- catalogs shipped. NULL default means every pre-existing service reads back as a globally shared
+-- entry, exactly the behavior the catalog already had — same guard pattern, and same "no foreign
+-- key" reasoning, as Customer.organization_id above.
+SET @add_services_org := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE `Services` ADD COLUMN `organization_id` bigint DEFAULT NULL AFTER `active`',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Services' AND COLUMN_NAME = 'organization_id');
+PREPARE add_services_org_stmt FROM @add_services_org;
+EXECUTE add_services_org_stmt;
+DEALLOCATE PREPARE add_services_org_stmt;
 
 -- Seed the services catalog.
 --
@@ -552,6 +571,59 @@ VALUES ('Tessera', 'ACTIVE'),
        ('Acme Partners', 'ACTIVE') AS new
 ON DUPLICATE KEY UPDATE status = new.status;
 
+-- ── Organization setup: tenant UUID, MFA policy, feature flags (2026-08-28) ─────────────
+--
+-- tenant_uuid is an external tenant identifier (distinct from the internal auto-increment `id`),
+-- admin-supplied and settable exactly once — enforced in OrganizationServiceImpl#setTenantUuid by
+-- refusing the write when the column is already non-null, not by anything the database itself can
+-- express. mfa_allowed_methods is a CSV of OrgMfaMethod names (NULL/empty = this organization has
+-- not configured a policy, which OrganizationServiceImpl#isMfaMethodAllowed treats as "no
+-- restriction from this org", not as "none allowed" — an org that never touches the setting must not
+-- suddenly block its members' existing MFA enrollment). feature_flags is a CSV of free-form labels;
+-- nothing in the application reads them yet (see FUTURE-ENHANCEMENTS.md).
+SET @add_orgs_tenant_uuid := (
+    SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizations' AND COLUMN_NAME = 'tenant_uuid');
+SET @add_orgs_tenant_uuid_sql := IF(@add_orgs_tenant_uuid,
+    'ALTER TABLE organizations ADD COLUMN tenant_uuid CHAR(36) DEFAULT NULL AFTER status',
+    'DO 0');
+PREPARE add_orgs_tenant_uuid_stmt FROM @add_orgs_tenant_uuid_sql;
+EXECUTE add_orgs_tenant_uuid_stmt;
+DEALLOCATE PREPARE add_orgs_tenant_uuid_stmt;
+
+-- Uniqueness on tenant_uuid is enforced separately from the ADD COLUMN above (a UNIQUE column-level
+-- constraint can't be appended with ADD COLUMN once the column already exists on a re-run), same
+-- reason the CHECK constraints in this file are rebuilt in their own guarded step.
+SET @orgs_tenant_uuid_uq := (SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+                             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizations'
+                               AND CONSTRAINT_NAME = 'UQ_Organizations_TenantUuid' LIMIT 1);
+SET @add_orgs_tenant_uuid_uq := IF(@orgs_tenant_uuid_uq IS NULL,
+    'ALTER TABLE organizations ADD CONSTRAINT UQ_Organizations_TenantUuid UNIQUE (tenant_uuid)',
+    'DO 0');
+PREPARE add_orgs_tenant_uuid_uq_stmt FROM @add_orgs_tenant_uuid_uq;
+EXECUTE add_orgs_tenant_uuid_uq_stmt;
+DEALLOCATE PREPARE add_orgs_tenant_uuid_uq_stmt;
+
+SET @add_orgs_mfa_methods := (
+    SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizations' AND COLUMN_NAME = 'mfa_allowed_methods');
+SET @add_orgs_mfa_methods_sql := IF(@add_orgs_mfa_methods,
+    'ALTER TABLE organizations ADD COLUMN mfa_allowed_methods VARCHAR(100) DEFAULT NULL AFTER tenant_uuid',
+    'DO 0');
+PREPARE add_orgs_mfa_methods_stmt FROM @add_orgs_mfa_methods_sql;
+EXECUTE add_orgs_mfa_methods_stmt;
+DEALLOCATE PREPARE add_orgs_mfa_methods_stmt;
+
+SET @add_orgs_feature_flags := (
+    SELECT COUNT(*) = 0 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizations' AND COLUMN_NAME = 'feature_flags');
+SET @add_orgs_feature_flags_sql := IF(@add_orgs_feature_flags,
+    'ALTER TABLE organizations ADD COLUMN feature_flags VARCHAR(255) DEFAULT NULL AFTER mfa_allowed_methods',
+    'DO 0');
+PREPARE add_orgs_feature_flags_stmt FROM @add_orgs_feature_flags_sql;
+EXECUTE add_orgs_feature_flags_stmt;
+DEALLOCATE PREPARE add_orgs_feature_flags_stmt;
+
 CREATE TABLE IF NOT EXISTS userorganizations
 (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -604,6 +676,13 @@ DEALLOCATE PREPARE add_uo_org_role_stmt;
 -- existence here would make the backfill run on every subsequent `schema.sql` execution and stomp
 -- every later demotion an administrator had made through the UI, the same "never overwrite a live
 -- edit" property `securitysettings`' INSERT IGNORE seed protects.
+--
+-- Wrapped in SQL_SAFE_UPDATES=0: the WHERE below (uo.active / r.name) is deliberate and reviewed,
+-- but neither column is a key on userorganizations, so a client with safe-update mode on (e.g.
+-- MySQL Workbench's default) rejects the UPDATE with Error 1175. Captured and restored rather than
+-- hardcoded, so this doesn't change the setting for anything else in the session.
+SET @orig_safe_updates := @@SQL_SAFE_UPDATES;
+SET SQL_SAFE_UPDATES = 0;
 SET @backfill_uo_org_role_sql := IF(@add_uo_org_role,
     'UPDATE userorganizations uo
          JOIN userroles ur ON ur.user_id = uo.user_id
@@ -615,6 +694,7 @@ SET @backfill_uo_org_role_sql := IF(@add_uo_org_role,
 PREPARE backfill_uo_org_role_stmt FROM @backfill_uo_org_role_sql;
 EXECUTE backfill_uo_org_role_stmt;
 DEALLOCATE PREPARE backfill_uo_org_role_stmt;
+SET SQL_SAFE_UPDATES = @orig_safe_updates;
 
 -- Same idempotent CHECK-rebuild pattern as events.type and organizations.status (see the events
 -- block for the full rationale): drop whatever CHECK this table currently carries and re-apply the

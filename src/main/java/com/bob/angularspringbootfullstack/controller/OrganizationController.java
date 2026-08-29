@@ -1,6 +1,7 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.UserDTO;
+import com.bob.angularspringbootfullstack.enumeration.OrgMfaMethod;
 import com.bob.angularspringbootfullstack.enumeration.OrgRole;
 import com.bob.angularspringbootfullstack.enumeration.RoleType;
 import com.bob.angularspringbootfullstack.exception.ApiException;
@@ -8,10 +9,16 @@ import com.bob.angularspringbootfullstack.event.NewOrganizationEvent;
 import com.bob.angularspringbootfullstack.form.OrganizationForm;
 import com.bob.angularspringbootfullstack.form.OrganizationInviteForm;
 import com.bob.angularspringbootfullstack.form.OrganizationProfileForm;
+import com.bob.angularspringbootfullstack.form.OrganizationSettingsForm;
 import com.bob.angularspringbootfullstack.form.OrganizationStatusForm;
+import com.bob.angularspringbootfullstack.form.OrganizationTenantUuidForm;
+import com.bob.angularspringbootfullstack.model.Customer;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
+import com.bob.angularspringbootfullstack.model.Invoice;
 import com.bob.angularspringbootfullstack.model.Organization;
 import com.bob.angularspringbootfullstack.model.OrganizationInvite;
+import com.bob.angularspringbootfullstack.service.CustomerService;
+import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +39,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_CREATED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_CUSTOMERS_ASSIGNED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_INVITE_CREATED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_INVITE_REVOKED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_MEMBER_ADDED;
@@ -41,7 +52,9 @@ import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_MEMBE
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_MEMBER_ROLE_CHANGED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_PROFILE_UPDATED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_RENAMED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_SETTINGS_UPDATED;
 import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_STATUS_CHANGED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.ORG_TENANT_UUID_SET;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
@@ -58,12 +71,15 @@ import static org.springframework.http.HttpStatus.OK;
  *       for everyone scoped to it — refused below the unscoped tiers ({@code ROLE_ADMIN},
  *       {@code ROLE_APPLICATION_ADMIN}), checked by {@link #requireUnscopedTier}, mirroring
  *       {@link RoleController#requireApplicationAdmin}'s shape for the analogous Role CRUD
- *       decision.</li>
+ *       decision. The tenant UUID and settings (MFA policy, feature flags) PATCHes fall in this
+ *       family too — a policy change is as much a catalog attribute as the name.</li>
  *   <li><b>Membership mutation</b> (add/remove a member, change a member's org role) only
  *       changes who belongs to <em>one</em> organization, so a scoped caller may perform it for an
  *       organization they administer — checked by {@link #requireMembershipAuthority}, which
  *       consults {@link OrganizationService#isOrgAdminOf}. An unscoped tier may manage any
- *       organization's membership.</li>
+ *       organization's membership. The read-only detail-view endpoints ({@link #getMembers},
+ *       {@link #getStats}, {@link #getCustomers}, {@link #getInvoices}, {@link #getEvents}) share
+ *       this same rule — viewing is bounded the same way as mutating.</li>
  * </ul>
  * <p>
  * <b>Per-organization roles (2026-08-26).</b> The membership rule above is keyed on
@@ -97,6 +113,8 @@ import static org.springframework.http.HttpStatus.OK;
 public class OrganizationController {
 
     private final OrganizationService organizationService;
+    private final CustomerService customerService;
+    private final EmailService emailService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -124,20 +142,37 @@ public class OrganizationController {
     }
 
     /**
-     * Creates a new organization (Organization CRUD — create), unscoped tiers only.
+     * Creates a new organization (Organization CRUD — create), unscoped tiers only, in one call
+     * covering its full initial setup: profile, tenant UUID, MFA policy, feature flags, attached
+     * customers, and an optional creation confirmation email to the creating admin.
      *
      * @param authentication the calling administrator's authentication
-     * @param form           the validated {name} payload
+     * @param form           the validated organization setup payload
      * @return 200 OK with the created organization and the refreshed catalog
      */
     @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
     @PostMapping
     public ResponseEntity<HttpResponse> createOrganization(Authentication authentication, @RequestBody @Valid OrganizationForm form) {
         requireUnscopedTier(authentication);
-        Organization created = organizationService.createOrganization(form.getName());
+        Organization created = organizationService.createOrganization(
+                form.getName(), form.getDescription(), form.getContactEmail(), form.getWebsite(),
+                form.getTenantUuid(), resolveMfaMethods(form.getMfaAllowedMethods()), form.getFeatureFlags());
         UserDTO caller = getAuthenticatedUser(authentication);
         eventPublisher.publishEvent(new NewOrganizationEvent(created.getId(), caller.getId(), ORG_CREATED, created.getName()));
         log.info("'{}' created organization '{}'", caller.getEmail(), created.getName());
+
+        if (form.getCustomerIds() != null && !form.getCustomerIds().isEmpty()) {
+            int assigned = customerService.assignCustomersToOrganization(form.getCustomerIds(), created.getId());
+            if (assigned > 0) {
+                eventPublisher.publishEvent(new NewOrganizationEvent(created.getId(), caller.getId(),
+                        ORG_CUSTOMERS_ASSIGNED, assigned + " customer(s) attached"));
+                log.info("'{}' attached {} customer(s) to organization '{}'", caller.getEmail(), assigned, created.getName());
+            }
+        }
+        if (form.isSendConfirmationEmail()) {
+            emailService.sendOrganizationCreatedEmail(caller.getFirstName(), caller.getEmail(), created.getName());
+        }
+
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
@@ -315,9 +350,14 @@ public class OrganizationController {
      * {@link #removeMember} needed: an admin cannot pick a member to remove from a roster they
      * can never see. Same authorization rule as those two, via {@link #requireMembershipAuthority}.
      *
+     * <p>{@code orgRoles} rides alongside {@code members}, keyed by user id, rather than being
+     * folded into {@code UserDTO}: a member's capacity is meaningful only in the context of this
+     * one organization, and the Members tab's per-row role selector is the only surface that needs
+     * it (see {@link OrganizationService#orgRolesForOrganization}).
+     *
      * @param authentication the calling administrator's authentication
      * @param organizationId the organization whose members to list
-     * @return 200 OK with the organization's active members
+     * @return 200 OK with the organization's active members and their per-organization roles
      */
     @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
     @GetMapping("/{organizationId}/members")
@@ -326,7 +366,9 @@ public class OrganizationController {
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
-                        .data(of("members", organizationService.listActiveMembers(organizationId)))
+                        .data(of(
+                                "members", organizationService.listActiveMembers(organizationId),
+                                "orgRoles", organizationService.orgRolesForOrganization(organizationId)))
                         .message("Members retrieved successfully.")
                         .status(OK)
                         .statusCode(OK.value())
@@ -358,6 +400,67 @@ public class OrganizationController {
                         .timeStamp(now().toString())
                         .data(of("organization", updated))
                         .message("Organization profile updated successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Sets an organization's external tenant UUID — exactly once. Unscoped tiers only, the same
+     * catalog-mutation rule {@link #updateProfile} applies.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the organization to set the tenant UUID on
+     * @param form           the validated {tenantUuid} payload
+     * @return 200 OK with the updated organization
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @PatchMapping("/{id}/tenant-uuid")
+    public ResponseEntity<HttpResponse> setTenantUuid(Authentication authentication,
+                                                        @PathVariable Long id,
+                                                        @RequestBody @Valid OrganizationTenantUuidForm form) {
+        requireUnscopedTier(authentication);
+        Organization updated = organizationService.setTenantUuid(id, form.getTenantUuid());
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(id, caller.getId(), ORG_TENANT_UUID_SET, null));
+        log.info("'{}' set the tenant UUID of organization id {}", caller.getEmail(), id);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("organization", updated))
+                        .message("Tenant UUID set successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Updates an organization's enforcement-relevant settings (MFA-allowed-methods policy,
+     * feature-flag labels). Unscoped tiers only, the same catalog-mutation rule
+     * {@link #updateProfile} applies — a policy change affects everyone scoped to the
+     * organization, not just the caller.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param id             the organization to update
+     * @param form           the validated settings payload; each field independently nullable
+     * @return 200 OK with the updated organization
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @PatchMapping("/{id}/settings")
+    public ResponseEntity<HttpResponse> updateSettings(Authentication authentication,
+                                                         @PathVariable Long id,
+                                                         @RequestBody @Valid OrganizationSettingsForm form) {
+        requireUnscopedTier(authentication);
+        Organization updated = organizationService.updateOrganizationSettings(
+                id, resolveMfaMethods(form.getMfaAllowedMethods()), form.getFeatureFlags());
+        UserDTO caller = getAuthenticatedUser(authentication);
+        eventPublisher.publishEvent(new NewOrganizationEvent(id, caller.getId(), ORG_SETTINGS_UPDATED, null));
+        log.info("'{}' updated the settings of organization id {}", caller.getEmail(), id);
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("organization", updated))
+                        .message("Organization settings updated successfully.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
@@ -411,6 +514,55 @@ public class OrganizationController {
                         .timeStamp(now().toString())
                         .data(of("stats", organizationService.getOrganizationStats(organizationId)))
                         .message("Organization stats retrieved successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Lists the customers attached to one organization — the read side of the create-time
+     * {@code customerIds} attachment (see {@link #createOrganization}), for the organization
+     * detail view's Customers/Invoices tab. Same authorization rule as {@link #getMembers}.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param organizationId the organization whose customers to list
+     * @return 200 OK with the organization's attached customers
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @GetMapping("/{organizationId}/customers")
+    public ResponseEntity<HttpResponse> getCustomers(Authentication authentication, @PathVariable Long organizationId) {
+        requireMembershipAuthority(authentication, organizationId);
+        Iterable<Customer> customers = customerService.getCustomersForOrganizations(Set.of(organizationId));
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("customers", customers))
+                        .message("Organization customers retrieved successfully.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Lists the invoices belonging to one organization's attached customers — an invoice is
+     * scoped to an organization only through the customer it belongs to (see
+     * {@link #createOrganization}'s Javadoc for why {@code Services} is not org-scoped). Same
+     * authorization rule as {@link #getMembers}.
+     *
+     * @param authentication the calling administrator's authentication
+     * @param organizationId the organization whose invoices to list
+     * @return 200 OK with the organization's invoices
+     */
+    @PreAuthorize("hasAuthority('UPDATE:ORGANIZATION')")
+    @GetMapping("/{organizationId}/invoices")
+    public ResponseEntity<HttpResponse> getInvoices(Authentication authentication, @PathVariable Long organizationId) {
+        requireMembershipAuthority(authentication, organizationId);
+        Iterable<Invoice> invoices = customerService.getInvoicesForOrganizations(Set.of(organizationId));
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("invoices", invoices))
+                        .message("Organization invoices retrieved successfully.")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
@@ -517,6 +669,34 @@ public class OrganizationController {
             return null;
         }
         return organizationService.findActiveOrganizationIds(caller.getId());
+    }
+
+    /**
+     * Resolves an MFA-policy field from its raw {@code List<String>} form into the
+     * {@code Set<OrgMfaMethod>} {@link OrganizationService} expects, fail-closed the same way
+     * {@link #requireAssignableOrgRole} resolves an org role name: an unrecognized entry is
+     * rejected outright rather than silently dropped, since dropping one would leave the admin
+     * believing they configured a broader policy than what was actually saved.
+     *
+     * <p>{@code null} passes through unchanged — for {@link #createOrganization} it means "no
+     * policy configured", and for {@link #updateSettings} it means "leave the current policy
+     * untouched" ({@link OrganizationService#updateOrganizationSettings} distinguishes the two by
+     * context). An empty (non-null) list resolves to an empty set in both cases.
+     *
+     * @param rawMethodNames the form's raw method names, or null
+     * @return the resolved methods, or null if the input was null
+     * @throws ApiException if any entry is not a recognized {@link OrgMfaMethod} name
+     */
+    private static Set<OrgMfaMethod> resolveMfaMethods(List<String> rawMethodNames) {
+        if (rawMethodNames == null) {
+            return null;
+        }
+        Set<OrgMfaMethod> methods = new LinkedHashSet<>();
+        for (String name : rawMethodNames) {
+            methods.add(OrgMfaMethod.from(name)
+                    .orElseThrow(() -> new ApiException("'" + name + "' is not a valid MFA method.")));
+        }
+        return methods;
     }
 
     /**

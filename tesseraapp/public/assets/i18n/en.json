@@ -36,7 +36,8 @@
     "pageXofY": "Page {{page}} of {{total}}",
     "nTotal": "{{count}} total",
     "acrossNPages": "across {{count}} pages",
-    "viewAll": "View all"
+    "viewAll": "View all",
+    "add": "Add"
   },
   "nav": {
     "customers": "Customers",
@@ -522,6 +523,8 @@
     "searchPlaceholder": "Search by name or email…",
     "addToOrganization": "Add",
     "noOrganizations": "No organizations found.",
+    "globalRole": "Global role",
+    "orgRole": "Organization role",
     "kpi": {
       "total": "Total Organizations",
       "active": "Active Organizations",
@@ -531,7 +534,9 @@
       "members": "Members",
       "profile": "Profile",
       "activity": "Activity",
-      "invites": "Invites"
+      "invites": "Invites",
+      "settings": "Settings",
+      "customers": "Customers"
     },
     "profile": {
       "description": "Description",
@@ -563,6 +568,35 @@
       "goHome": "Go to Dashboard",
       "invalidTitle": "This invite link is invalid or has expired",
       "invalidSubtitle": "Ask an administrator of the organization for a new invite link."
+    },
+    "createAdvanced": "Advanced setup (optional)",
+    "setup": {
+      "tenantUuid": "External tenant UUID",
+      "tenantUuidHint": "Optional; can also be set later. Cannot be changed once set.",
+      "featureFlags": "Feature flags",
+      "featureFlagsHint": "Comma-separated labels.",
+      "mfaAllowedMethods": "Allowed MFA methods",
+      "mfaAllHint": "Leave all unchecked to allow every method (no restriction configured).",
+      "customerIds": "Attach existing customers",
+      "customerSearchPlaceholder": "Search customers by name…",
+      "sendConfirmationEmail": "Email me a confirmation when this organization is created"
+    },
+    "mfaMethods": {
+      "TOTP": "Authenticator app (TOTP)",
+      "PASSKEY": "Passkey",
+      "SMS": "SMS",
+      "PHONE_CALL": "Phone call"
+    },
+    "settings": {
+      "setTenantUuid": "Set Tenant UUID",
+      "tenantUuidImmutable": "Settable once — cannot be changed after it's set.",
+      "save": "Save Settings"
+    },
+    "customers": {
+      "error": "Could not load customers. Please try again.",
+      "empty": "No customers attached to this organization yet.",
+      "invoicesTitle": "Invoices",
+      "invoicesEmpty": "No invoices yet."
     }
   },
   "charts": {

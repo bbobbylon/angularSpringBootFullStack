@@ -41,6 +41,26 @@ public interface CustomerService {
     Customer updateCustomer(Long customerId, Customer customer);
 
     /**
+     * Attaches existing, currently-unassigned customers to an organization — the "tie invoices to
+     * the org at creation" step of Organization CRUD (org setup). Invoices are not touched
+     * directly: an invoice belongs to a customer via {@code Invoice.customerId}, not to an
+     * organization, so they become visible under the organization implicitly once their customer
+     * does.
+     *
+     * <p>Deliberately scoped to customers with no organization yet — an id belonging to a customer
+     * already assigned elsewhere is silently skipped rather than reassigned, since moving a
+     * customer that already belongs to another organization is a more sensitive action than
+     * attaching new business to a brand-new org, and is left to a dedicated flow rather than being
+     * a side effect of creating an unrelated organization.
+     *
+     * @param customerIds    the customers to attach; unknown ids and ids already assigned to any
+     *                       organization are silently skipped
+     * @param organizationId the organization to attach them to
+     * @return how many customers were actually reassigned
+     */
+    int assignCustomersToOrganization(Collection<Long> customerIds, Long organizationId);
+
+    /**
      * Returns a paginated page of all customers.
      *
      * @param page zero-based page index

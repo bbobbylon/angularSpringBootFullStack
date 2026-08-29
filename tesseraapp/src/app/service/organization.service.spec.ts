@@ -69,6 +69,80 @@ describe('OrganizationService', () => {
 
       expect(error?.message).toBe("An organization named 'Acme' already exists.");
     });
+
+    it('includes the org-setup fields when options are supplied', () => {
+      service
+        .createOrganization$('Acme Partners', {
+          tenantUuid: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+          mfaAllowedMethods: ['TOTP', 'PASSKEY'],
+          featureFlags: ['beta'],
+          customerIds: [11, 12],
+          sendConfirmationEmail: true,
+        })
+        .subscribe();
+
+      const request = httpMock.expectOne(orgUrl);
+      expect(request.request.body).toEqual({
+        name: 'Acme Partners',
+        tenantUuid: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        mfaAllowedMethods: ['TOTP', 'PASSKEY'],
+        featureFlags: ['beta'],
+        customerIds: [11, 12],
+        sendConfirmationEmail: true,
+      });
+      request.flush({ data: { organization: { id: 1, name: 'Acme Partners' } } });
+    });
+  });
+
+  describe('setTenantUuid$', () => {
+    it('patches the tenant-uuid-scoped URL', () => {
+      let result: unknown;
+      service.setTenantUuid$(1, '3fa85f64-5717-4562-b3fc-2c963f66afa6').subscribe((response) => (result = response.data?.organization));
+
+      const request = httpMock.expectOne(`${orgUrl}/1/tenant-uuid`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({ tenantUuid: '3fa85f64-5717-4562-b3fc-2c963f66afa6' });
+      request.flush({ data: { organization: { id: 1, tenantUuid: '3fa85f64-5717-4562-b3fc-2c963f66afa6' } } });
+
+      expect(result).toEqual({ id: 1, tenantUuid: '3fa85f64-5717-4562-b3fc-2c963f66afa6' });
+    });
+  });
+
+  describe('updateOrganizationSettings$', () => {
+    it('patches the settings-scoped URL with the full replacement policy and flags', () => {
+      service.updateOrganizationSettings$(1, ['SMS'], ['beta']).subscribe();
+
+      const request = httpMock.expectOne(`${orgUrl}/1/settings`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({ mfaAllowedMethods: ['SMS'], featureFlags: ['beta'] });
+      request.flush({ data: { organization: { id: 1 } } });
+    });
+  });
+
+  describe('orgCustomers$', () => {
+    it('fetches the organization-scoped customer list', () => {
+      let result: unknown;
+      service.orgCustomers$(9).subscribe((response) => (result = response.data?.customers));
+
+      const request = httpMock.expectOne(`${orgUrl}/9/customers`);
+      expect(request.request.method).toBe('GET');
+      request.flush({ data: { customers: [{ id: 11, customerName: 'Jane Co' }] } });
+
+      expect(result).toEqual([{ id: 11, customerName: 'Jane Co' }]);
+    });
+  });
+
+  describe('orgInvoices$', () => {
+    it('fetches the organization-scoped invoice list', () => {
+      let result: unknown;
+      service.orgInvoices$(9).subscribe((response) => (result = response.data?.invoices));
+
+      const request = httpMock.expectOne(`${orgUrl}/9/invoices`);
+      expect(request.request.method).toBe('GET');
+      request.flush({ data: { invoices: [{ id: 21, invoiceNumber: 'A3F9KQ2B' }] } });
+
+      expect(result).toEqual([{ id: 21, invoiceNumber: 'A3F9KQ2B' }]);
+    });
   });
 
   describe('renameOrganization$', () => {
@@ -94,15 +168,20 @@ describe('OrganizationService', () => {
   });
 
   describe('members$', () => {
-    it('fetches the active members of one organization', () => {
-      let result: unknown;
-      service.members$(9).subscribe((response) => (result = response.data?.members));
+    it('fetches the active members of one organization, alongside their org roles', () => {
+      let members: unknown;
+      let orgRoles: unknown;
+      service.members$(9).subscribe((response) => {
+        members = response.data?.members;
+        orgRoles = response.data?.orgRoles;
+      });
 
       const request = httpMock.expectOne(`${orgUrl}/9/members`);
       expect(request.request.method).toBe('GET');
-      request.flush({ data: { members: [{ id: 42, email: 'member@example.com' }] } });
+      request.flush({ data: { members: [{ id: 42, email: 'member@example.com' }], orgRoles: { 42: 'ORG_ADMIN' } } });
 
-      expect(result).toEqual([{ id: 42, email: 'member@example.com' }]);
+      expect(members).toEqual([{ id: 42, email: 'member@example.com' }]);
+      expect(orgRoles).toEqual({ 42: 'ORG_ADMIN' });
     });
   });
 
@@ -114,6 +193,37 @@ describe('OrganizationService', () => {
       expect(request.request.method).toBe('POST');
       expect(request.request.body).toEqual({});
       request.flush({ message: 'Member added successfully.' });
+    });
+
+    it('includes the orgRole query param when a capacity is supplied', () => {
+      service.addMember$(9, 42, 'ORG_VIEWER').subscribe();
+
+      const request = httpMock.expectOne(`${orgUrl}/9/members/42?orgRole=ORG_VIEWER`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({});
+      request.flush({ message: 'Member added successfully.' });
+    });
+  });
+
+  describe('setMemberOrgRole$', () => {
+    it('patches the member-scoped role URL with the orgRole query param', () => {
+      service.setMemberOrgRole$(9, 42, 'ORG_ADMIN').subscribe();
+
+      const request = httpMock.expectOne(`${orgUrl}/9/members/42/role?orgRole=ORG_ADMIN`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({});
+      request.flush({ message: 'Member role updated successfully.' });
+    });
+
+    it('surfaces the server-provided reason on refusal (e.g. the last-admin guard)', () => {
+      let error: Error | undefined;
+      service.setMemberOrgRole$(9, 42, 'ORG_MEMBER').subscribe({ error: (err: Error) => (error = err) });
+
+      httpMock
+        .expectOne(`${orgUrl}/9/members/42/role?orgRole=ORG_MEMBER`)
+        .flush({ reason: 'An organization must keep at least one active administrator.' }, { status: 400, statusText: 'Bad Request' });
+
+      expect(error?.message).toBe('An organization must keep at least one active administrator.');
     });
   });
 

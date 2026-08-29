@@ -36,7 +36,8 @@
     "pageXofY": "Página {{page}} de {{total}}",
     "nTotal": "{{count}} en total",
     "acrossNPages": "en {{count}} páginas",
-    "viewAll": "Ver todo"
+    "viewAll": "Ver todo",
+    "add": "Añadir"
   },
   "nav": {
     "customers": "Clientes",
@@ -520,6 +521,8 @@
     "searchPlaceholder": "Buscar por nombre o correo electrónico…",
     "addToOrganization": "Agregar",
     "noOrganizations": "No se encontraron organizaciones.",
+    "globalRole": "Rol global",
+    "orgRole": "Rol en la organización",
     "kpi": {
       "total": "Total de organizaciones",
       "active": "Organizaciones activas",
@@ -529,7 +532,9 @@
       "members": "Miembros",
       "profile": "Perfil",
       "activity": "Actividad",
-      "invites": "Invitaciones"
+      "invites": "Invitaciones",
+      "settings": "Configuración",
+      "customers": "Clientes"
     },
     "profile": {
       "description": "Descripción",
@@ -561,6 +566,35 @@
       "goHome": "Ir al panel",
       "invalidTitle": "Este enlace de invitación no es válido o ha expirado",
       "invalidSubtitle": "Pida a un administrador de la organización un nuevo enlace de invitación."
+    },
+    "createAdvanced": "Configuración avanzada (opcional)",
+    "setup": {
+      "tenantUuid": "UUID de inquilino externo",
+      "tenantUuidHint": "Opcional; también se puede establecer más tarde. No se puede cambiar una vez establecido.",
+      "featureFlags": "Indicadores de funciones",
+      "featureFlagsHint": "Etiquetas separadas por comas.",
+      "mfaAllowedMethods": "Métodos MFA permitidos",
+      "mfaAllHint": "Deje todas las casillas sin marcar para permitir todos los métodos (sin restricción configurada).",
+      "customerIds": "Vincular clientes existentes",
+      "customerSearchPlaceholder": "Buscar clientes por nombre…",
+      "sendConfirmationEmail": "Enviarme una confirmación cuando se cree esta organización"
+    },
+    "mfaMethods": {
+      "TOTP": "Aplicación de autenticación (TOTP)",
+      "PASSKEY": "Clave de acceso",
+      "SMS": "SMS",
+      "PHONE_CALL": "Llamada telefónica"
+    },
+    "settings": {
+      "setTenantUuid": "Establecer UUID de inquilino",
+      "tenantUuidImmutable": "Se establece una sola vez; no se puede cambiar después.",
+      "save": "Guardar configuración"
+    },
+    "customers": {
+      "error": "No se pudieron cargar los clientes. Inténtelo de nuevo.",
+      "empty": "Todavía no hay clientes vinculados a esta organización.",
+      "invoicesTitle": "Facturas",
+      "invoicesEmpty": "Todavía no hay facturas."
     }
   },
   "charts": {

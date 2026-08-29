@@ -1,6 +1,8 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
+import com.bob.angularspringbootfullstack.enumeration.OrgMfaMethod;
 import com.bob.angularspringbootfullstack.exception.ApiException;
+import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.TotpService;
 import com.bob.angularspringbootfullstack.utils.TotpUtils;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +62,7 @@ public class TotpServiceImpl implements TotpService {
     private static final int CHALLENGE_EXPIRY_MINUTES = 5;
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final OrganizationService organizationService;
 
     /**
      * Starts (or restarts) enrollment per the contract: refuses if TOTP is already
@@ -100,6 +103,9 @@ public class TotpServiceImpl implements TotpService {
         }
         if (!TotpUtils.verifyCode(credential.secret(), code)) {
             throw new ApiException("That code didn't match. Check your authenticator app and try again.");
+        }
+        if (!organizationService.isMfaMethodAllowed(userId, OrgMfaMethod.TOTP)) {
+            throw new ApiException("Your organization does not allow authenticator-app MFA. Contact your admin for allowed options.");
         }
         jdbcTemplate.update(CONFIRM_TOTP_CREDENTIAL_QUERY, Map.of("userId", userId));
         jdbcTemplate.update(UPDATE_USER_USING_TOTP_QUERY, Map.of("usingTotp", true, "userId", userId));

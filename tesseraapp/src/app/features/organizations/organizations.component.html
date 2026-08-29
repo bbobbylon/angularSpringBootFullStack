@@ -3,9 +3,9 @@
   2026-08-22 revamp).
 
   Catalog-wide KPI row, then a responsive card grid (one .sc-panel per organization) with its own
-  mini stat row. Expanding a card shows a tabbed body — Members / Profile / Activity / Invites —
-  in place of the old single inline member row. See the component's Javadoc for the authorization
-  split between the two tiers.
+  mini stat row. Expanding a card shows a tabbed body — Members / Profile / Settings / Customers /
+  Activity / Invites — in place of the old single inline member row. See the component's Javadoc
+  for the authorization split between the two tiers.
 -->
 <app-navbar></app-navbar>
 <main class="sc-page" *transloco="let t">
@@ -85,6 +85,94 @@
                     {{ t('organizations.createOrganization') }}
                   </button>
                 </div>
+
+                <div class="col-12">
+                  <details class="mt-2">
+                    <summary class="text-muted small" style="cursor: pointer;">{{ t('organizations.createAdvanced') }}</summary>
+                    <div class="row g-2 mt-1">
+                      <div class="col-md-6">
+                        <label class="form-label" for="newOrgDescription">{{ t('organizations.profile.description') }}</label>
+                        <textarea [disabled]="isMutating()" class="form-control form-control-sm"
+                                  id="newOrgDescription" name="description" ngModel rows="2"></textarea>
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="newOrgContactEmail">{{ t('organizations.profile.contactEmail') }}</label>
+                        <input [disabled]="isMutating()" class="form-control form-control-sm"
+                               id="newOrgContactEmail" name="contactEmail" ngModel type="email">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label" for="newOrgWebsite">{{ t('organizations.profile.website') }}</label>
+                        <input [disabled]="isMutating()" class="form-control form-control-sm"
+                               id="newOrgWebsite" name="website" ngModel type="url">
+                      </div>
+
+                      <div class="col-md-6">
+                        <label class="form-label" for="newOrgTenantUuid">{{ t('organizations.setup.tenantUuid') }}</label>
+                        <input [disabled]="isMutating()" class="form-control form-control-sm"
+                               id="newOrgTenantUuid" name="tenantUuid" ngModel
+                               placeholder="3fa85f64-5717-4562-b3fc-2c963f66afa6" type="text">
+                        <div class="form-text">{{ t('organizations.setup.tenantUuidHint') }}</div>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label" for="newOrgFeatureFlags">{{ t('organizations.setup.featureFlags') }}</label>
+                        <input [disabled]="isMutating()" class="form-control form-control-sm"
+                               id="newOrgFeatureFlags" name="featureFlags" ngModel placeholder="beta, early-access" type="text">
+                        <div class="form-text">{{ t('organizations.setup.featureFlagsHint') }}</div>
+                      </div>
+
+                      <div class="col-12">
+                        <span class="form-label">{{ t('organizations.setup.mfaAllowedMethods') }}</span>
+                        <div class="d-flex flex-wrap gap-3">
+                          @for (method of MFA_METHODS; track method) {
+                            <div class="form-check">
+                              <input class="form-check-input" [id]="'newOrgMfa-' + method" type="checkbox"
+                                     [checked]="createMfaMethods().has(method)" (change)="toggleCreateMfaMethod(method)">
+                              <label class="form-check-label" [for]="'newOrgMfa-' + method">{{ t('organizations.mfaMethods.' + method) }}</label>
+                            </div>
+                          }
+                        </div>
+                        <div class="form-text">{{ t('organizations.setup.mfaAllHint') }}</div>
+                      </div>
+
+                      <div class="col-12">
+                        <label class="form-label" for="newOrgCustomerSearch">{{ t('organizations.setup.customerIds') }}</label>
+                        <input (input)="onCreateCustomerSearchInput($any($event.target).value)" [disabled]="isMutating()"
+                               class="form-control form-control-sm" id="newOrgCustomerSearch"
+                               [placeholder]="t('organizations.setup.customerSearchPlaceholder')" type="text">
+                        @if (createCustomerCandidates().length > 0) {
+                          <ul class="list-group mt-1">
+                            @for (candidate of createCustomerCandidates(); track candidate.id) {
+                              <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                                <span>{{ candidate.customerName }} <span class="text-muted small">({{ candidate.email }})</span></span>
+                                <button (click)="addCreateCustomer(candidate)" class="btn btn-sm btn-outline-primary" type="button">
+                                  {{ t('common.add') }}
+                                </button>
+                              </li>
+                            }
+                          </ul>
+                        }
+                        @if (createSelectedCustomers().length > 0) {
+                          <div class="d-flex flex-wrap gap-2 mt-2">
+                            @for (customer of createSelectedCustomers(); track customer.id) {
+                              <span class="badge bg-secondary d-inline-flex align-items-center gap-1">
+                                {{ customer.customerName }}
+                                <button (click)="removeCreateCustomer(customer)" aria-label="Remove"
+                                        class="btn-close btn-close-white" style="font-size: 0.6rem;" type="button"></button>
+                              </span>
+                            }
+                          </div>
+                        }
+                      </div>
+
+                      <div class="col-12">
+                        <div class="form-check">
+                          <input class="form-check-input" id="newOrgSendEmail" name="sendConfirmationEmail" ngModel type="checkbox">
+                          <label class="form-check-label" for="newOrgSendEmail">{{ t('organizations.setup.sendConfirmationEmail') }}</label>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                </div>
               </form>
             </div>
           </div>
@@ -156,7 +244,17 @@
                             {{ t('organizations.tabs.profile') }}
                           </button>
                         </li>
+                        <li class="nav-item">
+                          <button class="nav-link" [class.active]="activeTab() === 'settings'" (click)="selectTab('settings')" type="button">
+                            {{ t('organizations.tabs.settings') }}
+                          </button>
+                        </li>
                       }
+                      <li class="nav-item">
+                        <button class="nav-link" [class.active]="activeTab() === 'customers'" (click)="selectTab('customers')" type="button">
+                          {{ t('organizations.tabs.customers') }}
+                        </button>
+                      </li>
                       <li class="nav-item">
                         <button class="nav-link" [class.active]="activeTab() === 'activity'" (click)="selectTab('activity')" type="button">
                           {{ t('organizations.tabs.activity') }}
@@ -188,9 +286,17 @@
                                 <span>{{ member.firstName }} {{ member.lastName }} <span class="text-muted">({{ member.email }})</span></span>
                                 <div class="d-flex align-items-center gap-2">
                                   <select (change)="assignRole(member, $any($event.target).value)" [disabled]="isMutating()"
+                                          [title]="t('organizations.globalRole')"
                                           class="form-select form-select-sm" style="width: auto;">
                                     @for (role of ASSIGNABLE_ROLES; track role) {
                                       <option [selected]="member.roleName === role" [value]="role">{{ role }}</option>
+                                    }
+                                  </select>
+                                  <select (change)="assignOrgRole(member, $any($event.target).value)" [disabled]="isMutating()"
+                                          [title]="t('organizations.orgRole')"
+                                          class="form-select form-select-sm" style="width: auto;">
+                                    @for (orgRole of ASSIGNABLE_ORG_ROLES; track orgRole) {
+                                      <option [selected]="orgRoleFor(member) === orgRole" [value]="orgRole">{{ orgRole }}</option>
                                     }
                                   </select>
                                   <button (click)="removeMember(member)" [disabled]="isMutating()"
@@ -205,9 +311,18 @@
                           </ul>
 
                           <label class="form-label" for="memberSearch-{{ org.id }}">{{ t('organizations.addMember') }}</label>
-                          <input (input)="onMemberSearchInput($any($event.target).value)"
-                                 [disabled]="isMutating()" class="form-control form-control-sm mb-2"
-                                 id="memberSearch-{{ org.id }}" [placeholder]="t('organizations.searchPlaceholder')" type="text">
+                          <div class="d-flex gap-2 mb-2">
+                            <input (input)="onMemberSearchInput($any($event.target).value)"
+                                   [disabled]="isMutating()" class="form-control form-control-sm"
+                                   id="memberSearch-{{ org.id }}" [placeholder]="t('organizations.searchPlaceholder')" type="text">
+                            <select (change)="addMemberOrgRole.set($any($event.target).value)" [disabled]="isMutating()"
+                                    [title]="t('organizations.orgRole')"
+                                    class="form-select form-select-sm" style="width: auto;">
+                              @for (orgRole of ASSIGNABLE_ORG_ROLES; track orgRole) {
+                                <option [selected]="addMemberOrgRole() === orgRole" [value]="orgRole">{{ orgRole }}</option>
+                              }
+                            </select>
+                          </div>
                           @if (memberCandidates().length > 0) {
                             <ul class="list-group">
                               @for (candidate of memberCandidates(); track candidate.id) {
@@ -247,6 +362,86 @@
                           {{ t('common.save') }}
                         </button>
                       </form>
+                    }
+
+                    <!-- Settings tab — unscoped tiers only -->
+                    @if (activeTab() === 'settings' && isUnscopedTier) {
+                      <div class="mb-3">
+                        <span class="form-label">{{ t('organizations.setup.tenantUuid') }}</span>
+                        @if (org.tenantUuid) {
+                          <div class="form-control-plaintext form-control-sm"><code>{{ org.tenantUuid }}</code></div>
+                        } @else {
+                          <form #tenantUuidForm="ngForm" (ngSubmit)="saveTenantUuid(org, tenantUuidForm)" class="d-flex gap-2">
+                            <input [disabled]="isMutating()" class="form-control form-control-sm" name="tenantUuid" ngModel
+                                   [placeholder]="t('organizations.setup.tenantUuid')" required type="text">
+                            <button [disabled]="isMutating() || tenantUuidForm.invalid" class="btn btn-sm btn-primary text-nowrap" type="submit">
+                              {{ t('organizations.settings.setTenantUuid') }}
+                            </button>
+                          </form>
+                          <div class="form-text">{{ t('organizations.settings.tenantUuidImmutable') }}</div>
+                        }
+                      </div>
+
+                      <div class="mb-3">
+                        <span class="form-label">{{ t('organizations.setup.mfaAllowedMethods') }}</span>
+                        <div class="d-flex flex-wrap gap-3">
+                          @for (method of MFA_METHODS; track method) {
+                            <div class="form-check">
+                              <input class="form-check-input" [id]="'settingsMfa-' + org.id + '-' + method" type="checkbox"
+                                     [checked]="settingsMfaMethods().has(method)" (change)="toggleSettingsMfaMethod(method)">
+                              <label class="form-check-label" [for]="'settingsMfa-' + org.id + '-' + method">{{ t('organizations.mfaMethods.' + method) }}</label>
+                            </div>
+                          }
+                        </div>
+                        <div class="form-text">{{ t('organizations.setup.mfaAllHint') }}</div>
+                      </div>
+
+                      <div class="mb-3">
+                        <label class="form-label" for="settingsFeatureFlags-{{ org.id }}">{{ t('organizations.setup.featureFlags') }}</label>
+                        <input [value]="settingsFeatureFlagsText()" (input)="settingsFeatureFlagsText.set($any($event.target).value)"
+                               [disabled]="isMutating()" class="form-control form-control-sm" id="settingsFeatureFlags-{{ org.id }}" type="text">
+                        <div class="form-text">{{ t('organizations.setup.featureFlagsHint') }}</div>
+                      </div>
+
+                      <button (click)="saveSettings(org)" [disabled]="isMutating()" class="btn btn-sm btn-primary" type="button">
+                        {{ t('organizations.settings.save') }}
+                      </button>
+                    }
+
+                    <!-- Customers tab -->
+                    @if (activeTab() === 'customers') {
+                      @switch (orgCustomersState()) {
+                        @case (DataState.LOADING) {
+                          <div class="d-flex align-items-center gap-2 text-muted">
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                          </div>
+                        }
+                        @case (DataState.ERROR) {
+                          <div class="alert alert-danger mb-0">{{ t('organizations.customers.error') }}</div>
+                        }
+                        @case (DataState.LOADED) {
+                          <ul class="list-group mb-3">
+                            @for (customer of orgCustomers(); track customer.id) {
+                              <li class="list-group-item">
+                                {{ customer.customerName }} <span class="text-muted small">({{ customer.email }})</span>
+                              </li>
+                            } @empty {
+                              <li class="list-group-item text-muted">{{ t('organizations.customers.empty') }}</li>
+                            }
+                          </ul>
+                          <h3 class="h6">{{ t('organizations.customers.invoicesTitle') }}</h3>
+                          <ul class="list-group">
+                            @for (invoice of orgInvoices(); track invoice.id) {
+                              <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>{{ invoice.invoiceNumber }}</span>
+                                <span class="text-muted small">{{ invoice.status }} — {{ invoice.totalAmount | currency }}</span>
+                              </li>
+                            } @empty {
+                              <li class="list-group-item text-muted">{{ t('organizations.customers.invoicesEmpty') }}</li>
+                            }
+                          </ul>
+                        }
+                      }
                     }
 
                     <!-- Activity tab -->

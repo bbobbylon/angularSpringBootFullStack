@@ -36,7 +36,8 @@
     "pageXofY": "第 {{page}} 页，共 {{total}} 页",
     "nTotal": "共 {{count}} 条",
     "acrossNPages": "分布在 {{count}} 页",
-    "viewAll": "查看全部"
+    "viewAll": "查看全部",
+    "add": "添加"
   },
   "nav": {
     "customers": "客户",
@@ -520,6 +521,8 @@
     "searchPlaceholder": "按姓名或电子邮件搜索…",
     "addToOrganization": "添加",
     "noOrganizations": "未找到组织。",
+    "globalRole": "全局角色",
+    "orgRole": "组织角色",
     "kpi": {
       "total": "组织总数",
       "active": "已启用组织数",
@@ -529,7 +532,9 @@
       "members": "成员",
       "profile": "资料",
       "activity": "活动",
-      "invites": "邀请"
+      "invites": "邀请",
+      "settings": "设置",
+      "customers": "客户"
     },
     "profile": {
       "description": "描述",
@@ -561,6 +566,35 @@
       "goHome": "前往仪表盘",
       "invalidTitle": "该邀请链接无效或已过期",
       "invalidSubtitle": "请向该组织的管理员索取新的邀请链接。"
+    },
+    "createAdvanced": "高级设置（可选）",
+    "setup": {
+      "tenantUuid": "外部租户 UUID",
+      "tenantUuidHint": "可选；也可以稍后设置。设置后无法更改。",
+      "featureFlags": "功能标签",
+      "featureFlagsHint": "以逗号分隔的标签。",
+      "mfaAllowedMethods": "允许的多因素认证方式",
+      "mfaAllHint": "全部不勾选表示允许所有方式（未配置限制）。",
+      "customerIds": "关联现有客户",
+      "customerSearchPlaceholder": "按名称搜索客户…",
+      "sendConfirmationEmail": "创建此组织后向我发送确认邮件"
+    },
+    "mfaMethods": {
+      "TOTP": "身份验证器应用（TOTP）",
+      "PASSKEY": "通行密钥",
+      "SMS": "短信",
+      "PHONE_CALL": "电话呼叫"
+    },
+    "settings": {
+      "setTenantUuid": "设置租户 UUID",
+      "tenantUuidImmutable": "只能设置一次——设置后无法更改。",
+      "save": "保存设置"
+    },
+    "customers": {
+      "error": "无法加载客户，请重试。",
+      "empty": "该组织尚未关联任何客户。",
+      "invoicesTitle": "发票",
+      "invoicesEmpty": "暂无发票。"
     }
   },
   "charts": {

@@ -1,5 +1,7 @@
 import { UserInterface } from './user.interface';
 import { StatsInterface } from './stats.interface';
+import { CustomerInterface } from './customer.interface';
+import { InvoiceInterface } from './invoice.interface';
 
 /**
  * Organization catalog row — mirrors the backend's {@code Organization} model
@@ -13,6 +15,12 @@ import { StatsInterface } from './stats.interface';
  * {@code description}/{@code contactEmail}/{@code website} are the profile fields added by the
  * dashboard revamp (2026-08-22) — all optional, editable only by an unscoped tier via
  * {@code OrganizationService.updateOrganizationProfile$}.
+ *
+ * {@code tenantUuid}/{@code mfaAllowedMethods}/{@code featureFlags} are the org-setup fields
+ * (2026-08-28) — mirrors the backend's {@code Organization} model additions. {@code tenantUuid}
+ * is settable exactly once ({@code OrganizationService.setTenantUuid$}); {@code mfaAllowedMethods}
+ * empty means "no policy configured" (every method allowed), not "none allowed"; both are edited
+ * together via {@code OrganizationService.updateOrganizationSettings$}.
  */
 export interface OrganizationInterface {
   id?: number;
@@ -22,6 +30,9 @@ export interface OrganizationInterface {
   description?: string;
   contactEmail?: string;
   website?: string;
+  tenantUuid?: string;
+  mfaAllowedMethods?: string[];
+  featureFlags?: string[];
 }
 
 /**
@@ -32,20 +43,29 @@ export interface OrganizationInterface {
  * response except add/remove-member. {@code organizations} is the caller's refreshed in-scope
  * catalog, returned by the list endpoint and by every catalog mutation. {@code members} is
  * populated only by the members-list endpoint — the roster an admin picks a member to remove
- * from, or checks before adding one. {@code stats}/{@code events}/{@code totalEvents}/
- * {@code invite}/{@code invites} are populated only by their respective dashboard-revamp
- * endpoints (2026-08-22) — the same one-envelope-many-optional-keys shape {@code members}
- * already established for this interface.
+ * from, or checks before adding one. {@code orgRoles} rides alongside {@code members}, keyed by
+ * user id, since a member's per-organization capacity ({@code userorganizations.org_role}) is
+ * not part of {@code UserInterface} — it is only meaningful in the context of the one
+ * organization being viewed (per-organization roles, 2026-08-26/2026-08-27, FUTURE-ENHANCEMENTS.md
+ * §3.2). {@code stats}/{@code events}/{@code totalEvents}/{@code invite}/{@code invites} are
+ * populated only by their respective dashboard-revamp endpoints (2026-08-22) — the same
+ * one-envelope-many-optional-keys shape {@code members} already established for this interface.
+ * {@code customers}/{@code invoices} are populated only by the org setup read endpoints
+ * ({@code GET /admin/organization/:id/customers}/{@code /invoices}, 2026-08-28) — an invoice is
+ * scoped to an organization only through the customer it belongs to.
  */
 export interface OrganizationCatalogInterface {
   organization?: OrganizationInterface;
   organizations?: OrganizationInterface[];
   members?: UserInterface[];
+  orgRoles?: Record<number, string>;
   stats?: OrganizationStatsInterface;
   events?: OrganizationEventInterface[];
   totalEvents?: number;
   invite?: OrganizationInviteInterface;
   invites?: OrganizationInviteInterface[];
+  customers?: CustomerInterface[];
+  invoices?: InvoiceInterface[];
 }
 
 /** The data payload of {@code GET /user/organization/invite/:code} (invite preview). */

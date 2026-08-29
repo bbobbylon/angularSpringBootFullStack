@@ -8,11 +8,14 @@ import com.bob.angularspringbootfullstack.model.OrganizationInvite;
 import com.bob.angularspringbootfullstack.model.OrganizationStats;
 import com.bob.angularspringbootfullstack.model.OrganizationSummary;
 
+import com.bob.angularspringbootfullstack.enumeration.OrgMfaMethod;
 import com.bob.angularspringbootfullstack.enumeration.OrgRole;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Business contract for organization-scoped authorization (SRS §4.6 FR-ORG-1..3).
@@ -110,14 +113,41 @@ public interface OrganizationService {
     // Role CRUD.
 
     /**
-     * Creates a new organization, always starting {@code ACTIVE}.
+     * Creates a new organization, always starting {@code ACTIVE}, in one write covering its full
+     * initial setup — profile, tenant UUID, and MFA/feature-flag settings — rather than a
+     * create-then-several-PATCHes dance. Attaching existing customers and sending a creation
+     * confirmation email are orchestrated by {@code OrganizationController} after this call
+     * returns, not performed here: they are cross-cutting concerns ({@code CustomerService},
+     * {@code EmailService}) this method has no need to depend on.
+     *
+     * @param name              the organization's display name; must be non-blank and not already taken
+     * @param description       free-form description, or {@code null}
+     * @param contactEmail      organization contact email, or {@code null}
+     * @param website           organization website, or {@code null}
+     * @param tenantUuid        the admin-supplied external tenant identifier, or {@code null};
+     *                          must be a valid UUID string and not already in use if supplied
+     * @param mfaAllowedMethods the MFA methods this organization's members may enroll in, or
+     *                          {@code null}/empty for "no policy configured" (every method allowed)
+     * @param featureFlags      free-form feature-flag labels, or {@code null}/empty
+     * @return the created organization with its generated id populated
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if the name is blank or
+     *         already taken, or {@code tenantUuid} is malformed or already in use
+     */
+    Organization createOrganization(String name, String description, String contactEmail, String website,
+                                     String tenantUuid, Set<OrgMfaMethod> mfaAllowedMethods, List<String> featureFlags);
+
+    /**
+     * Creates a new organization with just a name — the common case, and the shape every
+     * pre-org-setup caller used.
      *
      * @param name the organization's display name; must be non-blank and not already taken
      * @return the created organization with its generated id populated
      * @throws com.bob.angularspringbootfullstack.exception.ApiException if the name is blank or
      *         already taken
      */
-    Organization createOrganization(String name);
+    default Organization createOrganization(String name) {
+        return createOrganization(name, null, null, null, null, null, null);
+    }
 
     /**
      * Returns every organization the caller may see: the full catalog for an unscoped tier, or
@@ -386,6 +416,19 @@ public interface OrganizationService {
     boolean hasOtherActiveOrgAdmin(Long organizationId, Long excludedUserId);
 
     /**
+     * Every active member's capacity within one organization — the Members tab's per-row role
+     * selector needs this alongside {@link #listActiveMembers}, since a {@code UserDTO} carries
+     * only the member's <em>global</em> role. Kept as its own lookup rather than folded into
+     * {@code UserDTO} itself: {@code org_role} is meaningful only in the context of one
+     * organization, and a user can hold a different capacity in each one they belong to.
+     *
+     * @param organizationId the organization whose members' capacities to resolve
+     * @return user id → org role, for every active membership with a recognized stored role;
+     *         possibly empty, never {@code null}
+     */
+    Map<Long, OrgRole> orgRolesForOrganization(Long organizationId);
+
+    /**
      * The per-organization KPI row for the dashboard-style Organizations page: member count plus
      * this organization's customer/invoice/revenue rollups, delegating to
      * {@link com.bob.angularspringbootfullstack.service.CustomerService}'s existing
@@ -395,4 +438,54 @@ public interface OrganizationService {
      * @return the organization's stat tiles
      */
     OrganizationStats getOrganizationStats(Long organizationId);
+
+    // ── Org setup: tenant UUID, MFA policy, feature flags (2026-08-28) ─────────────────────
+
+    /**
+     * Sets an organization's external tenant UUID — exactly once. Refuses the write outright if
+     * the organization already has one set; there is no "change" operation, matching the
+     * "admin-settable, settable once" requirement.
+     *
+     * @param id         the organization to set the tenant UUID on
+     * @param tenantUuid the UUID to set; must be a valid UUID string
+     * @return the updated organization, freshly re-read from the database
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no organization has
+     *         that id, the organization already has a tenant UUID, the value is not a valid UUID,
+     *         or it is already in use by another organization
+     */
+    Organization setTenantUuid(Long id, String tenantUuid);
+
+    /**
+     * Updates an organization's enforcement-relevant settings. Both fields are independently
+     * nullable, mirroring {@link #updateOrganizationProfile}: {@code null} leaves that setting
+     * unchanged, an empty collection clears it.
+     *
+     * @param id                the organization to update
+     * @param mfaAllowedMethods the new MFA policy, {@code null} to leave unchanged, or empty to
+     *                          clear it back to "no policy configured"
+     * @param featureFlags      the new feature-flag labels, {@code null} to leave unchanged, or
+     *                          empty to clear them
+     * @return the updated organization, freshly re-read from the database
+     * @throws com.bob.angularspringbootfullstack.exception.ApiException if no organization has
+     *         that id
+     */
+    Organization updateOrganizationSettings(Long id, Set<OrgMfaMethod> mfaAllowedMethods, List<String> featureFlags);
+
+    /**
+     * Whether {@code userId} may enroll in {@code method}, resolved across every organization they
+     * actively belong to.
+     *
+     * <p><b>Most-restrictive-wins:</b> the method is allowed unless at least one of the user's
+     * active organizations has <em>configured</em> a policy that excludes it. An organization with
+     * no configured policy imposes no restriction — it is not read as "allows nothing" — and a user
+     * with no active organization membership at all is unrestricted. This mirrors this codebase's
+     * general fail-closed posture ({@link #isWithinOrganizationScope},
+     * {@link #isActiveMemberOfOrganization}) while not retroactively restricting every organization
+     * that has never touched the setting.
+     *
+     * @param userId the user attempting to enroll
+     * @param method the method they are attempting to enroll in
+     * @return true when no active organization's configured policy excludes this method
+     */
+    boolean isMfaMethodAllowed(Long userId, OrgMfaMethod method);
 }
