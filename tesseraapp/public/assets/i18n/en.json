@@ -398,6 +398,7 @@
     "title": "Batch import",
     "hintCustomers": "Upload a CSV or Excel file of customers.",
     "hintInvoices": "Upload a CSV or Excel file of invoices.",
+    "downloadTemplate": "Download template",
     "chooseFile": "Choose file",
     "noFileChosen": "No file chosen",
     "upload": "Upload",

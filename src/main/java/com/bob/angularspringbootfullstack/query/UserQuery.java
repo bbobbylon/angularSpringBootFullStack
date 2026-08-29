@@ -122,6 +122,14 @@ public class UserQuery {
      */
     public static final String UPDATE_USER_PASSWORD_BY_ID_QUERY = "UPDATE users SET password = :password, password_changed_at = NOW() WHERE id = :userId";
     /**
+     * Stamps roles_changed_at NOW() to invalidate any token issued before this moment, mirroring
+     * {@link #UPDATE_USER_PASSWORD_BY_ID_QUERY}. Run by {@code RoleRepoImpl#updateUserRole}
+     * alongside {@link com.bob.angularspringbootfullstack.query.RoleQuery#UPDATE_USER_ROLE_QUERY}
+     * on every role change, including the auto-revert-to-{@code ROLE_USER} path when a time-boxed
+     * assignment expires. Parameter: userId.
+     */
+    public static final String TOUCH_USER_ROLES_CHANGED_AT_QUERY = "UPDATE users SET roles_changed_at = NOW() WHERE id = :userId";
+    /**
      * Updates the account-level flags that control whether a user can log in.
      * {@code enabled = false} blocks all login attempts; {@code non_locked = false}
      * locks the account (typically after suspicious activity).

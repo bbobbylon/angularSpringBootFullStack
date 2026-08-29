@@ -315,6 +315,24 @@ PREPARE widen_image_url_stmt FROM @widen_image_url;
 EXECUTE widen_image_url_stmt;
 DEALLOCATE PREPARE widen_image_url_stmt;
 
+-- Idempotent add of users.roles_changed_at (FUTURE-ENHANCEMENTS §3.1, role-change JWT staleness).
+-- Mirrors password_changed_at exactly: RoleRepoImpl#updateUserRole stamps NOW() here on every
+-- role change (admin-initiated or the auto-revert-to-ROLE_USER path when a time-boxed assignment
+-- expires), and TokenProvider#isTokenValid rejects any access token whose issuedAt is not after
+-- this value — so a demotion (or an expired elevated assignment) takes effect on the very next
+-- request instead of waiting out the access token's 30-minute TTL. NULL for a user whose role has
+-- never changed since account creation, in which case no invalidation check is performed, same as
+-- password_changed_at's NULL case.
+SET @add_users_roles_changed_at := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE users ADD COLUMN roles_changed_at DATETIME DEFAULT NULL AFTER password_changed_at',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'roles_changed_at');
+PREPARE add_users_roles_changed_at_stmt FROM @add_users_roles_changed_at;
+EXECUTE add_users_roles_changed_at_stmt;
+DEALLOCATE PREPARE add_users_roles_changed_at_stmt;
+
 -- ── Verification flows ─────────────────────────────────────────────────────────────────
 -- `url` stores a bare UUID verification key (NOT a full URL); the app builds the clickable
 -- email link from it.
@@ -944,4 +962,35 @@ CREATE TABLE IF NOT EXISTS refreshsessions
     CONSTRAINT UQ_RefreshSessions_Jti UNIQUE (jti),
     INDEX IX_RefreshSessions_User_Id (user_id),
     INDEX IX_RefreshSessions_Family (family)
+);
+
+-- ── Federated account-link tickets (single-instance -> DB-backed, FUTURE-ENHANCEMENTS §2.4) ──
+-- Backs ProviderLinkTicketService. Was an in-memory ConcurrentHashMap; moved here so a ticket
+-- minted on one app instance can be redeemed on another behind a load balancer. Same "opaque,
+-- single-use, five-minute TTL, grants nothing on its own" shape the class javadoc describes —
+-- only the storage changed, not the semantics. ticket is the UUID itself (no separate id column,
+-- same one-column-is-the-key shape as webauthnchallenges below).
+CREATE TABLE IF NOT EXISTS providerlinktickets
+(
+    ticket     CHAR(36)     NOT NULL PRIMARY KEY,
+    user_id    BIGINT UNSIGNED NOT NULL,
+    provider   VARCHAR(50)  NOT NULL,
+    expires_at DATETIME     NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ── WebAuthn ceremony challenges (single-instance -> DB-backed, FUTURE-ENHANCEMENTS §2.4) ──
+-- Backs WebAuthnChallengeStore. Was an in-memory ConcurrentHashMap; moved here for the same
+-- cross-instance reason as providerlinktickets above. The base64url-encoded challenge bytes ARE
+-- the primary key (see WebAuthnChallengeStore's class javadoc for why: WebAuthn's own correlation
+-- mechanism is the challenge value, so there is no separate id to invent). user_id is NULL for an
+-- AUTHENTICATE challenge — the server does not know who is signing in until the assertion names a
+-- credential id — so the FK is nullable, the same shape securitysettings.updated_by already uses.
+CREATE TABLE IF NOT EXISTS webauthnchallenges
+(
+    challenge  VARCHAR(64)  NOT NULL PRIMARY KEY,
+    purpose    VARCHAR(20)  NOT NULL,
+    user_id    BIGINT UNSIGNED DEFAULT NULL,
+    expires_at DATETIME     NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
 );

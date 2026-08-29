@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { of } from 'rxjs';
 
@@ -7,8 +8,8 @@ import { UserDetailsComponent } from './user-details.component';
 import { AdminUserService } from '../../../service/admin-user.service';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
-import { TranslocoService } from '@jsverse/transloco';
-import { translocoStub } from '../../../testing/transloco-stub';
+import { TRANSLOCO_TESTING_IMPORTS } from '../../../testing/transloco-testing';
+import { installMemoryLocalStorage, restoreLocalStorage } from '../../../testing/local-storage';
 import { AdminUserDetailInterface } from '../../../interface/admin.interface';
 import { PasskeyInterface } from '../../../interface/security.interface';
 import { UserInterface } from '../../../interface/user.interface';
@@ -29,7 +30,7 @@ import { UserInterface } from '../../../interface/user.interface';
 describe('UserDetailsComponent — admin Passkeys panel', () => {
   let fixture: ComponentFixture<UserDetailsComponent>;
   let adminUserService: Record<string, ReturnType<typeof vi.fn>>;
-  let userService: { hasAnyAuthority: ReturnType<typeof vi.fn> };
+  let userService: Record<string, ReturnType<typeof vi.fn>>;
   let notifications: { onSuccess: ReturnType<typeof vi.fn>; onError: ReturnType<typeof vi.fn> };
 
   const baseUser = (overrides: Partial<UserInterface> = {}): UserInterface => ({
@@ -78,6 +79,11 @@ describe('UserDetailsComponent — admin Passkeys panel', () => {
    * @param opts.passkeys the managed user's registered passkeys
    */
   const setup = (opts: { admin: boolean; selfTargeting?: boolean; passkeys?: PasskeyInterface[] }): void => {
+    // The page mounts <app-navbar>, whose CurrentUserService/ThemeService/LanguageService read
+    // localStorage and call UserService#profile$() at construction — unrelated to the Passkeys
+    // panel, but required for the fixture to render at all.
+    installMemoryLocalStorage();
+
     const callerId = 1;
     const detail: AdminUserDetailInterface = {
       user: baseUser({ id: callerId }),
@@ -97,17 +103,23 @@ describe('UserDetailsComponent — admin Passkeys panel', () => {
       ),
       revokeAllPasskeys$: vi.fn().mockReturnValue(of({ data: { ...detail, passkeys: [] } })),
     };
-    userService = { hasAnyAuthority: vi.fn().mockReturnValue(opts.admin) };
+    userService = {
+      hasAnyAuthority: vi.fn().mockReturnValue(opts.admin),
+      profile$: vi.fn().mockReturnValue(of({ data: { user: baseUser({ id: callerId }) } })),
+      logOut: vi.fn(),
+    };
     notifications = { onSuccess: vi.fn(), onError: vi.fn() };
 
     TestBed.configureTestingModule({
-      imports: [UserDetailsComponent],
+      imports: [UserDetailsComponent, ...TRANSLOCO_TESTING_IMPORTS],
       providers: [
+        provideRouter([]),
+        provideHttpClient(),
         { provide: AdminUserService, useValue: adminUserService },
         { provide: UserService, useValue: userService },
+        // Overrides provideRouter([])'s root ActivatedRoute — the component reads :id from this.
         { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: '42' })) } },
         { provide: NotificationsService, useValue: notifications },
-        { provide: TranslocoService, useValue: translocoStub() },
       ],
     });
 
@@ -121,6 +133,7 @@ describe('UserDetailsComponent — admin Passkeys panel', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    restoreLocalStorage();
   });
 
   it('shows a delete control per passkey and a bulk revoke-all for a staff session managing another account', () => {

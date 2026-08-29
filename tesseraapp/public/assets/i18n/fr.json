@@ -396,6 +396,7 @@
     "title": "Import par lots",
     "hintCustomers": "Importez un fichier CSV ou Excel de clients.",
     "hintInvoices": "Importez un fichier CSV ou Excel de factures.",
+    "downloadTemplate": "Télécharger le modèle",
     "chooseFile": "Choisir un fichier",
     "noFileChosen": "Aucun fichier choisi",
     "upload": "Importer",

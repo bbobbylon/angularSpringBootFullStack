@@ -10,6 +10,9 @@
           <h2 class="h6 mb-1">{{ t('batchImport.title') }}</h2>
           <p class="text-muted small mb-0">
             {{ kind() === 'customers' ? t('batchImport.hintCustomers') : t('batchImport.hintInvoices') }}
+            <button (click)="downloadTemplate()" class="btn btn-link btn-sm p-0 align-baseline batch-import__template-link" type="button">
+              <i class="bi bi-download"></i> {{ t('batchImport.downloadTemplate') }}
+            </button>
           </p>
         </div>
         <button (click)="reset()" [attr.aria-label]="t('batchImport.close')" class="btn-close" type="button"></button>

@@ -396,6 +396,7 @@
     "title": "Stapelimport",
     "hintCustomers": "Laden Sie eine CSV- oder Excel-Datei mit Kunden hoch.",
     "hintInvoices": "Laden Sie eine CSV- oder Excel-Datei mit Rechnungen hoch.",
+    "downloadTemplate": "Vorlage herunterladen",
     "chooseFile": "Datei auswählen",
     "noFileChosen": "Keine Datei ausgewählt",
     "upload": "Hochladen",

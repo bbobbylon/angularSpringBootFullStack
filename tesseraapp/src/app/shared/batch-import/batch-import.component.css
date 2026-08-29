@@ -23,3 +23,9 @@
   max-height: 16rem;
   overflow-y: auto;
 }
+
+/* Sits inline after the hint text (see the template) — margin-left separates it from that
+   sentence without the hint and link needing to be split into two elements. */
+.batch-import__template-link {
+  margin-left: var(--space-2);
+}

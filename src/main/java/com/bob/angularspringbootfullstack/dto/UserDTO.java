@@ -150,6 +150,15 @@ public class UserDTO {
      */
     private LocalDateTime passwordChangedAt;
     /**
+     * Mirrors {@link com.bob.angularspringbootfullstack.model.User#getRolesChangedAt()}.
+     * <p>
+     * Carried on the DTO for the same reason as {@link #passwordChangedAt}: so
+     * {@code TokenProvider} can compare a token's {@code issuedAt} against the last role change
+     * without reloading the full User entity. Null if the role has never changed, in which case
+     * no invalidation check is performed.
+     */
+    private LocalDateTime rolesChangedAt;
+    /**
      * Mirrors {@link com.bob.angularspringbootfullstack.model.User#getOrigin()} — copied through
      * automatically by {@code BeanUtils.copyProperties} since the property names match. Raw
      * storage value only ({@code null} or {@code "FEDERATED_<PROVIDER>"}); see {@link #userType}

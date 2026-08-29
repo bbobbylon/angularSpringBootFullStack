@@ -6,20 +6,11 @@ import { of, throwError } from 'rxjs';
 import { LoginComponent } from './login.component';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
-import { TranslocoService } from '@jsverse/transloco';
-import { translocoStub } from '../../../testing/transloco-stub';
+import { TRANSLOCO_TESTING_IMPORTS } from '../../../testing/transloco-testing';
+import { stubWebAuthn } from '../../../testing/webauthn-stub';
 import { Key } from '../../../enumeration/key.enumeration';
 import { UserInterface } from '../../../interface/user.interface';
 import { installMemoryLocalStorage, restoreLocalStorage } from '../../../testing/local-storage';
-import * as webauthnUtils from '../../../utils/webauthn.utils';
-
-// Only `startAuthentication` is swapped for a spy, for the same reason as the Security Center
-// spec: `navigator.credentials.get()` has no platform authenticator to talk to under jsdom.
-// `isWebAuthnSupported` stays real so the button's visibility gate is exercised for real.
-vi.mock('../../../utils/webauthn.utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../utils/webauthn.utils')>();
-  return { ...actual, startAuthentication: vi.fn() };
-});
 
 /**
  * Specs for {@link LoginComponent}'s passkey sign-in button — the second of the three
@@ -31,6 +22,10 @@ vi.mock('../../../utils/webauthn.utils', async (importOriginal) => {
  * the password form, MFA verification step, and federated-provider buttons this component
  * also renders are exercised nowhere in this app yet and are out of scope for closing this
  * specific gap.
+ *
+ * <p>The authentication ceremony is driven through {@link stubWebAuthn} — see that helper's doc
+ * for why the browser boundary, not the {@code webauthn.utils.ts} functions themselves, is what
+ * gets stubbed.
  */
 describe('LoginComponent — passkey sign-in', () => {
   let fixture: ComponentFixture<LoginComponent>;
@@ -64,8 +59,8 @@ describe('LoginComponent — passkey sign-in', () => {
       button.textContent?.includes('Sign in with a passkey'),
     );
 
-  const setup = (opts: { webauthnSupported: boolean }): void => {
-    vi.stubGlobal('PublicKeyCredential', opts.webauthnSupported ? function PublicKeyCredential() {} : undefined);
+  const setup = (opts: { webauthnSupported: boolean }): ReturnType<typeof stubWebAuthn> => {
+    const webauthn = stubWebAuthn(opts.webauthnSupported);
     installMemoryLocalStorage();
 
     userService = {
@@ -80,18 +75,18 @@ describe('LoginComponent — passkey sign-in', () => {
     notifications = { onError: vi.fn() };
 
     TestBed.configureTestingModule({
-      imports: [LoginComponent],
+      imports: [LoginComponent, ...TRANSLOCO_TESTING_IMPORTS],
       providers: [
         { provide: UserService, useValue: userService },
         { provide: Router, useValue: router },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
         { provide: NotificationsService, useValue: notifications },
-        { provide: TranslocoService, useValue: translocoStub() },
       ],
     });
 
     fixture = TestBed.createComponent(LoginComponent);
     fixture.detectChanges();
+    return webauthn;
   };
 
   beforeEach(() => {
@@ -118,15 +113,15 @@ describe('LoginComponent — passkey sign-in', () => {
   });
 
   it('runs a full authentication ceremony, stores the tokens, and routes home', async () => {
-    setup({ webauthnSupported: true });
-    vi.mocked(webauthnUtils.startAuthentication).mockResolvedValue({ id: 'assertion-1' });
+    const webauthn = setup({ webauthnSupported: true });
+    webauthn!.get.mockResolvedValue({ toJSON: () => ({ id: 'assertion-1' }) });
 
     passkeyButton()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flush();
     fixture.detectChanges();
 
     expect(userService.webauthnLoginOptions$).toHaveBeenCalledTimes(1);
-    expect(webauthnUtils.startAuthentication).toHaveBeenCalledWith({ rpId: 'tesseraapp.dev' });
+    expect(webauthn!.get).toHaveBeenCalledWith({ publicKey: { rpId: 'tesseraapp.dev' } });
     expect(userService.webauthnLoginVerify$).toHaveBeenCalledWith({ id: 'assertion-1' });
     expect(localStorage.getItem(Key.TOKEN)).toBe('AT');
     expect(localStorage.getItem(Key.REFRESH_TOKEN)).toBe('RT');
@@ -135,8 +130,8 @@ describe('LoginComponent — passkey sign-in', () => {
   });
 
   it('routes through the "add a passkey?" prompt for a sign-in whose account still has none', async () => {
-    setup({ webauthnSupported: true });
-    vi.mocked(webauthnUtils.startAuthentication).mockResolvedValue({ id: 'assertion-1' });
+    const webauthn = setup({ webauthnSupported: true });
+    webauthn!.get.mockResolvedValue({ toJSON: () => ({ id: 'assertion-1' }) });
     userService.webauthnLoginVerify$.mockReturnValue(
       of({ data: { access_token: 'AT', refresh_token: 'RT', user: baseUser({ usingPasskey: false }) } }),
     );
@@ -149,8 +144,8 @@ describe('LoginComponent — passkey sign-in', () => {
   });
 
   it('treats a cancelled platform prompt as a silent no-op, not an error toast', async () => {
-    setup({ webauthnSupported: true });
-    vi.mocked(webauthnUtils.startAuthentication).mockRejectedValue(new DOMException('The user cancelled.', 'NotAllowedError'));
+    const webauthn = setup({ webauthnSupported: true });
+    webauthn!.get.mockRejectedValue(new DOMException('The user cancelled.', 'NotAllowedError'));
 
     passkeyButton()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flush();

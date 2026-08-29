@@ -2,15 +2,21 @@ package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.webauthn4j.data.client.challenge.Challenge;
 import com.webauthn4j.data.client.challenge.DefaultChallenge;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+
+import static com.bob.angularspringbootfullstack.query.WebAuthnChallengeQuery.*;
 
 /**
  * Short-lived, single-use WebAuthn ceremony challenges, structurally identical to
@@ -21,28 +27,29 @@ import java.util.concurrent.ConcurrentHashMap;
  * WebAuthn's correlation mechanism <em>is</em> the challenge: the browser signs whatever random
  * bytes the server handed it in the "options" call, and the "verify" call must find the exact
  * challenge it minted to check that signature against. There is no separate ticket id to invent —
- * the base64url encoding of the random challenge bytes doubles as the map key, exactly the way
+ * the base64url encoding of the random challenge bytes doubles as the lookup key, exactly the way
  * {@code ProviderLinkTicketService}'s UUID ticket doubles as its own key.
  *
- * <h3>Why in-memory rather than a database table</h3>
- * Unlike {@code mfachallenges} (TOTP's login-challenge table), a WebAuthn challenge carries no
- * audit value once consumed — it is pure transient entropy, not evidence of "which second factor
- * was used." Modeling it the same way as the federation link ticket (rather than adding a table
- * that would only ever hold rows with a five-minute lifespan) keeps the same accepted tradeoff
- * this codebase already carries for rate-limit buckets and link tickets: the store is per-instance,
- * so a ceremony started on one node must finish on the same one. Both legs of a WebAuthn ceremony
- * happen within seconds of each other from the same browser, which is the same justification
- * {@code ProviderLinkTicketService} already documents. Behind a load balancer without sticky
- * sessions this needs to move to a shared store — the interface would not change.
+ * <h3>Storage (FUTURE-ENHANCEMENTS §2.4 — closed)</h3>
+ * Originally an in-memory {@code ConcurrentHashMap}; now backed by the {@code webauthnchallenges}
+ * table via {@link com.bob.angularspringbootfullstack.query.WebAuthnChallengeQuery}, for the same
+ * cross-instance reason as {@link ProviderLinkTicketService} — a ceremony started on one node no
+ * longer has to finish on that same node behind a load balancer without sticky sessions. Only the
+ * storage changed: the table holds the raw challenge bytes' base64url encoding as its primary key
+ * (no separate id column, matching the class's own "the challenge is the key" reasoning above),
+ * and {@link DefaultChallenge}'s {@code String} constructor — which decodes with webauthn4j's own
+ * {@code Base64UrlUtil}, the same codec {@link #encodeChallenge} uses to encode — reconstructs the
+ * {@link Challenge} object on redemption without this class hand-rolling the decode itself.
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class WebAuthnChallengeStore {
 
     /** How long a minted challenge remains redeemable — long enough for an authenticator prompt. */
     private static final Duration CHALLENGE_TTL = Duration.ofMinutes(5);
 
-    private final Map<String, PendingChallenge> challenges = new ConcurrentHashMap<>();
+    private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /** What a challenge was minted for — registering a new credential, or authenticating with one. */
     public enum Purpose {
@@ -50,17 +57,22 @@ public class WebAuthnChallengeStore {
     }
 
     /**
-     * A pending ceremony.
+     * One {@code webauthnchallenges} row, minus the challenge itself (already known to the caller
+     * that looked it up).
      *
-     * @param challenge the webauthn4j challenge object the ceremony was minted with
      * @param purpose   REGISTER or AUTHENTICATE — a challenge minted for one can never satisfy the other
      * @param userId    the authenticated caller for a REGISTER ceremony; null for AUTHENTICATE,
      *                  where the server does not know who is signing in until the assertion names
      *                  a credential id
      * @param expiresAt when the challenge stops being redeemable
      */
-    private record PendingChallenge(Challenge challenge, Purpose purpose, Long userId, Instant expiresAt) {
+    private record ChallengeRow(Purpose purpose, Long userId, LocalDateTime expiresAt) {
     }
+
+    private static final RowMapper<ChallengeRow> CHALLENGE_ROW_MAPPER = (rs, rowNum) -> new ChallengeRow(
+            Purpose.valueOf(rs.getString("purpose")),
+            rs.getObject("user_id", Long.class),
+            rs.getTimestamp("expires_at").toLocalDateTime());
 
     /**
      * Mints a fresh random challenge for a registration ceremony, bound to the already-authenticated
@@ -88,7 +100,11 @@ public class WebAuthnChallengeStore {
         purgeExpired();
         Challenge challenge = new DefaultChallenge();
         String key = encodeChallenge(challenge);
-        challenges.put(key, new PendingChallenge(challenge, purpose, userId, Instant.now().plus(CHALLENGE_TTL)));
+        jdbcTemplate.update(INSERT_CHALLENGE_QUERY, new MapSqlParameterSource()
+                .addValue("challenge", key)
+                .addValue("purpose", purpose.name())
+                .addValue("userId", userId)
+                .addValue("expiresAt", LocalDateTime.now().plus(CHALLENGE_TTL)));
         log.debug("[WEBAUTHN] Minted {} challenge{}", purpose, userId == null ? "" : " for userId=" + userId);
         return challenge;
     }
@@ -119,13 +135,14 @@ public class WebAuthnChallengeStore {
     public Optional<RedeemedChallenge> redeem(String challengeBase64Url, Purpose purpose) {
         if (challengeBase64Url == null || challengeBase64Url.isBlank()) return Optional.empty();
 
-        PendingChallenge found = challenges.get(challengeBase64Url);
-        if (found == null) {
+        List<ChallengeRow> rows = jdbcTemplate.query(SELECT_CHALLENGE_QUERY, Map.of("challenge", challengeBase64Url), CHALLENGE_ROW_MAPPER);
+        if (rows.isEmpty()) {
             log.debug("[WEBAUTHN] Challenge not found or already used.");
             return Optional.empty();
         }
-        if (Instant.now().isAfter(found.expiresAt())) {
-            challenges.remove(challengeBase64Url, found);
+        ChallengeRow found = rows.getFirst();
+        if (LocalDateTime.now().isAfter(found.expiresAt())) {
+            jdbcTemplate.update(DELETE_CHALLENGE_QUERY, Map.of("challenge", challengeBase64Url));
             log.debug("[WEBAUTHN] Challenge expired.");
             return Optional.empty();
         }
@@ -136,13 +153,15 @@ public class WebAuthnChallengeStore {
             log.warn("[WEBAUTHN] Challenge purpose mismatch: minted for '{}', redeemed as '{}'", found.purpose(), purpose);
             return Optional.empty();
         }
-        // Atomic consume: remove(key, value) succeeds for exactly one caller, so two concurrent
-        // redemptions of the same challenge cannot both be honored (replay protection).
-        if (!challenges.remove(challengeBase64Url, found)) {
+        // Atomic consume: a DELETE keyed on the primary key affects exactly one row for exactly
+        // one caller, so two concurrent redemptions of the same challenge — even from two
+        // different app instances — cannot both be honored (replay protection).
+        int deleted = jdbcTemplate.update(DELETE_CHALLENGE_QUERY, Map.of("challenge", challengeBase64Url));
+        if (deleted == 0) {
             log.debug("[WEBAUTHN] Challenge was consumed concurrently.");
             return Optional.empty();
         }
-        return Optional.of(new RedeemedChallenge(found.challenge(), found.userId()));
+        return Optional.of(new RedeemedChallenge(new DefaultChallenge(challengeBase64Url), found.userId()));
     }
 
     /**
@@ -152,18 +171,17 @@ public class WebAuthnChallengeStore {
      * {@link #redeem}.
      *
      * @param challenge the challenge to encode
-     * @return the encoded string, also used as this store's map key
+     * @return the encoded string, also used as this store's table primary key
      */
     public static String encodeChallenge(Challenge challenge) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(challenge.getValue());
     }
 
     /**
-     * Drops expired entries so an abandoned ceremony cannot accumulate indefinitely. Called on
+     * Drops expired rows so an abandoned ceremony cannot accumulate indefinitely. Called on
      * mint rather than on a schedule — same reasoning as {@link ProviderLinkTicketService}.
      */
     private void purgeExpired() {
-        Instant now = Instant.now();
-        challenges.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
+        jdbcTemplate.update(DELETE_EXPIRED_CHALLENGES_QUERY, Map.of());
     }
 }

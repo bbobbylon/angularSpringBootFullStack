@@ -79,6 +79,20 @@ public class User {
      */
     private LocalDateTime passwordChangedAt;
     /**
+     * Timestamp of the most recent role change (admin-initiated, or the auto-revert to
+     * {@code ROLE_USER} when a time-boxed assignment expires — see
+     * {@code RoleRepoImpl#getRoleByUserId}).
+     * <p>
+     * Set to {@code NOW()} by the database on every role change, mirroring
+     * {@link #passwordChangedAt} exactly. Any JWT whose {@code issuedAt} is not after this value
+     * is rejected by
+     * {@link com.bob.angularspringbootfullstack.tokenprovider.TokenProvider#isTokenValid}, so a
+     * demotion — or an elevated time-boxed assignment quietly expiring — takes effect on the very
+     * next request instead of waiting out the access token's 30-minute TTL.
+     * Null for a user whose role has never changed since account creation.
+     */
+    private LocalDateTime rolesChangedAt;
+    /**
      * How this account was created — an immutable fact stamped once, never updated. {@code null}
      * for ordinary password registration; {@code "FEDERATED_" + provider} (e.g.
      * {@code "FEDERATED_GOOGLE"}) for an account {@code FederatedIdentityServiceImpl} created on

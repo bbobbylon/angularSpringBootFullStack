@@ -1,132 +1,179 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
 import com.webauthn4j.data.client.challenge.Challenge;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
-import java.time.Instant;
-import java.util.Map;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
+import static com.bob.angularspringbootfullstack.query.WebAuthnChallengeQuery.DELETE_CHALLENGE_QUERY;
+import static com.bob.angularspringbootfullstack.query.WebAuthnChallengeQuery.DELETE_EXPIRED_CHALLENGES_QUERY;
+import static com.bob.angularspringbootfullstack.query.WebAuthnChallengeQuery.INSERT_CHALLENGE_QUERY;
+import static com.bob.angularspringbootfullstack.query.WebAuthnChallengeQuery.SELECT_CHALLENGE_QUERY;
 import static com.bob.angularspringbootfullstack.service.serviceimpl.WebAuthnChallengeStore.Purpose.AUTHENTICATE;
 import static com.bob.angularspringbootfullstack.service.serviceimpl.WebAuthnChallengeStore.Purpose.REGISTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * Pure unit tests for {@link WebAuthnChallengeStore} — no Spring context, no database. Structurally
- * mirrors what a {@code ProviderLinkTicketServiceTest} would cover, since this class is a direct
- * structural copy of that service applied to a different pre-authentication round trip.
- *
- * <p>Three properties earn a test: a challenge is single-use (replay after redemption fails), a
- * challenge minted for one purpose can never satisfy the other (a stray REGISTER challenge cannot
- * complete a login), and expiry is enforced without needing to sleep in the test — the internal map
- * is reached via reflection to backdate an entry's expiry instead.
+ * Unit tests for the DB-backed WebAuthn ceremony-challenge store (FUTURE-ENHANCEMENTS §2.4) —
+ * structurally the same suite as {@link ProviderLinkTicketServiceTest}, applied to this class's
+ * purpose-mismatch verdict instead of a provider mismatch, plus the AUTHENTICATE ceremony's
+ * legitimately-null {@code userId}.
  */
+@ExtendWith(MockitoExtension.class)
 class WebAuthnChallengeStoreTest {
 
-    @Test
-    @DisplayName("a registration challenge redeems successfully once and carries the minting user id")
-    void registrationChallengeRedeemsWithUserId() {
-        WebAuthnChallengeStore store = new WebAuthnChallengeStore();
-        Challenge challenge = store.mintForRegistration(42L);
-        String key = WebAuthnChallengeStore.encodeChallenge(challenge);
+    private static final Long USER_ID = 7L;
 
-        Optional<WebAuthnChallengeStore.RedeemedChallenge> redeemed = store.redeem(key, REGISTER);
+    @Mock
+    private NamedParameterJdbcTemplate jdbcTemplate;
 
-        assertTrue(redeemed.isPresent());
-        assertEquals(42L, redeemed.get().userId());
-        assertEquals(challenge, redeemed.get().challenge());
+    private WebAuthnChallengeStore challengeStore;
+
+    @BeforeEach
+    void setUp() {
+        challengeStore = new WebAuthnChallengeStore(jdbcTemplate);
     }
 
-    @Test
-    @DisplayName("an authentication challenge carries no user id — the server does not know who is signing in yet")
-    void authenticationChallengeCarriesNoUserId() {
-        WebAuthnChallengeStore store = new WebAuthnChallengeStore();
-        Challenge challenge = store.mintForAuthentication();
-        String key = WebAuthnChallengeStore.encodeChallenge(challenge);
-
-        Optional<WebAuthnChallengeStore.RedeemedChallenge> redeemed = store.redeem(key, AUTHENTICATE);
-
-        assertTrue(redeemed.isPresent(), "a successful AUTHENTICATE redemption must still be Optional.present");
-        assertNull(redeemed.get().userId());
-    }
-
-    @Test
-    @DisplayName("a challenge cannot be redeemed twice (replay protection)")
-    void challengeIsSingleUse() {
-        WebAuthnChallengeStore store = new WebAuthnChallengeStore();
-        String key = WebAuthnChallengeStore.encodeChallenge(store.mintForRegistration(1L));
-
-        assertTrue(store.redeem(key, REGISTER).isPresent(), "first redemption should succeed");
-        assertFalse(store.redeem(key, REGISTER).isPresent(), "second redemption of the same challenge must fail");
-    }
-
-    @Test
-    @DisplayName("a REGISTER challenge cannot be redeemed as AUTHENTICATE, or vice versa")
-    void purposeMismatchIsRefused() {
-        WebAuthnChallengeStore store = new WebAuthnChallengeStore();
-        String registerKey = WebAuthnChallengeStore.encodeChallenge(store.mintForRegistration(1L));
-        String authKey = WebAuthnChallengeStore.encodeChallenge(store.mintForAuthentication());
-
-        assertFalse(store.redeem(registerKey, AUTHENTICATE).isPresent(),
-                "a registration challenge must not complete a login");
-        assertFalse(store.redeem(authKey, REGISTER).isPresent(),
-                "a login challenge must not complete a registration");
-
-        // And a purpose mismatch does NOT consume the challenge — it can still be redeemed correctly.
-        assertTrue(store.redeem(registerKey, REGISTER).isPresent(),
-                "a mismatched redemption attempt must not burn the challenge for its real purpose");
-    }
-
-    @Test
-    @DisplayName("an unknown challenge value is refused")
-    void unknownChallengeIsRefused() {
-        WebAuthnChallengeStore store = new WebAuthnChallengeStore();
-
-        assertFalse(store.redeem("not-a-real-challenge", REGISTER).isPresent());
-        assertFalse(store.redeem(null, REGISTER).isPresent());
-        assertFalse(store.redeem("", REGISTER).isPresent());
-    }
-
-    @Test
-    @DisplayName("an expired challenge is refused even though it was never redeemed")
+    /** Stubs the SELECT to return one row shaped by mapping the given values through the real RowMapper. */
     @SuppressWarnings("unchecked")
-    void expiredChallengeIsRefused() {
-        WebAuthnChallengeStore store = new WebAuthnChallengeStore();
-        Challenge challenge = store.mintForRegistration(1L);
-        String key = WebAuthnChallengeStore.encodeChallenge(challenge);
+    private void stubSelectReturns(WebAuthnChallengeStore.Purpose purpose, Long userId, LocalDateTime expiresAt) throws Exception {
+        ResultSet rs = Mockito.mock(ResultSet.class);
+        when(rs.getString("purpose")).thenReturn(purpose.name());
+        when(rs.getObject("user_id", Long.class)).thenReturn(userId);
+        when(rs.getTimestamp("expires_at")).thenReturn(Timestamp.valueOf(expiresAt));
 
-        // Backdate the entry's expiry via reflection rather than sleeping the test 5 minutes.
-        Map<String, Object> challenges = (Map<String, Object>) ReflectionTestUtils.getField(store, "challenges");
-        Object pending = challenges.get(key);
-        challenges.put(key, withPastExpiry(pending));
-
-        assertFalse(store.redeem(key, REGISTER).isPresent());
+        when(jdbcTemplate.query(eq(SELECT_CHALLENGE_QUERY), anyMap(), any(RowMapper.class)))
+                .thenAnswer(invocation -> {
+                    RowMapper<Object> mapper = invocation.getArgument(2);
+                    return List.of(mapper.mapRow(rs, 0));
+                });
     }
 
-    /**
-     * Rebuilds a {@code PendingChallenge} record with its expiry moved into the past, since records
-     * are immutable and the store only exposes mint/redeem. Reflection is used only to reach the
-     * private record type's constructor and accessors — a targeted exception to this suite's
-     * otherwise black-box approach, justified by how expensive it would be to actually wait out a
-     * 5-minute TTL in a test.
-     */
-    private static Object withPastExpiry(Object pendingChallenge) {
-        try {
-            Class<?> type = pendingChallenge.getClass();
-            Object challenge = type.getMethod("challenge").invoke(pendingChallenge);
-            Object purpose = type.getMethod("purpose").invoke(pendingChallenge);
-            Object userId = type.getMethod("userId").invoke(pendingChallenge);
-            var constructor = type.getDeclaredConstructor(
-                    Challenge.class, WebAuthnChallengeStore.Purpose.class, Long.class, Instant.class);
-            constructor.setAccessible(true);
-            return constructor.newInstance(challenge, purpose, userId, Instant.now().minusSeconds(60));
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
+    @SuppressWarnings("unchecked")
+    private void stubSelectReturnsNothing() {
+        when(jdbcTemplate.query(eq(SELECT_CHALLENGE_QUERY), anyMap(), any(RowMapper.class)))
+                .thenReturn(List.of());
+    }
+
+    @Test
+    @DisplayName("mintForRegistration purges expired rows, inserts a REGISTER row bound to the caller")
+    void mintForRegistrationInsertsWithUserId() {
+        Challenge challenge = challengeStore.mintForRegistration(USER_ID);
+
+        assertTrue(challenge.getValue().length > 0);
+        verify(jdbcTemplate).update(eq(DELETE_EXPIRED_CHALLENGES_QUERY), anyMap());
+        verify(jdbcTemplate).update(eq(INSERT_CHALLENGE_QUERY), any(SqlParameterSource.class));
+    }
+
+    @Test
+    @DisplayName("mintForAuthentication inserts an AUTHENTICATE row with no bound user")
+    void mintForAuthenticationInsertsWithoutUserId() {
+        challengeStore.mintForAuthentication();
+
+        verify(jdbcTemplate).update(eq(INSERT_CHALLENGE_QUERY), any(SqlParameterSource.class));
+    }
+
+    @Test
+    @DisplayName("redeeming an unknown challenge returns empty without touching the delete statement")
+    void redeemUnknownChallengeReturnsEmpty() {
+        stubSelectReturnsNothing();
+
+        Optional<WebAuthnChallengeStore.RedeemedChallenge> result = challengeStore.redeem("nope", REGISTER);
+
+        assertTrue(result.isEmpty());
+        verify(jdbcTemplate, never()).update(eq(DELETE_CHALLENGE_QUERY), anyMap());
+    }
+
+    @Test
+    @DisplayName("redeeming a blank or null challenge short-circuits before any database call")
+    void redeemBlankChallengeShortCircuits() {
+        assertTrue(challengeStore.redeem(null, REGISTER).isEmpty());
+        assertTrue(challengeStore.redeem("   ", REGISTER).isEmpty());
+        verify(jdbcTemplate, never()).query(eq(SELECT_CHALLENGE_QUERY), anyMap(), any(RowMapper.class));
+    }
+
+    @Test
+    @DisplayName("redeeming an expired challenge deletes the row (housekeeping) and returns empty")
+    void redeemExpiredChallengeDeletesAndReturnsEmpty() throws Exception {
+        stubSelectReturns(REGISTER, USER_ID, LocalDateTime.now().minusMinutes(1));
+
+        Optional<WebAuthnChallengeStore.RedeemedChallenge> result = challengeStore.redeem("some-challenge", REGISTER);
+
+        assertTrue(result.isEmpty());
+        verify(jdbcTemplate).update(eq(DELETE_CHALLENGE_QUERY), anyMap());
+    }
+
+    @Test
+    @DisplayName("a purpose mismatch is refused WITHOUT consuming the challenge")
+    void redeemPurposeMismatchDoesNotConsume() throws Exception {
+        stubSelectReturns(REGISTER, USER_ID, LocalDateTime.now().plusMinutes(4));
+
+        Optional<WebAuthnChallengeStore.RedeemedChallenge> result = challengeStore.redeem("some-challenge", AUTHENTICATE);
+
+        assertTrue(result.isEmpty());
+        verify(jdbcTemplate, never()).update(eq(DELETE_CHALLENGE_QUERY), anyMap());
+    }
+
+    @Test
+    @DisplayName("a concurrently-consumed challenge (delete affects zero rows) is reported as empty")
+    void redeemConcurrentlyConsumedChallengeReturnsEmpty() throws Exception {
+        stubSelectReturns(AUTHENTICATE, null, LocalDateTime.now().plusMinutes(4));
+        when(jdbcTemplate.update(eq(DELETE_CHALLENGE_QUERY), anyMap())).thenReturn(0);
+
+        Optional<WebAuthnChallengeStore.RedeemedChallenge> result = challengeStore.redeem("some-challenge", AUTHENTICATE);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("a valid AUTHENTICATE redemption succeeds with a null userId, not a thrown NPE")
+    void redeemAuthenticateHappyPathHasNullUserId() throws Exception {
+        stubSelectReturns(AUTHENTICATE, null, LocalDateTime.now().plusMinutes(4));
+        when(jdbcTemplate.update(eq(DELETE_CHALLENGE_QUERY), anyMap())).thenReturn(1);
+
+        Optional<WebAuthnChallengeStore.RedeemedChallenge> result = challengeStore.redeem("c2hhbGxlbmdl", AUTHENTICATE);
+
+        assertTrue(result.isPresent());
+        assertNull(result.get().userId());
+    }
+
+    @Test
+    @DisplayName("a valid REGISTER redemption returns the bound userId and a Challenge round-tripped from the stored key")
+    void redeemRegisterHappyPathReturnsBoundUserId() throws Exception {
+        stubSelectReturns(REGISTER, USER_ID, LocalDateTime.now().plusMinutes(4));
+        when(jdbcTemplate.update(eq(DELETE_CHALLENGE_QUERY), anyMap())).thenReturn(1);
+        // Only the encoding is needed here, not a real mint — going through mintForRegistration
+        // would trip purgeExpired()'s own (separately-tested, here-unstubbed) DELETE statement.
+        String key = WebAuthnChallengeStore.encodeChallenge(new com.webauthn4j.data.client.challenge.DefaultChallenge());
+
+        Optional<WebAuthnChallengeStore.RedeemedChallenge> result = challengeStore.redeem(key, REGISTER);
+
+        assertTrue(result.isPresent());
+        assertEquals(USER_ID, result.get().userId());
+        // The redeemed Challenge round-trips through the same base64url encoding it was looked up
+        // by — DefaultChallenge's String constructor decodes with webauthn4j's own Base64UrlUtil,
+        // the same codec encodeChallenge uses, so this must be lossless.
+        assertEquals(key, WebAuthnChallengeStore.encodeChallenge(result.get().challenge()));
     }
 }

@@ -4,6 +4,7 @@ import com.bob.angularspringbootfullstack.dto.BatchImportResult;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Collection;
+import java.util.List;
 
 /**
  * BatchImportService defines the service-layer contract for CSV/XLSX bulk import
@@ -54,4 +55,26 @@ public interface BatchImportService {
      * @return a row-by-row report of what was imported and what was rejected, and why
      */
     BatchImportResult importInvoices(MultipartFile file, Collection<Long> scope);
+
+    /**
+     * The customer-import column headers, in the exact order and casing a downloadable template
+     * (FUTURE-ENHANCEMENTS.md §3.3, "Downloadable batch-upload templates") should present them.
+     * <p>
+     * This is the same list {@link #importCustomers}'s row parser reads back — see {@code
+     * BatchImportServiceImpl}'s {@code key()} helper — so the file that teaches a first-time
+     * uploader the expected shape can never silently drift from the parser that reads it.
+     *
+     * @return the ordered header row for the customer batch-upload template
+     */
+    List<String> customerTemplateHeaders();
+
+    /**
+     * The invoice-import column headers, in the exact order and casing a downloadable template
+     * should present them. Mirrors {@link #customerTemplateHeaders()} — see that method's
+     * Javadoc for why this list is the parser's own source of truth, not a separately
+     * maintained copy of it.
+     *
+     * @return the ordered header row for the invoice batch-upload template
+     */
+    List<String> invoiceTemplateHeaders();
 }

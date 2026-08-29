@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 
 import static com.bob.angularspringbootfullstack.enumeration.RoleType.ROLE_USER;
 import static com.bob.angularspringbootfullstack.query.RoleQuery.*;
+import static com.bob.angularspringbootfullstack.query.UserQuery.TOUCH_USER_ROLES_CHANGED_AT_QUERY;
 import static java.util.Map.of;
 import static java.util.Objects.requireNonNull;
 
@@ -339,7 +340,15 @@ public class RoleRepoImpl implements RoleRepo<Role> {
      * Looks up the target role by name using
      * {@link com.bob.angularspringbootfullstack.query.RoleQuery#SELECT_ROLE_BY_NAME_QUERY},
      * then updates the {@code userroles} junction table entry for the user with
-     * {@link com.bob.angularspringbootfullstack.query.RoleQuery#UPDATE_USER_ROLE_QUERY}.
+     * {@link com.bob.angularspringbootfullstack.query.RoleQuery#UPDATE_USER_ROLE_QUERY}, and
+     * finally stamps {@code users.roles_changed_at = NOW()} via
+     * {@link com.bob.angularspringbootfullstack.query.UserQuery#TOUCH_USER_ROLES_CHANGED_AT_QUERY}
+     * — mirroring how a password change stamps {@code password_changed_at} — so
+     * {@code TokenProvider#isTokenValid} rejects every access token minted before this change on
+     * its very next use. This runs for EVERY caller of this method, including the auto-revert to
+     * {@code ROLE_USER} that {@code getRoleByUserId} triggers when a time-boxed assignment
+     * expires: a token still carrying the expired elevated authorities must not remain valid
+     * merely because nobody happened to call the admin endpoint.
      * <p>
      * Uses a {@link MapSqlParameterSource} rather than this class's usual {@code Map.of(...)}
      * static import: {@code expiresAt} is legitimately {@code null} for the common,
@@ -361,6 +370,7 @@ public class RoleRepoImpl implements RoleRepo<Role> {
                     .addValue("roleId", requireNonNull(role).getId())
                     .addValue("expiresAt", expiresAt);
             jdbcTemplate.update(UPDATE_USER_ROLE_QUERY, params);
+            jdbcTemplate.update(TOUCH_USER_ROLES_CHANGED_AT_QUERY, of("userId", userId));
         } catch (EmptyResultDataAccessException e) {
             throw new ApiException("Can't find role via name " + roleName);
         } catch (Exception e) {

@@ -396,6 +396,7 @@
     "title": "Importación por lotes",
     "hintCustomers": "Sube un archivo CSV o Excel de clientes.",
     "hintInvoices": "Sube un archivo CSV o Excel de facturas.",
+    "downloadTemplate": "Descargar plantilla",
     "chooseFile": "Elegir archivo",
     "noFileChosen": "Ningún archivo seleccionado",
     "upload": "Subir",

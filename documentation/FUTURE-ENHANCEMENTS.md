@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.12
-**Last Updated:** 2026-08-28
+**Version:** 3.16
+**Last Updated:** 2026-08-29
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -38,14 +38,14 @@ operability**, not features.
 | Dimension | State |
 |---|---|
 | Functional scope | ✅ Complete — auth, MFA, passkeys, federation (login **and** link/unlink), real SMS 2FA, sessions (self-service **and** granular admin revoke), RBAC, org scoping, user-type classification, anomaly detection + step-up, security dashboard, business CRUD, i18n |
-| Tests | ✅ **490 backend / 139 frontend**, all green (re-verified 2026-08-28 via actual Surefire (`./mvnw test`, 490/490) and Vitest (`ng test`, 12 files/139 tests) execution — the growth since the 2026-08-19 count of 312/90 tracks the org-role and services-catalog org-scoping work landed since; the one DB-bound class, `contextLoads`, needs a live MySQL and passed against local `db2`) |
+| Tests | ✅ **513 backend / 158 frontend**, all green (re-verified 2026-08-29 via actual Surefire (`./mvnw test`, 513/513) and Vitest (`ng test`, 15 files/158 tests) execution — backend growth since the same day's 507 is `BatchImportServiceImplTest` + `CustomerControllerBatchTemplateTest` (§3.3's downloadable batch-upload templates, 4 + 2 cases; `BatchImportServiceImpl` had zero prior coverage); growth before that from 498 was `TokenProviderTest` + `RoleRepoImplTest` (§3.1's role-change JWT staleness fix); growth before that from 490 was `ProviderLinkTicketServiceTest` + `WebAuthnChallengeStoreTest` (§2.4's JDBC-backed rewrite), net of two now-redundant tests retired from `FederatedIdentityLinkTest`; the one DB-bound class, `contextLoads`, needs a live MySQL and passed against local `db2`; frontend count is unchanged this round — `BatchImportComponent`/`CustomerService` have no spec files, an app-wide pattern for this pair, not a gap introduced here) |
 | Lint | ✅ `ng lint` clean and gating in CI |
 | Dependency audit | ✅ `npm audit --audit-level=high` exit 0; OWASP `dependency-check` wired at `failBuildOnCVSS=7` |
 | CI | ✅ Gating on lint + audit + both test suites against a MySQL service container |
 | Deployment | ✅ Live on AWS ECS Fargate; GCP Cloud Run and Azure App Service pipelines also built |
 | Docs | ✅ Consolidated to four documents (2026-08-02), now five — `POST-SUBMISSION-UPGRADES.md` was added to keep post-course work separable from the graded deliverable. Full audit against the source re-run 2026-08-19 |
 | **Performance** | 🔄 Lighthouse round 1 done; round 2 candidates in §2.1 |
-| **Multi-instance readiness** | ⬜ The largest structural gap — see §2.4 and §6.2 |
+| **Multi-instance readiness** | 🔄 Two of three heap-state stores moved to the database (§2.4); the rate limiter is the one piece left, and it is a genuine architecture decision (§6.2) — see §2.4 for why it should not simply follow the other two |
 
 ---
 
@@ -83,7 +83,7 @@ opened CSP to a third party for a cosmetic asset. Measured, production build:
 | **Preload the icon woff2** | Icons pop in slightly late; discovered only after the deferred stylesheet applies | Needs a build-time hook because `outputHashing` renames the file |
 | **Confirm `jspdf`/`html2canvas` laziness** | The 427 kB `invoice-detail` chunk is the largest in the app | Already lazy; verify it loads on the export click, not on route entry |
 
-### 2.2 🔄 Remaining frontend specs
+### 2.2 ✅ Remaining frontend specs
 
 Done (2026-08-13, `ebf4f5e`) — `cache.interceptor.spec.ts` (149 lines) covered bypass, eviction, and
 cache-hit/miss behavior for `cacheInterceptor`, which was then the last unspecced interceptor and the
@@ -95,9 +95,38 @@ user's write (§3.4, POST-SUBMISSION-UPGRADES.md #3). The replacement, `HttpCach
 covered by 8 backend specs instead. `language.interceptor.spec.ts` now holds the "every interceptor is
 specced" line, so that property still holds — it is just enforced on a smaller set.
 
-**Still open:** the frontend **passkey UI** — the Security Center enrollment card, the login button,
-and the admin revoke panel — has no dedicated spec, while both backend halves do
-([GUIDE.md §10.5](GUIDE.md#105-known-gaps)). That is the one named frontend coverage gap left.
+**Closed (2026-08-29).** The frontend **passkey UI** — the Security Center enrollment card, the login
+button, and the admin revoke panel — was the one named frontend coverage gap left (both backend halves
+already had specs — [GUIDE.md §10.5](GUIDE.md#105-known-gaps)). All three now have dedicated Vitest
+specs: `security-center.component.spec.ts` (7 tests — panel visibility, the inline add-passkey form, a
+full registration ceremony, a cancelled-prompt no-op, removal), `login.component.spec.ts` (6 tests —
+button visibility, a full authentication ceremony, routing through the post-login "add a passkey?"
+prompt, cancellation, a genuine-failure toast), and `user-details.component.spec.ts` (6 tests — the
+`UPDATE:USER` gate, the self-targeting guard, single and bulk revoke). 19 tests total, all against the
+real component code with only the true browser boundary doubled.
+
+This was also the first spec coverage in the app for a component using the `*transloco="let t"`
+structural directive or mounting `<app-navbar>` (every prior component spec either injected
+`TranslocoService` directly or rendered a component with no navbar), so two reusable test doubles were
+added to `testing/` along the way and are available for the next component spec that needs them:
+- `testing/transloco-testing.ts` — `TranslocoTestingModule.forRoot(...)` wired with empty `en`
+  translations, standing in for the plain `translocoStub()` double whenever a spec renders
+  `TranslocoDirective` (that directive reaches into `TranslocoService` internals — `config`,
+  `langChanges$`, scope resolution — that a hand-rolled double cannot cheaply reproduce; a spec that
+  tries throws deep inside the directive's `ngOnInit` instead of at a real misconfiguration).
+- `testing/webauthn-stub.ts` — stubs the WebAuthn browser boundary
+  (`PublicKeyCredential.parse*OptionsFromJSON`, `navigator.credentials.create`/`.get`) rather than the
+  `webauthn.utils.ts` functions themselves, because `vi.mock` on a relative import is rejected outright
+  by `@angular/build:unit-test` ("Please use Angular TestBed for mocking dependencies") and
+  `startRegistration`/`startAuthentication` are plain functions with nothing for TestBed to override.
+
+One non-obvious timing gotcha the ceremony specs ran into, worth recording for the next form-submission
+spec: `NgModel` defers registering its control with the parent `NgForm` to a microtask (to dodge
+"expression changed after checked"), so a form opened via `@if` in the same test still has an *empty*
+`NgForm.value` immediately after the `detectChanges()` that renders it — typing into a field before
+that microtask resolves silently vanishes. A tick (a `setTimeout(0)` flush, matching the existing
+"flushes the promise chain" helper the ceremony tests already needed) between opening the form and
+typing into it is required.
 
 ### 2.3 ✅ Exercise a real production boot
 
@@ -117,13 +146,45 @@ than Aiven, so nothing live was touched. Database dropped after. `MYSQL_SSL_MODE
 truststore, which only exists in the built Docker image, not a bare local MySQL; that half is already
 verified separately (see the `MYSQL_SSL_MODE` history in this file's changelog / RUNBOOK).
 
-### 2.4 ⬜ Move per-instance security state off the heap
+### 2.4 🔄 Move per-instance security state off the heap
 
-Three controls live in a `ConcurrentHashMap` on one JVM: the brute-force counter, the rate limiter's
-buckets, and `ProviderLinkTicketService`. Behind a load balancer without sticky sessions, an attacker
-gets N× the attempt budget simply by being routed around. Not a bug today (one instance); a real hole
-the moment a second exists — which makes it a **blocker for horizontal scaling**, not merely a
-backlog item. See §6.2.
+**Correction first:** the "brute-force counter" named in earlier revisions of this section was never
+actually heap state. `UserController.authenticate()` calls
+`eventService.countRecentFailuresByEmail(email, BRUTE_FORCE_WINDOW_MINUTES)`, which
+(`EventRepoImpl.countRecentFailuresByEmail`) is a `COUNT(*)` against the `userevents` audit table —
+already database-backed, already correct across instances, no change needed. That leaves two genuine
+`ConcurrentHashMap`s and the rate limiter's Bucket4j buckets — three items, not the three originally
+named.
+
+**Closed (2026-08-29):** `ProviderLinkTicketService` and `WebAuthnChallengeStore` were both
+in-memory `ConcurrentHashMap`s, correct only for a single instance — a ticket or challenge minted on
+node A could never be redeemed on node B without sticky sessions. Both now persist to new tables
+(`providerlinktickets`, `webauthnchallenges` — `schema.sql`) via `NamedParameterJdbcTemplate` and new
+`ProviderLinkTicketQuery`/`WebAuthnChallengeQuery` constant classes, following the same
+service-owns-the-JDBC convention `SessionServiceImpl` already established for `refreshsessions`.
+**No caller changed** — both classes kept their exact public method signatures (`mint`/`redeem`,
+`mintForRegistration`/`mintForAuthentication`/`redeem`), so `FederatedAuthController`,
+`SessionController`, and `PasskeyServiceImpl` needed zero edits. The atomic "exactly one redeemer
+wins" guarantee that `ConcurrentHashMap.remove(key, value)` gave for free in memory is now a
+single-row `DELETE`'s affected-row count — race-free per row regardless of which instance issues it.
+`ProviderLinkTicketServiceTest` (7 tests) and `WebAuthnChallengeStoreTest` (9 tests) cover the
+redemption verdicts (unknown, expired, mismatch-does-not-consume, concurrently-consumed, happy path)
+with the mocked-`NamedParameterJdbcTemplate` convention `SessionServiceImplTest` already uses. Two
+now-redundant end-to-end tests in `FederatedIdentityLinkTest` (which exercised the old real in-memory
+map directly, no mocking needed) were retired in favor of this more thorough coverage.
+
+**Deliberately NOT moved to the database: the rate limiter.** `RateLimitFilter` runs on *every* HTTP
+request at `@Order(-200)`, before Spring Security and before JWT parsing — including the 200 req/min
+global tier applied to "every other path." A relational round trip on every single request the app
+receives is a real latency/throughput regression, not a wash, and both the filter's own class Javadoc
+and `pom.xml`'s Bucket4j dependency comment already say so: the documented intended fix is
+`bucket4j-redis` or `bucket4j-hazelcast`, not a MySQL table — a shared, low-latency cache is the
+correct tool for a check that fires on every request, and this codebase has never carried a Redis/
+Hazelcast dependency or the infrastructure (docker-compose service, deployment secrets across the
+AWS/GCP/Azure pipelines) that would come with adding one. Forcing this into `schema.sql` would
+contradict a decision the codebase already made deliberately, twice, and would change production
+request-path latency on a live app without the user weighing in — genuinely the user's call, not a
+default to pick silently. Left open pending that decision; see §6.2.
 
 ### 2.5 ⬜ 🔧 Turn on cost visibility — infra-only, no code
 
@@ -183,7 +244,7 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | Enhancement | Why it is worth doing | Sketch |
 |---|---|---|
 | ✅ **`schema.sql` was missing two audit event types — the rows were silently dropped** | Done (2026-08-20). `MFA_RESET` and `RECOVERY_CODES_REGENERATED` (published by admin TOTP reset and recovery-code rotation respectively) are now in both `CK_Events_Type` and the seed `INSERT INTO events`, alongside `PASSKEY_LOGIN` which was already present in both — the original audit slightly overcounted the gap, but the two genuinely missing types are fixed | |
-| ⬜ **Distributed brute-force + rate-limit + link-ticket state** | See §2.4 — the scale-out blocker | Move counters to the database or Redis; the service interfaces do not change (`bucket4j-redis` exists for exactly this) |
+| 🔄 **Distributed rate-limit state** (link tickets + WebAuthn challenges already closed) | See §2.4 — the one remaining scale-out blocker | Needs `bucket4j-redis`/`bucket4j-hazelcast`, a genuine new-infrastructure decision, not a database table (see §2.4 for why) |
 | ✅ **Session revocation from the security dashboard** | Done (2026-08-08) — `GET /admin/user/{id}` now returns the target's live sessions (same `RefreshSession` shape as the Security Center, already `@JsonIgnore`-safe); `DELETE /admin/user/{id}/sessions/{family}` revokes one device, alongside the existing bulk `DELETE /admin/user/{id}/sessions`. Org-scoped, self-target-refused, audited against the target — same convention as every other admin action. Frontend: a Sessions panel on the user-detail page (`user-details.component`), per-row revoke + a bulk "sign out everywhere" button | |
 | ✅ **Admin-initiated MFA reset** | Done (2026-08-13, `ebf4f5e`) — `AdminUserController` carries the reset action, gated on staff authority and audited as `MFA_RESET`; `AdminUserControllerTotpResetTest` covers it | |
 | ✅ **Regenerate recovery codes** | Done (2026-08-13, `ebf4f5e`) — `POST /user/totp/recovery-codes/regenerate` (`TotpController`), reusing `issueRecoveryCodes()`'s existing delete-then-insert; no more disable-and-re-enroll round trip | |
@@ -192,7 +253,7 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | ✅ **Single CORS source of truth** | Done — verified in code 2026-08-12. `SecurityConfig#corsConfigurationSource()` is now the single bean, built from `app.cors.allowed-origin-patterns`; `AngularSpringBootFullStackApplication#corsFilter` takes that same `CorsConfigurationSource` as a constructor argument instead of building its own rival config. No hardcoded origin list remains | |
 | ✅ **Anomaly signal tuning UI** | Done (2026-08-14) — new pinned-singleton `securitysettings` row (id=1, seeded via `INSERT IGNORE` so a re-run of `schema.sql` never stomps a live admin edit) with nullable `anomaly_enabled`/`anomaly_history_limit` override columns, `null` meaning "use the env default". `SecuritySettingsService`/`Impl` (JDBC, no Repo/RepoImpl — one row, same service-owns-its-SQL shape as `OrganizationServiceImpl`) is consulted **live** inside `LoginRiskServiceImpl#assess` on every login rather than cached, so a change from the panel takes effect on the very next sign-in with no redeploy; the `@Value` fields stay as the fallback default. New `GET`/`PATCH /admin/security/anomaly-settings` on `SecurityDashboardController` (reuses the existing `UPDATE:USER`/`UPDATE:ROLE` gate — no `SecurityConfig` matcher change), `AnomalySettingsForm` (both fields nullable by design — `null` clears an override, not a validation failure), and a `CapabilityCatalog` rule so the PATCH gets its own 403 message ("change security settings") ahead of the broader `/admin/security` rule. Frontend: a settings panel added to `/security-overview` (three-way default/enabled/disabled selector + history-limit input with a "use default" clear button, dirty-state gated Save), full 6-locale i18n. New tests: `SecuritySettingsServiceImplTest`, `SecurityDashboardControllerSecurityTest`, plus two new `LoginRiskServiceImplTest` cases proving a DB override wins over the env default | |
 | ⬜ **Access tokens have no revocation path** | Raised 2026-08-21 after a Postman-captured `access_token` kept authenticating well after it was captured, which read as a bug at first — it is not. `TokenProvider` documents this precisely: the `sid` claim does not gate validation, so access tokens stay fully stateless (NFR-PERF-2). Logging in again, revoking a session from the Security Center, and even "log out everywhere else" only stop a refresh token from minting a *new* access token — an access token already issued keeps authenticating for the rest of its 30-minute TTL regardless of what the account does afterward. A token pasted into Postman behaves identically to a token still sitting in the SPA on another device, because nothing server-side distinguishes them | Two independent, partial mitigations — neither free: (1) shorten `ACCESS_TOKEN_EXPIRE_TIME` below 30 minutes, cheap but pushes more traffic onto the refresh endpoint; (2) add a real revocation check — e.g. a `token_version` column on `users`, bumped on logout/password-change/admin-revoke and compared against a claim in `CustomAuthFilter` — which reintroduces exactly the per-request DB hit NFR-PERF-2 was written to avoid, so it is a deliberate tradeoff decision, not a drop-in fix |
-| ⬜ **A role change does not take effect until the next token refresh** | Raised 2026-08-26 from the question "if I update a user's role, why doesn't the JWT in local storage change?". It cannot change — a JWT is signed and immutable, so nothing can rewrite one in place. The real issue is what the stale token still *authorizes*. `TokenProvider#createAccessToken` bakes the authority strings into the token's `authorities` claim at mint time, and `CustomAuthFilter` reads authorities **back out of the token**, not from the database — so a demoted user keeps staff authority for the remainder of their 30-minute access TTL. The frontend agrees with the backend for the same reason: `UserService#grantedAuthorities` decodes that same claim out of `localStorage`, so `adminGuard` and the navbar stay stale in lockstep. **This self-heals on the next refresh** — `SessionServiceImpl#rotate` re-reads `roleService.getRoleByUserId(userId)` when it mints, so rotation carries the new role — which makes promotions merely delayed, but leaves demotions a real, if bounded, window. **Note there is a split-brain worth knowing about:** the `UserDTO` *principal* is fresh on every request (`TokenProvider#getAuthentication` calls `getUserById`), so anything reading `user.getRoleName()` — including all of §3.2's org scoping and `RoleType.isOrganizationScoped` — is already immediate. Only the coarse `hasAuthority` gate is stale | Cheaper than it looks, and cheaper than the sibling row below claims for the general case. `isTokenValid` **already** calls `userService.getUserById(userID)` on every authenticated request to read `passwordChangedAt`, and `getAuthentication` reads the user again — so the per-request DB hit NFR-PERF-2 was written to avoid is already being paid, twice. Mirroring the existing `passwordChangedAt` mechanism with a `roles_changed_at` column, bumped by `AdminUserController#updateUserRole` and compared against the token's `iat` in that same already-happening read, would make role changes take effect immediately at ~zero additional cost. Revoking the target's sessions on role change is **not** a substitute: per the row below, the `sid` claim does not gate validation, so revocation stops the next refresh but leaves the outstanding access token working |
+| ✅ **A role change now takes effect on the very next request, not the next token refresh** | Closed 2026-08-29. Raised 2026-08-26 from the question "if I update a user's role, why doesn't the JWT in local storage change?". It cannot change — a JWT is signed and immutable — so the real issue was what a stale token still *authorized*: `TokenProvider#createAccessToken` bakes authority strings into the `authorities` claim at mint time, and `CustomAuthFilter` reads them back out of the token, not the database, so a demoted user kept staff authority for the remainder of their 30-minute access TTL | Implemented exactly the "cheaper than it looks" path this row's Sketch column proposed: a `users.roles_changed_at` column (idempotent `ALTER`, mirrors `password_changed_at` down to the column shape), stamped by `RoleRepoImpl#updateUserRole` on **every** role change — both an admin-initiated `PATCH .../role/{roleName}` and, just as importantly, the silent auto-revert-to-`ROLE_USER` that `getRoleByUserId` triggers internally when a time-boxed assignment expires (a token still carrying the expired elevated authorities must not stay valid merely because no admin explicitly demoted anyone). `TokenProvider#isTokenValid` now rejects a token unless its `iat` postdates *both* `passwordChangedAt` and `rolesChangedAt` independently — postdating the more recent of the two is not sufficient, since either can be null while the other is set. Costs nothing extra per request: `isTokenValid` already calls `userService.getUserById(userID)` for the `passwordChangedAt` check, so `rolesChangedAt` rides the same already-loaded `UserDTO`. Session revocation remains a deliberate non-substitute (the `sid` claim still doesn't gate validation — see the row above), but that gap no longer matters for role changes specifically. Tests: `TokenProviderTest` (6 cases — both-null, password-stale, roles-stale, "must postdate both, not just the newer one" in both directions, null-userId short-circuit) and `RoleRepoImplTest` (3 cases — stamps fire alongside the junction-table update, `expiresAt` passes through unchanged, an unknown role name touches neither `UPDATE` query) |
 | ⬜ **P2-3 — Machine-to-machine API access** | Lets scripts and CI authenticate without a browser. Deferred deliberately: it adds a second authentication front door, the highest-risk change on this list | **Option A — API keys:** an `X-API-Key` filter ahead of `CustomAuthFilter` resolving a **hashed** key to an `Authentication` carrying authority strings, so every existing `hasAnyAuthority`/`@PreAuthorize` rule applies unchanged. **Option B — OAuth2 client-credentials:** `POST /oauth/token`. Both converge on "a request arrives already carrying authorities". Needs `service_accounts` + hashed `api_keys` tables, new audit event types, and `PUBLIC_URLS` ↔ `PUBLIC_ROUTES` lockstep. **Large, higher risk — do last, with dedicated review** |
 | ⬜ **External identity platform (IdM/IdP) — build vs. buy** | Recurring question, previously answered from memory each time it came up. Evaluated properly 2026-08-26 and recorded below so it stops being re-litigated: the verdict is **do not migrate**, and the reasoning is written down rather than the conclusion alone | Ping/ForgeRock ruled out on licensing before any technical comparison; Keycloak is the only realistic free path if the answer ever changes. Migration means deleting ~1,500 lines of working, tested auth — see the notes below |
 | ⬜ **Federated orgs — per-organization external IdP (enterprise SSO)** | Raised 2026-08-28 as a backlog item, not a design decision. Today's federated login (`OAuth2ClientConfig`/`FederatedIdentityServiceImpl`, table above) is federation *per user* against three fixed consumer providers (Google/GitHub/Microsoft) baked into app config — there is no way for an organization to bring its own IdP (its own Okta tenant, Azure AD tenant, or Google Workspace) so its members sign in through *that* identity, distinct from what every other organization uses. This is the natural next step now that §3.2's per-organization role model exists to receive it | Sketch, not a plan: an organization would need its own IdP registration (client id/secret, or SAML metadata) — likely a new `organizationidentityproviders` table keyed by `organizationId` — and `OAuth2ClientConfig` would need to resolve the registration dynamically per tenant instead of today's fixed three. `FederatedIdentityServiceImpl#insertFederatedUser` would need to assign a new user into that IdP's owning organization automatically on first login, rather than requiring a separate manual invite. **This is SSO/login federation, not SCIM provisioning** — the SRS (§1.4) already declined provisioning/lifecycle sync deliberately (see the evaluation notes just below); this row is narrower and does not reopen that decision |
@@ -323,7 +384,7 @@ not the role catalog.
 | ✅ **List sorting & filtering** | Done — Customers/Invoices (2026-08-14, POST-SUBMISSION-UPGRADES.md #1) and the JDBC-based admin User Directory (2026-08-14, POST-SUBMISSION-UPGRADES.md #11), which needed its own allow-listed `ORDER BY` mechanism since it isn't Spring Data JPA | |
 | ✅ **Invoice total aggregation query** | Done (2026-08-12), but not the way this row originally described — see below | |
 | ✅ **P2-2 — Batch upload** | CSV/Excel import for customers and invoices — the most-requested "real business app" feature still missing | Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #8) — `BatchImportService`, deliberately not `@Transactional` at the class level so each row commits independently (true per-row partial success, no chunking needed); `MAX_BATCH_ROWS = 2000` hard cap instead of an async job. Apache Commons CSV + POI for `.xlsx`, reusing the existing bean-validation constraints via the `Validator` bean directly |
-| ⬜ **Downloadable batch-upload templates** | Batch upload (row above) has no companion "here's the exact column shape" file — a first-time uploader has to reverse-engineer the expected headers from `BatchImportService`'s Javadoc or trial-and-error against the row-level error report. A blank starter file removes that guesswork and cuts down failed-row noise on the first real attempt | One template per current batch-import consumer — customers and invoices today — plus any future one this list should stay in sync with (e.g. if services or role-catalog bulk import is ever added, §3.2's "Per-organization role definitions" or similar). Sketch: a `GET /customer/batch/template` / `GET /customer/invoice/batch/template` pair returning a header-only `.xlsx` (reuse the POI stack `report/InvoiceReport.java` already has) with the same lowercase column keys `BatchImportServiceImpl` parses, so the file that teaches the shape can never drift from the parser that reads it back; frontend adds a "Download template" link next to each `BatchImportComponent` instance |
+| ✅ **Downloadable batch-upload templates** | Done (2026-08-29). Batch upload had no companion "here's the exact column shape" file — a first-time uploader had to reverse-engineer the expected headers from `BatchImportService`'s Javadoc or trial-and-error against the row-level error report | Built almost exactly to the original sketch: `GET /customer/batch/template` / `GET /customer/invoice/batch/template` (`CustomerController`) return a header-only `.xlsx` from the new `report/BatchTemplateReport` — a generic header-list-to-workbook writer, unlike `CustomerReport`/`InvoiceReport` it hardcodes no columns of its own. The no-drift guarantee is real, not aspirational: `BatchImportServiceImpl.CUSTOMER_TEMPLATE_HEADERS`/`INVOICE_TEMPLATE_HEADERS` are now the *only* place these column names are spelled out — `importCustomerRow`/`importInvoiceRow`'s `row.get(...)` calls were rewired through a new `key(header)` helper (`header.toLowerCase()`, matching how `parseCsv`/`parseXlsx` already lowercase every header they read) instead of carrying their own separately typed lowercase literals, so the template and the parser cannot silently diverge. `BatchImportService` exposes the two lists via `customerTemplateHeaders()`/`invoiceTemplateHeaders()`. Frontend: a "Download template" link next to each `BatchImportComponent`'s hint text, wired to two new `CustomerService` methods (`downloadCustomerBatchTemplate$`/`downloadInvoiceBatchTemplate$` — plain blob `GET`s, not the progress-tracked variant the full data-export reports use, since a header-only file is a few hundred bytes); full 6-locale i18n. Tests: `BatchImportServiceImplTest` (new — this class had no prior coverage at all) round-trips a CSV built from each header list through the real import pipeline end to end, plus asserts the header lists themselves; `CustomerControllerBatchTemplateTest` asserts both endpoints' `Content-Disposition`/content-type and that the generated workbook's header row matches whatever the service returns |
 | ✅ **Favorites / pinned destinations bar** | Done (2026-08-21, POST-SUBMISSION-UPGRADES.md #14) — navigation had outgrown the navbar: the Admin dropdown alone holds six destinations, so common pages were two clicks deep behind a menu that had to be opened to be read | Built on a new shared `navigable-destinations.ts` registry (extracted from the command palette, not a parallel route list) — see the design note below for the decisions this followed |
 | ⬜ **Backend-driven i18n** | Server-generated messages (validation, email bodies, capability-denied text) stay English while the UI switches language | Spring `MessageSource` + `Accept-Language`; the `CapabilityCatalog` phrases are the natural first target since they already have a message template |
 | ⬜ **Resolve `VERIFY_EMAIL_HOST`** | Reserved and unused (`UI_APP_URL` drives links today). Keep or remove deliberately — do not let it rot as ambiguous config | |
@@ -468,7 +529,9 @@ Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/
 
 ## 5. Engineering debt
 
-- ⬜ **Per-instance security state** (brute force, rate limiting, link tickets) — §2.4. The scale-out blocker.
+- 🔄 **Per-instance security state** — §2.4. Link tickets and WebAuthn challenges closed 2026-08-29
+  (moved to the database); rate limiting is the one remaining piece, and deliberately not a database
+  table (see §2.4).
 - ✅ **Production boot with `ddl-auto=validate`** — §2.3. Verified 2026-08-14 against a fresh local database.
 - ✅ **No test touches the real filter chain.** Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #9) —
   new `SecurityFilterChainIntegrationTest` (`@SpringBootTest(webEnvironment=RANDOM_PORT)` +
@@ -555,7 +618,7 @@ The app runs on one Fargate task. Running two would break these, in this order o
 
 | Blocker | What breaks on instance #2 | Fix |
 |---|---|---|
-| **Brute-force counter, rate-limit buckets, link tickets** | All three are per-JVM maps. An attacker routed across instances gets N× the budget; a link ticket minted on A cannot be redeemed on B | Move to the database or Redis (§2.4). The service interfaces do not change |
+| **Rate-limit buckets** | Per-JVM Bucket4j maps. An attacker routed across instances gets N× the request budget | `bucket4j-redis`/`bucket4j-hazelcast` (§2.4) — a new-infrastructure decision, not a database table; a DB round trip on every request is a real regression, not a neutral fix |
 | **Profile-image storage** | `IMAGE_STORAGE_TYPE=local` writes to the container filesystem, so an avatar uploaded to A 404s from B — and vanishes on redeploy | Already solved: set `IMAGE_STORAGE_TYPE=s3` and grant the task role `s3:PutObject`/`s3:GetObject`. **This is configuration, not code** |
 | **HTTP cache** | Client-side only, so a write by one user never invalidates another user's cache | `Cache-Control`/`ETag` on read endpoints (§3.4) |
 | **The `dev` seeder** | Harmless — it never runs under `prod` | — |

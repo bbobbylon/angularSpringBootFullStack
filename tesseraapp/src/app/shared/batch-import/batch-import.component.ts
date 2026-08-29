@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
 import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
+import { saveAs } from 'file-saver';
 import { CustomerService } from '../../service/customer.service';
 import { NotificationsService } from '../../service/notifications-service';
 import { BatchImportResultInterface } from '../../interface/batch-import.interface';
@@ -75,6 +76,21 @@ export class BatchImportComponent {
   protected onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.selectedFile.set(input.files?.[0] ?? null);
+  }
+
+  /**
+   * Downloads a blank, header-only XLSX shaped exactly like what {@link upload} sends
+   * (FUTURE-ENHANCEMENTS.md §3.3, "Downloadable batch-upload templates") — removes the need to
+   * reverse-engineer the expected columns from the help text or from a failed first attempt.
+   * Selects the endpoint the same way {@link upload} selects it: by {@link kind}.
+   */
+  protected downloadTemplate(): void {
+    const request$ = this.kind() === 'customers' ? this.customerService.downloadCustomerBatchTemplate$() : this.customerService.downloadInvoiceBatchTemplate$();
+    const filename = this.kind() === 'customers' ? 'customer_batch_template.xlsx' : 'invoice_batch_template.xlsx';
+    request$.subscribe({
+      next: (blob) => saveAs(blob, filename),
+      error: (error: string) => this.notification.onError(error),
+    });
   }
 
   /**

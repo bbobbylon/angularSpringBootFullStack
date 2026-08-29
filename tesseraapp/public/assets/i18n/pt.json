@@ -396,6 +396,7 @@
     "title": "Importação em lote",
     "hintCustomers": "Envie um arquivo CSV ou Excel de clientes.",
     "hintInvoices": "Envie um arquivo CSV ou Excel de faturas.",
+    "downloadTemplate": "Baixar modelo",
     "chooseFile": "Escolher arquivo",
     "noFileChosen": "Nenhum arquivo escolhido",
     "upload": "Enviar",

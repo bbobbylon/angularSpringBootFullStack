@@ -1,23 +1,17 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { of } from 'rxjs';
 
 import { SecurityCenterComponent } from './security-center.component';
 import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
-import { TranslocoService } from '@jsverse/transloco';
-import { translocoStub } from '../../../testing/transloco-stub';
+import { TRANSLOCO_TESTING_IMPORTS } from '../../../testing/transloco-testing';
+import { stubWebAuthn } from '../../../testing/webauthn-stub';
+import { installMemoryLocalStorage, restoreLocalStorage } from '../../../testing/local-storage';
 import { PasskeyInterface } from '../../../interface/security.interface';
 import { UserInterface } from '../../../interface/user.interface';
-import * as webauthnUtils from '../../../utils/webauthn.utils';
-
-// Only `startRegistration` is swapped for a spy — `isWebAuthnSupported` stays real so these
-// specs prove the panel reacts to `window.PublicKeyCredential` the same way production does,
-// and a real ceremony can never run under jsdom anyway (no platform authenticator exists).
-vi.mock('../../../utils/webauthn.utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../utils/webauthn.utils')>();
-  return { ...actual, startRegistration: vi.fn() };
-});
 
 /**
  * Specs for {@link SecurityCenterComponent}'s Passkeys card — the one named frontend
@@ -25,16 +19,14 @@ vi.mock('../../../utils/webauthn.utils', async (importOriginal) => {
  * and {@code PasskeyController}, already have specs; this component never did).
  *
  * <p>Scope is deliberately narrow: this file drives only the passkey enrollment card
- * (visibility gating on {@link webauthnUtils.isWebAuthnSupported}, the inline "name this
- * passkey" form, the registration ceremony, and removal) rather than the whole page — the
- * MFA/sessions/providers/events panels this component also owns are unrelated to the gap
- * being closed and would only dilute what a failure here points at.
+ * (visibility gating on WebAuthn support, the inline "name this passkey" form, the registration
+ * ceremony, and removal) rather than the whole page — the MFA/sessions/providers/events panels
+ * this component also owns are unrelated to the gap being closed and would only dilute what a
+ * failure here points at.
  *
- * <p>The registration ceremony itself (`navigator.credentials.create()`) cannot run under
- * jsdom — there is no platform authenticator — so {@link webauthnUtils.startRegistration} is
- * mocked at the module level above rather than driven for real; everything around it
- * (options fetch, completion POST, list/notification updates, the cancelled-prompt path) runs
- * through the real component code.
+ * <p>The registration ceremony is driven through {@link stubWebAuthn} — see that helper's doc for
+ * why a real {@code navigator.credentials.create()} cannot run under jsdom and why the browser
+ * boundary, not the {@code webauthn.utils.ts} functions themselves, is what gets stubbed.
  */
 describe('SecurityCenterComponent — Passkeys card', () => {
   let fixture: ComponentFixture<SecurityCenterComponent>;
@@ -72,7 +64,7 @@ describe('SecurityCenterComponent — Passkeys card', () => {
 
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /** The Passkeys `.card`, or undefined when the panel is hidden (`webauthnSupported === false`). */
+  /** The Passkeys `.card`, or undefined when the panel is hidden (no WebAuthn support). */
   const passkeyCard = (): HTMLElement | undefined =>
     Array.from(host().querySelectorAll<HTMLElement>('.card')).find((card) => card.textContent?.includes('Passkeys'));
 
@@ -81,11 +73,17 @@ describe('SecurityCenterComponent — Passkeys card', () => {
   const findButton = (root: HTMLElement, text: string): HTMLButtonElement | undefined =>
     Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent?.trim().includes(text));
 
-  const setup = (opts: { webauthnSupported: boolean; passkeys?: PasskeyInterface[] }): void => {
-    vi.stubGlobal('PublicKeyCredential', opts.webauthnSupported ? function PublicKeyCredential() {} : undefined);
+  const setup = (opts: { webauthnSupported: boolean; passkeys?: PasskeyInterface[] }): ReturnType<typeof stubWebAuthn> => {
+    const webauthn = stubWebAuthn(opts.webauthnSupported);
+    // The page mounts <app-navbar>, whose CurrentUserService/ThemeService/LanguageService read
+    // localStorage and call UserService#profile$()/#hasAnyAuthority() at construction — unrelated
+    // to the Passkeys card, but required for the fixture to render at all.
+    installMemoryLocalStorage();
 
     userService = {
       profile$: vi.fn().mockReturnValue(of({ data: { user: baseUser() } })),
+      hasAnyAuthority: vi.fn().mockReturnValue(false),
+      logOut: vi.fn(),
       totpStatus$: vi.fn().mockReturnValue(of({ data: { recoveryCodesRemaining: 0 } })),
       sessions$: vi.fn().mockReturnValue(of({ data: { sessions: [], currentFamily: '' } })),
       webauthnList$: vi.fn().mockReturnValue(of({ data: { passkeys: opts.passkeys ?? [] } })),
@@ -99,16 +97,18 @@ describe('SecurityCenterComponent — Passkeys card', () => {
     notifications = { onSuccess: vi.fn(), onError: vi.fn() };
 
     TestBed.configureTestingModule({
-      imports: [SecurityCenterComponent],
+      imports: [SecurityCenterComponent, ...TRANSLOCO_TESTING_IMPORTS],
       providers: [
+        provideRouter([]),
+        provideHttpClient(),
         { provide: UserService, useValue: userService },
         { provide: NotificationsService, useValue: notifications },
-        { provide: TranslocoService, useValue: translocoStub() },
       ],
     });
 
     fixture = TestBed.createComponent(SecurityCenterComponent);
     fixture.detectChanges();
+    return webauthn;
   };
 
   beforeEach(() => {
@@ -118,6 +118,7 @@ describe('SecurityCenterComponent — Passkeys card', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    restoreLocalStorage();
   });
 
   it('hides the panel entirely on a browser with no WebAuthn support', () => {
@@ -144,7 +145,7 @@ describe('SecurityCenterComponent — Passkeys card', () => {
   });
 
   it('opens and cancels the inline add-passkey form without starting a ceremony', () => {
-    setup({ webauthnSupported: true, passkeys: [] });
+    const webauthn = setup({ webauthnSupported: true, passkeys: [] });
 
     findButton(passkeyCard()!, 'Add a passkey')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
@@ -155,14 +156,20 @@ describe('SecurityCenterComponent — Passkeys card', () => {
 
     expect(passkeyCard()!.querySelector('#passkeyDeviceName')).toBeNull();
     expect(userService.webauthnEnrollOptions$).not.toHaveBeenCalled();
+    expect(webauthn!.create).not.toHaveBeenCalled();
   });
 
   it('runs a full registration ceremony on submit and appends the new passkey to the list', async () => {
-    setup({ webauthnSupported: true, passkeys: [] });
-    vi.mocked(webauthnUtils.startRegistration).mockResolvedValue({ id: 'cred-1' });
+    const webauthn = setup({ webauthnSupported: true, passkeys: [] });
+    webauthn!.create.mockResolvedValue({ toJSON: () => ({ id: 'cred-1' }) });
 
     findButton(passkeyCard()!, 'Add a passkey')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
+    // NgModel defers registering its control with the parent NgForm to a microtask (to dodge
+    // "expression changed after checked"), so the freshly-opened form's control tree is still
+    // empty immediately after this detectChanges() — a tick has to pass before typing into it
+    // means anything to `nameForm.value`.
+    await flush();
     const nameInput = passkeyCard()!.querySelector<HTMLInputElement>('#passkeyDeviceName')!;
     nameInput.value = 'MacBook Touch ID';
     nameInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -173,7 +180,7 @@ describe('SecurityCenterComponent — Passkeys card', () => {
     fixture.detectChanges();
 
     expect(userService.webauthnEnrollOptions$).toHaveBeenCalledTimes(1);
-    expect(webauthnUtils.startRegistration).toHaveBeenCalledWith({ rp: { id: 'tesseraapp.dev' } });
+    expect(webauthn!.create).toHaveBeenCalledWith({ publicKey: { rp: { id: 'tesseraapp.dev' } } });
     expect(userService.webauthnEnrollComplete$).toHaveBeenCalledWith('MacBook Touch ID', { id: 'cred-1' });
     // The form closes and the new passkey (from the mocked enroll-complete response) is on screen.
     expect(passkeyCard()!.querySelector('#passkeyDeviceName')).toBeNull();
@@ -182,8 +189,8 @@ describe('SecurityCenterComponent — Passkeys card', () => {
   });
 
   it('treats a cancelled platform prompt as a quiet notice, not a hard error, and leaves the form open', async () => {
-    setup({ webauthnSupported: true, passkeys: [] });
-    vi.mocked(webauthnUtils.startRegistration).mockRejectedValue(new DOMException('The user cancelled.', 'NotAllowedError'));
+    const webauthn = setup({ webauthnSupported: true, passkeys: [] });
+    webauthn!.create.mockRejectedValue(new DOMException('The user cancelled.', 'NotAllowedError'));
 
     findButton(passkeyCard()!, 'Add a passkey')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
@@ -198,10 +205,10 @@ describe('SecurityCenterComponent — Passkeys card', () => {
     expect(passkeyCard()!.querySelector('#passkeyDeviceName')).not.toBeNull();
   });
 
-  it('removes a passkey and refreshes the list from the response', async () => {
+  it('removes a passkey and refreshes the list from the response', () => {
     setup({ webauthnSupported: true, passkeys: [PASSKEY] });
 
-    findButton(passkeyRows()[0], 'common.delete')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    findButton(passkeyRows()[0], 'delete')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
 
     expect(userService.webauthnDelete$).toHaveBeenCalledWith(7);
