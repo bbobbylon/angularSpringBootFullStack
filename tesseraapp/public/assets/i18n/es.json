@@ -196,7 +196,11 @@
       "offered": "en oferta",
       "retired": "retirados",
       "catalogValue": "Valor del catálogo"
-    }
+    },
+    "organization": "Organización",
+    "orgShared": "Compartido (todas las organizaciones)",
+    "orgScopedHint": "Los servicios que agregue aquí son privados para la organización que elija — solo sus miembros los verán.",
+    "orgNoneHint": "Actualmente no pertenece activamente a ninguna organización, por lo que aún no puede agregar un servicio."
   },
   "invoice": {
     "exportPdf": "Exportar como PDF",

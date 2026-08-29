@@ -196,7 +196,11 @@
       "offered": "offered",
       "retired": "retired",
       "catalogValue": "Catalog value"
-    }
+    },
+    "organization": "Organization",
+    "orgShared": "Shared (all organizations)",
+    "orgScopedHint": "Services you add here are private to the organization you choose — only its members will see them.",
+    "orgNoneHint": "You do not actively belong to any organization, so you cannot add a service yet."
   },
   "invoice": {
     "exportPdf": "Export as PDF",

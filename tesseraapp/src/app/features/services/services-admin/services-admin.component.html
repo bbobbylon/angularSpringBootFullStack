@@ -81,10 +81,28 @@
                   <label class="form-label" for="create-price">{{ t('servicesAdmin.basePrice') }}</label>
                   <input class="form-control" id="create-price" min="0" name="price" ngModel step="0.01" type="number" />
                 </div>
+                <div class="col-md-4">
+                  <label class="form-label" for="create-org">{{ t('servicesAdmin.organization') }}</label>
+                  <select class="form-select" id="create-org" name="organizationId" [required]="!isUnscopedTier"
+                          [ngModel]="createOrganizationId()" (ngModelChange)="createOrganizationId.set($event)">
+                    @if (isUnscopedTier) {
+                      <option [ngValue]="undefined">{{ t('servicesAdmin.orgShared') }}</option>
+                    }
+                    @for (org of myOrganizations(); track org.id) {
+                      <option [ngValue]="org.id">{{ org.name }}</option>
+                    }
+                  </select>
+                  @if (!isUnscopedTier) {
+                    <p class="small text-muted mb-0 mt-1">{{ t('servicesAdmin.orgScopedHint') }}</p>
+                  }
+                  @if (!isUnscopedTier && myOrganizations().length === 0) {
+                    <p class="small text-danger mb-0 mt-1">{{ t('servicesAdmin.orgNoneHint') }}</p>
+                  }
+                </div>
               </div>
               <div class="sc-svcadmin__form-actions">
                 <button (click)="cancel()" class="btn btn-outline-secondary btn-sm" type="button">{{ t('common.cancel') }}</button>
-                <button [disabled]="createForm.invalid || isSaving()" class="btn btn-primary btn-sm" type="submit">
+                <button [disabled]="createForm.invalid || isSaving() || !canSubmitCreate" class="btn btn-primary btn-sm" type="submit">
                   @if (isSaving()) { <span>{{ t('common.saving') }}</span> } @else { <span>{{ t('servicesAdmin.addService') }}</span> }
                 </button>
               </div>
@@ -108,6 +126,7 @@
                   <th scope="col">{{ t('nav.services') }}</th>
                   <th scope="col">{{ t('servicesAdmin.description') }}</th>
                   <th class="text-end" scope="col">{{ t('servicesAdmin.basePrice') }}</th>
+                  <th scope="col">{{ t('servicesAdmin.organization') }}</th>
                   <th scope="col">{{ t('common.status') }}</th>
                   <th class="text-end" scope="col">{{ t('common.actions') }}</th>
                 </tr>
@@ -122,7 +141,7 @@
                            the surrounding catalog stays visible — pricing decisions are usually made
                            by comparison with the neighboring entries. -->
                       <tr class="sc-svcadmin__editing">
-                        <td colspan="5">
+                        <td colspan="6">
                           <form #editForm="ngForm" (ngSubmit)="save(service.id, editForm)">
                             <div class="row g-2 align-items-end">
                               <div class="col-md-3">
@@ -162,6 +181,13 @@
                           {{ service.description || t('servicesAdmin.noDescription') }}
                         </td>
                         <td class="text-end">${{ service.price | number: '1.2-2' }}</td>
+                        <td>
+                          @if (ownerLabel(service); as owner) {
+                            <span class="sc-svcadmin__chip sc-svcadmin__chip--org" title="Private to this organization">{{ owner }}</span>
+                          } @else {
+                            <span class="sc-svcadmin__chip sc-svcadmin__chip--live" title="Visible to every organization">{{ t('servicesAdmin.orgShared') }}</span>
+                          }
+                        </td>
                         <td>
                           @if (service.active === false) {
                             <span class="sc-svcadmin__chip sc-svcadmin__chip--retired">{{ t('servicesAdmin.retired') }}</span>

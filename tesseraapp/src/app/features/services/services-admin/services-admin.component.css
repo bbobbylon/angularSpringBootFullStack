@@ -98,6 +98,11 @@
   border-color: rgba(52, 211, 153, 0.32);
   color: var(--ok);
 }
+.sc-svcadmin__chip--org {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.32);
+  color: var(--accent);
+}
 .sc-svcadmin__chip--retired {
   background: var(--surface-3);
   border-color: var(--hairline-strong);

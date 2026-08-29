@@ -195,6 +195,24 @@ public interface CustomerService {
     Iterable<Services> getServices();
 
     /**
+     * Returns the active service catalog entries visible to an organization-scoped caller raising
+     * an invoice: every globally shared entry, plus any entry privately owned by one of the given
+     * organizations.
+     *
+     * <p>Deliberately tolerant of an empty {@code organizationIds}, unlike every sibling
+     * {@code *ForOrganizations} method on this interface. Those methods treat an empty scope as "the
+     * caller belongs to no organization, so show nothing" — correct for customer/invoice data, which
+     * has no meaning outside organization ownership. A service catalog is different: the globally
+     * shared entries exist independently of any organization membership, so a caller in zero active
+     * organizations must still see them in order to raise an invoice at all. An empty collection here
+     * simply skips the organization-owned half of the union rather than short-circuiting to nothing.
+     *
+     * @param organizationIds the caller's active organization ids; may be empty, must not be null
+     * @return the active catalog entries the caller may put on a new invoice
+     */
+    Iterable<Services> getServicesForOrganizations(Collection<Long> organizationIds);
+
+    /**
      * Returns aggregated dashboard statistics: total customers, total invoices,
      * and the sum of all invoice {@code totalAmount} values.
      *

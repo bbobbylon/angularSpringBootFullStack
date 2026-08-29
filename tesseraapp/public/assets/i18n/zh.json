@@ -196,7 +196,11 @@
       "offered": "提供中",
       "retired": "已下架",
       "catalogValue": "目录总值"
-    }
+    },
+    "organization": "组织",
+    "orgShared": "共享（所有组织）",
+    "orgScopedHint": "在此处添加的服务仅对所选组织私有——只有该组织的成员才能看到。",
+    "orgNoneHint": "您目前不是任何组织的活跃成员，因此还不能添加服务。"
   },
   "invoice": {
     "exportPdf": "导出为 PDF",

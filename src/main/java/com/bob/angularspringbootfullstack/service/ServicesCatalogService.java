@@ -2,6 +2,7 @@ package com.bob.angularspringbootfullstack.service;
 
 import com.bob.angularspringbootfullstack.model.Services;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -29,6 +30,18 @@ public interface ServicesCatalogService {
      * @return the whole catalog, newest last (insertion order)
      */
     List<Services> getAllServices();
+
+    /**
+     * Returns every catalog entry an organization-scoped admin may manage: every globally shared
+     * entry, plus every entry privately owned by one of the given organizations. Retired entries are
+     * included, same as {@link #getAllServices()} — this is the scoped counterpart of that method,
+     * not of {@code CustomerService#getServicesForOrganizations}, so it does not filter by
+     * {@code active}.
+     *
+     * @param organizationIds the caller's active organization ids; may be empty, must not be null
+     * @return the catalog entries visible to a caller scoped to these organizations
+     */
+    List<Services> getAllServicesForOrganizations(Collection<Long> organizationIds);
 
     /**
      * Retrieves one catalog entry by id.

@@ -196,7 +196,11 @@
       "offered": "im Angebot",
       "retired": "zurückgezogen",
       "catalogValue": "Katalogwert"
-    }
+    },
+    "organization": "Organisation",
+    "orgShared": "Gemeinsam (alle Organisationen)",
+    "orgScopedHint": "Hier hinzugefügte Dienste sind privat für die ausgewählte Organisation — nur deren Mitglieder sehen sie.",
+    "orgNoneHint": "Sie gehören derzeit keiner Organisation aktiv an, daher können Sie noch keinen Dienst hinzufügen."
   },
   "invoice": {
     "exportPdf": "Als PDF exportieren",

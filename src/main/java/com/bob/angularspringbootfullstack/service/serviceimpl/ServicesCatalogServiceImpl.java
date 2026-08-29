@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -34,6 +36,18 @@ public class ServicesCatalogServiceImpl implements ServicesCatalogService {
     @Override
     public List<Services> getAllServices() {
         return servicesRepo.findAll();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<Services> getAllServicesForOrganizations(Collection<Long> organizationIds) {
+        List<Services> visible = new ArrayList<>(servicesRepo.findByOrganizationIdIsNull());
+        if (!organizationIds.isEmpty()) {
+            visible.addAll(servicesRepo.findByOrganizationIdIn(organizationIds));
+        }
+        return visible;
     }
 
     /**
@@ -78,6 +92,10 @@ public class ServicesCatalogServiceImpl implements ServicesCatalogService {
         service.setPrice(edits.getPrice());
         // Retirement is intentionally not editable here — it has its own operation, so that
         // "correct this description" can never accidentally pull a live service off the menu.
+        // organizationId is likewise excluded: it is set once at creation (mirroring
+        // Organization.tenantUuid's settable-once shape) and never reassigned through an edit, so
+        // "fix this service's price" can never double as a silent transfer of a private catalog
+        // entry to a different organization, or a private entry quietly becoming global.
         return servicesRepo.save(service);
     }
 
