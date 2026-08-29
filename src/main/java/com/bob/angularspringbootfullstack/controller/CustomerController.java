@@ -9,6 +9,7 @@ import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.Invoice;
 import com.bob.angularspringbootfullstack.model.Services;
 import com.bob.angularspringbootfullstack.model.Stats;
+import com.bob.angularspringbootfullstack.report.BatchTemplateReport;
 import com.bob.angularspringbootfullstack.report.CustomerReport;
 import com.bob.angularspringbootfullstack.report.InvoicePdfReport;
 import com.bob.angularspringbootfullstack.report.InvoiceReport;
@@ -358,6 +359,29 @@ public class CustomerController {
     }
 
     /**
+     * Downloads a blank, header-only XLSX shaped exactly like what {@link #batchImportCustomers}
+     * expects to read back (FUTURE-ENHANCEMENTS.md §3.3, "Downloadable batch-upload templates").
+     *
+     * <p>Removes the guesswork a first-time uploader otherwise faces — reverse-engineering the
+     * expected columns from {@link BatchImportService#importCustomers}'s Javadoc, or from
+     * trial-and-error against the row-level error report. The header list comes from {@link
+     * BatchImportService#customerTemplateHeaders()}, the same list the row parser reads back, so
+     * this file can never drift out of sync with what an upload actually needs.
+     *
+     * @return 200 OK with an XLSX body and {@code Content-Disposition: attachment}
+     */
+    @GetMapping("/batch/template")
+    public ResponseEntity<Resource> downloadCustomerBatchTemplate() {
+        BatchTemplateReport report = new BatchTemplateReport("Customers", batchImportService.customerTemplateHeaders());
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"customer_batch_template.xlsx\"");
+        return ResponseEntity.ok()
+                .contentType(parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .headers(headers)
+                .body(report.exportReport());
+    }
+
+    /**
      * Links an existing standalone (draft) invoice to a customer.
      *
      * <p>The completion of {@code POST /invoice/create}, which raises an invoice with no owner.
@@ -480,6 +504,24 @@ public class CustomerController {
                         .status(OK)
                         .statusCode(OK.value())
                         .build());
+    }
+
+    /**
+     * Downloads a blank, header-only XLSX shaped exactly like what {@link #batchImportInvoices}
+     * expects to read back. See {@link #downloadCustomerBatchTemplate} — same mechanism, same
+     * no-drift guarantee via {@link BatchImportService#invoiceTemplateHeaders()}.
+     *
+     * @return 200 OK with an XLSX body and {@code Content-Disposition: attachment}
+     */
+    @GetMapping("/invoice/batch/template")
+    public ResponseEntity<Resource> downloadInvoiceBatchTemplate() {
+        BatchTemplateReport report = new BatchTemplateReport("Invoices", batchImportService.invoiceTemplateHeaders());
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"invoice_batch_template.xlsx\"");
+        return ResponseEntity.ok()
+                .contentType(parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .headers(headers)
+                .body(report.exportReport());
     }
 
     /**

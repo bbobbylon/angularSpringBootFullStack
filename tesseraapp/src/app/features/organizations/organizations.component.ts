@@ -10,7 +10,6 @@ import { StatsComponent } from '../../shared/stats/stats.component';
 import { UserService } from '../../service/user.service';
 import { OrganizationService } from '../../service/organization.service';
 import { AdminUserService } from '../../service/admin-user.service';
-import { CustomerService } from '../../service/customer.service';
 import { NotificationsService } from '../../service/notifications-service';
 import { DataState } from '../../enumeration/datastate.enum';
 import { UserInterface } from '../../interface/user.interface';
@@ -47,8 +46,8 @@ const EVENTS_PAGE_SIZE = 10;
  * <h3>Two authorization tiers, one page</h3>
  * The backend enforces two different rules per endpoint family — see
  * {@code OrganizationController}'s Javadoc — and this component mirrors that split rather than
- * hiding it: the create-organization form, the rename/status controls, and the Profile tab only
- * render for {@link isUnscopedTier} ({@code ROLE_ADMIN}/{@code ROLE_APPLICATION_ADMIN}), matching
+ * hiding it: the rename/status controls and the Profile tab only render for {@link isUnscopedTier}
+ * ({@code ROLE_ADMIN}/{@code ROLE_APPLICATION_ADMIN}), matching
  * {@code OrganizationController#requireUnscopedTier}. Membership management, Activity, and
  * Invites render for every organization row the page loaded, because {@code GET
  * /admin/organization} already scopes a {@code ROLE_ORGANIZATION_ADMIN} caller down to only the
@@ -87,13 +86,19 @@ const EVENTS_PAGE_SIZE = 10;
  * those two (schema.sql's 2026-08-21 grant note), so this is not an additional restriction.
  *
  * <h3>Org setup: tenant UUID, MFA policy, feature flags, attached customers (2026-08-28)</h3>
- * The create form's advanced-setup section (collapsed by default) and a new Settings tab surface
- * {@code OrganizationController}'s org-setup endpoints. Settings gets the same
- * {@link isUnscopedTier} gate as Profile, since a policy change affects every member, not just the
- * caller; the tenant-UUID sub-form only renders while unset, since the backend refuses to change
- * one that already exists. The new Customers tab is read-only and open to every loaded
- * organization row, the same rule Members/Activity/Invites already use. {@link MFA_METHODS}
- * intentionally omits {@code EMAIL_OTP} — see its own doc comment for why.
+ * The Settings tab surfaces {@code OrganizationController}'s org-setup endpoints (the
+ * create-organization form has its own, near-identical advanced-setup section — see
+ * {@code NewOrganizationComponent}). Settings gets the same {@link isUnscopedTier} gate as
+ * Profile, since a policy change affects every member, not just the caller; the tenant-UUID
+ * sub-form only renders while unset, since the backend refuses to change one that already exists.
+ * The new Customers tab is read-only and open to every loaded organization row, the same rule
+ * Members/Activity/Invites already use. {@link MFA_METHODS} intentionally omits {@code EMAIL_OTP}
+ * — see its own doc comment for why.
+ *
+ * <h3>Create screen lives elsewhere (2026-08-29)</h3>
+ * Creating a new organization is {@code NewOrganizationComponent} at {@code /organizations/new},
+ * not a form on this page — this component is the catalog only, matching the
+ * {@code /customer/new}/{@code /invoice/new} precedent the rest of the app already follows.
  */
 @Component({
   selector: 'app-organizations',
@@ -117,7 +122,8 @@ export class OrganizationsComponent implements OnInit {
    */
   readonly ASSIGNABLE_ORG_ROLES: readonly string[] = ['ORG_VIEWER', 'ORG_MEMBER', 'ORG_ADMIN'];
   /**
-   * MFA methods offered by the create form's and Settings tab's policy checkboxes — mirrors the
+   * MFA methods offered by the Settings tab's policy checkboxes (the create-organization form has
+   * its own copy of this same list — see {@code NewOrganizationComponent#MFA_METHODS}) — mirrors the
    * backend's {@code OrgMfaMethod}, deliberately narrowed to the methods actually enrollment-gated
    * ({@code PasskeyServiceImpl}/{@code TotpServiceImpl}/{@code UserServiceImpl#toggleMFA}).
    * {@code EMAIL_OTP} exists server-side but is not offered here: it is not a deliberate
@@ -169,12 +175,6 @@ export class OrganizationsComponent implements OnInit {
   protected readonly orgInvites = signal<OrganizationInviteInterface[]>([]);
   /** Load state of the Invites tab. */
   protected readonly orgInvitesState = signal<DataState>(DataState.LOADING);
-  /** The MFA methods selected in the create form's advanced-setup checkboxes. */
-  protected readonly createMfaMethods = signal<Set<string>>(new Set());
-  /** Customers chosen to attach in the create form's advanced-setup picker. */
-  protected readonly createSelectedCustomers = signal<CustomerInterface[]>([]);
-  /** Directory matches for the create form's customer-search input. */
-  protected readonly createCustomerCandidates = signal<CustomerInterface[]>([]);
   /** Customers attached to {@link expandedOrgId}'s organization, for the Customers tab. */
   protected readonly orgCustomers = signal<CustomerInterface[]>([]);
   /** Invoices belonging to {@link orgCustomers}, for the Customers tab. */
@@ -225,14 +225,11 @@ export class OrganizationsComponent implements OnInit {
   private readonly userService = inject(UserService);
   private readonly organizationService = inject(OrganizationService);
   private readonly adminUserService = inject(AdminUserService);
-  private readonly customerService = inject(CustomerService);
   private readonly notification = inject(NotificationsService);
   private readonly destroyRef = inject(DestroyRef);
 
   /** Raw keystrokes from the add-member search input; debounced below before hitting the API. */
   private readonly memberSearchInput$ = new Subject<string>();
-  /** Raw keystrokes from the create form's customer-search input; debounced the same way. */
-  private readonly createCustomerSearchInput$ = new Subject<string>();
 
   /**
    * Loads the signed-in user (for the navbar and {@link isUnscopedTier}) and the organization
@@ -271,19 +268,6 @@ export class OrganizationsComponent implements OnInit {
         next: (response) => this.memberCandidates.set(response.data?.users ?? []),
         error: (error: string) => this.notification.onError(error),
       });
-
-    this.createCustomerSearchInput$
-      .pipe(
-        debounceTime(300),
-        distinctUntilChanged(),
-        filter((term) => term.length >= 2),
-        switchMap((term) => this.customerService.searchCustomers$(term, 0, 5)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: (response) => this.createCustomerCandidates.set(response.data?.page?.content ?? []),
-        error: (error: string) => this.notification.onError(error),
-      });
   }
 
   /**
@@ -314,74 +298,6 @@ export class OrganizationsComponent implements OnInit {
         });
         this.orgStats.set(next);
       });
-  }
-
-  /**
-   * Submits the "new organization" form ({@code POST /admin/organization}), including whatever
-   * the collapsed advanced-setup section carries — profile fields, tenant UUID, MFA policy
-   * checkboxes, feature-flag labels, attached customers, and the confirmation-email checkbox all
-   * ride along in one call, matching {@code OrganizationController#createOrganization}'s single-
-   * INSERT design. The advanced fields are plain form fields except {@link createMfaMethods} and
-   * {@link createSelectedCustomers}, which are held as component state rather than {@code ngModel}
-   * (checkboxes and a multi-pick list don't map cleanly onto a single form value each).
-   *
-   * @param form - the NgForm carrying {@code name} and the advanced-setup text/URL/email fields
-   */
-  protected createOrganization(form: NgForm): void {
-    if (!form.valid) return;
-    this.isMutating.set(true);
-    const featureFlags = this.splitFeatureFlags(form.value.featureFlags);
-    const customerIds = this.createSelectedCustomers().map((customer) => customer.id);
-    this.organizationService
-      .createOrganization$(form.value.name, {
-        description: form.value.description || undefined,
-        contactEmail: form.value.contactEmail || undefined,
-        website: form.value.website || undefined,
-        tenantUuid: form.value.tenantUuid || undefined,
-        mfaAllowedMethods: this.createMfaMethods().size > 0 ? Array.from(this.createMfaMethods()) : undefined,
-        featureFlags: featureFlags.length > 0 ? featureFlags : undefined,
-        customerIds: customerIds.length > 0 ? customerIds : undefined,
-        sendConfirmationEmail: !!form.value.sendConfirmationEmail,
-      })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (response) => {
-          const organizations = response.data?.organizations ?? this.organizations();
-          this.organizations.set(organizations);
-          this.isMutating.set(false);
-          this.notification.onSuccess(response.message ?? 'Organization created successfully');
-          form.resetForm();
-          this.createMfaMethods.set(new Set());
-          this.createSelectedCustomers.set([]);
-          this.createCustomerCandidates.set([]);
-          this.loadAllStats(organizations);
-        },
-        error: (error: string) => this.failMutation(error),
-      });
-  }
-
-  /** Toggles one MFA method in the create form's advanced-setup policy checkboxes. */
-  protected toggleCreateMfaMethod(method: string): void {
-    const next = new Set(this.createMfaMethods());
-    if (next.has(method)) next.delete(method);
-    else next.add(method);
-    this.createMfaMethods.set(next);
-  }
-
-  /** Pushes each keystroke from the create form's customer-search input into the debounced pipeline. */
-  protected onCreateCustomerSearchInput(term: string): void {
-    this.createCustomerSearchInput$.next(term);
-  }
-
-  /** Adds a search result to the create form's selected-customers list, if not already chosen. */
-  protected addCreateCustomer(candidate: CustomerInterface): void {
-    if (this.createSelectedCustomers().some((customer) => customer.id === candidate.id)) return;
-    this.createSelectedCustomers.set([...this.createSelectedCustomers(), candidate]);
-  }
-
-  /** Removes a customer from the create form's selected-customers list. */
-  protected removeCreateCustomer(candidate: CustomerInterface): void {
-    this.createSelectedCustomers.set(this.createSelectedCustomers().filter((customer) => customer.id !== candidate.id));
   }
 
   /**

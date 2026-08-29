@@ -161,6 +161,16 @@ export const routes: Routes = [
     data: { deniedAction: 'manage roles and permissions', deniedActionKey: 'permissions.actions.manageRoles' },
     loadComponent: () => import('./features/users/roles-matrix/roles-matrix.component').then((m) => m.RolesMatrixComponent),
   },
+  // Create-role screen, split out of /roles (2026-08-29) to match the /customer/new and
+  // /invoice/new precedent — the matrix page is a catalog, this one is a form. Same
+  // adminGuard as /roles: the narrower ROLE_APPLICATION_ADMIN check that actually gates
+  // role creation lives inside NewRoleComponent, matching the matrix page's own pattern.
+  {
+    path: 'roles/new',
+    canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'create roles', deniedActionKey: 'permissions.actions.createRoles' },
+    loadComponent: () => import('./features/users/roles-matrix/new-role/new-role.component').then((m) => m.NewRoleComponent),
+  },
   // Organization administration (FUTURE-ENHANCEMENTS.md §3.2). adminGuard mirrors /roles —
   // every tier UPDATE:ORGANIZATION was granted to (schema.sql's 2026-08-21 grant note) already
   // holds UPDATE:USER or UPDATE:ROLE, so this guard is not a narrower gate than the backend's.
@@ -169,6 +179,17 @@ export const routes: Routes = [
     canActivate: [authenticationGuard, adminGuard],
     data: { deniedAction: 'manage organizations', deniedActionKey: 'permissions.actions.manageOrganizations' },
     loadComponent: () => import('./features/organizations/organizations.component').then((m) => m.OrganizationsComponent),
+  },
+  // Create-organization screen, split out of /organizations (2026-08-29) for the same reason
+  // /roles/new was split out of /roles — the catalog page is a card grid, this one is a form.
+  // Same adminGuard as /organizations: the narrower unscoped-tier check that actually gates
+  // organization creation lives inside NewOrganizationComponent.
+  {
+    path: 'organizations/new',
+    canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'create organizations', deniedActionKey: 'permissions.actions.createOrganizations' },
+    loadComponent: () =>
+      import('./features/organizations/new-organization/new-organization.component').then((m) => m.NewOrganizationComponent),
   },
   // Invite-redeem landing page (OrganizationJoinComponent's Javadoc) — reachable by ANY
   // authenticated user, deliberately without adminGuard: the person opening a shared invite

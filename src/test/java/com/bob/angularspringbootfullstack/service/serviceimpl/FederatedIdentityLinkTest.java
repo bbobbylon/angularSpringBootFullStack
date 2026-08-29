@@ -14,7 +14,6 @@ import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import java.util.List;
-import java.util.Optional;
 
 import static com.bob.angularspringbootfullstack.query.OAuthQuery.INSERT_PROVIDER_LINK_QUERY;
 import static com.bob.angularspringbootfullstack.query.OAuthQuery.SELECT_USER_ID_BY_PROVIDER_SUBJECT_QUERY;
@@ -109,31 +108,10 @@ class FederatedIdentityLinkTest {
         verify(jdbcTemplate, never()).update(eq(INSERT_PROVIDER_LINK_QUERY), anyMap());
     }
 
-    @Test
-    @DisplayName("a link ticket is single-use and bound to the provider it was minted for")
-    void linkTicketIsSingleUseAndProviderBound() {
-        ProviderLinkTicketService tickets = new ProviderLinkTicketService();
-        String ticket = tickets.mint(ME, PROVIDER);
-
-        // Wrong provider: a ticket started for one provider must not complete a link for another,
-        // or a user who began a GitHub link could be steered into attaching a Google identity.
-        assertTrue(tickets.redeem(ticket, "github").isEmpty());
-
-        Optional<Long> redeemed = tickets.redeem(ticket, PROVIDER);
-        assertTrue(redeemed.isPresent());
-        assertTrue(redeemed.get() == ME);
-
-        // Consumed: replaying the link URL does nothing the second time.
-        assertTrue(tickets.redeem(ticket, PROVIDER).isEmpty());
-    }
-
-    @Test
-    @DisplayName("an unknown or blank ticket redeems to nothing")
-    void unknownTicketIsRejected() {
-        ProviderLinkTicketService tickets = new ProviderLinkTicketService();
-
-        assertTrue(tickets.redeem(null, PROVIDER).isEmpty());
-        assertTrue(tickets.redeem("", PROVIDER).isEmpty());
-        assertTrue(tickets.redeem("not-a-real-ticket", PROVIDER).isEmpty());
-    }
+    // The link-ticket single-use / provider-binding / unknown-ticket behavior formerly pinned down
+    // here (against a live in-memory ConcurrentHashMap, since ProviderLinkTicketService needed no
+    // collaborators to construct) moved to ProviderLinkTicketServiceTest when that store became
+    // JDBC-backed (FUTURE-ENHANCEMENTS §2.4) — it now needs a NamedParameterJdbcTemplate mock
+    // shaped around the actual query lifecycle (SELECT then a row-count-checked DELETE), which
+    // belongs with that class's own test, not bolted onto this file's account-linking suite.
 }

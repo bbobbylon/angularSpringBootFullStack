@@ -28,18 +28,16 @@ public class UserQuery {
     /**
      * Inserts an account verification record for the account-activation flow.
      * <p>
-     * NOTE: across all verification queries below, the {@code url} column stores a <b>bare UUID
-     * key</b>, not a full URL. The host-bearing link is built for the email only (see
-     * {@code UserRepoImpl#getVerificationURL}); keeping the host out of the persisted key makes
-     * verification lookups host-independent.
+     * NOTE: across all verification queries below, the {@code verification_key} column stores a
+     * <b>bare UUID key</b>, not a full URL — the column was originally named {@code url} and was
+     * renamed 2026-08-29 (guarded, idempotent rename in {@code schema.sql}, applied to the live
+     * local and Aiven databases) to match what it actually holds. The host-bearing link is built
+     * for the email only (see {@code UserRepoImpl#getVerificationURL}); keeping the host out of
+     * the persisted key makes verification lookups host-independent.
      * <p>
-     * TODO: rename the {@code url} column to {@code verification_key} to match its contents. That
-     *  requires a guarded, idempotent rename in {@code schema.sql} (the single schema source),
-     *  applied to the live local and Aiven databases — intentionally deferred as a follow-up.
-     * <p>
-     * Parameters: userId, url (the bare key)
+     * Parameters: userId, verificationKey (the bare key)
      */
-    public static final String INSERT_ACCOUNT_VERIFICATION_URL_QUERY = "INSERT INTO accountverifications (user_id, url) VALUES (:userId, :url)";
+    public static final String INSERT_ACCOUNT_VERIFICATION_URL_QUERY = "INSERT INTO accountverifications (user_id, verification_key) VALUES (:userId, :verificationKey)";
 
     /**
      * Selects all fields for a user by their email address.
@@ -86,25 +84,25 @@ public class UserQuery {
      */
     public static final String DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY = "DELETE FROM resetpasswordverifications WHERE user_id = :userId";
     /**
-     * Inserts a password reset verification URL with the expiration timestamp. Parameters: userId, url, expirationDate.
+     * Inserts a password reset verification key with the expiration timestamp. Parameters: userId, verificationKey, expirationDate.
      */
-    public static final String INSERT_PASSWORD_VERIFICATION_QUERY = "INSERT INTO resetpasswordverifications (user_id, url, expiration_date) VALUES (:userId, :url, :expirationDate)";
+    public static final String INSERT_PASSWORD_VERIFICATION_QUERY = "INSERT INTO resetpasswordverifications (user_id, verification_key, expiration_date) VALUES (:userId, :verificationKey, :expirationDate)";
     /**
-     * Returns whether a verification URL is expired. Parameter: url.
+     * Returns whether a verification key is expired. Parameter: verificationKey.
      */
-    public static final String SELECT_EXPIRATION_BY_URL = "SELECT expiration_date < NOW() AS is_expired FROM resetpasswordverifications WHERE url = :url";
+    public static final String SELECT_EXPIRATION_BY_URL = "SELECT expiration_date < NOW() AS is_expired FROM resetpasswordverifications WHERE verification_key = :verificationKey";
     /**
-     * Selects a user by password reset verification URL. Parameter: url.
+     * Selects a user by password reset verification key. Parameter: verificationKey.
      */
-    public static final String SELECT_USER_BY_PASSWORD_URL_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM resetpasswordverifications WHERE url = :url)";
+    public static final String SELECT_USER_BY_PASSWORD_URL_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM resetpasswordverifications WHERE verification_key = :verificationKey)";
     // (UPDATE_USER_PASSWORD_BY_URL_QUERY / DELETE_VERIFICATION_BY_URL_QUERY removed — both were dead code.
     //  The reset flow keys off userID: it updates via UPDATE_USER_PASSWORD_BY_ID_QUERY and deletes the
     //  row via DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY.)
 
     /**
-     * Selects a user by account verification URL. Parameter: url.
+     * Selects a user by account verification key. Parameter: verificationKey.
      */
-    public static final String SELECT_USER_BY_ACCOUNT_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM accountverifications WHERE url = :url)";
+    public static final String SELECT_USER_BY_ACCOUNT_QUERY = "SELECT * FROM users WHERE id = (SELECT user_id FROM accountverifications WHERE verification_key = :verificationKey)";
     /**
      * Enables/disables a user account. Parameters: enabled, id.
      */
@@ -123,6 +121,14 @@ public class UserQuery {
      * invalidate any tokens issued this moment ago. Parameters: password, userId.
      */
     public static final String UPDATE_USER_PASSWORD_BY_ID_QUERY = "UPDATE users SET password = :password, password_changed_at = NOW() WHERE id = :userId";
+    /**
+     * Stamps roles_changed_at NOW() to invalidate any token issued before this moment, mirroring
+     * {@link #UPDATE_USER_PASSWORD_BY_ID_QUERY}. Run by {@code RoleRepoImpl#updateUserRole}
+     * alongside {@link com.bob.angularspringbootfullstack.query.RoleQuery#UPDATE_USER_ROLE_QUERY}
+     * on every role change, including the auto-revert-to-{@code ROLE_USER} path when a time-boxed
+     * assignment expires. Parameter: userId.
+     */
+    public static final String TOUCH_USER_ROLES_CHANGED_AT_QUERY = "UPDATE users SET roles_changed_at = NOW() WHERE id = :userId";
     /**
      * Updates the account-level flags that control whether a user can log in.
      * {@code enabled = false} blocks all login attempts; {@code non_locked = false}

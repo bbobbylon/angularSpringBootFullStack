@@ -71,6 +71,9 @@ public class UserRowMapper implements RowMapper<User> {
                 .passwordChangedAt(resultSet.getTimestamp("password_changed_at") != null
                         ? resultSet.getTimestamp("password_changed_at").toLocalDateTime()
                         : null)
+                .rolesChangedAt(resultSet.getTimestamp("roles_changed_at") != null
+                        ? resultSet.getTimestamp("roles_changed_at").toLocalDateTime()
+                        : null)
                 .origin(resultSet.getString("origin"))
                 .build();
 

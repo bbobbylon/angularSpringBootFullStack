@@ -24,6 +24,13 @@
         <h1 class="sc-head__title">{{ t('organizations.title') }}</h1>
         <p class="sc-head__sub">{{ t('organizations.subtitle') }}</p>
       </div>
+      @if (isUnscopedTier) {
+        <div class="sc-head__actions">
+          <a [routerLink]="['/organizations/new']" class="btn btn-primary btn-sm sc-panel__action">
+            <i class="bi bi-building-add"></i> {{ t('organizations.newOrgLink') }}
+          </a>
+        </div>
+      }
     </header>
 
     @switch (dataState()) {
@@ -65,118 +72,6 @@
             </div>
           </div>
         </div>
-
-        @if (isUnscopedTier) {
-          <!-- Create — unscoped tiers only, mirrors OrganizationController#requireUnscopedTier -->
-          <div class="sc-panel sc-reveal mb-4">
-            <div class="p-3">
-              <h2 class="h5 mb-3"><i class="bi bi-building-add me-2"></i>{{ t('organizations.createTitle') }}</h2>
-              <form #createForm="ngForm" (ngSubmit)="createOrganization(createForm)" class="row g-2 align-items-end">
-                <div class="col-md-8">
-                  <label class="form-label" for="newOrgName">{{ t('organizations.newOrgName') }}</label>
-                  <input [disabled]="isMutating()" class="form-control" id="newOrgName" name="name"
-                         ngModel placeholder="Acme Partners" required type="text">
-                </div>
-                <div class="col-md-4">
-                  <button [disabled]="isMutating() || createForm.invalid" class="btn btn-primary w-100" type="submit">
-                    @if (isMutating()) {
-                      <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
-                    }
-                    {{ t('organizations.createOrganization') }}
-                  </button>
-                </div>
-
-                <div class="col-12">
-                  <details class="mt-2">
-                    <summary class="text-muted small" style="cursor: pointer;">{{ t('organizations.createAdvanced') }}</summary>
-                    <div class="row g-2 mt-1">
-                      <div class="col-md-6">
-                        <label class="form-label" for="newOrgDescription">{{ t('organizations.profile.description') }}</label>
-                        <textarea [disabled]="isMutating()" class="form-control form-control-sm"
-                                  id="newOrgDescription" name="description" ngModel rows="2"></textarea>
-                      </div>
-                      <div class="col-md-3">
-                        <label class="form-label" for="newOrgContactEmail">{{ t('organizations.profile.contactEmail') }}</label>
-                        <input [disabled]="isMutating()" class="form-control form-control-sm"
-                               id="newOrgContactEmail" name="contactEmail" ngModel type="email">
-                      </div>
-                      <div class="col-md-3">
-                        <label class="form-label" for="newOrgWebsite">{{ t('organizations.profile.website') }}</label>
-                        <input [disabled]="isMutating()" class="form-control form-control-sm"
-                               id="newOrgWebsite" name="website" ngModel type="url">
-                      </div>
-
-                      <div class="col-md-6">
-                        <label class="form-label" for="newOrgTenantUuid">{{ t('organizations.setup.tenantUuid') }}</label>
-                        <input [disabled]="isMutating()" class="form-control form-control-sm"
-                               id="newOrgTenantUuid" name="tenantUuid" ngModel
-                               placeholder="3fa85f64-5717-4562-b3fc-2c963f66afa6" type="text">
-                        <div class="form-text">{{ t('organizations.setup.tenantUuidHint') }}</div>
-                      </div>
-                      <div class="col-md-6">
-                        <label class="form-label" for="newOrgFeatureFlags">{{ t('organizations.setup.featureFlags') }}</label>
-                        <input [disabled]="isMutating()" class="form-control form-control-sm"
-                               id="newOrgFeatureFlags" name="featureFlags" ngModel placeholder="beta, early-access" type="text">
-                        <div class="form-text">{{ t('organizations.setup.featureFlagsHint') }}</div>
-                      </div>
-
-                      <div class="col-12">
-                        <span class="form-label">{{ t('organizations.setup.mfaAllowedMethods') }}</span>
-                        <div class="d-flex flex-wrap gap-3">
-                          @for (method of MFA_METHODS; track method) {
-                            <div class="form-check">
-                              <input class="form-check-input" [id]="'newOrgMfa-' + method" type="checkbox"
-                                     [checked]="createMfaMethods().has(method)" (change)="toggleCreateMfaMethod(method)">
-                              <label class="form-check-label" [for]="'newOrgMfa-' + method">{{ t('organizations.mfaMethods.' + method) }}</label>
-                            </div>
-                          }
-                        </div>
-                        <div class="form-text">{{ t('organizations.setup.mfaAllHint') }}</div>
-                      </div>
-
-                      <div class="col-12">
-                        <label class="form-label" for="newOrgCustomerSearch">{{ t('organizations.setup.customerIds') }}</label>
-                        <input (input)="onCreateCustomerSearchInput($any($event.target).value)" [disabled]="isMutating()"
-                               class="form-control form-control-sm" id="newOrgCustomerSearch"
-                               [placeholder]="t('organizations.setup.customerSearchPlaceholder')" type="text">
-                        @if (createCustomerCandidates().length > 0) {
-                          <ul class="list-group mt-1">
-                            @for (candidate of createCustomerCandidates(); track candidate.id) {
-                              <li class="list-group-item d-flex justify-content-between align-items-center py-1">
-                                <span>{{ candidate.customerName }} <span class="text-muted small">({{ candidate.email }})</span></span>
-                                <button (click)="addCreateCustomer(candidate)" class="btn btn-sm btn-outline-primary" type="button">
-                                  {{ t('common.add') }}
-                                </button>
-                              </li>
-                            }
-                          </ul>
-                        }
-                        @if (createSelectedCustomers().length > 0) {
-                          <div class="d-flex flex-wrap gap-2 mt-2">
-                            @for (customer of createSelectedCustomers(); track customer.id) {
-                              <span class="badge bg-secondary d-inline-flex align-items-center gap-1">
-                                {{ customer.customerName }}
-                                <button (click)="removeCreateCustomer(customer)" aria-label="Remove"
-                                        class="btn-close btn-close-white" style="font-size: 0.6rem;" type="button"></button>
-                              </span>
-                            }
-                          </div>
-                        }
-                      </div>
-
-                      <div class="col-12">
-                        <div class="form-check">
-                          <input class="form-check-input" id="newOrgSendEmail" name="sendConfirmationEmail" ngModel type="checkbox">
-                          <label class="form-check-label" for="newOrgSendEmail">{{ t('organizations.setup.sendConfirmationEmail') }}</label>
-                        </div>
-                      </div>
-                    </div>
-                  </details>
-                </div>
-              </form>
-            </div>
-          </div>
-        }
 
         <div class="sc-org-grid sc-reveal" style="--d: 80ms;">
           @for (org of organizations(); track org.id) {

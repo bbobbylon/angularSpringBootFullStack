@@ -1,0 +1,76 @@
+<!--
+  Dedicated "create role" screen — split out of roles-matrix.component.html (2026-08-29) so
+  /roles goes back to being a pure catalog matrix, matching the /customer/new and /invoice/new
+  precedent. Same name + permission form that used to sit above the matrix; only the shell
+  (breadcrumb/sc-head) and the post-success behavior (stay here, reset the form) changed.
+-->
+<app-navbar></app-navbar>
+<main class="sc-page" *transloco="let t">
+  <div class="container">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb sc-breadcrumb">
+        <li class="breadcrumb-item"><a [routerLink]="['/']">{{ t('securityCenter.home') }}</a></li>
+        <li class="breadcrumb-item"><a [routerLink]="['/roles']">{{ t('rolesMatrix.breadcrumb') }}</a></li>
+        <li aria-current="page" class="breadcrumb-item active">{{ t('rolesMatrix.newRoleLink') }}</li>
+      </ol>
+    </nav>
+
+    <header class="sc-head sc-reveal">
+      <div>
+        <p class="eyebrow mb-1">{{ t('rolesMatrix.eyebrow') }}</p>
+        <h1 class="sc-head__title">{{ t('rolesMatrix.catalogTitle') }}</h1>
+      </div>
+    </header>
+
+    @switch (dataState()) {
+
+      @case (DataState.LOADING) {
+        <div class="d-flex align-items-center gap-2 text-muted py-4">
+          <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+          <span>{{ t('rolesMatrix.loading') }}</span>
+        </div>
+      }
+
+      @case (DataState.ERROR) {
+        <div class="alert alert-danger">{{ t('rolesMatrix.error') }}</div>
+      }
+
+      @case (DataState.LOADED) {
+        @if (isApplicationAdmin) {
+          <div class="sc-panel sc-reveal mb-4">
+            <div class="p-3">
+              <h2 class="h5 mb-3"><i class="bi bi-shield-plus me-2"></i>{{ t('rolesMatrix.createRole') }}</h2>
+              <form #createForm="ngForm" (ngSubmit)="createRole(createForm)" class="row g-2 align-items-end">
+                <div class="col-md-4">
+                  <label class="form-label" for="newRoleName">{{ t('rolesMatrix.newRoleName') }}</label>
+                  <input [disabled]="isMutating()" class="form-control" id="newRoleName" name="name"
+                         ngModel pattern="^ROLE_[A-Za-z_]+$" placeholder="ROLE_BILLING_REVIEWER" required type="text">
+                </div>
+                <div class="col-md-5">
+                  <label class="form-label" for="newRolePermission">{{ t('rolesMatrix.newRolePermission') }}</label>
+                  <input [disabled]="isMutating()" class="form-control" id="newRolePermission" name="permission"
+                         ngModel placeholder="READ:CUSTOMER,UPDATE:CUSTOMER" required type="text">
+                </div>
+                <div class="col-md-3">
+                  <button [disabled]="isMutating() || createForm.invalid" class="btn btn-primary w-100" type="submit">
+                    @if (isMutating()) {
+                      <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                    }
+                    {{ t('rolesMatrix.createRole') }}
+                  </button>
+                </div>
+                <div class="col-12">
+                  <small class="text-secondary">{{ t('rolesMatrix.createRoleHint') }}</small>
+                </div>
+              </form>
+            </div>
+          </div>
+        } @else {
+          <div class="alert alert-warning sc-reveal">
+            {{ t('permissions.denied', { action: t('permissions.actions.createRoles') }) }}
+          </div>
+        }
+      }
+    }
+  </div>
+</main>

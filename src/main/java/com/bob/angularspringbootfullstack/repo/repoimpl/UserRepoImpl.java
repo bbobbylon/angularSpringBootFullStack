@@ -65,6 +65,15 @@ import static org.apache.commons.lang3.time.DateUtils.addDays;
  * Principle. The repository layer should only be responsible for data
  * persistence (CRUD SQL operations). All business logic currently living here
  * should be extracted to {@link com.bob.angularspringbootfullstack.service.serviceimpl.UserServiceImpl}.
+ *
+ * <p><b>Deliberately not attempted 2026-08-29:</b> checked for a safety net before touching this —
+ * neither {@code UserRepoImplTest} nor {@code UserServiceImplTest} exists anywhere in the tree, so
+ * this class's password encoding, verification-key minting, and 2FA-code generation have no direct
+ * unit coverage, only whatever a controller-level test happens to exercise indirectly. Mechanically
+ * relocating business logic out of the class every password-reset and 2FA code path runs through,
+ * with no unit test net to catch a behavioral slip, is not a change to make blind mid-sprint — write
+ * {@code UserRepoImplTest}/{@code UserServiceImplTest} first, then revisit this extraction with a
+ * regression net actually in place.
  * -----------------------------------------------------------------------
  *
  * <p><b>Business logic to move to UserServiceImpl:</b>
@@ -184,11 +193,9 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             // Persist the bare UUID verification key — NOT the full URL. The host belongs only in the
             // emailed link (built below); keeping it out of the stored key makes verification lookups
             // host-independent, so changing ui.app.url never invalidates a pending link.
-            // TODO: the `url` column now holds a bare key, not a URL — consider renaming it to
-            //  `verification_key` (a guarded rename in schema.sql, applied to local + Aiven).
             String key = UUID.randomUUID().toString();
             String verificationURL = getVerificationURL(key, ACCOUNT.getType());
-            jdbcTemplate.update(INSERT_ACCOUNT_VERIFICATION_URL_QUERY, of("userId", user.getId(), "url", key));
+            jdbcTemplate.update(INSERT_ACCOUNT_VERIFICATION_URL_QUERY, of("userId", user.getId(), "verificationKey", key));
             notificationService.sendAccountVerification(user.getFirstName(), user.getEmail(), verificationURL);
             log.info("Account verification url {} sent to user with email: {}", verificationURL, user.getEmail());
 
@@ -600,7 +607,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             String key = UUID.randomUUID().toString();
             String verificationURL = getVerificationURL(key, PASSWORD.getType());
             jdbcTemplate.update(DELETE_PASSWORD_VERIFICATION_BY_USER_ID_QUERY, of("userId", user.getId()));
-            jdbcTemplate.update(INSERT_PASSWORD_VERIFICATION_QUERY, of("userId", user.getId(), "url", key, "expirationDate", expirationDate));
+            jdbcTemplate.update(INSERT_PASSWORD_VERIFICATION_QUERY, of("userId", user.getId(), "verificationKey", key, "expirationDate", expirationDate));
             log.info("Password reset verification url {} sent to user with email: {}", verificationURL, email);
             notificationService.sendPasswordResetVerification(user.getFirstName(), email, verificationURL);
         } catch (Exception exception) {
@@ -622,7 +629,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
             throw new ApiException("This link is not valid. Please request a new password reset link.");
         try {
             // Look up by the bare UUID key stored at reset-request time — host-independent, no URL rebuild.
-            return jdbcTemplate.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("url", key), new UserRowMapper());
+            return jdbcTemplate.queryForObject(SELECT_USER_BY_PASSWORD_URL_QUERY, of("verificationKey", key), new UserRowMapper());
         } catch (EmptyResultDataAccessException e) {
             log.error(e.getMessage());
             throw new ApiException("This link is not valid. Please request a new password reset link.");
@@ -639,12 +646,12 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
      * account verifications never expire, which is why this takes no verification-type
      * argument and queries the reset table directly.
      *
-     * @param key the bare UUID stored in the {@code url} column at reset-request time
+     * @param key the bare UUID stored in the {@code verification_key} column at reset-request time
      * @return {@code true} if the row is expired
      */
     private boolean isLinkExpired(String key) {
         try {
-            return Boolean.TRUE.equals(jdbcTemplate.queryForObject(SELECT_EXPIRATION_BY_URL, of("url", key), Boolean.class));
+            return Boolean.TRUE.equals(jdbcTemplate.queryForObject(SELECT_EXPIRATION_BY_URL, of("verificationKey", key), Boolean.class));
         } catch (EmptyResultDataAccessException e) {
             log.error(e.getMessage());
             throw new ApiException("This link is not valid. Please request a new password reset link.");
@@ -707,7 +714,7 @@ public class UserRepoImpl implements UserRepo<User>, UserDetailsService {
     public User verifyAccountKey(String key) {
         try {
             // Look up by the bare UUID key stored at registration — host-independent, no URL rebuild.
-            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_ACCOUNT_QUERY, of("url", key), new UserRowMapper());
+            User user = jdbcTemplate.queryForObject(SELECT_USER_BY_ACCOUNT_QUERY, of("verificationKey", key), new UserRowMapper());
             jdbcTemplate.update(UPDATE_USER_ENABLED_QUERY, of("enabled", true, "id", user.getId()));
             // Log successful account verification for auditing
             log.info("Account successfully verified for user with email: {}", user.getEmail());

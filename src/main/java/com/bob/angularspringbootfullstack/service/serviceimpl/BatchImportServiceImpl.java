@@ -91,6 +91,27 @@ public class BatchImportServiceImpl implements BatchImportService {
      */
     private static final int MAX_BATCH_ROWS = 2000;
 
+    /**
+     * Column headers for the customer batch-upload template (FUTURE-ENHANCEMENTS.md §3.3,
+     * "Downloadable batch-upload templates"), in display casing and expected order.
+     * {@code organizationId} is deliberately absent — see {@link #importCustomerRow}'s Javadoc
+     * for why a client-supplied organization column would be a scope-escape.
+     * <p>
+     * Every {@code row.get(key(...))} call in {@link #importCustomerRow} reads one of these
+     * headers back via {@link #key}, so this list and the parser can never drift apart: renaming
+     * a header here without updating the matching {@code key(...)} call below simply breaks the
+     * column, it cannot silently point the template at the wrong field.
+     */
+    static final List<String> CUSTOMER_TEMPLATE_HEADERS =
+            List.of("customerName", "type", "email", "status", "phoneNumber", "address", "imageUrl");
+
+    /**
+     * Column headers for the invoice batch-upload template. See {@link #CUSTOMER_TEMPLATE_HEADERS}
+     * for the no-drift guarantee this list shares with {@link #importInvoiceRow}.
+     */
+    static final List<String> INVOICE_TEMPLATE_HEADERS =
+            List.of("customerEmail", "invoiceNumber", "status", "totalAmount", "amount", "invoiceDate");
+
     private final CustomerRepo customerRepo;
     private final InvoiceRepo invoiceRepo;
     private final CustomerService customerService;
@@ -134,20 +155,20 @@ public class BatchImportServiceImpl implements BatchImportService {
      */
     private void importCustomerRow(int rowNum, Map<String, String> row, Long organizationId,
                                     List<BatchImportError> failed, AtomicInteger imported) {
-        String email = StringUtils.trimToNull(row.get("email"));
+        String email = StringUtils.trimToNull(row.get(key("email")));
         if (email != null && customerRepo.findByEmail(email).isPresent()) {
             failed.add(new BatchImportError(rowNum, "A customer with email \"" + email + "\" already exists"));
             return;
         }
 
         Customer customer = Customer.builder()
-                .customerName(StringUtils.trimToNull(row.get("customername")))
-                .type(StringUtils.trimToNull(row.get("type")))
+                .customerName(StringUtils.trimToNull(row.get(key("customerName"))))
+                .type(StringUtils.trimToNull(row.get(key("type"))))
                 .email(email)
-                .status(StringUtils.trimToNull(row.get("status")))
-                .phoneNumber(StringUtils.trimToNull(row.get("phonenumber")))
-                .address(StringUtils.trimToNull(row.get("address")))
-                .imageUrl(StringUtils.trimToNull(row.get("imageurl")))
+                .status(StringUtils.trimToNull(row.get(key("status"))))
+                .phoneNumber(StringUtils.trimToNull(row.get(key("phoneNumber"))))
+                .address(StringUtils.trimToNull(row.get(key("address"))))
+                .imageUrl(StringUtils.trimToNull(row.get(key("imageUrl"))))
                 .organizationId(organizationId)
                 .build();
 
@@ -172,7 +193,7 @@ public class BatchImportServiceImpl implements BatchImportService {
      */
     private void importInvoiceRow(int rowNum, Map<String, String> row, Collection<Long> scope,
                                    List<BatchImportError> failed, AtomicInteger imported) {
-        String customerEmail = StringUtils.trimToNull(row.get("customeremail"));
+        String customerEmail = StringUtils.trimToNull(row.get(key("customerEmail")));
         if (customerEmail == null) {
             failed.add(new BatchImportError(rowNum, "customerEmail is required"));
             return;
@@ -190,7 +211,7 @@ public class BatchImportServiceImpl implements BatchImportService {
             return;
         }
 
-        String invoiceNumber = StringUtils.trimToNull(row.get("invoicenumber"));
+        String invoiceNumber = StringUtils.trimToNull(row.get(key("invoiceNumber")));
         if (invoiceNumber != null && invoiceRepo.findByInvoiceNumber(invoiceNumber).isPresent()) {
             failed.add(new BatchImportError(rowNum, "An invoice with number \"" + invoiceNumber + "\" already exists"));
             return;
@@ -198,33 +219,33 @@ public class BatchImportServiceImpl implements BatchImportService {
 
         Double totalAmount;
         try {
-            String raw = StringUtils.trimToNull(row.get("totalamount"));
+            String raw = StringUtils.trimToNull(row.get(key("totalAmount")));
             totalAmount = raw == null ? null : Double.valueOf(raw);
         } catch (NumberFormatException e) {
-            failed.add(new BatchImportError(rowNum, "totalAmount \"" + row.get("totalamount") + "\" is not a valid number"));
+            failed.add(new BatchImportError(rowNum, "totalAmount \"" + row.get(key("totalAmount")) + "\" is not a valid number"));
             return;
         }
         Double amount;
         try {
-            String raw = StringUtils.trimToNull(row.get("amount"));
+            String raw = StringUtils.trimToNull(row.get(key("amount")));
             amount = raw == null ? totalAmount : Double.valueOf(raw);
         } catch (NumberFormatException e) {
-            failed.add(new BatchImportError(rowNum, "amount \"" + row.get("amount") + "\" is not a valid number"));
+            failed.add(new BatchImportError(rowNum, "amount \"" + row.get(key("amount")) + "\" is not a valid number"));
             return;
         }
         Date invoiceDate;
         try {
-            String raw = StringUtils.trimToNull(row.get("invoicedate"));
+            String raw = StringUtils.trimToNull(row.get(key("invoiceDate")));
             invoiceDate = raw == null ? new Date()
                     : Date.from(LocalDate.parse(raw).atStartOfDay(ZoneId.systemDefault()).toInstant());
         } catch (DateTimeParseException e) {
-            failed.add(new BatchImportError(rowNum, "invoiceDate \"" + row.get("invoicedate") + "\" must be in yyyy-MM-dd format"));
+            failed.add(new BatchImportError(rowNum, "invoiceDate \"" + row.get(key("invoiceDate")) + "\" must be in yyyy-MM-dd format"));
             return;
         }
 
         Invoice invoice = new Invoice();
         invoice.setInvoiceNumber(invoiceNumber != null ? invoiceNumber : randomAlphanumeric(10).toUpperCase());
-        invoice.setStatus(StringUtils.trimToNull(row.get("status")));
+        invoice.setStatus(StringUtils.trimToNull(row.get(key("status"))));
         invoice.setAmount(amount);
         invoice.setTotalAmount(totalAmount);
         invoice.setInvoiceDate(invoiceDate);
@@ -244,6 +265,36 @@ public class BatchImportServiceImpl implements BatchImportService {
             log.warn("Batch invoice import failed on row {}: {}", rowNum, e.getMessage());
             failed.add(new BatchImportError(rowNum, "Could not save this row — check the values and try again"));
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<String> customerTemplateHeaders() {
+        return CUSTOMER_TEMPLATE_HEADERS;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<String> invoiceTemplateHeaders() {
+        return INVOICE_TEMPLATE_HEADERS;
+    }
+
+    /**
+     * Lowercases a display header (e.g. {@code "customerName"}) into the row-map key {@link
+     * #parseCsv}/{@link #parseXlsx} store it under — both lowercase every header they read, so
+     * this is the exact inverse operation. Routing every {@code row.get(...)} call in {@link
+     * #importCustomerRow}/{@link #importInvoiceRow} through this one method, applied to a header
+     * literal drawn from {@link #CUSTOMER_TEMPLATE_HEADERS}/{@link #INVOICE_TEMPLATE_HEADERS}, is
+     * what keeps the downloadable template and the parser mechanically in sync — there is no
+     * second, independently typed set of lowercase key strings left anywhere in this class to
+     * drift out from under the templates.
+     */
+    private static String key(String header) {
+        return header.toLowerCase(Locale.ROOT);
     }
 
     /**

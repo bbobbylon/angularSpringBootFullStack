@@ -224,12 +224,18 @@ public class TokenProvider {
 
     /**
      * Returns true when the token is structurally valid, not expired, and was
-     * issued after the user's last password change. Used by CustomAuthFilter as
-     * a gate before extracting authorities and authenticating the request.
+     * issued after both the user's last password change AND last role change.
+     * Used by CustomAuthFilter as a gate before extracting authorities and
+     * authenticating the request.
      * <p>
      * The {@code passwordChangedAt} check ensures tokens issued before a password
      * change are invalidated — preventing stolen pre-change tokens from remaining
-     * usable.
+     * usable. The {@code rolesChangedAt} check (FUTURE-ENHANCEMENTS §3.1) does the
+     * same for a role change: without it, a demoted user's already-issued access
+     * token keeps carrying its old, now-revoked authorities for up to the full
+     * 30-minute TTL, since the "authorities" claim is baked in at mint time and
+     * never re-derived per request. Both checks share one already-loaded
+     * {@code UserDTO} rather than two separate lookups.
      *
      * @param userID the numeric user ID previously extracted via {@link #getSubject(String, HttpServletRequest)}
      * @param token  the raw JWT
@@ -240,14 +246,19 @@ public class TokenProvider {
         if (Objects.isNull(userID)) return false;
         JWTVerifier verifier = getJWTVerifier();
         if (isTokenExpired(verifier, token)) return false;
-        LocalDateTime passwordChangedAt = userService.getUserById(userID).getPasswordChangedAt();
-        if (passwordChangedAt != null) {
-            // Reject tokens that were issued before the last password change.
-            LocalDateTime issuedAt = verifier.verify(token).getIssuedAt()
-                    .toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-            return issuedAt.isAfter(passwordChangedAt);
-        }
-        return true;
+
+        var user = userService.getUserById(userID);
+        LocalDateTime passwordChangedAt = user.getPasswordChangedAt();
+        LocalDateTime rolesChangedAt = user.getRolesChangedAt();
+        if (passwordChangedAt == null && rolesChangedAt == null) return true;
+
+        // Reject tokens issued before whichever of the two invalidation events happened most
+        // recently — a token must postdate BOTH the last password change and the last role
+        // change, not merely the more recent of the two by coincidence.
+        LocalDateTime issuedAt = verifier.verify(token).getIssuedAt()
+                .toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        if (passwordChangedAt != null && !issuedAt.isAfter(passwordChangedAt)) return false;
+        return rolesChangedAt == null || issuedAt.isAfter(rolesChangedAt);
     }
 
     /**

@@ -22,9 +22,12 @@ import { TranslocoDirective } from '@jsverse/transloco';
  * is already returned by {@code GET /user/profile}, so no new backend endpoint
  * is needed for the read-only grid. Role and permission ASSIGNMENT (which user
  * holds which existing role) is still done through the admin user-detail view
- * (FR-ADMIN-3) — this page is where the catalog rows themselves are managed
- * (create / edit-permission / delete), gated tighter than that: only an
- * application administrator sees the panel at all (see {@link isApplicationAdmin}).
+ * (FR-ADMIN-3) — this page is where the catalog rows themselves are edited or
+ * deleted, gated tighter than that: only an application administrator sees the
+ * panel at all (see {@link isApplicationAdmin}). Creating a new role is its own
+ * screen, {@code NewRoleComponent} at {@code /roles/new} (2026-08-29 split, matching
+ * the {@code /customer/new}/{@code /invoice/new} precedent) — this component is the
+ * matrix and edit/delete panel only.
  *
  * Authority gate: only users with UPDATE:USER or UPDATE:ROLE reach this route
  * (adminGuard), matching the existing admin surface constraint (NFR-SEC-4).
@@ -115,30 +118,6 @@ export class RolesMatrixComponent implements OnInit {
   protected hasPermission(role: RolesInterface, permission: string): boolean {
     if (!role.permission) return false;
     return role.permission.split(',').map((p) => p.trim()).includes(permission);
-  }
-
-  /**
-   * Submits the "new role" form ({@code POST /admin/role}). The created row comes back with
-   * {@code assignable: false} until a redeploy adds a matching {@code RoleType} constant — the
-   * refreshed catalog from the response already carries that flag, so no extra fetch is needed.
-   *
-   * @param form - the NgForm carrying {@code name} and {@code permission}
-   */
-  protected createRole(form: NgForm): void {
-    if (!form.valid) return;
-    this.isMutating.set(true);
-    this.adminUserService
-      .createRole$(form.value.name, form.value.permission)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (response) => {
-          this.roles.set(response.data?.roles ?? this.roles());
-          this.isMutating.set(false);
-          this.notification.onSuccess('Role created successfully');
-          form.resetForm();
-        },
-        error: (error: string) => this.failMutation(error),
-      });
   }
 
   /** Opens the permission-edit form for one catalog row. The role name itself is immutable. */

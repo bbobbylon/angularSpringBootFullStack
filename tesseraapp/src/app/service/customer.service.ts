@@ -251,6 +251,30 @@ export class CustomerService {
       .get<Blob>(`${this.server}/customer/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
+  /**
+   * Downloads the blank, header-only XLSX starter file for {@link importCustomers$} via
+   * GET /customer/batch/template (FUTURE-ENHANCEMENTS.md §3.3, "Downloadable batch-upload
+   * templates").
+   *
+   * <p>Unlike {@link downloadCustomerReport$}, this is not wired through `reportProgress`/
+   * `observe: 'events'` — a header-only template is a few hundred bytes, so a progress bar would
+   * never have anything meaningful to show. Callers subscribe once and `saveAs` the blob directly.
+   *
+   * @returns Observable emitting the XLSX file as a Blob
+   */
+  downloadCustomerBatchTemplate$ = (): Observable<Blob> =>
+    this.http.get(`${this.server}/customer/batch/template`, { responseType: 'blob' }).pipe(catchError(this.handleError));
+
+  /**
+   * Downloads the blank, header-only XLSX starter file for {@link importInvoices$} via
+   * GET /customer/invoice/batch/template. See {@link downloadCustomerBatchTemplate$} for why
+   * this skips the progress-tracked download variant used for the full data reports.
+   *
+   * @returns Observable emitting the XLSX file as a Blob
+   */
+  downloadInvoiceBatchTemplate$ = (): Observable<Blob> =>
+    this.http.get(`${this.server}/customer/invoice/batch/template`, { responseType: 'blob' }).pipe(catchError(this.handleError));
+
   downloadInvoiceReport$ = (): Observable<HttpEvent<Blob>> =>
     this.http
       .get<Blob>(`${this.server}/customer/invoice/download/report`, { reportProgress: true, observe: 'events', responseType: 'blob' as 'json' })

@@ -1,14 +1,20 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+
+import static com.bob.angularspringbootfullstack.query.ProviderLinkTicketQuery.*;
 
 /**
  * Short-lived, single-use tickets that carry "user X asked to link provider Y" across the OAuth2
@@ -34,31 +40,42 @@ import java.util.concurrent.ConcurrentHashMap;
  * to be linked to the victim's account, which still has to pass the "already linked elsewhere"
  * refusal, and which the victim sees in their audit log and can undo from the Security Center.
  *
- * <h3>Known limitation</h3>
- * The store is in-memory, so a ticket minted on one instance cannot be redeemed on another. That is
- * consistent with the brute-force counter, which is also per-instance, and acceptable because a
- * ticket lives for five minutes and both legs of the exchange come from the same browser within
- * seconds. Behind a load balancer without sticky sessions this needs to move to the database or a
- * shared cache — the interface would not change.
+ * <h3>Storage (FUTURE-ENHANCEMENTS §2.4 — closed)</h3>
+ * Originally an in-memory {@code ConcurrentHashMap}, correct only for a single instance: a ticket
+ * minted on one node could not be redeemed on another behind a load balancer without sticky
+ * sessions. Now backed by the {@code providerlinktickets} table via
+ * {@link com.bob.angularspringbootfullstack.query.ProviderLinkTicketQuery} — same shape (opaque,
+ * single-use, five-minute TTL), same public method signatures, so no caller changed. The atomic
+ * "exactly one redeemer wins" guarantee that {@code ConcurrentHashMap.remove(key, value)} gave for
+ * free in memory is now provided by a single-row {@code DELETE}'s affected-row count, which MySQL
+ * guarantees is race-free per row regardless of which instance issues it — see
+ * {@link com.bob.angularspringbootfullstack.query.ProviderLinkTicketQuery} for detail.
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class ProviderLinkTicketService {
 
     /** How long a ticket remains redeemable. Long enough to finish a consent screen, short enough not to linger. */
     private static final Duration TICKET_TTL = Duration.ofMinutes(5);
 
-    private final Map<String, Ticket> tickets = new ConcurrentHashMap<>();
+    private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
-     * A pending link intent.
+     * One {@code providerlinktickets} row, minus the ticket itself (already known to the caller
+     * that looked it up).
      *
      * @param userId    the account the provider should be attached to
      * @param provider  the registration id the ticket was minted for
      * @param expiresAt when the ticket stops being redeemable
      */
-    private record Ticket(Long userId, String provider, Instant expiresAt) {
+    private record TicketRow(Long userId, String provider, LocalDateTime expiresAt) {
     }
+
+    private static final RowMapper<TicketRow> TICKET_ROW_MAPPER = (rs, rowNum) -> new TicketRow(
+            rs.getLong("user_id"),
+            rs.getString("provider"),
+            rs.getTimestamp("expires_at").toLocalDateTime());
 
     /**
      * Mints a ticket for an authenticated user.
@@ -70,7 +87,11 @@ public class ProviderLinkTicketService {
     public String mint(Long userId, String provider) {
         purgeExpired();
         String ticket = UUID.randomUUID().toString();
-        tickets.put(ticket, new Ticket(userId, provider, Instant.now().plus(TICKET_TTL)));
+        jdbcTemplate.update(INSERT_TICKET_QUERY, new MapSqlParameterSource()
+                .addValue("ticket", ticket)
+                .addValue("userId", userId)
+                .addValue("provider", provider)
+                .addValue("expiresAt", LocalDateTime.now().plus(TICKET_TTL)));
         log.debug("[FEDERATION] Minted link ticket for userId={} provider={}", userId, provider);
         return ticket;
     }
@@ -90,18 +111,19 @@ public class ProviderLinkTicketService {
     public Optional<Long> redeem(String ticket, String provider) {
         if (ticket == null || ticket.isBlank()) return Optional.empty();
 
-        Ticket found = tickets.get(ticket);
-        if (found == null) {
+        List<TicketRow> rows = jdbcTemplate.query(SELECT_TICKET_QUERY, Map.of("ticket", ticket), TICKET_ROW_MAPPER);
+        if (rows.isEmpty()) {
             log.debug("[FEDERATION] Link ticket not found or already used.");
             return Optional.empty();
         }
-        if (Instant.now().isAfter(found.expiresAt())) {
-            tickets.remove(ticket, found);
+        TicketRow found = rows.getFirst();
+        if (LocalDateTime.now().isAfter(found.expiresAt())) {
+            jdbcTemplate.update(DELETE_TICKET_QUERY, Map.of("ticket", ticket));
             log.debug("[FEDERATION] Link ticket expired for userId={}", found.userId());
             return Optional.empty();
         }
         if (!found.provider().equals(provider)) {
-            // Deliberately does NOT consume. Checking before removing matters: consuming on a
+            // Deliberately does NOT consume. Checking before deleting matters: consuming on a
             // mismatch would let anyone who learns a ticket cancel somebody else's pending link
             // just by presenting it at the wrong provider — a small denial of service that costs
             // nothing to prevent.
@@ -110,9 +132,11 @@ public class ProviderLinkTicketService {
             return Optional.empty();
         }
 
-        // Atomic consume: remove(key, value) succeeds for exactly one caller, so two concurrent
-        // redemptions of the same ticket cannot both be handed the user id.
-        if (!tickets.remove(ticket, found)) {
+        // Atomic consume: a DELETE keyed on the primary key affects exactly one row for exactly
+        // one caller, so two concurrent redemptions of the same ticket — even from two different
+        // app instances — cannot both be handed the user id.
+        int deleted = jdbcTemplate.update(DELETE_TICKET_QUERY, Map.of("ticket", ticket));
+        if (deleted == 0) {
             log.debug("[FEDERATION] Link ticket was consumed concurrently.");
             return Optional.empty();
         }
@@ -120,14 +144,13 @@ public class ProviderLinkTicketService {
     }
 
     /**
-     * Drops expired entries so an unused ticket cannot accumulate indefinitely.
+     * Drops expired rows so an unused ticket cannot accumulate indefinitely.
      *
-     * <p>Called on mint rather than on a schedule: the map only grows when tickets are minted, so
-     * that is exactly when it is worth tidying, and it avoids a timer for a map that is normally
-     * empty.
+     * <p>Called on mint rather than on a schedule: the table only grows when tickets are minted,
+     * so that is exactly when it is worth tidying, and it avoids a dedicated cleanup job for a
+     * table that is normally near-empty.
      */
     private void purgeExpired() {
-        Instant now = Instant.now();
-        tickets.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
+        jdbcTemplate.update(DELETE_EXPIRED_TICKETS_QUERY, Map.of());
     }
 }
