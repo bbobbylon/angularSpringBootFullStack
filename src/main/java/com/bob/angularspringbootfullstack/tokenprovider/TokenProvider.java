@@ -9,6 +9,7 @@ import com.auth0.jwt.exceptions.TokenExpiredException;
 import com.auth0.jwt.interfaces.Claim;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
+import com.bob.angularspringbootfullstack.repo.SessionRepo;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -45,12 +46,19 @@ import static java.util.stream.Collectors.toList;
  * application properties. Verification intentionally does not require the
  * "authorities" claim, so refresh tokens remain valid; CustomAuthFilter then
  * refuses to authenticate any token that lacks authorities.
+ * <p>
+ * Access-token revocation (FUTURE-ENHANCEMENTS §3.1): {@link #isTokenValid} checks the token's
+ * {@code sid} family against {@link SessionRepo#isFamilyRevoked}, so any of
+ * {@code SessionService}'s revoke paths (single-session revoke, "log out everywhere else",
+ * password-change "revoke all", or server-initiated reuse detection) takes effect on the
+ * already-issued access token immediately rather than only once it naturally expires.
  */
 @Component
 @RequiredArgsConstructor
 public class TokenProvider {
 
     private final UserService userService;
+    private final SessionRepo sessionRepo;
     @Value("${jwt.secret}")
     private String secret;
 
@@ -61,9 +69,11 @@ public class TokenProvider {
      * and an expiration time (30 minutes).
      * The token is signed using HMAC512 with the secret key.
      * <p>
-     * The {@code sid} claim does not gate validation — access tokens stay fully
-     * stateless (NFR-PERF-2). It exists so the sessions endpoint and the SPA can
-     * mark which listed session the caller is currently on.
+     * The {@code sid} claim is checked against the session store's revoked flag on every
+     * request (see {@link #isTokenValid}) — access tokens are no longer fully stateless
+     * (superseding the original NFR-PERF-2 framing; see {@link #isTokenValid}'s Javadoc for
+     * why the marginal cost is small). It also lets the sessions endpoint and the SPA mark
+     * which listed session the caller is currently on.
      *
      * @param userPrincipal an authenticated user
      * @param sessionFamily the refresh-session family minted by {@code SessionService}
@@ -236,6 +246,18 @@ public class TokenProvider {
      * 30-minute TTL, since the "authorities" claim is baked in at mint time and
      * never re-derived per request. Both checks share one already-loaded
      * {@code UserDTO} rather than two separate lookups.
+     * <p>
+     * A third gate runs first: the token's {@code sid} (session family) is checked
+     * against {@link SessionRepo#isFamilyRevoked}. This is what actually closes
+     * "access tokens have no revocation path" (FUTURE-ENHANCEMENTS §3.1) — the two
+     * checks above only cover password/role changes, not a user (or an admin, or
+     * reuse detection) explicitly revoking one specific session. A revoked family
+     * fails fast here, before the {@code userService.getUserById} call below, which
+     * already ran unconditionally on every request for the password/role checks —
+     * so this adds one indexed point-lookup on {@code refreshsessions.family} to a
+     * path that was already making a DB round trip, not a second DB hit where there
+     * was previously none. Legacy pre-M5 tokens with no {@code sid} claim skip this
+     * check entirely, exactly as {@link #getSessionFamily} already treats them.
      *
      * @param userID the numeric user ID previously extracted via {@link #getSubject(String, HttpServletRequest)}
      * @param token  the raw JWT
@@ -246,6 +268,9 @@ public class TokenProvider {
         if (Objects.isNull(userID)) return false;
         JWTVerifier verifier = getJWTVerifier();
         if (isTokenExpired(verifier, token)) return false;
+
+        String family = getSessionFamily(token);
+        if (family != null && sessionRepo.isFamilyRevoked(family)) return false;
 
         var user = userService.getUserById(userID);
         LocalDateTime passwordChangedAt = user.getPasswordChangedAt();

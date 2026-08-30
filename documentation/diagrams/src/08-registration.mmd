@@ -1,0 +1,53 @@
+---
+title: Registration & Email Verification
+---
+%% Sign-up creates a DISABLED account. Only the emailed link enables it, which is what stops
+%% one person registering an address they don't control.
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant SPA as Angular<br/>RegisterComponent
+    participant API as UserController<br/>/user/register
+    participant SVC as UserService
+    participant DB as MySQL
+    participant MAIL as EmailService
+    participant EV as NewUserEventListener
+
+    U->>SPA: First name, last name, email, password
+    SPA->>SPA: Client-side PasswordPolicy check
+    note left of SPA: UX only — the backend re-validates<br/>with the identical pattern regardless<br/>of what the client sends.
+
+    SPA->>API: POST /user/register
+    API->>SVC: createUser(form)
+    SVC->>SVC: Re-validate password server-side
+
+    alt email already registered
+        SVC-->>API: conflict
+        API-->>SPA: Generic failure — same shape as any other
+        note right of API: Must not confirm the address is taken.
+    else new address
+        SVC->>DB: INSERT users (enabled = FALSE, non_locked = TRUE)<br/>password BCrypt strength 12
+        SVC->>DB: Assign the default role
+        SVC->>DB: INSERT accountverifications (url key)
+        SVC->>MAIL: Send verification link<br/>{UI_APP_URL}/verify/account/{key}
+        SVC->>EV: Publish registration event
+        EV->>DB: Write the audit row
+        note right of EV: Audit failures are swallowed and logged,<br/>never rethrown — Spring's synchronous<br/>multicaster would otherwise turn a failed<br/>audit write into a failed registration.
+        API-->>SPA: 201 — "check your email"
+    end
+
+    U->>U: Open email, click the link
+    U->>SPA: Navigate /verify/account/{key}
+    SPA->>API: GET /user/verify/account/{key}
+    API->>DB: Look up the key
+
+    alt key valid
+        API->>DB: UPDATE users SET enabled = TRUE
+        API->>DB: Delete the verification row — single use
+        API-->>SPA: 200 — account active
+        SPA->>U: Redirect to /login
+    else expired or unknown
+        API-->>SPA: 400 — link no longer valid
+    end
+
+    note over U, EV: Seeded demo accounts skip all of this: DemoDataSeeder inserts them<br/>already enabled, which is why they exist only on the dev profile.

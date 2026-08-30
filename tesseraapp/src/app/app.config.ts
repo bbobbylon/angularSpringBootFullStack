@@ -58,7 +58,12 @@ export const appConfig: ApplicationConfig = {
 
     { provide: IMAGE_CONFIG, useValue: { disableImageSizeWarning: true } },
     provideAnimationsAsync(),
-    provideToastr({ timeOut: 4000, positionClass: 'toast-bottom-right', preventDuplicates: true }),
+    provideToastr({
+      timeOut: 4000,
+      positionClass: 'toast-bottom-right',
+      preventDuplicates: true,
+      progressBar: true,
+    }),
 
     /**
      * Runtime internationalisation (ROADMAP §2).

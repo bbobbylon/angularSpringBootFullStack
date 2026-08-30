@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.17
-**Last Updated:** 2026-08-29
+**Version:** 3.20
+**Last Updated:** 2026-08-30
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -239,6 +239,12 @@ both accept the multi-line `UPDATE … JOIN` string inside the `IF(...)` prepare
 
 Ranked roughly by value-to-effort. Nothing here is committed work — it is the menu.
 
+Subsections: [3.1 Security & identity](#31-security--identity) · [3.2 Access model](#32-access-model)
+· [3.3 Product & data](#33-product--data) · [3.4 Operations](#34-operations) ·
+[3.5 Public-facing & marketing](#35-public-facing--marketing-surface) ·
+[**3.6 Motion & interaction feedback**](#36-motion--interaction-feedback--whats-currently-chosen)
+— the button/route animations currently in use, and how to change them.
+
 ### 3.1 Security & identity
 
 | Enhancement | Why it is worth doing | Sketch |
@@ -252,7 +258,7 @@ Ranked roughly by value-to-effort. Nothing here is committed work — it is the 
 | ✅ **Role-tier ceiling on reassignment** | Done (2026-08-07, `ec26adc`) — `RoleType.canAssign` + `AdminUserController#requireAssignableTier` reject assigning any role above the caller's own tier, fails closed on an unrecognised role name | |
 | ✅ **Single CORS source of truth** | Done — verified in code 2026-08-12. `SecurityConfig#corsConfigurationSource()` is now the single bean, built from `app.cors.allowed-origin-patterns`; `AngularSpringBootFullStackApplication#corsFilter` takes that same `CorsConfigurationSource` as a constructor argument instead of building its own rival config. No hardcoded origin list remains | |
 | ✅ **Anomaly signal tuning UI** | Done (2026-08-14) — new pinned-singleton `securitysettings` row (id=1, seeded via `INSERT IGNORE` so a re-run of `schema.sql` never stomps a live admin edit) with nullable `anomaly_enabled`/`anomaly_history_limit` override columns, `null` meaning "use the env default". `SecuritySettingsService`/`Impl` (JDBC, no Repo/RepoImpl — one row, same service-owns-its-SQL shape as `OrganizationServiceImpl`) is consulted **live** inside `LoginRiskServiceImpl#assess` on every login rather than cached, so a change from the panel takes effect on the very next sign-in with no redeploy; the `@Value` fields stay as the fallback default. New `GET`/`PATCH /admin/security/anomaly-settings` on `SecurityDashboardController` (reuses the existing `UPDATE:USER`/`UPDATE:ROLE` gate — no `SecurityConfig` matcher change), `AnomalySettingsForm` (both fields nullable by design — `null` clears an override, not a validation failure), and a `CapabilityCatalog` rule so the PATCH gets its own 403 message ("change security settings") ahead of the broader `/admin/security` rule. Frontend: a settings panel added to `/security-overview` (three-way default/enabled/disabled selector + history-limit input with a "use default" clear button, dirty-state gated Save), full 6-locale i18n. New tests: `SecuritySettingsServiceImplTest`, `SecurityDashboardControllerSecurityTest`, plus two new `LoginRiskServiceImplTest` cases proving a DB override wins over the env default | |
-| ⬜ **Access tokens have no revocation path** | Raised 2026-08-21 after a Postman-captured `access_token` kept authenticating well after it was captured, which read as a bug at first — it is not. `TokenProvider` documents this precisely: the `sid` claim does not gate validation, so access tokens stay fully stateless (NFR-PERF-2). Logging in again, revoking a session from the Security Center, and even "log out everywhere else" only stop a refresh token from minting a *new* access token — an access token already issued keeps authenticating for the rest of its 30-minute TTL regardless of what the account does afterward. A token pasted into Postman behaves identically to a token still sitting in the SPA on another device, because nothing server-side distinguishes them | Two independent, partial mitigations — neither free: (1) shorten `ACCESS_TOKEN_EXPIRE_TIME` below 30 minutes, cheap but pushes more traffic onto the refresh endpoint; (2) add a real revocation check — e.g. a `token_version` column on `users`, bumped on logout/password-change/admin-revoke and compared against a claim in `CustomAuthFilter` — which reintroduces exactly the per-request DB hit NFR-PERF-2 was written to avoid, so it is a deliberate tradeoff decision, not a drop-in fix |
+| ✅ **Access tokens have no revocation path** | Closed 2026-08-29. Raised 2026-08-21 after a Postman-captured `access_token` kept authenticating well after it was captured — `TokenProvider` documented this precisely at the time: the `sid` claim did not gate validation, so revoking a session from the Security Center only stopped a *refresh*, leaving an already-issued access token live for the rest of its 30-minute TTL | Built the *simpler* of the two originally-sketched mitigations' alternatives instead of either: `TokenProvider#isTokenValid` now checks the token's `sid` (session family) against a new `SessionRepo#isFamilyRevoked` (`EXISTS(SELECT 1 FROM refreshsessions WHERE family = :family AND revoked = TRUE)`, indexed on `family`). Every existing revoke path — single-session revoke, "log out everywhere else", password-change "revoke all", and reuse detection — already sets `revoked = TRUE` on the affected row(s), so this one check point closes the gap for all four uniformly with zero changes to `SessionServiceImpl`. `token_version`-on-`users` (the original sketch) was rejected: a single per-user counter can only revoke *everything* at once, which is wrong for a single-session revoke (it would also kill the caller's own current session) and wrong for "log out everywhere else" (which is supposed to *keep* the current session alive) — the per-family check is strictly more correct, not just simpler. On the NFR-PERF-2 cost concern: it turned out to already be moot — `isTokenValid` was unconditionally calling `userService.getUserById` on every request for the `passwordChangedAt`/`rolesChangedAt` checks (the row below) before this change, so the "DB-free access token" framing was already stale; this adds one more indexed point-lookup to a path already making a round trip, not a new one. `SessionRepo`/`SessionRepoImpl` added as a minimal new repo (not folded into `SessionServiceImpl`, which talks to `NamedParameterJdbcTemplate` directly by its own design) specifically so `TokenProvider` could depend on it without a circular dependency back through `SessionServiceImpl`. Tests: `TokenProviderTest` gained 3 cases (revoked family rejected without loading the user, non-revoked family unaffected, legacy no-`sid` token skips the check entirely) |
 | ✅ **A role change now takes effect on the very next request, not the next token refresh** | Closed 2026-08-29. Raised 2026-08-26 from the question "if I update a user's role, why doesn't the JWT in local storage change?". It cannot change — a JWT is signed and immutable — so the real issue was what a stale token still *authorized*: `TokenProvider#createAccessToken` bakes authority strings into the `authorities` claim at mint time, and `CustomAuthFilter` reads them back out of the token, not the database, so a demoted user kept staff authority for the remainder of their 30-minute access TTL | Implemented exactly the "cheaper than it looks" path this row's Sketch column proposed: a `users.roles_changed_at` column (idempotent `ALTER`, mirrors `password_changed_at` down to the column shape), stamped by `RoleRepoImpl#updateUserRole` on **every** role change — both an admin-initiated `PATCH .../role/{roleName}` and, just as importantly, the silent auto-revert-to-`ROLE_USER` that `getRoleByUserId` triggers internally when a time-boxed assignment expires (a token still carrying the expired elevated authorities must not stay valid merely because no admin explicitly demoted anyone). `TokenProvider#isTokenValid` now rejects a token unless its `iat` postdates *both* `passwordChangedAt` and `rolesChangedAt` independently — postdating the more recent of the two is not sufficient, since either can be null while the other is set. Costs nothing extra per request: `isTokenValid` already calls `userService.getUserById(userID)` for the `passwordChangedAt` check, so `rolesChangedAt` rides the same already-loaded `UserDTO`. Session revocation remains a deliberate non-substitute (the `sid` claim still doesn't gate validation — see the row above), but that gap no longer matters for role changes specifically. Tests: `TokenProviderTest` (6 cases — both-null, password-stale, roles-stale, "must postdate both, not just the newer one" in both directions, null-userId short-circuit) and `RoleRepoImplTest` (3 cases — stamps fire alongside the junction-table update, `expiresAt` passes through unchanged, an unknown role name touches neither `UPDATE` query) |
 | ⬜ **P2-3 — Machine-to-machine API access** | Lets scripts and CI authenticate without a browser. Deferred deliberately: it adds a second authentication front door, the highest-risk change on this list | **Option A — API keys:** an `X-API-Key` filter ahead of `CustomAuthFilter` resolving a **hashed** key to an `Authentication` carrying authority strings, so every existing `hasAnyAuthority`/`@PreAuthorize` rule applies unchanged. **Option B — OAuth2 client-credentials:** `POST /oauth/token`. Both converge on "a request arrives already carrying authorities". Needs `service_accounts` + hashed `api_keys` tables, new audit event types, and `PUBLIC_URLS` ↔ `PUBLIC_ROUTES` lockstep. **Large, higher risk — do last, with dedicated review** |
 | ⬜ **External identity platform (IdM/IdP) — build vs. buy** | Recurring question, previously answered from memory each time it came up. Evaluated properly 2026-08-26 and recorded below so it stops being re-litigated: the verdict is **do not migrate**, and the reasoning is written down rather than the conclusion alone | Ping/ForgeRock ruled out on licensing before any technical comparison; Keycloak is the only realistic free path if the answer ever changes. Migration means deleting ~1,500 lines of working, tested auth — see the notes below |
@@ -513,8 +519,8 @@ not the role catalog.
 | ✅ **Downloadable batch-upload templates** | Done (2026-08-29). Batch upload had no companion "here's the exact column shape" file — a first-time uploader had to reverse-engineer the expected headers from `BatchImportService`'s Javadoc or trial-and-error against the row-level error report | Built almost exactly to the original sketch: `GET /customer/batch/template` / `GET /customer/invoice/batch/template` (`CustomerController`) return a header-only `.xlsx` from the new `report/BatchTemplateReport` — a generic header-list-to-workbook writer, unlike `CustomerReport`/`InvoiceReport` it hardcodes no columns of its own. The no-drift guarantee is real, not aspirational: `BatchImportServiceImpl.CUSTOMER_TEMPLATE_HEADERS`/`INVOICE_TEMPLATE_HEADERS` are now the *only* place these column names are spelled out — `importCustomerRow`/`importInvoiceRow`'s `row.get(...)` calls were rewired through a new `key(header)` helper (`header.toLowerCase()`, matching how `parseCsv`/`parseXlsx` already lowercase every header they read) instead of carrying their own separately typed lowercase literals, so the template and the parser cannot silently diverge. `BatchImportService` exposes the two lists via `customerTemplateHeaders()`/`invoiceTemplateHeaders()`. Frontend: a "Download template" link next to each `BatchImportComponent`'s hint text, wired to two new `CustomerService` methods (`downloadCustomerBatchTemplate$`/`downloadInvoiceBatchTemplate$` — plain blob `GET`s, not the progress-tracked variant the full data-export reports use, since a header-only file is a few hundred bytes); full 6-locale i18n. Tests: `BatchImportServiceImplTest` (new — this class had no prior coverage at all) round-trips a CSV built from each header list through the real import pipeline end to end, plus asserts the header lists themselves; `CustomerControllerBatchTemplateTest` asserts both endpoints' `Content-Disposition`/content-type and that the generated workbook's header row matches whatever the service returns |
 | ✅ **Favorites / pinned destinations bar** | Done (2026-08-21, POST-SUBMISSION-UPGRADES.md #14) — navigation had outgrown the navbar: the Admin dropdown alone holds six destinations, so common pages were two clicks deep behind a menu that had to be opened to be read | Built on a new shared `navigable-destinations.ts` registry (extracted from the command palette, not a parallel route list) — see the design note below for the decisions this followed |
 | ✅ **Backend-driven i18n** | Server-generated messages (validation, email bodies, capability-denied text) stay English while the UI switches language | Done — `CapabilityCatalog`'s 403 phrases, the natural first target flagged below, are the one surface actually wired: `src/main/resources/messages*.properties` (6 locales, key-parity verified) backs a `MessageSource` auto-registered by Spring Boot's `MessageSourceAutoConfiguration` from the classpath bundle (no explicit `@Bean` needed — basename `messages` is the unmodified default). `CustomAccessDeniedHandler` resolves `CapabilityCatalog.actionKeyFor(request)` to localized text via `HttpServletRequest#getLocale()` (the Servlet API's own `Accept-Language` parser, used because this handler runs inside the Security filter chain, before `DispatcherServlet`'s `LocaleResolver` would ever populate `LocaleContextHolder`), then substitutes it into `capability.messageTemplate` via `MessageFormat`'s `{0}` placeholder. `CapabilityCatalog` itself only resolves a request to a message *key* — it has no Spring bean lifecycle and cannot hold a `MessageSource`, so key-to-text resolution stays entirely in the handler. Deliberately scoped to just this: validation messages and email bodies remain English-only, exactly as the properties file's own header comment records, since `CapabilityCatalog` was the only server-generated surface that already had one shared message template to translate. Tests: `CapabilityCatalogTest` (request → key), `CustomAccessDeniedHandlerTest` (key → localized text against the real bundles, including an unsupported-language fallback-to-English case and a cross-locale non-enumeration sweep) |
-| ⬜ **Resolve `VERIFY_EMAIL_HOST`** | Reserved and unused (`UI_APP_URL` drives links today). Keep or remove deliberately — do not let it rot as ambiguous config | |
-| ⬜ **App-wide animations & transitions** | The UI is functionally complete but static — button clicks, link/route navigations, and screen changes have no motion. User-requested (2026-08-29): "fancy" transitions on button presses, link activation, and route changes | Angular's own `@angular/animations` (route-level `:enter`/`:leave` transitions wired through `app.routes.ts`'s existing route data) is the natural fit over a third-party library, since the app is already all-Angular with no other animation dependency to justify. Scope not yet decided — needs a pass to pick which interactions get motion (route changes are the highest-value one) versus which would just be noise |
+| ⬜ **Resolve `VERIFY_EMAIL_HOST`** | Reserved and unused (`UI_APP_URL` drives links today). Keep or remove deliberately — do not let it rot as ambiguous config | **Deliberately kept, not removed (2026-08-29 re-confirmation).** Zero references in `src/` (any Java class or `application*.yml`) is confirmed, same as before — but the user stated on 2026-08-13 that this is reserved to be wired up later and asked explicitly not to remove it. This row's own "keep or remove deliberately" framing reads as still-undecided, which doesn't match that earlier explicit instruction; recorded here so the next pass doesn't re-litigate it from the code alone without checking for that context first |
+| ✅ **App-wide animations & transitions** | The UI is functionally complete but static — button clicks, link/route navigations, and screen changes have no motion. User-requested (2026-08-29): "fancy" transitions on button presses, link activation, and route changes | Done (2026-08-29). Route changes turned out to already be covered — `shared/animations/route-animations.ts`'s `routeTransition` trigger (cross-fade + translateY, `[@.disabled]` bound to `prefers-reduced-motion`) shipped as part of M7 on 2026-07-24; this row's own Sketch column had gone stale describing it as still-needed. The two genuinely missing pieces were button presses and link activation — neither `.btn` nor `a` had any `:active` (press) treatment at all, only `:hover`. Both fixed with plain CSS rather than Angular animations, deliberately: a stateless pseudo-class effect needs no component wiring and so carries zero risk across the ~28 templates that use `.btn`/`a`, versus the real visual-regression risk a broader selector or new markup would carry (see §2.1's Bootstrap-trim caution for the same concern). `.btn:not(:disabled):active { transform: scale(0.97); transition-duration: var(--dur-fast) }` gives buttons a snappy press-down; `a:active { opacity: 0.65; transition-duration: var(--dur-fast) }` gives links click feedback before navigation completes. Both reuse the existing `--dur-fast`/`--ease-out` design tokens rather than inventing new timing values, and both are covered by the same `@media (prefers-reduced-motion: reduce)` pattern already used elsewhere in `styles.css` (`.sc-reveal`, `.sc-skeleton`) — the reduced-motion block also caught and fixed a pre-existing gap, the `.btn-primary:hover` lift-and-glow having never been disabled under reduced motion either. Verified live: `ng build`/`ng lint` both clean, and the compiled stylesheet's `.btn:not(:disabled):active`/`a:active` rules confirmed via the browser's live CSSOM to target the real `<button class="btn btn-primary sc-submit">` and `<a>` "Forgot password?" elements on the login page, not just present in source |
 | ✅ **DB connection: `VERIFY_IDENTITY` instead of `REQUIRED`** | Done (2026-08-08) — Aiven's per-project CA (`certs/aiven-mysql-ca.pem`, a public certificate, safe to commit) is imported into the JRE's default truststore at Docker build time (`keytool -importcert`), and `MYSQL_SSL_MODE` is now `VERIFY_IDENTITY`. Verified three ways before touching production: the cert is well-formed (`openssl x509`), the import actually lands in the built image's truststore (`keytool -list` inside the container), and — the real test — a live `mysql.exe --ssl-mode=VERIFY_IDENTITY --ssl-ca=...` connection against the actual Aiven instance succeeded (TLSv1.3). Not yet redeployed to production as of this writing — see the RUNBOOK for the redeploy step | |
 | ✅ **Email invoices/documents as PDF attachments** | Done (2026-08-16, POST-SUBMISSION-UPGRADES.md #7) — server-side `InvoicePdfReport` (OpenPDF) + a manual "Email Invoice" button; the client-side jsPDF "Export PDF" button was left as-is, this is a second, independent path | |
 | ✅ **Scheduled/on-demand report & metrics emails** | Done (2026-08-16, POST-SUBMISSION-UPGRADES.md #6) — new `ReportDigestService` renders the same `Stats`/`SecurityOverview` figures `SecurityDashboardServiceImpl` already computes into `EmailTemplate`; a manual "Email me this report" button and a weekly `SchedulingConfig` cron job (per-organization + system-wide) both call it, so the two routes can't drift into two implementations | |
@@ -561,6 +567,7 @@ POST-SUBMISSION-UPGRADES.md #14.
 | ✅ **Real production domain** | Done (2026-08-08) — `tesseraapp.dev` (Porkbun) attached to the CloudFront distribution as an alternate domain name; see §6.8 | |
 | ✅ **`start.sh` → Maven wrapper** | Already done — `start.sh` runs `./mvnw`, not bare `mvn`. This row was stale; no code change was needed | |
 | ✅ **API testing suite (Postman/Bruno/cURL)** | Done (2026-08-14, see POST-SUBMISSION-UPGRADES.md #4) — not a pre-existing backlog item, added directly on request. The old `documentation/APIs.postman_collection` covered ~5 endpoints and hadn't been touched since May; `documentation/api-testing/` now ships three parity-checked runners (a dependency-free `curl-smoke-test.sh`, a Postman collection, a Bruno collection) covering all 12 controllers | |
+| ✅ **Report-digest cron was emailing demo-seeded accounts, bouncing into the app's own inbox** | Real hard-bounce "Delivery Status Notification (Failure)" messages landed in the operator's own inbox: the weekly digest cron (and the manual "Email me this report" button) emails every `ROLE_ADMIN`/`ROLE_APPLICATION_ADMIN`, which includes `DemoDataSeeder`'s dev-profile-only seed accounts at `@tessera.dev` — a domain with no mail server | Done (2026-08-29). Fixed one layer down from the recipient query, in `EmailServiceImpl` — the single choke point every send already funnels through — rather than filtering `SELECT_SYSTEM_ADMIN_EMAILS_QUERY` alone, which would have left the org-scoped digest's `findOrganizationAdminEmails` (equally capable of resolving a `@tessera.dev` org admin) still vulnerable. New `Constants.DEMO_EMAIL_DOMAIN`; `DemoDataSeeder` builds its six demo emails from that constant instead of six independent literals; new `EmailServiceImpl#isSuppressedRecipient` short-circuits both real dispatch methods before `mailSender.createMimeMessage()` is even called. `send`/`sendWithReplyTo`/`sendWithAttachment` changed from `void` to `boolean` so every public method's "dispatched to {}" log line only fires on an actual send — the first pass at this fix suppressed the SMTP call but still logged a false dispatch success, which would have been the same class of misleading-log problem this fix exists to prevent. Covers every current and future `EmailService` caller uniformly, none of which need to know demo accounts exist. Tests: `EmailServiceImplTest` +2 (`sendReportDigestEmail_toDemoAccount_isSuppressed`, `sendInvoiceEmail_toDemoAccount_isSuppressed`) |
 
 ### 3.5 Public-facing & marketing surface
 
@@ -573,6 +580,42 @@ opposed to the product itself. None of it is started.
 | ✅ **Contact Us page** | Done (2026-08-13) — public `/contact` route (`ContactComponent`), `POST /contact/send` (`ContactController`, public, rate-limited by the global tier — the `/send` suffix keeps the bare `/contact` path free for the SPA page, since Spring claims an exact path for *any* method match and would otherwise 500 every direct GET), forwards to the app's mailbox via `NotificationService#sendContactMessage` → `EmailServiceImpl`, reusing the existing `multipart/alternative` + `EmailTemplate` pattern exactly as sketched. Visitor's address goes on `Reply-To`, not `From` | |
 | ✅ **Public feature-preview / "product tour" pages** | Done (2026-08-13) — `/features` (`FeatureTourComponent`), static copy/icon cards describing the seven real capability areas, linked from the login screen ("See what TesseraApp can do"). Copy only, no screenshots yet — a real screenshot pass is a separate, later effort. Static, no live/authenticated components, matching the original design constraint | |
 | ✅ **`/welcome-passkey` had no `SecurityConfig` permit** | Done (2026-08-20) — added to both the `GET` and `HEAD` client-route matcher lists | |
+
+---
+
+### 3.6 Motion & interaction feedback — what's currently chosen
+
+Logged here on request so the choices are reviewable and easy to swap later. All of it shipped
+2026-08-29/30. **Every rule below has a `prefers-reduced-motion: reduce` counterpart that disables
+it** — that is not decoration, it is what lets the E2E suite run with `reducedMotion: 'reduce'` and
+get deterministic clicks (see §5).
+
+| Where | Effect | Defined in |
+|---|---|---|
+| Any `.btn` press | Scale down to `0.97` over `--dur-fast` — a physical "give" under the cursor | `styles.css` `.btn:not(:disabled):active` |
+| **Primary button press** | **Accent pulse ring** — `box-shadow` blooms from `0 0 0 0 var(--accent-ring)` out to `0 0 0 10px transparent` over 420ms. It expands from the button's *own outline*, so it inherits the exact border radius and cannot misalign | `styles.css` `@keyframes sc-btn-pulse` |
+| Primary button hover | Lift `translateY(-1px)` + accent glow `0 8px 24px` | `styles.css` `.btn-primary:hover` |
+| **Destructive** button press | A 320ms horizontal shake instead of the calm scale — deleting should not feel like saving | `styles.css` `@keyframes sc-btn-shake` |
+| Route change | Outgoing view fades to `scale(0.99)` in 140ms; incoming rises from `translateY(16px) scale(0.98)` to rest. Absolutely positioned during the overlap so the page doesn't jump | `shared/animations/route-animations.ts` |
+| Ambient status dots | `sc-pulse`, 2.4s infinite | `styles.css` `.sc-pulse` |
+
+**Why the ring rather than a ripple.** A Material-style ripple needs a positioned pseudo-element
+sized to the click coordinates. Two problems here: `::after` collides with Bootstrap's own
+`.dropdown-toggle` caret on any button that is both `.btn-primary` and a dropdown trigger, and a
+circular ripple on a rounded rectangle visibly misaligns at the corners. Animating `box-shadow`
+needs no extra element at all and follows the button's own shape by construction — which is also why
+it is cheap: `box-shadow` and `transform` are the two properties that animate without triggering
+layout.
+
+**If you want to change it**, these are the honest options, in ascending order of effort:
+- **Bigger / slower bloom** — raise the `10px` spread and the `420ms` in `sc-btn-pulse`. One line.
+- **Ring on every button, not just primary** — move the `animation` onto `.btn:not(:disabled):active`.
+  Worth trying; the current split exists so the primary action on a screen feels distinct.
+- **True origin-at-cursor ripple** — needs a directive that reads `event.offsetX/Y` and injects a
+  span, plus a fix for the caret collision. Materially more code, and it is the version that
+  misaligns on rounded corners, which is exactly what the ring was chosen to avoid.
+- **Nothing at all** — the reduced-motion block already contains a working "off" switch for each
+  rule; promoting those to the default is a delete, not a rewrite.
 
 ---
 
@@ -687,8 +730,94 @@ Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/
   2.x renamed these from the un-prefixed `mysql`/`junit-jupiter` artifact ids used in 1.x tutorials)
   + `spring-boot-testcontainers`, all version-managed by `spring-boot-dependencies`' imported
   `testcontainers-bom` — no versions pinned in `pom.xml`.
-- ⬜ **No end-to-end coverage.** Playwright against `docker compose up` is the only way to catch seam
-  breaks (interceptor ↔ backend, OAuth redirect round-trip, federated link flow).
+- ✅ **No end-to-end coverage.** Closed 2026-08-30. Playwright suite built **and green against a
+  live stack**: `16 passed (3.0m)`, `tsc --noEmit` clean, `RateLimitFilterTest` 6/6 after the
+  filter change below. Full detail in [../e2e/README.md](../e2e/README.md).
+
+  Worth recording that the first run was **not** a formality. It took seven runs to go green, and
+  the six failures in between were all harness or environment faults, not application bugs — the
+  suite found one real production issue (the mail health indicator, below) and zero defects in the
+  code it was written to test. That is the expected shape for a first E2E run and the reason
+  "written, and it lists correctly" was never worth calling done.
+
+  **Shape.** 16 tests / 5 files at the repository root (not under `tesseraapp/`, because they
+  exercise the *deployed artifact* — the Dockerfile bakes the Angular bundle into the jar's static
+  resources, so the SPA and API are one origin and neither project owns the seam). Covers: the
+  sign-in path; the user-enumeration guarantee asserted through the rendered UI (the two failure
+  messages must equal *each other*, so the test pins the property rather than the copy and survives
+  rewording/translation); the interceptor ↔ real filter chain (bearer prefix, malformed-token 401
+  with a valid-token control); an end-to-end proof of the 2026-08-29 access-token revocation, using
+  two genuinely independent browser contexts, that no mocked unit test can give; the CSP /
+  cache-revalidation headers, including that `script-src` has not silently regressed to
+  `'unsafe-inline'`; and the rate limiter's own 429 tier, `Retry-After` and envelope.
+
+  **Production issue found: the mail health indicator could take the app down.**
+  `spring-boot-starter-mail` plus a configured `spring.mail.host` makes Spring Boot auto-register a
+  `MailHealthIndicator` that opens a real SMTP connection on *every* `/actuator/health` probe —
+  nobody opts into this, it arrives with the starter. `/actuator/health` is exactly what the ALB
+  target group and the ECS container check poll, so a Gmail outage or connect-rate throttle would
+  have flipped health to 503, drained the targets and had ECS replace a task that could still serve
+  every request except sending an email. Now `management.health.mail.enabled: false` in
+  `application.yml`, with the reasoning recorded on the property. Surfaced because the E2E stack
+  points `MAIL_HOST` at nothing: the app served `/` with a 200 while health stayed DOWN forever, so
+  the suite could never start.
+
+  **Rate-limit capacities are now configurable** (`security.rate-limit.auth-capacity` /
+  `global-capacity`, defaulting to the unchanged 10 and 200). Inside Docker every request from the
+  host arrives from one bridge-gateway IP, so a whole suite run is — correctly — indistinguishable
+  from one client issuing a sustained burst, and the limiter rejected it. `.env.e2e` raises both for
+  that stack alone rather than weakening the shipped defaults, and `e2e/rate-limit.spec.ts` then
+  drives the auth tier past the raised ceiling on purpose, so the limiter ends up with *more*
+  end-to-end coverage than it had before. Constructor injection rather than `@Value` fields,
+  deliberately: `RateLimitFilterTest` builds the filter with `new`, which no Spring post-processor
+  sees, so field injection would have left both capacities at zero — a bucket admitting nothing.
+
+  **Three seam findings, none visible from either half alone** (full detail in the E2E README):
+  1. The default compose stack has **no login accounts** — `DemoDataSeeder` is `@Profile("dev")`
+     but `docker-compose.yml` defaults to `prod`.
+  2. **Risk-based step-up makes an E2E login unsatisfiable.** Seeded accounts carry login history
+     from a fixed device/IP, so a browser matches neither and both `NEW_DEVICE` and `NEW_NETWORK`
+     fire; the resulting step-up code is mailed to a `@tessera.dev` address, which
+     `EmailServiceImpl#isSuppressedRecipient` drops. The login hangs forever with no error. The
+     suite sets `ANOMALY_DETECTION_ENABLED=false`, exactly the case `application.yml`'s comment on
+     that flag anticipates.
+  3. **Signing in is rationed** — `RateLimitFilter` allows 10 `/user/login` per minute per IP and
+     the whole suite shares one IP, so it would throttle itself. Forced the (correct, idiomatic)
+     sign-in-once-and-share-storage-state design.
+
+  Also caught before shipping: `docker-compose.e2e.yml` needs `env_file: !override`, because Compose
+  *appends* `env_file` across `-f` layers. Without it the throwaway stack loads the developer's real
+  `.env` — live Google/GitHub/Microsoft client secrets and the Aiven database password — and breaks
+  besides (`.env`'s `SPRING_DATASOURCE_PASSWORD` overrides the E2E MySQL credentials).
+
+  **Three harness traps that each faked an application bug.** All three produced failures that
+  pointed convincingly at working production code, which is the reason they are written down:
+  1. **`browser.newContext()` inherits `storageState`.** It inherits the project's `use` options, so
+     the default is not a clean browser — it is *the same session again*. The revocation test opens
+     a second context precisely to have two sessions to revoke between; it silently got one. Had it
+     not hung first, A and B would have shared a session family and "revoke everything except mine"
+     would have spared A's token, failing with a message asserting that access-token revocation was
+     broken. Fixed with an explicit `storageState: { cookies: [], origins: [] }`.
+  2. **`reuseExistingServer` silently tested a stale image.** Playwright's default is reuse-locally,
+     which is right for a dev server that picks up source changes and wrong for a compose stack
+     whose image bakes in the compiled jar. A leftover container is a frozen snapshot of older
+     source; one run reported red on rate limits that had already been raised, against code that was
+     never deployed. Now pinned `false`, with a `pree2e` teardown so a leftover stack is not an error.
+  3. **The compose project name is load-bearing.** Without `name: tessera-e2e` the stack shares the
+     developer's `mysql-data` volume — which both breaks it (`MYSQL_ROOT_PASSWORD` is honoured only
+     on an empty data directory) and, had it connected, would have run the suite against the real
+     development database.
+
+  Also adopted: `use.reducedMotion: 'reduce'`. Playwright will not dispatch a click until the
+  element is *stable* across two animation frames, and an animating element never satisfies that —
+  `click()` then retries silently until the test timeout rather than failing. Now that route
+  transitions and button-press feedback are animated, this is worth having permanently. The app
+  honours the query in `styles.css`, `command-palette.component.css` and `app.component.ts`, so it
+  switches on the app's own reduced-motion path rather than fighting the animations.
+
+  **Still uncovered:** federated OAuth and SAML round-trips (need a mock IdP container such as Dex —
+  the E2E env deliberately configures no OAuth clients) and every email-dependent flow (password
+  reset, verification links; needs a mail catcher such as MailHog wired to `MAIL_HOST`).
 - ⬜ **Refactors** listed in §4 — none urgent, all the kind that get harder the longer they wait.
 - ✅ Security-critical-path tests · `ng lint` · `npm audit` · prod error hygiene · Aiven schema
   drift · redundant JWT library — all closed; see [IMPLEMENTATION-HISTORY.md](IMPLEMENTATION-HISTORY.md).

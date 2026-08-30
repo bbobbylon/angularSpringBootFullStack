@@ -79,4 +79,15 @@ public class SessionQuery {
             "SELECT * FROM refreshsessions " +
             "WHERE user_id = :userId AND revoked = FALSE AND superseded = FALSE AND expires_at > NOW() " +
             "ORDER BY last_used_at DESC";
+
+    /**
+     * Access-token revocation check (FUTURE-ENHANCEMENTS §3.1): does ANY row for this family
+     * carry {@code revoked = TRUE}? Backs {@code TokenProvider#isTokenValid} so a session
+     * revoked via {@link #REVOKE_FAMILY_FOR_USER_QUERY}, {@link #REVOKE_OTHER_SESSIONS_QUERY},
+     * {@link #REVOKE_ALL_SESSIONS_QUERY}, or {@link #REVOKE_FAMILY_QUERY} (reuse detection) takes
+     * effect on the already-issued access token immediately, instead of waiting out its up-to-
+     * 30-minute TTL. Parameter: family.
+     */
+    public static final String IS_FAMILY_REVOKED_QUERY =
+            "SELECT EXISTS(SELECT 1 FROM refreshsessions WHERE family = :family AND revoked = TRUE)";
 }

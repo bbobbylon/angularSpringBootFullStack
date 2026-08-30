@@ -1,0 +1,58 @@
+---
+title: Request Path & Access-Token Validation
+---
+%% What every authenticated request passes through, and the three checks inside isTokenValid.
+%% Check 2 (session-family revocation) is the piece added 2026-08-29.
+sequenceDiagram
+    autonumber
+    participant SPA as Angular<br/>tokenInterceptor
+    participant RL as RateLimitFilter<br/>@Order(-200)
+    participant CORS as CorsFilter
+    participant CAF as CustomAuthFilter
+    participant TP as TokenProvider<br/>isTokenValid
+    participant DB as MySQL
+    participant SEC as Spring Security<br/>authorization rules
+    participant CTL as Controller
+    participant CACHE as HttpCacheHeadersFilter
+
+    SPA->>RL: GET /customer/list<br/>Authorization: Bearer {access}
+    note left of SPA: The interceptor attaches the JWT to<br/>every outbound call. The "Bearer "<br/>prefix is load-bearing — CustomAuthFilter<br/>strips exactly that literal.
+
+    RL->>RL: Global tier: 200 req/min per IP
+    RL->>CORS: pass
+    CORS->>CAF: pass
+
+    alt path is in Constants.PUBLIC_ROUTES
+        CAF->>SEC: skip — no token parsing at all
+        note right of CAF: PUBLIC_ROUTES (this skip list) and<br/>PUBLIC_URLS (the filter chain's permitAll)<br/>must stay in lockstep. A route public in<br/>one but not the other breaks on a stale<br/>Authorization header.
+    else authenticated request
+        CAF->>TP: isTokenValid(userId, token)
+
+        rect rgba(107, 91, 255, 0.10)
+        TP->>TP: 1 — signature + expiry
+        TP->>DB: 2 — SessionRepo.isFamilyRevoked(sid)
+        note right of TP: Added 2026-08-29. One indexed EXISTS<br/>on refreshsessions.family. Makes every<br/>revoke path take effect immediately<br/>instead of waiting out the 30-min TTL.
+        TP->>DB: 3 — user's passwordChangedAt / rolesChangedAt
+        note right of TP: This lookup already existed, which is<br/>why check 2 adds no new round trip —<br/>only one more indexed read.
+        end
+
+        alt any check fails
+            TP-->>CAF: invalid
+            CAF-->>SPA: 401 — custom entry point
+        else all three pass
+            TP-->>CAF: valid
+            CAF->>SEC: Set UserDTO principal
+        end
+    end
+
+    SEC->>SEC: hasAnyAuthority("READ:USER", …)
+    note right of SEC: Matchers evaluated top-down, so specific<br/>rules must precede the broad /** catch-alls.
+
+    alt authority missing
+        SEC-->>SPA: 403 — custom access-denied handler
+    else authorized
+        SEC->>CTL: dispatch
+        CTL-->>CACHE: ResponseEntity of HttpResponse
+        CACHE->>CACHE: Cache-Control: private, no-cache + ETag
+        CACHE-->>SPA: 200, or 304 if the ETag matched
+    end

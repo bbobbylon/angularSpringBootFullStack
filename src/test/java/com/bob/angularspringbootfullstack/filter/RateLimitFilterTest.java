@@ -52,7 +52,16 @@ class RateLimitFilterTest {
     /** A path in no auth-tier prefix, so it draws on the 200/minute global bucket. */
     private static final String GLOBAL_PATH = "/customer/list";
 
+    /**
+     * The capacities these tests run against, passed explicitly to the filter's constructor.
+     *
+     * <p>They are the same values {@code application.yml} defaults to, so this suite still describes
+     * the shipped configuration — but it no longer depends on that being the default. The filter
+     * takes both limits as constructor arguments (see its Javadoc), which is what lets a case state
+     * the numbers it is asserting against instead of restating a constant defined elsewhere.
+     */
     private static final int AUTH_CAPACITY = 10;
+    private static final int GLOBAL_CAPACITY = 200;
 
     /** The address the TCP connection genuinely came from — not forgeable over an established connection. */
     private static final String PEER = "203.0.113.7";
@@ -102,7 +111,7 @@ class RateLimitFilterTest {
     }
 
     private static RateLimitFilter newFilter() {
-        return new RateLimitFilter(new ObjectMapper());
+        return new RateLimitFilter(new ObjectMapper(), AUTH_CAPACITY, GLOBAL_CAPACITY);
     }
 
     @Test

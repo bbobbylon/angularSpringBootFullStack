@@ -19,11 +19,14 @@ import java.util.List;
  * invariant is what makes the Security Center's device list complete and "revoke"
  * actually mean something.
  *
- * <p>Division of labor with {@code TokenProvider}: the provider signs and verifies JWTs
- * (stateless); this service owns the {@code refreshsessions} table and the rotation
- * policy (stateful). Access tokens are never checked against the store — they stay
- * DB-free on every request (NFR-PERF-2) and simply age out within 30 minutes after a
- * revocation.
+ * <p>Division of labor with {@code TokenProvider}: the provider signs and verifies JWTs;
+ * this service owns the {@code refreshsessions} table and the rotation policy. Every
+ * revocation method below (a single revoke, "log out everywhere else", "revoke all", and
+ * server-initiated reuse detection) sets {@code revoked = TRUE} on the affected family
+ * row(s), and {@code TokenProvider#isTokenValid} checks that flag on every request — so a
+ * revocation here takes effect on the caller's already-issued access token immediately,
+ * not only once it naturally expires (FUTURE-ENHANCEMENTS §3.1, superseding the original
+ * NFR-PERF-2 "access tokens stay fully stateless" framing).
  */
 public interface SessionService {
 

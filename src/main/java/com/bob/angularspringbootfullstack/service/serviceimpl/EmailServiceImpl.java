@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.service.serviceimpl;
 
+import com.bob.angularspringbootfullstack.constants.Constants;
 import com.bob.angularspringbootfullstack.enumeration.VerificationType;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.SecurityOverview;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 
 /**
@@ -97,8 +99,9 @@ public class EmailServiceImpl implements EmailService {
                 .note(copy.note())
                 .build();
 
-        send(email, subject, plain, html);
-        log.info("Verification email ({}) dispatched to {}", verificationType.getType(), email);
+        if (send(email, subject, plain, html)) {
+            log.info("Verification email ({}) dispatched to {}", verificationType.getType(), email);
+        }
     }
 
     /**
@@ -137,8 +140,9 @@ public class EmailServiceImpl implements EmailService {
                         + "Security Center.")
                 .build();
 
-        send(email, subject, plain, html);
-        log.info("Step-up verification code dispatched to {}", email);
+        if (send(email, subject, plain, html)) {
+            log.info("Step-up verification code dispatched to {}", email);
+        }
     }
 
     /**
@@ -173,8 +177,9 @@ public class EmailServiceImpl implements EmailService {
                         + "sessions under Security Center.")
                 .build();
 
-        send(email, subject, plain, html);
-        log.info("Security alert email dispatched to {}", email);
+        if (send(email, subject, plain, html)) {
+            log.info("Security alert email dispatched to {}", email);
+        }
     }
 
     /**
@@ -204,8 +209,9 @@ public class EmailServiceImpl implements EmailService {
                 .note("Reply directly to this email to respond — Reply-To is set to the sender's address.")
                 .build();
 
-        sendWithReplyTo(FROM_ADDRESS, mailSubject, plain, html, email);
-        log.info("Contact Us submission from {} <{}> forwarded to {}", name, email, FROM_ADDRESS);
+        if (sendWithReplyTo(FROM_ADDRESS, mailSubject, plain, html, email)) {
+            log.info("Contact Us submission from {} <{}> forwarded to {}", name, email, FROM_ADDRESS);
+        }
     }
 
     /**
@@ -232,8 +238,9 @@ public class EmailServiceImpl implements EmailService {
                 .note("If you have any questions about this invoice, please reply to this email.")
                 .build();
 
-        sendWithAttachment(customerEmail, subject, plain, html, "invoice-" + invoiceNumber + ".pdf", pdfBytes);
-        log.info("Invoice {} emailed to {}", invoiceNumber, customerEmail);
+        if (sendWithAttachment(customerEmail, subject, plain, html, "invoice-" + invoiceNumber + ".pdf", pdfBytes)) {
+            log.info("Invoice {} emailed to {}", invoiceNumber, customerEmail);
+        }
     }
 
     /**
@@ -276,8 +283,9 @@ public class EmailServiceImpl implements EmailService {
                 .note("Sign in to TesseraApp for the full interactive dashboard.")
                 .build();
 
-        send(recipientEmail, subject, plain, html);
-        log.info("Report digest ({}) dispatched to {}", scopeLabel, recipientEmail);
+        if (send(recipientEmail, subject, plain, html)) {
+            log.info("Report digest ({}) dispatched to {}", scopeLabel, recipientEmail);
+        }
     }
 
     /**
@@ -300,8 +308,9 @@ public class EmailServiceImpl implements EmailService {
                 .note("You can manage its settings, members, and roles from the Organizations screen at any time.")
                 .build();
 
-        send(adminEmail, subject, plain, html);
-        log.info("Organization-created confirmation dispatched to {} for organization '{}'", adminEmail, organizationName);
+        if (send(adminEmail, subject, plain, html)) {
+            log.info("Organization-created confirmation dispatched to {} for organization '{}'", adminEmail, organizationName);
+        }
     }
 
     /**
@@ -323,10 +332,12 @@ public class EmailServiceImpl implements EmailService {
      * @param subject subject line
      * @param plain   the {@code text/plain} alternative
      * @param html    the {@code text/html} alternative, as rendered by {@link EmailTemplate}
+     * @return {@code true} if the message was actually handed to {@link JavaMailSender}, {@code
+     *         false} if dispatch was suppressed ({@link #isSuppressedRecipient})
      * @throws MailPreparationException if the message cannot be composed
      */
-    private void send(String to, String subject, String plain, String html) {
-        sendWithReplyTo(to, subject, plain, html, null);
+    private boolean send(String to, String subject, String plain, String html) {
+        return sendWithReplyTo(to, subject, plain, html, null);
     }
 
     /**
@@ -337,8 +348,13 @@ public class EmailServiceImpl implements EmailService {
      * @param replyTo address to set as {@code Reply-To}, or {@code null} to omit the header entirely
      *                (every other caller — the header only makes sense when the reply audience
      *                differs from the sender)
+     * @return {@code true} if the message was actually handed to {@link JavaMailSender}, {@code
+     *         false} if dispatch was suppressed ({@link #isSuppressedRecipient})
      */
-    private void sendWithReplyTo(String to, String subject, String plain, String html, String replyTo) {
+    private boolean sendWithReplyTo(String to, String subject, String plain, String html, String replyTo) {
+        if (isSuppressedRecipient(to)) {
+            return false;
+        }
         MimeMessage message = mailSender.createMimeMessage();
         try {
             // multipart=true is what allows a text/html part alongside text/plain; without it the
@@ -355,6 +371,7 @@ public class EmailServiceImpl implements EmailService {
             throw new MailPreparationException("Unable to compose outbound email", e);
         }
         mailSender.send(message);
+        return true;
     }
 
     /**
@@ -375,10 +392,15 @@ public class EmailServiceImpl implements EmailService {
      * @param html               the {@code text/html} alternative, as rendered by {@link EmailTemplate}
      * @param attachmentFilename the name the attachment is saved as by the recipient's mail client
      * @param attachmentBytes    the attachment's raw bytes
+     * @return {@code true} if the message was actually handed to {@link JavaMailSender}, {@code
+     *         false} if dispatch was suppressed ({@link #isSuppressedRecipient})
      * @throws MailPreparationException if the message cannot be composed
      */
-    private void sendWithAttachment(String to, String subject, String plain, String html,
-                                     String attachmentFilename, byte[] attachmentBytes) {
+    private boolean sendWithAttachment(String to, String subject, String plain, String html,
+                                        String attachmentFilename, byte[] attachmentBytes) {
+        if (isSuppressedRecipient(to)) {
+            return false;
+        }
         MimeMessage message = mailSender.createMimeMessage();
         try {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
@@ -391,6 +413,28 @@ public class EmailServiceImpl implements EmailService {
             throw new MailPreparationException("Unable to compose outbound email", e);
         }
         mailSender.send(message);
+        return true;
+    }
+
+    /**
+     * True when {@code to} belongs to {@link Constants#DEMO_EMAIL_DOMAIN} — the domain every
+     * {@code DemoDataSeeder} account uses. Those mailboxes don't exist, so a real SMTP attempt
+     * always hard-bounces back into {@link #FROM_ADDRESS}'s own inbox rather than the intended
+     * recipient's, which is exactly what happened in production: the weekly report-digest cron
+     * emails every {@code ROLE_ADMIN}/{@code ROLE_APPLICATION_ADMIN} user, seed accounts included.
+     * Checked once here, in both real dispatch methods, rather than filtered out of each caller's
+     * recipient query — a demo address reaching {@link EmailService} through any future flow is
+     * suppressed the same way without that flow needing to know demo accounts exist at all.
+     *
+     * @param to intended recipient address
+     * @return {@code true} if the send should be skipped entirely
+     */
+    private boolean isSuppressedRecipient(String to) {
+        boolean suppressed = to != null && to.toLowerCase(Locale.ROOT).endsWith(Constants.DEMO_EMAIL_DOMAIN);
+        if (suppressed) {
+            log.info("Suppressing outbound email to {} — demo account, mailbox does not exist.", to);
+        }
+        return suppressed;
     }
 
     /**

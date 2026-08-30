@@ -1,0 +1,51 @@
+---
+title: Session Management & Revocation
+---
+%% Listing your active sessions and ending them. Before 2026-08-29 a revoke only stopped the
+%% REFRESH token; the access token stayed usable for up to 30 more minutes. It no longer does.
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant SPA as Angular<br/>SecurityComponent
+    participant API as SessionController<br/>/user/sessions
+    participant SESS as SessionService
+    participant DB as MySQL<br/>refreshsessions
+    participant OTHER as Another device<br/>(session B)
+
+    rect rgba(107, 91, 255, 0.10)
+    note over U, DB: Review
+    U->>SPA: Open the security screen
+    SPA->>API: GET /user/sessions
+    API->>SESS: listSessions(userId)
+    SESS->>DB: Active families for this user
+    API-->>SPA: Device, location, last-used per session
+    end
+
+    rect rgba(251, 113, 133, 0.12)
+    note over U, OTHER: Revoke
+    alt end one session
+        U->>SPA: "Sign out this device"
+        SPA->>API: DELETE /user/sessions/{family}
+        API->>SESS: revokeSession(userId, family)
+        SESS->>DB: UPDATE ... SET revoked = TRUE WHERE family = :family
+    else end every other session
+        U->>SPA: "Sign out everywhere else"
+        SPA->>API: DELETE /user/sessions
+        API->>SESS: revokeOtherSessions(userId, currentFamily)
+        SESS->>DB: UPDATE ... SET revoked = TRUE<br/>WHERE user = :id AND family <> :current
+        note right of SESS: The caller's own session must survive —<br/>"everywhere else" that also logs you out<br/>is a different, broken feature.
+    else password changed
+        SESS->>DB: revokeAllSessions(userId) — including this one
+    end
+    end
+
+    rect rgba(52, 211, 153, 0.10)
+    note over OTHER, DB: The effect, on the very next request
+    OTHER->>API: Any call with its still-unexpired access token
+    API->>DB: TokenProvider → SessionRepo.isFamilyRevoked(sid)
+    DB-->>API: revoked = TRUE
+    API-->>OTHER: 401 — immediately, not in 30 minutes
+    note right of API: One check point closes the gap for ALL<br/>four revoke paths at once, because every<br/>one of them already set the same column.
+    end
+
+    note over U, OTHER: Chosen over a per-user token_version counter, which can only revoke<br/>everything at once — wrong for both single-session revoke and<br/>"sign out everywhere else".

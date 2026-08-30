@@ -340,6 +340,23 @@ aws:
   s3:
     bucket: ${AWS_S3_BUCKET:}
 
+security:
+  rate-limit:
+    # Per-IP, per-minute request budgets enforced by RateLimitFilter (@Order(-200), so it runs
+    # before Spring Security does any JWT work). These defaults ARE the production values — the
+    # properties exist so a specific environment can move them, not so the shipped limits change.
+    #
+    # The auth tier is tight on purpose: /user/login, /user/register, /user/refresh/token and the
+    # verification endpoints are the ones worth brute-forcing.
+    #
+    # The E2E stack raises both (see .env.e2e.example). Not a weakening of the control so much as
+    # an acknowledgement that the suite is a false positive for it: inside Docker every request
+    # from the host arrives from one bridge-gateway IP, so a fourteen-test run is one client
+    # issuing a burst — which is precisely the shape the limiter exists to reject. The limiter is
+    # still covered there, deliberately, by e2e/rate-limit.spec.ts.
+    auth-capacity: ${RATE_LIMIT_AUTH_CAPACITY:10}
+    global-capacity: ${RATE_LIMIT_GLOBAL_CAPACITY:200}
+
 management:
   endpoints:
     web:
@@ -355,3 +372,30 @@ management:
   endpoint:
     health:
       show-details: never
+  health:
+    mail:
+      # Deliberately OFF. `spring-boot-starter-mail` + a configured `spring.mail.host` makes
+      # Spring Boot auto-register a MailHealthIndicator that opens a real SMTP connection on
+      # EVERY health probe. Nobody opted into that — it arrives with the starter — and it
+      # quietly wires an optional feature into the signal that decides whether this instance
+      # lives or dies:
+      #
+      #   • /actuator/health is what the ALB target group and the ECS container health check
+      #     poll (see the exposure comment above, aws/setup.sh, aws/task-definition.json).
+      #   • So in prod every probe did a TCP+TLS handshake to smtp.gmail.com, and a Gmail
+      #     hiccup or a connect-rate throttle would flip health to 503 → ALB drains the
+      #     targets → ECS replaces a task that could still serve every request except sending
+      #     an email. An email outage became a full application outage.
+      #   • The connect timeout is 5s, so a hanging SMTP host also stalls each probe long
+      #     enough to trip the healthcheck's own 5s timeout.
+      #
+      # A health check answers "should traffic be routed here?", not "is every downstream
+      # dependency perfect?". Undeliverable mail is a degraded feature, not a reason to stop
+      # serving. This was found by the E2E stack (MAIL_HOST has no listener there, so the app
+      # served fine on / but reported DOWN forever and never became healthy) — but the
+      # production consequence above is the actual reason it is disabled everywhere.
+      #
+      # Trade-off accepted: we lose the passive signal that SMTP is misconfigured. That is
+      # covered instead by EmailServiceImpl logging every send failure, and by the audit
+      # events surfaced through /actuator/metrics — observability, not admission control.
+      enabled: false

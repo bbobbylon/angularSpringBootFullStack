@@ -33,6 +33,12 @@ Two deep references sit alongside it and are **not** duplicated here:
 - [10. Testing](#10-testing)
 - [11. Deployment](#11-deployment)
 
+**Visual companion:** [diagrams/index.html](diagrams/index.html) — sequence diagrams for all nine
+authentication, authorization and session flows (password reset, login + risk step-up, token
+rotation and reuse detection, the request path, federated login, per-org SSO, passkeys,
+registration, session revocation). Generated from tracked `.mmd` sources; see
+[diagrams/README.md](diagrams/README.md) to edit or regenerate them.
+
 ---
 
 ## 1. Architecture

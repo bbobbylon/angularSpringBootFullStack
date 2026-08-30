@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Compose OVERRIDE for the Playwright E2E stack. Never used alone — it layers on
+# top of docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml \
+#     --env-file .env.e2e up --build
+#
+# (`npm run e2e` does this for you; playwright.config.ts's `webServer` block runs
+# the same command.)
+#
+# Compose MERGES the `environment` mapping rather than replacing it, so everything
+# the base file sets — MYSQL_HOST=mysql, SPRING_DATASOURCE_URL, CONTAINER_PORT,
+# UI_APP_URL — still applies. Only the three keys below are changed, and each one
+# is changed because the suite genuinely cannot run otherwise. This file exists so
+# those three deviations are visible and justified in one place, instead of being
+# smuggled in as ad-hoc `-e` flags on somebody's shell command.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# A DEDICATED COMPOSE PROJECT NAME — the most important line in this file.
+#
+# Without it the stack inherits the base file's project name (`angularspringbootfullstack`,
+# derived from the directory), and therefore SHARES the developer's `mysql-data` and
+# `app-images` volumes and container names. Two consequences, both discovered by running it:
+#
+#   1. It does not work. `MYSQL_ROOT_PASSWORD` is honoured only when MySQL initialises an EMPTY
+#      data directory; on an existing volume it is ignored and the previous password stands, so
+#      the app dies at startup with "Access denied for user 'root'".
+#   2. Worse, if it HAD connected, the suite would have been reading and writing the developer's
+#      real development database — seeding it, revoking its sessions, and leaving test rows behind.
+#
+# A separate project name isolates volumes, containers and networks completely, which is also what
+# makes `npm run e2e:down -v` safe: it can only ever destroy E2E data.
+name: tessera-e2e
+
+services:
+  app:
+    # The base file hardcodes `env_file: .env`, the developer's real environment
+    # (live Gmail app password, real OAuth client secrets, a real Aiven host and
+    # password). Point the E2E stack at its own throwaway file instead: the suite
+    # must be runnable on a machine that has never configured this app, and must
+    # never be able to send a real email or reach a real database by accident.
+    #
+    # `!override` is load-bearing and must not be dropped. Compose MERGES list-valued
+    # keys across -f layers, so a plain `env_file: [.env.e2e]` APPENDS to the base
+    # list and yields `[.env, .env.e2e]` — loading the developer's real secrets into
+    # the throwaway stack anyway. Verified against `docker compose config`: without
+    # the tag, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET
+    # and AIVEN_DB_PASSWORD all appear in the rendered E2E environment. It also
+    # breaks the stack outright — `.env`'s SPRING_DATASOURCE_PASSWORD wins over this
+    # file's MySQL credentials, so the app cannot authenticate to its own container.
+    env_file: !override
+      - .env.e2e
+
+    environment:
+      # DemoDataSeeder is @Profile("dev"). The base compose file defaults to `prod`,
+      # under which the seeder bean is never instantiated and the stack boots with no
+      # login accounts at all — every auth test would fail with nothing to sign in as.
+      SPRING_ACTIVE_PROFILES: dev
+
+      # THE setting that makes E2E login possible. See the long explanation in
+      # .env.e2e.example: seeded accounts have login history from a fixed device/IP,
+      # a Playwright browser matches neither, so NEW_DEVICE + NEW_NETWORK both fire
+      # and escalate to an emailed step-up code — which EmailServiceImpl then drops
+      # because the address is @tessera.dev. The login becomes unsatisfiable.
+      # Repeated here as well as in .env.e2e so that overriding --env-file cannot
+      # silently re-enable it and leave the suite hanging on the MFA screen.
+      ANOMALY_DETECTION_ENABLED: "false"
+
+      # Single-origin stack: the Angular bundle is baked into the jar's static
+      # resources, so the SPA and API share a host and port.
+      UI_APP_URL: "http://localhost:${APP_PORT:-8090}"
+
+  mysql:
+    # A throwaway database on a non-default host port, so the E2E stack cannot
+    # collide with (or worse, be mistaken for) a developer's real local MySQL.
+    ports:
+      - "${MYSQL_HOST_PORT:-3307}:3306"

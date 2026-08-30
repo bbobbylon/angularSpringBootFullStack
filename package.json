@@ -1,8 +1,25 @@
 {
-  "devDependencies": {
-    "prettier": "^3.8.2"
+  "name": "tessera-e2e",
+  "private": true,
+  "description": "Root workspace for the end-to-end suite. The Angular app has its own package.json under tesseraapp/; this one exists only for tooling that spans both halves of the stack.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "diagrams": "node documentation/diagrams/render.mjs",
+    "pree2e": "docker compose -f docker-compose.yml -f docker-compose.e2e.yml --env-file .env.e2e down -v --remove-orphans",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:headed": "playwright test --headed",
+    "e2e:report": "playwright show-report",
+    "e2e:install": "playwright install --with-deps chromium",
+    "e2e:up": "docker compose -f docker-compose.yml -f docker-compose.e2e.yml --env-file .env.e2e up --build -d",
+    "e2e:down": "docker compose -f docker-compose.yml -f docker-compose.e2e.yml --env-file .env.e2e down -v",
+    "e2e:logs": "docker compose -f docker-compose.yml -f docker-compose.e2e.yml --env-file .env.e2e logs -f app"
   },
-  "dependencies": {
-    "node": "^25.9.0"
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^22.10.0",
+    "mermaid": "^11.17.2",
+    "prettier": "^3.8.2",
+    "typescript": "~5.9.2"
   }
 }

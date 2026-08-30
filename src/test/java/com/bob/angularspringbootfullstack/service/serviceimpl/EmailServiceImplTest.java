@@ -22,6 +22,7 @@ import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -114,6 +115,25 @@ class EmailServiceImplTest {
                 .contains("1 restricted accounts")
                 .contains("80.0% MFA coverage")
                 .contains("5 active sessions");
+    }
+
+    @Test
+    @DisplayName("sendReportDigestEmail suppresses dispatch to a @tessera.dev demo account instead of hard-bouncing")
+    void sendReportDigestEmail_toDemoAccount_isSuppressed() {
+        Stats stats = new Stats(1, 1, 100.0);
+        SecurityOverview overview = SecurityOverview.empty(30);
+
+        emailService.sendReportDigestEmail("frank.app@tessera.dev", "System-wide", stats, overview);
+
+        verifyNoInteractions(mailSender);
+    }
+
+    @Test
+    @DisplayName("sendInvoiceEmail suppresses dispatch to a @tessera.dev demo account instead of hard-bouncing")
+    void sendInvoiceEmail_toDemoAccount_isSuppressed() {
+        emailService.sendInvoiceEmail("Frank AppAdmin", "frank.app@tessera.dev", "A3F9KQ2B", "%PDF-1.4".getBytes());
+
+        verifyNoInteractions(mailSender);
     }
 
     /**

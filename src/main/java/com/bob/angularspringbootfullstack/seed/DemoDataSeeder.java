@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.seed;
 
+import com.bob.angularspringbootfullstack.constants.Constants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -50,12 +51,12 @@ public class DemoDataSeeder implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         log.info("[DemoDataSeeder] Checking seed users …");
-        seedIfMissing("Alice",  "Guest",    "alice.guest@tessera.dev",  "ROLE_GUEST",              "Chrome on macOS",   "10.0.1.10");
-        seedIfMissing("Bob",    "Mod",      "bob.mod@tessera.dev",      "ROLE_MODERATOR",           "Firefox on Ubuntu", "10.0.1.11");
-        seedIfMissing("Carol",  "Help",     "carol.help@tessera.dev",   "ROLE_HELP_DESK_ADMIN",    "Edge on Windows",   "10.0.1.12");
-        seedIfMissing("Dave",   "OrgAdmin", "dave.org@tessera.dev",     "ROLE_ORGANIZATION_ADMIN", "Safari on macOS",   "10.0.1.13");
-        seedIfMissing("Eve",    "Admin",    "eve.admin@tessera.dev",    "ROLE_ADMIN",              "Chrome on Windows", "10.0.1.14");
-        seedIfMissing("Frank",  "AppAdmin", "frank.app@tessera.dev",    "ROLE_APPLICATION_ADMIN",  "Chrome on Linux",   "10.0.1.15");
+        seedIfMissing("Alice",  "Guest",    "alice.guest" + Constants.DEMO_EMAIL_DOMAIN,  "ROLE_GUEST",              "Chrome on macOS",   "10.0.1.10");
+        seedIfMissing("Bob",    "Mod",      "bob.mod" + Constants.DEMO_EMAIL_DOMAIN,      "ROLE_MODERATOR",           "Firefox on Ubuntu", "10.0.1.11");
+        seedIfMissing("Carol",  "Help",     "carol.help" + Constants.DEMO_EMAIL_DOMAIN,   "ROLE_HELP_DESK_ADMIN",    "Edge on Windows",   "10.0.1.12");
+        seedIfMissing("Dave",   "OrgAdmin", "dave.org" + Constants.DEMO_EMAIL_DOMAIN,     "ROLE_ORGANIZATION_ADMIN", "Safari on macOS",   "10.0.1.13");
+        seedIfMissing("Eve",    "Admin",    "eve.admin" + Constants.DEMO_EMAIL_DOMAIN,    "ROLE_ADMIN",              "Chrome on Windows", "10.0.1.14");
+        seedIfMissing("Frank",  "AppAdmin", "frank.app" + Constants.DEMO_EMAIL_DOMAIN,    "ROLE_APPLICATION_ADMIN",  "Chrome on Linux",   "10.0.1.15");
         log.info("[DemoDataSeeder] Seed check complete.");
     }
 

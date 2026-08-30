@@ -10,8 +10,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -65,7 +65,6 @@ import java.util.concurrent.TimeUnit;
 @Component
 @Order(-200)
 @Slf4j
-@RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
     /**
@@ -84,8 +83,23 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/user/verify/resend"
     );
 
-    private static final int AUTH_CAPACITY     = 10;   // requests per minute on auth endpoints
-    private static final int GLOBAL_CAPACITY   = 200;  // requests per minute on all other endpoints
+    /**
+     * Requests per minute per IP on {@link #AUTH_PATHS}. Defaults to 10 — deliberately tight,
+     * because these are the endpoints worth brute-forcing.
+     *
+     * <p>Externalised rather than hardcoded for one concrete reason: the Playwright E2E suite runs
+     * every test from a single client IP (inside Docker the whole host collapses to one bridge
+     * gateway address), so a normal 14-test run looks exactly like an attack and the suite starts
+     * failing on 429s that have nothing to do with the behaviour under test. Rather than weaken the
+     * limit for everyone, {@code .env.e2e} raises it for that stack alone, and
+     * {@code e2e/rate-limit.spec.ts} then asserts the limiter still rejects a genuine burst.
+     *
+     * <p>The default is the production value, so every environment that sets nothing is unchanged.
+     */
+    private final int authCapacity;
+
+    /** Requests per minute per IP on every other path. Defaults to 200. See {@link #authCapacity}. */
+    private final int globalCapacity;
 
     /** Per-IP buckets for the auth tier. Lazily created on first auth request from an IP. */
     private final ConcurrentHashMap<String, Bucket> authBuckets   = new ConcurrentHashMap<>();
@@ -93,6 +107,24 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final ConcurrentHashMap<String, Bucket> globalBuckets = new ConcurrentHashMap<>();
 
     private final ObjectMapper objectMapper;
+
+    /**
+     * Constructor injection, deliberately, rather than {@code @Value} on the fields.
+     *
+     * <p>Field injection would have been fewer lines and would have silently broken every test in
+     * {@code RateLimitFilterTest}: those construct the filter directly with {@code new}, which no
+     * Spring post-processor ever sees, so both capacities would have stayed at {@code int}'s default
+     * of zero — a bucket that admits nothing and answers 429 to the very first request. Taking them
+     * as constructor arguments makes the filter impossible to build in that half-initialised state,
+     * and lets a test state outright which limits it is exercising.
+     */
+    public RateLimitFilter(ObjectMapper objectMapper,
+                           @Value("${security.rate-limit.auth-capacity:10}") int authCapacity,
+                           @Value("${security.rate-limit.global-capacity:200}") int globalCapacity) {
+        this.objectMapper = objectMapper;
+        this.authCapacity = authCapacity;
+        this.globalCapacity = globalCapacity;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -105,8 +137,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         boolean isAuthEndpoint = AUTH_PATHS.stream().anyMatch(path::startsWith);
 
         Bucket bucket = isAuthEndpoint
-                ? authBuckets.computeIfAbsent(clientIp, ip -> buildBucket(AUTH_CAPACITY))
-                : globalBuckets.computeIfAbsent(clientIp, ip -> buildBucket(GLOBAL_CAPACITY));
+                ? authBuckets.computeIfAbsent(clientIp, ip -> buildBucket(authCapacity))
+                : globalBuckets.computeIfAbsent(clientIp, ip -> buildBucket(globalCapacity));
 
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 

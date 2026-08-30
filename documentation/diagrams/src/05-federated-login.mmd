@@ -1,0 +1,57 @@
+---
+title: Federated Login (Google / GitHub / Microsoft)
+---
+%% OAuth2 sign-in. The app never sees the user's provider password; what it gets back is an
+%% identity it maps onto its own user, then mints its OWN JWTs for — federation is the front
+%% door only, never the session mechanism.
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant SPA as Angular<br/>LoginComponent
+    participant SEC as Spring Security<br/>OAuth2 client
+    participant IDP as Provider<br/>Google / GitHub / Microsoft
+    participant SH as OAuth2LoginSuccessHandler
+    participant FLC as FederatedLoginCompletionService
+    participant SESS as SessionService
+    participant DB as MySQL
+
+    note over SPA, IDP: Buttons render only for providers whose CLIENT_ID is set —<br/>the SPA discovers them via GET /oauth2/providers.
+
+    U->>SPA: Click "Continue with Google"
+    SPA->>SEC: Full-window redirect to<br/>/oauth2/authorization/{provider}
+    SEC->>IDP: Authorization request (+ state, PKCE)
+    IDP->>U: Consent screen
+    U->>IDP: Approve
+    IDP->>SEC: Redirect /login/oauth2/code/{provider}?code=…
+    SEC->>IDP: Exchange code for tokens (client_secret_post)
+    IDP-->>SEC: id_token / userinfo
+    SEC->>SH: onAuthenticationSuccess
+
+    SH->>FLC: complete(provider, email, name, request, response)
+    note right of FLC: Extracted so OIDC and SAML share one<br/>tail instead of duplicating it.
+
+    FLC->>DB: Find user by email
+
+    alt no account yet
+        FLC->>DB: Create FEDERATED user (enabled, no password)
+        FLC->>DB: Auto-join organization by email domain
+    else existing account
+        FLC->>DB: Link this provider to the account
+    end
+
+    alt account disabled or locked
+        FLC-->>U: Redirect {UI_APP_URL}/login?error=account
+    else 2FA enrolled
+        FLC-->>U: Redirect /oauth2/callback#mfa=totp — no tokens yet
+        note right of FLC: Federation does not bypass 2FA.
+    else clear
+        FLC->>SESS: issueTokenPair(...)
+        SESS->>DB: INSERT refreshsessions (new family)
+        FLC-->>U: Redirect /oauth2/callback#access_token=…&refresh_token=…
+    end
+
+    U->>SPA: Lands on /oauth2/callback
+    SPA->>SPA: Read fragment, persist tokens, clear the URL
+    SPA->>U: Navigate to dashboard
+
+    note over SPA, DB: From here the session is indistinguishable from a password login —<br/>same JWTs, same rotation, same revocation.

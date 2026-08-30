@@ -71,6 +71,7 @@ web_modules/
 !.env.example
 !.env.qa.example
 !.env.stage.example
+!.env.e2e.example
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -154,3 +155,22 @@ application-prod.yml
 ~$*
 ~WRL*.tmp
 /assignments
+
+# ── Playwright end-to-end suite ───────────────────────────────────────────────
+# Run artifacts: regenerated on every run, large, and meaningless outside the run
+# that produced them (traces and videos are retained only for failures).
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Cached signed-in browser state written by e2e/auth.setup.ts. Holds a real (if
+# throwaway) JWT for a seeded demo account, and is rebuilt on every run — there is
+# no case where committing it is correct.
+/e2e/.auth/
+
+# The E2E environment file. Unlike .env.e2e.example (which is tracked and contains
+# only working local defaults), this is a real local file and follows the same
+# never-commit rule as .env — the `.env.*` pattern above already catches it, but it
+# is named here so the intent is explicit rather than incidental.
+.env.e2e

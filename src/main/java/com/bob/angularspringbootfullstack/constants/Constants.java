@@ -153,4 +153,13 @@ public class Constants {
      * (SAML) vs. {@code ClientRegistrationRepository} (OIDC) resolves it.
      */
     public static final String ORG_SAML_REGISTRATION_PREFIX = "org-saml-";
+
+    /**
+     * Domain shared by every {@code DemoDataSeeder} account (FUTURE-ENHANCEMENTS.md "Report Digest
+     * Bounces to Demo Accounts"). These mailboxes never exist, so real delivery always hard-bounces
+     * back into {@code EmailServiceImpl}'s own {@code FROM_ADDRESS} inbox — the seeder builds every
+     * demo email with this constant and {@code EmailServiceImpl} suppresses dispatch to it, so the
+     * seeded addresses and the suppression check cannot silently drift apart.
+     */
+    public static final String DEMO_EMAIL_DOMAIN = "@tessera.dev";
 }

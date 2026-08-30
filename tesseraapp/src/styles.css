@@ -206,9 +206,14 @@ h1, h2, h3, h4, h5, h6 {
 a {
   color: var(--accent);
   text-decoration: none;
-  transition: color var(--dur) var(--ease-out);
+  transition:
+    color var(--dur) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
 }
 a:hover { color: var(--accent-strong); }
+/* Link activation: a brief opacity dip gives click feedback before the browser
+   navigates away, so a tap/click reads as registered even on a fast route change. */
+a:active { opacity: 0.65; transition-duration: var(--dur-fast); }
 
 /* ===========================================================================
    5. COMPONENT OVERRIDES
@@ -241,6 +246,45 @@ a:hover { color: var(--accent-strong); }
 .btn-primary:not(:disabled):hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 24px var(--accent-ring);
+}
+/* Button press: a quick, snappy scale-down on :active — every hover treatment above
+   already animates in on --dur, but nothing acknowledged the press itself before this. */
+.btn:not(:disabled):active {
+  transform: scale(0.97);
+  transition-duration: var(--dur-fast);
+}
+/* A primary-button click also gets an expanding ring that fades out — a cheap, pseudo-
+   element-free "pulse" (no ::after, which would collide with Bootstrap's own .dropdown-toggle
+   caret on any button that's both .btn-primary and a dropdown trigger). Layered on top of the
+   scale-down above, not a replacement for it. */
+@keyframes sc-btn-pulse {
+  from { box-shadow: 0 0 0 0 var(--accent-ring); }
+  to { box-shadow: 0 0 0 10px transparent; }
+}
+.btn-primary:not(:disabled):active {
+  animation: sc-btn-pulse 420ms var(--ease-out);
+}
+/* Destructive actions get a distinct press cue — a quick shake reads as "careful" rather than
+   the calm scale-down every other button gets, so deleting/removing something feels different
+   from any other click. Overrides the generic scale so the shake isn't fighting a zoom. */
+@keyframes sc-btn-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-3px); }
+  40%, 60% { transform: translateX(3px); }
+}
+.btn-danger:not(:disabled):active,
+.btn-outline-danger:not(:disabled):active {
+  transform: none;
+  animation: sc-btn-shake 320ms var(--ease-in-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn:not(:disabled):active,
+  .btn-primary:not(:disabled):hover { transform: none; }
+  .btn-primary:not(:disabled):active,
+  .btn-danger:not(:disabled):active,
+  .btn-outline-danger:not(:disabled):active { animation: none; }
+  a:active { opacity: 1; }
 }
 .btn-info {
   --bs-btn-bg: var(--accent-bg);

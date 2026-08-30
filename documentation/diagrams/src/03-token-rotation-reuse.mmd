@@ -1,0 +1,45 @@
+---
+title: Refresh Token Rotation & Reuse Detection
+---
+%% Every refresh consumes its token and issues a new one in the same family. Presenting an
+%% already-consumed token is treated as theft and kills the whole family.
+sequenceDiagram
+    autonumber
+    participant SPA as Angular<br/>UserService
+    participant API as UserController<br/>/user/refresh/token
+    participant TP as TokenProvider
+    participant SESS as SessionServiceImpl<br/>@Transactional
+    participant DB as MySQL<br/>refreshsessions
+    participant AUD as Audit log
+
+    note over SPA, AUD: Access tokens live 30 minutes, refresh tokens 5 days.<br/>Rotation means a refresh token is valid exactly once.
+
+    SPA->>API: GET /user/refresh/token<br/>Authorization: Bearer {refresh}
+    API->>TP: Validate signature + expiry
+    TP-->>API: claims { jti, sid (family) }
+    API->>SESS: rotate(refreshToken, request)
+    SESS->>DB: SELECT ... WHERE jti = :jti
+
+    alt jti unknown — fabricated or legacy
+        SESS-->>API: reject
+        API-->>SPA: 401
+    else row already consumed or revoked — REUSE
+        rect rgba(251, 113, 133, 0.14)
+        note over SESS, AUD: Someone is replaying a spent token.<br/>The legitimate holder and the attacker are<br/>indistinguishable here, so revoke BOTH.
+        SESS->>DB: UPDATE refreshsessions SET revoked = TRUE<br/>WHERE family = :sid
+        SESS->>AUD: TOKEN_REUSE_DETECTED
+        note right of SESS: Committed immediately — the caller<br/>throws right after, and a rolled-back<br/>revocation would be worse than none.
+        SESS-->>API: reject
+        API-->>SPA: 401 — every session in the family is now dead
+        end
+    else valid and unused
+        rect rgba(52, 211, 153, 0.10)
+        SESS->>DB: Mark this row consumed
+        SESS->>DB: INSERT successor row — same family, new jti
+        SESS-->>API: new access + refresh pair
+        API-->>SPA: 200 {access_token, refresh_token}
+        SPA->>SPA: Replace BOTH tokens in localStorage
+        end
+    end
+
+    note over SPA, AUD: The family (sid) is also what makes revocation work —<br/>see the access-token validation diagram.

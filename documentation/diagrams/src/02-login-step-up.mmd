@@ -1,0 +1,66 @@
+---
+title: Login & Risk-Based Step-Up
+---
+%% Password sign-in and the three ways it can end: tokens, an enrolled-2FA challenge, or an
+%% anomaly-driven step-up (FR-TPF-1). This is the flow that makes E2E login impossible with
+%% ANOMALY_DETECTION_ENABLED=true — see e2e/README.md.
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant SPA as Angular<br/>LoginComponent
+    participant RL as RateLimitFilter<br/>@Order(-200)
+    participant API as UserController
+    participant AM as AuthenticationManager<br/>+ BCrypt
+    participant RISK as LoginRiskService
+    participant SESS as SessionService
+    participant DB as MySQL
+
+    U->>SPA: Enter email + password
+    SPA->>RL: POST /user/login
+
+    alt over 10 requests/min from this IP
+        RL-->>SPA: 429 Too Many Requests
+        note right of RL: Runs BEFORE Spring Security,<br/>so throttling costs no JWT parsing<br/>or database work.
+    end
+
+    RL->>API: forward
+    API->>DB: countRecentFailuresByEmail(email, window)
+    alt brute-force threshold exceeded
+        API-->>SPA: 401 — generic failure message
+    end
+
+    API->>AM: authenticate(email, password)
+    AM->>DB: loadUserByUsername → UserRepoImpl
+    AM->>AM: BCrypt verify (strength 12)
+
+    alt bad credentials OR unknown account
+        AM-->>API: AuthenticationException
+        API-->>SPA: 401 — one identical message for both cases
+        note right of API: Never reveals whether the<br/>account exists.
+    end
+
+    API->>RISK: assess(user, device, clientIp)
+    RISK->>DB: This account's own successful-login history
+    note right of RISK: Compared only against the<br/>account's own past — never against<br/>other accounts, so a risk verdict<br/>can't become an oracle either.
+
+    alt NEW_DEVICE and/or NEW_NETWORK
+        RISK-->>API: risky
+        API->>DB: Store one-time code
+        API-->>SPA: 200 {user, stepUp: true} — no tokens
+        note over API, SPA: Copy says an extra check was needed,<br/>never which signal fired.
+        U->>SPA: Enter emailed code
+        SPA->>API: GET /user/verify/code/{email}/{code}
+    else enrolled 2FA (TOTP / SMS)
+        API-->>SPA: 200 {user, isUsingMfa: true} — no tokens
+        U->>SPA: Enter authenticator or SMS code
+        SPA->>API: GET /user/verify/code/{email}/{code}
+    else no risk, no 2FA
+        note over API, SESS: Straight through
+    end
+
+    API->>SESS: issueTokenPair(principal, request)
+    SESS->>DB: INSERT refreshsessions (new family + jti)
+    SESS-->>API: access (30 min) + refresh (5 days)
+    API-->>SPA: 200 {user, access_token, refresh_token}
+    SPA->>SPA: Persist both to localStorage
+    SPA->>U: Navigate to dashboard

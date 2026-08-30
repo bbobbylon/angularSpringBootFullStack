@@ -1,0 +1,52 @@
+---
+title: Per-Organization Enterprise SSO (OIDC & SAML)
+---
+%% An organization brings its own IdP. Registrations are resolved at request time from the
+%% database, so onboarding a tenant is a row, not a redeploy.
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant SPA as Angular<br/>LoginComponent
+    participant API as FederatedAuthController<br/>/oauth2
+    participant REG as OrgAware…RegistrationRepository
+    participant IDP as Organization's IdP<br/>Okta / Entra / Ping
+    participant SH as Org success handler
+    participant FLC as FederatedLoginCompletionService
+    participant DB as MySQL
+
+    rect rgba(107, 91, 255, 0.10)
+    note over U, DB: Discovery — which IdP, if any, owns this email's domain?
+    U->>SPA: Enter work email
+    SPA->>API: GET /oauth2/org-sso-lookup?email=…
+    API->>DB: Match the email DOMAIN to an organization
+    alt domain has org SSO configured
+        API-->>SPA: {found: true, orgId, protocol}
+    else no match
+        API-->>SPA: {found: false}
+        note right of API: Says nothing about whether the<br/>ADDRESS exists — only whether its<br/>domain has SSO. Keyed on domain,<br/>not identity, precisely so it can't<br/>be used to enumerate accounts.
+    end
+    end
+
+    alt protocol = OIDC
+        SPA->>REG: Redirect /oauth2/authorization/org-{orgId}
+        REG->>DB: Load this org's client id + secret
+        REG->>REG: EncryptionUtil AES-256-GCM decrypt
+        note right of REG: Client secrets are encrypted at rest.<br/>Key: ORG_IDP_SECRET_ENCRYPTION_KEY
+    else protocol = SAML
+        SPA->>REG: Redirect /saml2/authenticate/org-saml-{orgId}
+        REG->>DB: Load this org's metadata URL
+        REG->>IDP: Fetch + cache IdP metadata
+    end
+
+    REG->>IDP: Authentication request
+    IDP->>U: Organization's own login (and its own MFA)
+    U->>IDP: Authenticate
+    IDP->>SH: Assertion / authorization code
+    SH->>SH: Extract email + name<br/>(SAML: several candidate attributes, then NameID)
+
+    SH->>FLC: complete(...)
+    FLC->>DB: Resolve or create the user
+    FLC->>DB: Auto-join the organization
+    FLC-->>U: Redirect /oauth2/callback with our own JWTs
+
+    note over U, DB: SAML shipped with code + unit tests but has never been run<br/>against a live IdP — see FUTURE-ENHANCEMENTS.md.

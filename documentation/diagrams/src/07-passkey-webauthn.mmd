@@ -1,0 +1,60 @@
+---
+title: Passkeys — WebAuthn Enrolment & Sign-In
+---
+%% Public-key authentication. The private key never leaves the authenticator, so there is no
+%% shared secret for this app to store, leak, or have phished.
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant AUTH as Authenticator<br/>Touch ID / Windows Hello / key
+    participant SPA as Angular<br/>webauthn.utils
+    participant API as PasskeyController<br/>/user/webauthn
+    participant STORE as WebAuthnChallengeStore
+    participant DB as MySQL
+    participant SESS as SessionService
+
+    rect rgba(107, 91, 255, 0.10)
+    note over U, SESS: Enrolment — signed in already
+    U->>SPA: "Add a passkey"
+    SPA->>API: POST /user/webauthn/enroll/options
+    API->>STORE: mintForRegistration(challenge)
+    STORE->>DB: INSERT webauthnchallenges
+    note right of STORE: Was an in-memory map until 2026-08-29 —<br/>a challenge minted on one instance could<br/>never be redeemed on another.
+    API-->>SPA: PublicKeyCredentialCreationOptions
+    SPA->>AUTH: navigator.credentials.create()
+    AUTH->>U: Biometric / PIN prompt
+    U->>AUTH: Approve
+    AUTH-->>SPA: Attestation + PUBLIC key
+    SPA->>API: POST /user/webauthn/enroll/complete
+    API->>STORE: redeem(challenge) — single use
+    API->>DB: Store credential id, public key, sign counter
+    API-->>SPA: 200 — passkey registered
+    end
+
+    rect rgba(52, 211, 153, 0.10)
+    note over U, SESS: Sign-in — no password involved
+    U->>SPA: "Sign in with a passkey"
+    SPA->>API: POST /user/verify/webauthn/options
+    API->>STORE: mintForAuthentication(challenge)
+    API-->>SPA: allowCredentials + challenge
+    SPA->>AUTH: navigator.credentials.get()
+    AUTH->>U: Biometric / PIN prompt
+    U->>AUTH: Approve
+    AUTH-->>SPA: Assertion signed by the PRIVATE key
+    note right of AUTH: The private key never leaves the device.<br/>Nothing phishable crosses the network.
+    SPA->>API: POST /user/verify/webauthn
+    API->>STORE: redeem(challenge)
+    API->>DB: Verify signature against the stored public key
+    API->>DB: Check + advance the sign counter
+    note right of API: A counter that went backwards suggests<br/>a cloned authenticator.
+
+    alt verification fails
+        API-->>SPA: 401
+    else verified
+        API->>SESS: issueTokenPair(...)
+        API-->>SPA: 200 {access_token, refresh_token}
+        SPA->>U: Navigate to dashboard
+    end
+    end
+
+    note over U, SESS: Passkeys deliberately bypass risk-based step-up: possession of the<br/>authenticator is already stronger evidence than an emailed code.
