@@ -3,9 +3,14 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
+    "prestart": "npm run css:prepare",
     "start": "ng serve",
     "start:lan": "ng serve --configuration lan",
+    "prebuild": "npm run css:prepare",
     "build": "ng build",
+    "css:prepare": "npm run generate:icons && npm run check:css",
+    "generate:icons": "node scripts/generate-icon-subset.mjs",
+    "check:css": "node scripts/check-bootstrap-subset.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "ng lint",
@@ -47,6 +52,7 @@
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^28.0.0",
     "prettier": "^3.8.1",
+    "sass": "^1.103.1",
     "typescript": "~5.9.2",
     "typescript-eslint": "8.56.1",
     "vitest": "^4.0.8"

@@ -206,6 +206,7 @@
   },
   "invoice": {
     "exportPdf": "Export as PDF",
+    "exportingPdf": "Preparing PDF…",
     "emailInvoice": "Email invoice",
     "sending": "Sending…",
     "edit": "Edit invoice",

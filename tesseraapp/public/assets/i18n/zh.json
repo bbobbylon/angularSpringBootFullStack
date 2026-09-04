@@ -206,6 +206,9 @@
   },
   "invoice": {
     "exportPdf": "导出为 PDF",
+    "exportingPdf": "正在准备 PDF…",
+    "emailInvoice": "通过电子邮件发送发票",
+    "sending": "正在发送…",
     "edit": "编辑发票",
     "cancelEdit": "取消编辑",
     "invoiceDate": "开票日期",

@@ -206,6 +206,9 @@
   },
   "invoice": {
     "exportPdf": "Exportar como PDF",
+    "exportingPdf": "Preparando PDF…",
+    "emailInvoice": "Enviar factura por correo",
+    "sending": "Enviando…",
     "edit": "Editar factura",
     "cancelEdit": "Cancelar edición",
     "invoiceDate": "Fecha de factura",

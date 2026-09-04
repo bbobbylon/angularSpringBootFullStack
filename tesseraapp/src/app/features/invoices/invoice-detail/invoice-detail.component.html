@@ -21,9 +21,17 @@
                   customer's copy of the invoice.
                 -->
                 <div class="invoice-company d-flex justify-content-end gap-2">
-                  <button (click)="exportAsPDF()" class="btn btn-sm btn-primary sc-panel__action" type="button">
+                  <!--
+                    Disabled while exporting because the first click also downloads the PDF
+                    renderer (~430 kB, imported on demand — see exportAsPDF), which is long
+                    enough on a cold cache that the button looks unresponsive without this.
+                  -->
+                  <button (click)="exportAsPDF()"
+                          [disabled]="isExporting()"
+                          class="btn btn-sm btn-primary sc-panel__action"
+                          type="button">
                     <i class="bi bi-file-earmark-pdf-fill"></i>
-                    {{ t('invoice.exportPdf') }}
+                    @if (isExporting()) { <span>{{ t('invoice.exportingPdf') }}</span> } @else { <span>{{ t('invoice.exportPdf') }}</span> }
                   </button>
                   <button (click)="emailInvoice()"
                           [disabled]="!canEditInvoice || isEmailing()"

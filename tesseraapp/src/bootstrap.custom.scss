@@ -1,0 +1,192 @@
+// =====================================================================================
+// Bootstrap, compiled from source with the parts this application does not use removed.
+//
+// WHY THIS FILE EXISTS
+// --------------------
+// `angular.json` used to load `node_modules/bootstrap/dist/css/bootstrap.min.css` — the
+// pre-built distribution, which is every component and every utility whether or not a
+// template references them. At 232 kB it was 67% of the 345 kB stylesheet, and that
+// stylesheet is render-blocking (see `index.html`: a plain `<link rel="stylesheet">`,
+// because `optimization.styles.inlineCritical` is `false`, so Beasties is not splitting
+// out a critical subset). Every byte here is therefore on the critical path to first
+// paint. This file is the "trim Bootstrap's CSS" item from
+// `documentation/FUTURE-ENHANCEMENTS.md` §2.1.
+//
+// HOW THE REMOVALS WERE CHOSEN — MEASURED, NOT GUESSED
+// ----------------------------------------------------
+// Nothing below was removed because it "looked unused". Each candidate was compiled on
+// its own, its generated class selectors extracted, and those selectors checked against
+// every identifier appearing in `src/**/*.{html,ts,css}`. Only groups with *zero*
+// references anywhere in the application were removed. The i18n bundles in
+// `public/assets/i18n/*.json` were checked separately and contain no markup, so no class
+// name can arrive from a translation string.
+//
+// HOW THIS IS KEPT HONEST — THE POINT WORTH READING
+// -------------------------------------------------
+// A hand-maintained subset is dangerous in exactly one way: the day someone writes
+// `class="position-absolute"` in a new template, it will render wrong and nothing will
+// say so. CSS has no "undefined class" error. That risk is why §2.1 flagged this work as
+// "measure first, do it deliberately".
+//
+// The mitigation is `scripts/check-bootstrap-subset.mjs`, wired into the `prebuild` and
+// `prestart` npm hooks. It compiles this file, diffs its selectors against the full
+// upstream distribution, and fails the build if any class that this file removed is used
+// anywhere in `src/`. So a removed utility does not break silently — it breaks the build,
+// with the class name and the file that used it. If you hit that failure, the fix is
+// normally one line: delete the offending entry from `$removed-utilities` below, or
+// re-add the `@import` for the component. Do that rather than working around it.
+//
+// KEEPING THIS IN STEP WITH BOOTSTRAP'S JAVASCRIPT
+// ------------------------------------------------
+// `src/main.ts` imports Bootstrap's JS one component at a time for the same reason, and
+// the two lists must agree: a component whose CSS is dropped here must not have its JS
+// imported there, and vice versa. Today both say the same thing — dropdown, collapse,
+// tab and alert are in use; modal, tooltip, popover, carousel, offcanvas and toast are
+// not.
+//
+// Upstream still ships an `@import`-based SCSS API (Bootstrap 5.3.8 has no `@use` entry
+// point), so this file uses `@import` too. The resulting Dart Sass deprecation warnings
+// are silenced via `stylePreprocessorOptions.sass.silenceDeprecations` in `angular.json`;
+// they come from Bootstrap's own source, not from anything written here.
+// =====================================================================================
+
+// --- Configuration -------------------------------------------------------------------
+// Must come first and must stay complete: `$utilities` is *defined* by "utilities", and
+// the component partials below read the variables and mixins these set up.
+@import 'functions';
+@import 'variables';
+@import 'variables-dark';
+@import 'maps';
+@import 'mixins';
+@import 'utilities';
+
+// --- Utility groups removed ------------------------------------------------------------
+// `utilities/api` walks the `$utilities` map and emits every group across all six
+// breakpoints, which is why it alone is ~69 kB — 30% of Bootstrap, more than any single
+// component. Pruning the map before that import is the single largest saving available
+// here (~33 kB) and costs nothing visually, because every group listed below has no
+// reference anywhere in the application.
+//
+// Read this list as "not currently used", not as "banned". Adding one back is a
+// one-line change, and `check-bootstrap-subset.mjs` will tell you when you need to.
+//
+// Grouped by why they are absent rather than alphabetically, so the list stays reviewable:
+$removed-utilities: (
+  // Flex/grid fine-tuning the layouts never reach for — the app aligns with
+  // `justify-content-*`/`align-items-*` (both kept) and never per-item.
+  'align-content',
+  'align-self',
+  'order',
+  'flex',
+  'flex-shrink',
+  // Single-axis gaps: only the combined `gap-*` is used.
+  'row-gap',
+  'column-gap',
+  // Spacing shorthands with no callers. All-sides `m-*` is genuinely unused — the
+  // templates always name an axis or a side, e.g. `mb-3`, `px-4`. (`p-*` and `pt-*` are
+  // used, so `padding` and `padding-top` stay.)
+  'margin',
+  'padding-bottom',
+  'padding-end',
+  'padding-start',
+  // Positioning utilities: the app positions in component CSS, not in markup.
+  'position',
+  'top',
+  'bottom',
+  'start',
+  'end',
+  'translate-middle',
+  'z-index',
+  // Sizing beyond `w-100`/`h-100`, which are kept.
+  'max-width',
+  'max-height',
+  'viewport-width',
+  'viewport-height',
+  'min-viewport-width',
+  'min-viewport-height',
+  // Border variants: plain `border`, `border-0`, `border-top` and `border-bottom` are
+  // used; the rest are not.
+  'border-end',
+  'border-start',
+  'border-color',
+  'border-width',
+  'border-opacity',
+  'subtle-border-color',
+  // Corner-specific radii: only `rounded`/`rounded-circle` appear in templates.
+  'rounded-top',
+  'rounded-end',
+  'rounded-bottom',
+  'rounded-start',
+  // Colour/opacity modifiers. The design system drives these through the CSS custom
+  // properties in `styles.css`, not through Bootstrap's opacity utilities.
+  'opacity',
+  'text-opacity',
+  'text-color',
+  'bg-opacity',
+  'subtle-background-color',
+  'gradient',
+  // Link decoration utilities — the app styles links in `styles.css`.
+  'link-opacity',
+  'link-offset',
+  'link-underline',
+  'link-underline-opacity',
+  // Typography knobs with no callers; `fw-*`, `text-*` alignment and `font-monospace`
+  // are all kept.
+  'font-size',
+  'font-style',
+  'line-height',
+  'word-wrap',
+  // Miscellaneous.
+  'object-fit',
+  'overflow',
+  'overflow-x',
+  'overflow-y',
+  'focus-ring',
+  'pointer-events'
+);
+
+$utilities: map-remove($utilities, $removed-utilities...);
+
+// --- Layout & components ---------------------------------------------------------------
+// Mirrors upstream `bootstrap.scss` order (order matters: `type` `@extend`s headings that
+// `reboot` defines, so neither can move or be dropped independently). Components with no
+// use in this application are commented out rather than deleted, so the diff against
+// upstream stays obvious and re-enabling one is a single keystroke.
+@import 'root';
+@import 'reboot';
+@import 'type';
+// @import "images";    // No `img-fluid`/`img-thumbnail`/`<figure>` anywhere.  (368 B)
+@import 'containers';
+@import 'grid';
+@import 'tables';
+@import 'forms';
+@import 'buttons';
+@import 'transitions'; // Required: `.collapse`/`.collapsing` back the navbar toggler.
+@import 'dropdown';
+@import 'button-group'; // One use: the anomaly-override group on the security overview.
+@import 'nav';
+@import 'navbar';
+@import 'card';
+// @import "accordion"; // Unused.                                                (5.2 kB)
+@import 'breadcrumb';
+@import 'pagination';
+@import 'badge';
+@import 'alert';
+@import 'progress';
+@import 'list-group';
+@import 'close'; // `.btn-close` on dismissible alerts.
+// @import "toasts";    // Toasts come from ngx-toastr, which ships its own CSS.  (1.9 kB)
+// @import "modal";     // No modals — the command palette is bespoke CSS.        (5.8 kB)
+// @import "tooltip";   // The only "tooltip" is the chart's own `sc-chart-tooltip`. (3.1 kB)
+// @import "popover";   // Unused.                                                (6.2 kB)
+// @import "carousel";  // Unused.                                                (4.4 kB)
+@import 'spinners';
+// @import "offcanvas"; // Unused — the mobile nav uses `collapse`.              (11.1 kB)
+@import 'placeholders'; // The profile page's loading skeleton.
+
+// --- Helpers -----------------------------------------------------------------------------
+@import 'helpers';
+
+// --- Utilities ---------------------------------------------------------------------------
+// Must stay last: it reads the `$utilities` map as pruned above.
+@import 'utilities/api';

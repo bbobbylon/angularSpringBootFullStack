@@ -10,7 +10,6 @@ import { CustomHttpResponseInterface } from '../../../interface/customhttprespon
 import { UserInterface } from '../../../interface/user.interface';
 import { CustomerInvoiceUserInterface } from '../../../interface/appstates.interface';
 import { CustomerService } from '../../../service/customer.service';
-import { jsPDF } from 'jspdf';
 import { NotificationsService } from '../../../service/notifications-service';
 import { FormsModule, NgForm } from '@angular/forms';
 import { UserService } from '../../../service/user.service';
@@ -76,6 +75,16 @@ export class InvoiceDetailComponent implements OnInit {
 
   /** Blocks duplicate submits while an "Email Invoice" send is in flight. */
   protected readonly isEmailing = signal(false);
+
+  /**
+   * Blocks duplicate clicks while {@link exportAsPDF} is running.
+   *
+   * <p>This one covers a network fetch as well as the render: the first click on "Export PDF"
+   * downloads jsPDF (see that method), which is a large chunk and therefore visibly slow on a
+   * cold cache. Without this flag an impatient second click would start a second import and a
+   * second render of the same document.
+   */
+  protected readonly isExporting = signal(false);
 
   ngOnInit(): void {
     this.customerService.invoice$(this.id).pipe(
@@ -165,20 +174,57 @@ export class InvoiceDetailComponent implements OnInit {
       });
   }
 
-  exportAsPDF(): void {
+  /**
+   * Renders the {@code #invoice} element to a PDF in the browser and saves it. The counterpart to
+   * {@link emailInvoice}, which renders server-side and sends; this one never leaves the machine.
+   *
+   * <h3>Why jsPDF is imported here rather than at the top of the file</h3>
+   * jsPDF pulls in html2canvas, and together they are ~430 kB — larger than the entire initial
+   * bundle. As a static {@code import} they were linked into this route's chunk, so <em>opening</em>
+   * an invoice paid for the PDF renderer whether or not anyone exported anything. Angular reported
+   * them as "lazy chunks", which is true only relative to the initial bundle and was easy to
+   * misread as "loaded on demand" — they were eagerly fetched on route entry.
+   *
+   * Moving the import inside the click handler makes it genuinely on demand: the chunk is fetched
+   * the first time someone exports, and never for the far more common case of just reading an
+   * invoice. The browser caches the module afterwards, so repeat exports do not re-download it.
+   *
+   * <p>The import must therefore be kept dynamic. Re-hoisting it to the top of the file for tidiness
+   * would silently undo this and put ~430 kB back on every invoice view.
+   */
+  protected async exportAsPDF(): Promise<void> {
+    if (this.isExporting()) return;
+
     const invoice = this.data()?.data?.invoice;
     if (!invoice) return;
 
     const element = document.getElementById('invoice');
     if (!element) return;
 
-    const pdf = new jsPDF();
-    const filename = `invoice-${invoice.invoiceNumber}.pdf`;
-    pdf.html(element, {
-      margin: 5,
-      windowWidth: 1000,
-      width: 200,
-      callback: (doc) => doc.save(filename),
-    });
+    this.isExporting.set(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF();
+      const filename = `invoice-${invoice.invoiceNumber}.pdf`;
+      await new Promise<void>((resolve) => {
+        pdf.html(element, {
+          margin: 5,
+          windowWidth: 1000,
+          width: 200,
+          callback: (doc) => {
+            doc.save(filename);
+            resolve();
+          },
+        });
+      });
+    } catch {
+      // A failed chunk fetch (offline, or a stale index.html pointing at a hash that no longer
+      // exists after a deploy) throws here. Report it rather than leaving a button that does
+      // nothing — the previous synchronous version could not fail this way, so there was nothing
+      // to report before.
+      this.notification.onError('Could not prepare the PDF. Please try again.');
+    } finally {
+      this.isExporting.set(false);
+    }
   }
 }
