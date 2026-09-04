@@ -18,6 +18,7 @@ import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import com.bob.angularspringbootfullstack.utils.OrganizationScope;
 import com.bob.angularspringbootfullstack.utils.SortUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -834,10 +835,7 @@ public class CustomerController {
      * @return {@code null} when unscoped, otherwise the caller's active organization ids (possibly empty)
      */
     private Collection<Long> resolveScope(UserDTO caller) {
-        if (!RoleType.isOrganizationScoped(caller.getRoleName())) {
-            return null;
-        }
-        return organizationService.findActiveOrganizationIds(caller.getId());
+        return OrganizationScope.resolve(caller, organizationService);
     }
 
     /**

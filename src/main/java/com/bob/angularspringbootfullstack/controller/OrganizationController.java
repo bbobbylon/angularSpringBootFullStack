@@ -20,6 +20,7 @@ import com.bob.angularspringbootfullstack.model.OrganizationInvite;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.EmailService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
+import com.bob.angularspringbootfullstack.utils.OrganizationScope;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -665,10 +666,7 @@ public class OrganizationController {
      * unscoped floor, otherwise the ids they actively belong to.
      */
     private Collection<Long> resolveScope(UserDTO caller) {
-        if (!RoleType.isOrganizationScoped(caller.getRoleName())) {
-            return null;
-        }
-        return organizationService.findActiveOrganizationIds(caller.getId());
+        return OrganizationScope.resolve(caller, organizationService);
     }
 
     /**

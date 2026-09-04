@@ -10,6 +10,7 @@ import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.ReportDigestService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import com.bob.angularspringbootfullstack.utils.OrganizationScope;
 import com.bob.angularspringbootfullstack.utils.SortUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -348,10 +349,7 @@ public class AnalyticsController {
      * @return {@code null} when the caller is unscoped, otherwise their active organization ids
      */
     private Collection<Long> resolveScope(UserDTO caller) {
-        if (!RoleType.isOrganizationScoped(caller.getRoleName())) {
-            return null;
-        }
-        return organizationService.findActiveOrganizationIds(caller.getId());
+        return OrganizationScope.resolve(caller, organizationService);
     }
 
     /**
