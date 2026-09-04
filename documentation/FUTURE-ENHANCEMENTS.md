@@ -1,7 +1,7 @@
 # Future Enhancements & Roadmap
 
-**Version:** 3.20
-**Last Updated:** 2026-08-30
+**Version:** 3.24
+**Last Updated:** 2026-09-03
 **Status:** Living — the single source of truth for anything planned, deferred, or TODO.
 
 ## Overview
@@ -40,12 +40,12 @@ operability**, not features.
 | Functional scope | ✅ Complete — auth, MFA, passkeys, federation (login **and** link/unlink), real SMS 2FA, sessions (self-service **and** granular admin revoke), RBAC, org scoping, user-type classification, anomaly detection + step-up, security dashboard, business CRUD, i18n |
 | Tests | ✅ **557 backend / 173 frontend**, all green (re-verified 2026-08-29 via actual Surefire (`./mvnw test`, 557/557) and Vitest (`ng test`, 17 files/173 tests) execution — backend growth since the same day's 513 is Stage 1–2 of the "Federated orgs" SSO work above: `EncryptionUtilTest`, `OrganizationIdentityProviderServiceImplTest`, `OrgAwareClientRegistrationRepositoryTest`, an extended `OAuth2LoginSuccessHandlerTest` (first suite ever written for that class), `FederatedAuthControllerTest`, and two `ensureAutoJoinMembership` cases added to `OrganizationServiceImplTest`; frontend growth from 158 is two spec files this doc had not yet caught up to: `organization-sso.service.spec.ts` (Stage 1's admin SSO tab, 10 cases) and this round's `login-org-sso.component.spec.ts` (Stage 2's email-domain discovery affordance, 5 cases); the one DB-bound class, `contextLoads`, needs a live MySQL and passed against local `db2`) |
 | Lint | ✅ `ng lint` clean and gating in CI |
-| Dependency audit | ✅ `npm audit --audit-level=high` exit 0; OWASP `dependency-check` wired at `failBuildOnCVSS=7` |
+| Dependency audit | ✅ **`npm audit --audit-level=high` clean** (0 vulnerabilities) — the `undici`-via-`@angular/build` advisory from §2.7 is resolved by the `^21.2.22` toolchain bump (2026-09-03). OWASP `dependency-check` still wired at `failBuildOnCVSS=7` |
 | CI | ✅ Gating on lint + audit + both test suites against a MySQL service container |
 | Deployment | ✅ Live on AWS ECS Fargate; GCP Cloud Run and Azure App Service pipelines also built |
 | Docs | ✅ Consolidated to four documents (2026-08-02), now five — `POST-SUBMISSION-UPGRADES.md` was added to keep post-course work separable from the graded deliverable. Full audit against the source re-run 2026-08-19 |
-| **Performance** | 🔄 Lighthouse round 1 done; round 2 candidates in §2.1 |
-| **Multi-instance readiness** | 🔄 Two of three heap-state stores moved to the database (§2.4); the rate limiter is the one piece left, and it is a genuine architecture decision (§6.2) — see §2.4 for why it should not simply follow the other two |
+| **Performance** | ✅ Lighthouse rounds 1 and 2 done — stylesheet 345 → 193 kB, `invoice-detail` chunk 428 → 18 kB, both subsets guarded by build-time checks (§2.1). Remaining candidates there are dependency decisions, not code |
+| **Multi-instance readiness** | ✅ Decided (§2.4). Two of three heap-state stores moved to the database; the rate limiter stays in-process as a **documented, accepted constraint** — buying a shared cache for a scale-out blocker is premature at one instance. Its unbounded-growth bug (a real single-instance DoS vector) *was* fixed. **Trigger: raising the ECS desired count above 1 requires doing this work first** (§6.2) |
 
 ---
 
@@ -53,7 +53,7 @@ operability**, not features.
 
 Do these in order.
 
-### 2.1 🔄 Frontend performance — Lighthouse 57 → 90s
+### 2.1 ✅ Frontend performance — Lighthouse 57 → 90s
 
 **Round 1 is done (2026-07-26): every third-party origin removed from the critical path.**
 
@@ -74,14 +74,65 @@ opened CSP to a third party for a cosmetic asset. Measured, production build:
 | Initial JS (transfer) | 27.81 kB over 2 requests | **21.76 kB over 1** |
 | Icons/fonts in production | broken by CSP | working |
 
-**Round 2 candidates, if the score still needs moving:**
+**Round 2 is done (2026-09-01).** Three of the four candidates shipped, one was measured and
+deliberately *not* taken. Measured, production build:
 
-| Candidate | Payoff | Risk |
+| | Before | After |
 |---|---|---|
-| **Trim Bootstrap's CSS** — import only the needed layers via SCSS | `bootstrap.min.css` is ~230 kB of the 344 kB stylesheet | Real visual-regression risk across 28 templates. Measure first, do it deliberately |
-| **Subset `bootstrap-icons.css`** | 90 icons used out of ~2,000, so ~95% is dead weight | Only worth it behind a build step that scans the templates — a hand-maintained subset breaks silently the first time someone adds an icon |
-| **Preload the icon woff2** | Icons pop in slightly late; discovered only after the deferred stylesheet applies | Needs a build-time hook because `outputHashing` renames the file |
-| **Confirm `jspdf`/`html2canvas` laziness** | The 427 kB `invoice-detail` chunk is the largest in the app | Already lazy; verify it loads on the export click, not on route entry |
+| `styles.css` raw | 345.30 kB | **193.28 kB** (−44.0%) |
+| `styles.css` transfer | 38.67 kB | **24.04 kB** (−37.8%) |
+| Initial total, raw | 783.86 kB | **631.83 kB** |
+| Initial total, transfer | 162.08 kB | **147.45 kB** |
+| `invoice-detail` route chunk | 428.37 kB / 117.21 kB transfer | **17.64 kB / 4.64 kB** (−95.9%) |
+
+**Correction to round 1's write-up above.** It says Beasties inlines the critical CSS and turns the
+stylesheet into a non-blocking `media="print"` link. It does not: `angular.json` sets
+`optimization.styles.inlineCritical: false`, so Beasties is off and the built `index.html` carries a
+plain, render-blocking `<link rel="stylesheet">`. Round 1's *other* claims (no third-party origins,
+self-hosted fonts and icons) are accurate and still hold. Because the stylesheet genuinely blocks
+first paint, every byte removed below is on the critical path — which is what made round 2 worth
+doing rather than a micro-optimisation.
+
+**What shipped:**
+
+| Candidate | Result |
+|---|---|
+| **Trim Bootstrap's CSS** | Done — `src/bootstrap.custom.scss` compiles Bootstrap from source instead of loading `dist/bootstrap.min.css`. Drops 8 components with no real use (accordion, carousel, offcanvas, popover, tooltip, modal, images, toasts — 38 kB) and prunes 53 zero-reference utility groups out of `$utilities` before `utilities/api` (33 kB). 230 kB → 192 kB |
+| **Subset `bootstrap-icons.css`** | Done — `scripts/generate-icon-subset.mjs` regenerates `src/bootstrap-icons.subset.css` from a scan of the templates on every build. 104 of 2,078 icons kept: **85.0 kB → 5.4 kB (−93.7%)** |
+| **Confirm `jspdf`/`html2canvas` laziness** | **They were not lazy.** `import { jsPDF } from 'jspdf'` was a *static* import, so the ~430 kB renderer was linked into the `invoice-detail` route chunk and fetched on route entry. Angular reports it under "Lazy chunk files", which is true only relative to the *initial* bundle and is easy to misread as "on demand". Now a dynamic `await import('jspdf')` inside the click handler |
+| **Preload the icon woff2** | **Measured and declined.** The woff2 is 134 kB because the *font file* is not subset — only its CSS is. Preloading 134 kB at high priority, ahead of 147 kB of initial JS+CSS, would very likely cost more LCP on Lighthouse's throttled mobile profile than the icon pop-in it saves. The right fix is to subset the font, not to fetch the un-subset one sooner |
+
+**Why the subsetting is safe rather than hopeful.** This section previously flagged the real hazard:
+CSS has no "undefined class" error, so a hand-maintained subset breaks silently the first time
+someone uses a class it dropped. Neither list is hand-maintained, and both fail loudly:
+
+- `scripts/generate-icon-subset.mjs` rebuilds the icon list from the templates on every build, so
+  adding an icon needs no other action. It also **fails the build on an icon name that does not
+  exist upstream** — a typo like `bi-chevron-rigth` used to render an invisible glyph and could only
+  be caught by eye.
+- `scripts/check-bootstrap-subset.mjs` compiles the subset, diffs its selectors against the full
+  upstream distribution, and **fails the build if any trimmed class is used anywhere in `src/`**,
+  naming the class and the files. The removed set is derived from the two builds, so it cannot drift
+  when Bootstrap is upgraded. Verified to actually fire (exit 1) by probing it with
+  `class="position-absolute"`.
+
+Both run from the `prebuild`/`prestart` npm hooks, which is what the Dockerfile and
+`.github/workflows/ci.yml` invoke, so neither can be skipped in a real build.
+
+**Equivalence check.** Compiling full Bootstrap and the subset with identical Sass settings and
+diffing rule-by-rule: 864 subset rules, every one byte-identical to upstream, the only differences
+being the 5 responsive utility blocks that were intentionally pruned and `:root` (same declarations,
+different order). Nothing was *altered* — only removed. Frontend suite 174/174 green, `ng lint`
+clean, and login/register/reset-password verified in-browser.
+
+**Still open, in payoff order:**
+
+| Candidate | Payoff | Cost / risk |
+|---|---|---|
+| **Subset the icon woff2 itself** | 134 kB → ~6 kB. The largest single asset left, and `font-display: block` means icons are invisible until it lands. Would also make the declined preload worthwhile | Needs a font toolchain in the Docker build — `fonttools` (a Python dependency in a Node build stage) or the `subset-font` npm package (harfbuzz wasm). A dependency decision, not just a code change |
+| **Turn Beasties back on** (`inlineCritical: true`) | Would de-block the remaining 193 kB stylesheet, which is what round 1's write-up already assumed was happening | Needs checking against the production CSP: Beasties inlines a `<style>` block, so `style-src` must allow `'unsafe-inline'` (it currently does) and the `onload` handler must not trip `script-src` |
+| **Drop the legacy `.woff` fallbacks** | ~330 kB of never-fetched files out of the deployed artifact (180 kB icons + ~150 kB IBM Plex). Not on the critical path — artifact size only | Every browser Angular 21 targets supports woff2. Would need doing for both the icon subset *and* the `@fontsource` imports, or it is an inconsistent half-measure |
+| **Drop the `xxl` breakpoint** | Zero `-xxl-` classes are used anywhere | Not free: `$container-max-widths` would lose its 1400px entry too, so `.container` (27 uses) would cap at 1140px instead of 1320px on wide monitors. A real visual change, not a pure removal |
 
 ### 2.2 ✅ Remaining frontend specs
 
@@ -146,7 +197,7 @@ than Aiven, so nothing live was touched. Database dropped after. `MYSQL_SSL_MODE
 truststore, which only exists in the built Docker image, not a bare local MySQL; that half is already
 verified separately (see the `MYSQL_SSL_MODE` history in this file's changelog / RUNBOOK).
 
-### 2.4 🔄 Move per-instance security state off the heap
+### 2.4 ✅ Move per-instance security state off the heap
 
 **Correction first:** the "brute-force counter" named in earlier revisions of this section was never
 actually heap state. `UserController.authenticate()` calls
@@ -173,6 +224,28 @@ with the mocked-`NamedParameterJdbcTemplate` convention `SessionServiceImplTest`
 now-redundant end-to-end tests in `FederatedIdentityLinkTest` (which exercised the old real in-memory
 map directly, no mocking needed) were retired in favor of this more thorough coverage.
 
+**Fixed on the way past (2026-09-01): the bucket stores were unbounded.** Separate bug from the
+multi-instance question below, found while assessing it, and worth stating plainly because it was a
+denial-of-service vector in the component whose job is to prevent denial of service. `authBuckets`
+and `globalBuckets` were plain `ConcurrentHashMap`s with **no eviction of any kind**, so every
+distinct client IP the process ever saw left an entry behind permanently. That set is not bounded by
+the user base on a public service — background internet scanning grows it continuously, and an
+attacker rotating source addresses grows it deliberately — and the allocation is reachable at
+`@Order(-200)`, before any authentication runs. Both stores are now Caffeine caches bounded by
+`maximumSize` (50,000 per tier) and `expireAfterAccess` (10 minutes).
+
+*Why eviction is not a loophole:* the retention window is deliberately far longer than the bucket's
+one-minute refill period, so any bucket idle long enough to be evicted had already refilled to
+capacity — the replacement is identical to what was discarded, and nobody gains an allowance they
+had not already regained by waiting. Under address-rotation flooding, Caffeine's
+frequency/recency eviction drops the one-shot addresses scanners generate before the actively
+throttled ones. **No new dependency**: Caffeine was already in `pom.xml` for the configuration
+cache. `RateLimitFilterTest` gained `bucketStoreIsBoundedAgainstAddressRotation`, which drives
+60,000 distinct addresses through the filter and asserts the store did not retain them all — the one
+property of this fix that is invisible from a response, since a bounded and an unbounded store
+answer every request identically and differ only in what they do to the heap over days. 585/585
+backend tests green.
+
 **Deliberately NOT moved to the database: the rate limiter.** `RateLimitFilter` runs on *every* HTTP
 request at `@Order(-200)`, before Spring Security and before JWT parsing — including the 200 req/min
 global tier applied to "every other path." A relational round trip on every single request the app
@@ -184,7 +257,37 @@ Hazelcast dependency or the infrastructure (docker-compose service, deployment s
 AWS/GCP/Azure pipelines) that would come with adding one. Forcing this into `schema.sql` would
 contradict a decision the codebase already made deliberately, twice, and would change production
 request-path latency on a live app without the user weighing in — genuinely the user's call, not a
-default to pick silently. Left open pending that decision; see §6.2.
+default to pick silently. That call has now been made; see the decision below and the §6.2 row.
+
+**The four options, costed (2026-09-01), so the decision can actually be made:**
+
+| Option | What it costs | What it buys |
+|---|---|---|
+| **Do nothing; document the constraint** | $0 | Correct today — the app runs on exactly one Fargate task, and §6.7 puts multi-instance in Phase 3 behind backups, alerting and the legal work. The limiter is *not* wrong until a second instance exists; it is wrong the moment one appears |
+| **AWS WAF rate-based rule** | ~$5/mo web ACL + $1/rule + $0.60 per million requests | Enforced at the edge, ahead of the ALB, so it is shared across instances by construction and costs the app zero request-path latency. Coarser than this filter (no per-path tiering, 5-minute evaluation windows), so it complements the auth tier rather than replacing it |
+| **ElastiCache Redis + `bucket4j-redis`** | ~$9–12/mo (`cache.t4g.micro`), plus a VPC/security-group and one new secret in each of the AWS/GCP/Azure pipelines | The textbook answer. Exact same semantics as today, just shared. Also the most new infrastructure to own, monitor and pay for |
+| **Embedded Hazelcast + `bucket4j-hazelcast`** | $0 extra infrastructure; more heap per task and non-trivial ECS discovery config | No external service, but peer discovery under `awsvpc` networking is fiddly and a split-brain silently restores the per-instance behaviour it was added to fix — failure mode is invisible |
+
+#### Decision (2026-09-01): accept the single-instance limit, do not buy infrastructure yet
+
+**Chosen: do nothing.** Paying for, securing and monitoring a shared cache to fix a *scale-out*
+blocker is premature while the application runs on exactly one Fargate task and serves no production
+traffic. §6.7 already sequences multi-instance into Phase 3, behind backups, alerting and the
+commercial work — all of which protect against losses that are irrecoverable, whereas this one
+protects against a condition that does not currently exist. Redis and Hazelcast were both rejected
+on cost-and-complexity grounds rather than on correctness; AWS WAF is the preferred answer if and
+when it is needed, because it is enforced at the edge and therefore shared by construction, with no
+request-path latency added to the app.
+
+**This is an accepted constraint, not an oversight, and it has a precise trigger.** The limiter is
+not wrong today. It becomes wrong **the moment a second instance exists** — at which point N nodes
+means N independent allowances for the same caller and the effective limit is N× the configured one,
+silently. Anything that raises the ECS desired count above 1, adds a second region, or introduces a
+blue/green overlap where both revisions serve traffic simultaneously **must** be paired with this
+work. Treat the desired-count change itself as the reminder: there is no runtime symptom, no log
+line and no failing test that will announce it.
+
+What *was* fixed is the part that was wrong today: the unbounded bucket stores, above.
 
 ### 2.5 ⬜ 🔧 Turn on cost visibility — infra-only, no code
 
@@ -231,6 +334,54 @@ Both things inspection alone couldn't settle are now confirmed: MySQL 8.0 (local
 both accept the multi-line `UPDATE … JOIN` string inside the `IF(...)` prepared statement, and the
 `CHECK` add does not collide with any differently-named existing constraint on either database.
 
+### 2.7 ✅ 🔒 `npm audit` is red — patch the Angular build toolchain
+
+**Found 2026-09-01** while adding `sass` as an explicit devDependency (see §2.1). This is new since
+the last recorded clean audit, because the advisories were published after it, not because anything
+in this repo changed.
+
+```
+undici  7.0.0 - 7.28.0                       Severity: high
+  5 advisories (response desync, cache-directive info disclosure, CRLF injection, …)
+  via @angular/build 21.0.0-next.0 - 21.2.20
+2 vulnerabilities (1 moderate, 1 high)   →   npm audit --audit-level=high exits 1
+```
+
+**Actual exposure is low, and it is worth being precise about why.** `undici` arrives through
+`@angular/build`, a **devDependency**. It is an HTTP client used by the build tooling, not by the
+application: nothing in `dist/` contains it, and the deployed artifact is static files served by
+Spring Boot. The realistic threat is against a build machine, not against a running instance. The
+urgent part is not the CVE, it is that **`.github/workflows/ci.yml` gates on this audit**, so the
+pipeline is red until it is fixed.
+
+**Why `npm audit fix` does not fix it.** The patched release exists (`@angular/build@21.2.22`, above
+the vulnerable `≤ 21.2.20` range), but taking it drags the whole framework: `@angular/compiler-cli`
+peers `@angular/compiler` at an *exact* version, so build, cli, compiler-cli, core, common,
+animations, forms, platform-browser and router all have to move to 21.2.22 together. npm will not
+unwind the existing `package-lock.json` to do that — `platform-browser@21.2.19`'s peerOptional pin on
+`@angular/animations@21.2.19` blocks it, and the resolver reports `ERESOLVE` for every partial
+combination. Attempted and reverted on 2026-09-01 rather than leaving a half-upgraded tree.
+
+**The fix, when someone takes it:** bump every `@angular/*` entry in `tesseraapp/package.json` to
+`^21.2.22`, delete `package-lock.json`, and `npm install` to re-resolve from scratch. It is a
+same-minor patch bump, so no migration is expected, but it regenerates the whole lock file and
+therefore wants its own commit and a full `build` + `lint` + `test` pass rather than riding along
+with unrelated work. Do not use `--force` or `--legacy-peer-deps`; they paper over the peer
+constraint instead of satisfying it.
+
+**Done (2026-09-03).** All eleven `@angular/*` entries — the seven exact-peer packages
+(`animations`, `common`, `compiler`, `core`, `forms`, `platform-browser`, `router`) plus `build`,
+`cli`, `compiler-cli`, `language-service` — bumped to `^21.2.22` in lockstep, exactly as planned; no
+framework migration, no code changes. `package-lock.json` deleted and regenerated from scratch
+rather than patched in place, because `npm install` with a stale `node_modules` present resolved the
+same `ERESOLVE` this section describes (it was still reusing the old `21.2.19` install underneath the
+new `package.json` range) — `rm -rf node_modules` first was required, not just deleting the lock
+file. `npm audit --audit-level=high` now reports **0 vulnerabilities**. Full frontend verification
+re-run against the new toolchain: production build clean (no budget warnings, same lazy-chunk shape
+for jsPDF/html2canvas/canvg as §2.1 established), 174/174 Vitest tests green, `ng lint` clean.
+`@angular/animations` now logs a deprecation notice pointing at the `animate.enter`/`animate.leave`
+API planned for a future Angular version — informational only, nothing to act on at 21.x.
+
 ---
 
 ---
@@ -250,7 +401,7 @@ Subsections: [3.1 Security & identity](#31-security--identity) · [3.2 Access mo
 | Enhancement | Why it is worth doing | Sketch |
 |---|---|---|
 | ✅ **`schema.sql` was missing two audit event types — the rows were silently dropped** | Done (2026-08-20). `MFA_RESET` and `RECOVERY_CODES_REGENERATED` (published by admin TOTP reset and recovery-code rotation respectively) are now in both `CK_Events_Type` and the seed `INSERT INTO events`, alongside `PASSKEY_LOGIN` which was already present in both — the original audit slightly overcounted the gap, but the two genuinely missing types are fixed | |
-| 🔄 **Distributed rate-limit state** (link tickets + WebAuthn challenges already closed) | See §2.4 — the one remaining scale-out blocker | Needs `bucket4j-redis`/`bucket4j-hazelcast`, a genuine new-infrastructure decision, not a database table (see §2.4 for why) |
+| ✅ **Distributed rate-limit state — decided, deliberately deferred** (link tickets + WebAuthn challenges already closed) | Decision recorded 2026-09-01 in §2.4: keep the limiter in-process as an accepted single-instance constraint; AWS WAF at the edge is the preferred fix if/when a second instance appears. Separately, the stores' **unbounded growth was a real DoS vector and is fixed** (Caffeine `maximumSize` + `expireAfterAccess`) | Trigger, not a date: any change raising the ECS desired count above 1 must be paired with this work — there is no runtime symptom that will announce it (§6.2) |
 | ✅ **Session revocation from the security dashboard** | Done (2026-08-08) — `GET /admin/user/{id}` now returns the target's live sessions (same `RefreshSession` shape as the Security Center, already `@JsonIgnore`-safe); `DELETE /admin/user/{id}/sessions/{family}` revokes one device, alongside the existing bulk `DELETE /admin/user/{id}/sessions`. Org-scoped, self-target-refused, audited against the target — same convention as every other admin action. Frontend: a Sessions panel on the user-detail page (`user-details.component`), per-row revoke + a bulk "sign out everywhere" button | |
 | ✅ **Admin-initiated MFA reset** | Done (2026-08-13, `ebf4f5e`) — `AdminUserController` carries the reset action, gated on staff authority and audited as `MFA_RESET`; `AdminUserControllerTotpResetTest` covers it | |
 | ✅ **Regenerate recovery codes** | Done (2026-08-13, `ebf4f5e`) — `POST /user/totp/recovery-codes/regenerate` (`TotpController`), reusing `issueRecoveryCodes()`'s existing delete-then-insert; no more disable-and-re-enroll round trip | |
@@ -699,9 +850,11 @@ Not marked by a `TODO` but tracked in §3.2: `RoleRepoImpl.create/update/delete/
 
 ## 5. Engineering debt
 
-- 🔄 **Per-instance security state** — §2.4. Link tickets and WebAuthn challenges closed 2026-08-29
-  (moved to the database); rate limiting is the one remaining piece, and deliberately not a database
-  table (see §2.4).
+- ✅ **Per-instance security state** — §2.4. Link tickets and WebAuthn challenges closed 2026-08-29
+  (moved to the database). Rate limiting stays in-process by decision (2026-09-01): it is correct at
+  one instance, a database table is the wrong tool for a check that fires on every request, and the
+  edge (AWS WAF) is the preferred fix when a second instance appears. Its separate **unbounded-growth
+  bug is fixed** — the bucket stores are now Caffeine caches bounded by size and idle time.
 - ✅ **Production boot with `ddl-auto=validate`** — §2.3. Verified 2026-08-14 against a fresh local database.
 - ✅ **No test touches the real filter chain.** Done (2026-08-19, POST-SUBMISSION-UPGRADES.md #9) —
   new `SecurityFilterChainIntegrationTest` (`@SpringBootTest(webEnvironment=RANDOM_PORT)` +
@@ -873,19 +1026,76 @@ one, not a coverage gap specific to this change. Per-tenant *role* catalogs (§3
 role definitions" row) remain the one outstanding piece of this shape — that gap is about the role
 vocabulary, not services, and is unrelated to what just closed here.
 
-For a single business running its own instance the current state was already fine. For a product
-serving several businesses as genuinely separate tenants, the decision below is what remains:
+#### Decision (2026-08-30): shared-schema multi-tenant — ratified
 
-| Model | What it means here | Effort |
+This is no longer an open question. The audit recorded below walked the *code* rather than these
+paragraphs, and found the model already built, already enforced, and already covered by tests — the
+section had simply never been closed out. The other two options are recorded as **rejected**, not
+pending, so a future reader does not reopen a decision that shipping code has already made:
+
+| Model | What it means here | Verdict |
 |---|---|---|
-| **Single-tenant** — one deployment per customer | Ship as-is; each business gets its own container + database. Simplest and safest, but per-customer operational cost and no economy of scale | Low — mostly packaging and a provisioning script |
-| **Shared-schema multi-tenant** — `organization_id` on every business table | The natural extension of what already exists; the analytics aggregates already do this. Needs the column on `customer`/`invoice`/`services`, the predicate pushed into every query, and a fail-closed default | **Medium — the recommended path.** The org-scoping pattern is already proven in `OrganizationServiceImpl` |
-| **Schema-per-tenant** | Strongest isolation, worst migration story with a hand-applied `schema.sql` and no migration tool | High, and it fights the current schema strategy |
+| **Single-tenant** — one deployment per customer | Ship as-is; each business gets its own container + database. Simplest and safest, but per-customer operational cost and no economy of scale | **Rejected.** Cost scales linearly with customers, and §6.6 already shows one Fargate task is the dominant line item. Still the right answer for a single business self-hosting, which needs no code change either way |
+| **Shared-schema multi-tenant** — `organization_id` on the business tables | One database, one schema, a tenant predicate pushed into every query, and a fail-closed default | **✅ Chosen — and already implemented.** Not a plan; see the verification below |
+| **Schema-per-tenant** | Strongest isolation, worst migration story with a hand-applied `schema.sql` and no migration tool | **Rejected.** It fights the schema strategy directly: `schema.sql` is applied by hand (`sql.init.mode: never`, no Flyway by choice), so N tenants means N manual applications of every DDL change, with partial-failure states and no tool to detect drift |
 
-If shared-schema is chosen, two rules from the existing org work carry over verbatim and are worth
-restating because getting them wrong is silent: **scope inside the SQL, never filter the result set**
-(an aggregate has discarded its attribution by the time it is a number, and post-filtering a page
-corrupts `totalElements`), and **an empty scope means nothing, not everything**.
+**What the audit verified** — each of these was checked against the source on 2026-08-30, because
+every one of them fails *silently* when wrong:
+
+1. **The tenant boundary is a single predicate**, not a scattered role comparison:
+   `RoleType.isOrganizationScoped(String)` — everything below `ROLE_ADMIN`'s tier is a tenant, and
+   it is **fail-closed** (`from(roleName).map(...).orElse(true)`), so an unrecognized or renamed
+   role is treated as *restricted*, never as a platform operator.
+2. **`null` scope and empty scope mean opposite things, and both are deliberate.** `null` is
+   returned only for the unscoped platform tiers and means "no predicate"; an *empty* collection
+   would be a scoped caller who belongs to no organization, and
+   `CustomerServiceImpl#requireScope` throws an `ApiException` before it can reach the database.
+   This is the "an empty scope means nothing, not everything" rule, enforced rather than merely
+   documented — `IN ()` is a query that would otherwise have quietly returned everything on some
+   dialects and nothing on others.
+3. **The predicate is inside the SQL on every scoped path.** `CustomerQuery`'s
+   `STATS_BY_ORGANIZATION_QUERY`, the `*OrganizationIdIn` finders, and the JPQL
+   `WHERE i.customer.organizationId IN :organizationIds` all scope in the database. Nothing
+   post-filters a returned page — which would corrupt `totalElements` — and nothing post-filters an
+   aggregate, which is impossible anyway once it is a number.
+4. **Tenancy is enforced in two shapes, both built on that one predicate.** *Query scoping* resolves
+   a collection of organization ids and pushes it into the SQL — four controllers (`Customer`,
+   `Analytics`, `Organization`, `SecurityDashboard`), now all delegating to
+   `OrganizationScope#resolve`. *Per-record authorization* checks one already-fetched row against
+   the caller instead — `AdminUserController#isWithinOrganizationScope`,
+   `OrganizationController#requireMembershipAuthority`,
+   `ServicesCatalogController#requireManageable`, `OrganizationIdentityProviderController`. The
+   second shape is right where the caller names a specific record, and it is not a missed
+   extraction; both call `RoleType.isOrganizationScoped` and cannot disagree about who is a tenant.
+5. **It is tested at the boundary it protects**: `CustomerControllerOrgScopeTest`,
+   `AnalyticsControllerOrgScopeTest`, `SecurityDashboardControllerOrgScopeTest`,
+   `ServicesCatalogControllerOrgScopeTest`, and `AdminUserControllerOrgScopeTest` — 55 tests across
+   the five scoped surfaces, each pairing a positive assertion with a `never()` on the unscoped
+   sibling method, so "correct-looking data that silently spans tenants" fails the build.
+
+**Correction to this section's earlier wording.** The old table said the work "needs the column on
+`customer`/`invoice`/`services`". `Customer` and `Services` have it; **`Invoice` deliberately does
+not, and should not get one.** An invoice reaches its tenant through its customer
+(`i.customer.organizationId`), because an invoice's owner is not independent information — a column
+on `invoice` would be a second copy of a fact already stored, free to disagree with it after a
+customer is reassigned. Two consequences follow and are intended, not defects:
+
+- A **draft invoice with no customer yet** (`customer` is nullable) belongs to no tenant and is
+  therefore invisible to every scoped caller until it is attached to one.
+- Moving a customer between organizations moves its whole invoice history with it. That is the
+  correct behaviour for "this account now belongs to that org", and the only behaviour a single
+  source of truth can produce.
+
+**What genuinely remains** (none of it blocks the model — these are hardening items):
+
+| Gap | Why it matters | Where |
+|---|---|---|
+| ~~`resolveScope` duplicated verbatim in **four** controllers~~ — **closed 2026-08-30** | This duplication is what produced the literal-`ROLE_ORGANIZATION_ADMIN` bug: the analytics copy was fixed 2026-08-13 and the customer/security-dashboard copies kept leaking until 2026-08-21. Four copies of a security boundary is four chances to fix three of them | Extracted to `utils/OrganizationScope#resolve`; the four `resolveScope` methods are now one-line delegations. Deliberately a **static helper taking `OrganizationService` as a parameter**, not an injected bean — the `*OrgScopeTest` suites are plain `@InjectMocks` Mockito tests that assert `verify(organizationService, never()).findActiveOrganizationIds(...)`, and a new collaborator would have forced those into assertions against a mock of the resolver, replacing a test of real behaviour with a test of a stub |
+| Enforcement is **application-level only** — there is no database backstop | A single forgotten `WHERE` in a new query is a full cross-tenant read, and nothing below the service layer would stop it. MySQL has no row-level security, so the realistic backstop is a review rule plus a test per new scoped finder, not a database feature | Accepted risk, recorded deliberately rather than assumed away |
+| Per-organization **role catalogs** | Tenants share one role vocabulary; a tenant cannot define its own roles | Already tracked in §3.2's "Per-organization role definitions" row — role vocabulary, not data scoping |
+
+For a single business running its own instance, none of this matters — the platform tiers see
+everything, which is what a self-hosting owner wants.
 
 ### 6.2 Scale-out blockers
 
@@ -893,7 +1103,7 @@ The app runs on one Fargate task. Running two would break these, in this order o
 
 | Blocker | What breaks on instance #2 | Fix |
 |---|---|---|
-| **Rate-limit buckets** | Per-JVM Bucket4j maps. An attacker routed across instances gets N× the request budget | `bucket4j-redis`/`bucket4j-hazelcast` (§2.4) — a new-infrastructure decision, not a database table; a DB round trip on every request is a real regression, not a neutral fix |
+| **Rate-limit buckets** | Per-JVM Bucket4j caches. An attacker routed across instances gets N× the request budget, silently — nothing logs or alerts on it | **Deliberately unfixed — see the decision in §2.4.** Accepted while `desired_count = 1`; the fix is AWS WAF rate-based rules at the edge (no code, no new service to run) rather than `bucket4j-redis`/`bucket4j-hazelcast`. **Raising the ECS desired count above 1 requires doing this first.** The related *unbounded-growth* bug is already fixed (Caffeine-bounded stores) |
 | **Profile-image storage** | `IMAGE_STORAGE_TYPE=local` writes to the container filesystem, so an avatar uploaded to A 404s from B — and vanishes on redeploy | Already solved: set `IMAGE_STORAGE_TYPE=s3` and grant the task role `s3:PutObject`/`s3:GetObject`. **This is configuration, not code** |
 | **HTTP cache** | Client-side only, so a write by one user never invalidates another user's cache | `Cache-Control`/`ETag` on read endpoints (§3.4) |
 | **The `dev` seeder** | Harmless — it never runs under `prod` | — |
@@ -973,7 +1183,7 @@ If this were to be taken seriously as a product, the order would be:
 |---|---|---|
 | **1 — Safe to run** | Nothing can be lost or silently broken | Backup + rehearsed restore (§6.3), alerting + billing alarm (§2.5, §6.4), HTTPS on the ALB (§3.4), the real prod-profile boot (§2.3) |
 | **2 — Safe to sell** | Legally and contractually shippable | Data export/deletion (§6.5), retention policy, ToS/privacy, an external security review |
-| **3 — Able to grow** | More than one customer, more than one instance | The tenancy decision (§6.1), distributed security state (§2.4), S3 images + backend caching (§6.2), org self-management (§3.2) |
+| **3 — Able to grow** | More than one customer, more than one instance | The tenancy decision (§6.1), **shared rate-limit state — the deferred §2.4 decision comes due here, and this phase is its trigger**, S3 images + backend caching (§6.2), org self-management (§3.2) |
 | **4 — Competitive** | Reasons to choose it | Batch upload (§3.3), sorting/filtering, session revocation from the dashboard, backend i18n |
 
 Phase 1 is roughly a week of focused work and removes every risk that could destroy trust
