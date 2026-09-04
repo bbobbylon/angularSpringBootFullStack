@@ -39,8 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * it fails against any implementation that reads the header directly.
  *
  * <p>Each case constructs its own {@link RateLimitFilter}, because the buckets are instance state
- * held in a {@code ConcurrentHashMap} that never expires within a filter's lifetime; sharing one
- * instance would let an earlier case drain the allowance of a later one.
+ * that no case is fast enough to age out (the stores retain an idle bucket for ten minutes);
+ * sharing one instance would let an earlier case drain the allowance of a later one.
  *
  * @see RequestUtils#getIpAddress(jakarta.servlet.http.HttpServletRequest) the trusted-proxy-aware
  * resolution rule this filter must not bypass
@@ -235,5 +235,43 @@ class RateLimitFilterTest {
 
         assertEquals(AUTH_CAPACITY, chain.invocations,
                 "the trailing entry is the same client throughout, so one bucket governs all 30");
+    }
+
+    /**
+     * The bucket stores must be bounded, because their keys come from unauthenticated input.
+     *
+     * <p>They were previously plain {@code ConcurrentHashMap}s with no eviction of any kind, so
+     * every distinct client IP the process ever saw left an entry behind permanently. On a
+     * public-facing service that set is not bounded by the user base: background internet scanning
+     * grows it continuously, and an attacker rotating source addresses grows it on purpose. The
+     * filter that exists to stop the service being exhausted was itself an unbounded allocation
+     * driven by the caller, reachable at {@code @Order(-200)} before any authentication runs.
+     *
+     * <p>This is the one property of that fix that cannot be observed from a response: a bounded
+     * store and an unbounded one answer every request identically and differ only in what they do
+     * to the heap over days. Hence the reach into {@link RateLimitFilter#trackedClients()}.
+     *
+     * <p>Deliberately drives more distinct addresses than the cache is allowed to keep, which is
+     * what makes the assertion meaningful — it takes a second or so, and that cost is the point.
+     */
+    @Test
+    @DisplayName("the bucket store is bounded, so rotating source IPs cannot exhaust the heap")
+    void bucketStoreIsBoundedAgainstAddressRotation() throws Exception {
+        RateLimitFilter filter = newFilter();
+        CountingFilterChain chain = new CountingFilterChain();
+
+        // Comfortably past the 50,000-per-tier ceiling, each address used exactly once.
+        int distinctClients = 60_000;
+        for (int i = 0; i < distinctClients; i++) {
+            fire(filter, GLOBAL_PATH, "10." + (i >> 16 & 0xFF) + "." + (i >> 8 & 0xFF) + "." + (i & 0xFF), null, chain);
+        }
+
+        long tracked = filter.trackedClients();
+        assertTrue(tracked < distinctClients,
+                "every address was retained (" + tracked + "), so the store is still unbounded");
+        assertTrue(tracked <= 50_000,
+                "the store grew past its configured ceiling: " + tracked);
+        assertEquals(distinctClients, chain.invocations,
+                "each address is a first request on its own bucket, so none should have been refused");
     }
 }

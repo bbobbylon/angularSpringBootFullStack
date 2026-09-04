@@ -3,6 +3,8 @@ package com.bob.angularspringbootfullstack.filter;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.utils.RequestUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
@@ -53,10 +55,19 @@ import java.util.concurrent.TimeUnit;
  * infrastructure writes. Requests whose address cannot be determined share the single
  * {@code "Unknown IP"} bucket, which throttles them together rather than exempting them.
  *
- * <p><b>Storage:</b> in-memory {@link ConcurrentHashMap} keyed by client IP. This is correct
- * for single-instance deployments. For a multi-instance / horizontally-scaled deployment, replace
- * the bucket store with a shared backend (e.g. Bucket4j + Redis via {@code bucket4j-redis}
- * or Hazelcast via {@code bucket4j-hazelcast}) so limits are enforced across nodes.
+ * <p><b>Storage:</b> in-memory Caffeine caches keyed by client IP, bounded by both
+ * {@link #MAX_TRACKED_CLIENTS} and {@link #IDLE_RETENTION}. This is correct for single-instance
+ * deployments. For a multi-instance / horizontally-scaled deployment, replace the bucket store with
+ * a shared backend (e.g. Bucket4j + Redis via {@code bucket4j-redis} or Hazelcast via
+ * {@code bucket4j-hazelcast}) so limits are enforced across nodes — see
+ * {@code documentation/FUTURE-ENHANCEMENTS.md} §2.4, which explains why that is an infrastructure
+ * decision rather than something to push into MySQL.
+ *
+ * <p><b>What the bounds do and do not buy.</b> They fix a single-instance memory-exhaustion vector
+ * (the stores previously grew without limit, one entry per client IP forever). They do <em>not</em>
+ * make the limiter correct across instances: N nodes still means N independent allowances for the
+ * same caller, so the effective limit is N× the configured one. Those are separate problems with
+ * separate fixes, and only the first is addressed here.
  *
  * <p>This filter is registered as a plain servlet filter at {@code @Order(-200)}, placing it
  * BEFORE Spring Security's {@code FilterChainProxy} (default order -100). Rate limiting therefore
@@ -101,10 +112,54 @@ public class RateLimitFilter extends OncePerRequestFilter {
     /** Requests per minute per IP on every other path. Defaults to 200. See {@link #authCapacity}. */
     private final int globalCapacity;
 
-    /** Per-IP buckets for the auth tier. Lazily created on first auth request from an IP. */
-    private final ConcurrentHashMap<String, Bucket> authBuckets   = new ConcurrentHashMap<>();
+    /**
+     * How long an unused per-IP bucket is kept before it is discarded.
+     *
+     * <p>Must be comfortably longer than the bucket's own refill period (one minute), and that
+     * constraint is what makes eviction safe rather than a loophole. A greedy bucket that has not
+     * been touched for a full minute has already refilled to capacity, so it is byte-for-byte
+     * equivalent to the fresh bucket that would replace it. Evicting after ten idle minutes
+     * therefore cannot hand anyone an allowance they had not already regained by waiting — an
+     * attacker who stops for ten minutes to get their bucket dropped has simply been rate limited
+     * for ten minutes, which is the point.
+     */
+    private static final Duration IDLE_RETENTION = Duration.ofMinutes(10);
+
+    /**
+     * Hard ceiling on how many client IPs are tracked per tier.
+     *
+     * <p>Backstop for the case {@link #IDLE_RETENTION} alone does not bound: a flood from many
+     * distinct source addresses, which would otherwise mint a bucket per address faster than idle
+     * expiry retires them. Caffeine evicts by frequency/recency, so an address that is actively
+     * being throttled is among the last to be dropped, while the one-shot addresses that scanners
+     * and botnets generate are the first.
+     *
+     * <p>50,000 entries per tier is a few megabytes and far above any plausible legitimate
+     * concurrent-client count for this application. Raise it only alongside a heap increase.
+     */
+    private static final long MAX_TRACKED_CLIENTS = 50_000L;
+
+    /**
+     * Per-IP buckets for the auth tier. Lazily created on first auth request from an IP.
+     *
+     * <p>Bounded caches rather than plain {@link ConcurrentHashMap}s, which is a correctness fix and
+     * not a tidy-up. The maps here previously had no eviction of any kind, so every distinct client
+     * IP the application ever saw left a permanent entry in two of them. On a public-facing service
+     * that set is not bounded by the user base — background internet scanning alone grows it
+     * continuously, and an attacker rotating source addresses grows it deliberately. The limiter
+     * that exists to make the service hard to exhaust was itself an unbounded allocation driven by
+     * unauthenticated input, reachable at {@code @Order(-200)} before any authentication runs.
+     */
+    private final Cache<String, Bucket> authBuckets = Caffeine.newBuilder()
+            .maximumSize(MAX_TRACKED_CLIENTS)
+            .expireAfterAccess(IDLE_RETENTION)
+            .build();
+
     /** Per-IP buckets for the global tier. Lazily created on first request from an IP. */
-    private final ConcurrentHashMap<String, Bucket> globalBuckets = new ConcurrentHashMap<>();
+    private final Cache<String, Bucket> globalBuckets = Caffeine.newBuilder()
+            .maximumSize(MAX_TRACKED_CLIENTS)
+            .expireAfterAccess(IDLE_RETENTION)
+            .build();
 
     private final ObjectMapper objectMapper;
 
@@ -137,8 +192,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         boolean isAuthEndpoint = AUTH_PATHS.stream().anyMatch(path::startsWith);
 
         Bucket bucket = isAuthEndpoint
-                ? authBuckets.computeIfAbsent(clientIp, ip -> buildBucket(authCapacity))
-                : globalBuckets.computeIfAbsent(clientIp, ip -> buildBucket(globalCapacity));
+                ? authBuckets.get(clientIp, ip -> buildBucket(authCapacity))
+                : globalBuckets.get(clientIp, ip -> buildBucket(globalCapacity));
 
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
@@ -165,6 +220,27 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 .build();
 
         response.getWriter().write(objectMapper.writeValueAsString(httpResponse));
+    }
+
+    /**
+     * How many distinct client IPs are currently tracked, across both tiers.
+     *
+     * <p>Package-private and present solely so {@code RateLimitFilterTest} can assert that the
+     * bucket stores are actually bounded. That property is invisible from the outside — an
+     * unbounded store and a bounded one answer every request identically and differ only in what
+     * they do to the heap over days — so without this the regression it guards against could
+     * return unnoticed.
+     *
+     * <p>Runs Caffeine's maintenance first: eviction is amortised onto later operations rather than
+     * performed inline, so {@code estimatedSize()} can otherwise still count entries that are
+     * already logically evicted.
+     *
+     * @return the combined number of live entries in the auth and global stores
+     */
+    long trackedClients() {
+        authBuckets.cleanUp();
+        globalBuckets.cleanUp();
+        return authBuckets.estimatedSize() + globalBuckets.estimatedSize();
     }
 
     /**
