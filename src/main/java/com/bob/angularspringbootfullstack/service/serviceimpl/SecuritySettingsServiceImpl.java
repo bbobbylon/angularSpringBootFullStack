@@ -52,14 +52,16 @@ public class SecuritySettingsServiceImpl implements SecuritySettingsService {
     }
 
     @Override
-    public SecuritySettings updateSettings(Boolean anomalyEnabled, Integer anomalyHistoryLimit, Long updatedBy) {
+    public SecuritySettings updateSettings(Boolean anomalyEnabled, Integer anomalyHistoryLimit,
+                                            Integer maxConcurrentSessions, Long updatedBy) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("anomalyEnabled", anomalyEnabled)
                 .addValue("anomalyHistoryLimit", anomalyHistoryLimit)
+                .addValue("maxConcurrentSessions", maxConcurrentSessions)
                 .addValue("updatedBy", updatedBy);
         jdbcTemplate.update(UPDATE_SECURITY_SETTINGS_QUERY, params);
-        log.info("Security settings updated by admin id {}: anomalyEnabled={}, anomalyHistoryLimit={}",
-                updatedBy, anomalyEnabled, anomalyHistoryLimit);
+        log.info("Security settings updated by admin id {}: anomalyEnabled={}, anomalyHistoryLimit={}, maxConcurrentSessions={}",
+                updatedBy, anomalyEnabled, anomalyHistoryLimit, maxConcurrentSessions);
         return getSettings();
     }
 }

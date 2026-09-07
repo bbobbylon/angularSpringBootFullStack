@@ -3,9 +3,11 @@ package com.bob.angularspringbootfullstack.controller;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.RoleType;
 import com.bob.angularspringbootfullstack.form.AnomalySettingsForm;
+import com.bob.angularspringbootfullstack.model.AuditChainVerificationResult;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.SecurityOverview;
 import com.bob.angularspringbootfullstack.model.SecuritySettings;
+import com.bob.angularspringbootfullstack.service.AuditIntegrityService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.SecurityDashboardService;
 import com.bob.angularspringbootfullstack.service.SecuritySettingsService;
@@ -80,11 +82,17 @@ class SecurityDashboardControllerSecurityTest {
         }
 
         @Bean
+        AuditIntegrityService auditIntegrityService() {
+            return mock(AuditIntegrityService.class);
+        }
+
+        @Bean
         SecurityDashboardController securityDashboardController(SecurityDashboardService securityDashboardService,
                                                                  UserService userService,
                                                                  OrganizationService organizationService,
-                                                                 SecuritySettingsService securitySettingsService) {
-            return new SecurityDashboardController(securityDashboardService, userService, organizationService, securitySettingsService);
+                                                                 SecuritySettingsService securitySettingsService,
+                                                                 AuditIntegrityService auditIntegrityService) {
+            return new SecurityDashboardController(securityDashboardService, userService, organizationService, securitySettingsService, auditIntegrityService);
         }
     }
 
@@ -96,6 +104,8 @@ class SecurityDashboardControllerSecurityTest {
     private UserService userService;
     @Autowired
     private SecuritySettingsService securitySettingsService;
+    @Autowired
+    private AuditIntegrityService auditIntegrityService;
 
     /**
      * ROLE_ADMIN — an unscoped tier — so this suite's stubs (which assert authority gating, not
@@ -114,7 +124,7 @@ class SecurityDashboardControllerSecurityTest {
 
     @BeforeEach
     void resetMocks() {
-        reset(securityDashboardService, userService, securitySettingsService);
+        reset(securityDashboardService, userService, securitySettingsService, auditIntegrityService);
     }
 
     private static void authenticateWith(String... authorities) {
@@ -143,9 +153,25 @@ class SecurityDashboardControllerSecurityTest {
         assertThatThrownBy(() -> controller.updateAnomalySettings(caller, new AnomalySettingsForm()))
                 .as("writing anomaly settings must require an admin authority")
                 .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getAuditIntegrity(caller))
+                .as("checking audit trail integrity must require an admin authority")
+                .isInstanceOf(AccessDeniedException.class);
 
         // The @PreAuthorize denies BEFORE the method body, so no data is ever loaded or written.
-        verifyNoInteractions(securityDashboardService, securitySettingsService);
+        verifyNoInteractions(securityDashboardService, securitySettingsService, auditIntegrityService);
+    }
+
+    @Test
+    @DisplayName("an admin with UPDATE:USER can trigger the audit trail integrity check")
+    void updateUserAuthorityCanCheckAuditIntegrity() {
+        authenticateWith("UPDATE:USER");
+        when(userService.getUserByEmail(any())).thenReturn(new UserDTO());
+        when(auditIntegrityService.verifyUserEvents()).thenReturn(AuditChainVerificationResult.intact(0));
+        when(auditIntegrityService.verifyOrganizationEvents()).thenReturn(AuditChainVerificationResult.intact(0));
+
+        ResponseEntity<HttpResponse> response = controller.getAuditIntegrity(principal());
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
     }
 
     @Test
@@ -166,7 +192,7 @@ class SecurityDashboardControllerSecurityTest {
         authenticateWith("UPDATE:ROLE");
         UserDTO caller = principal();
         when(userService.getUserByEmail(any())).thenReturn(new UserDTO());
-        when(securitySettingsService.updateSettings(any(), any(), eq(caller.getId())))
+        when(securitySettingsService.updateSettings(any(), any(), any(), eq(caller.getId())))
                 .thenReturn(SecuritySettings.builder().build());
 
         AnomalySettingsForm form = new AnomalySettingsForm();

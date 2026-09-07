@@ -30,23 +30,27 @@
 
           <section class="sc-panel sc-reveal" style="--d: 80ms;">
             @if ((state?.appData?.data?.users?.length ?? 0) > 0) {
+              <!-- Column-priority collapse (FUTURE-ENHANCEMENTS §3.7): on phones the essentials
+                   stay — Name, Status, Action; Email and Role return at ≥md; the merely
+                   supplementary ID, Photo, Type, and MFA return at ≥lg. Each hidden th has a
+                   matching td below with the identical d-none d-*-table-cell classes, and
+                   .table-responsive remains the fallback for anything still too wide. Mirrors the
+                   same treatment already applied to customers/invoices. -->
               <div class="table-responsive">
                 <table class="table table-hover align-middle">
                   <thead>
                   <tr>
-                    <th class="text-center" scope="col">ID</th>
-                    <th scope="col">{{ t('common.photo') }}</th>
-                    <th (click)="toggleSort('firstName')" (keydown.enter)="toggleSort('firstName')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th class="text-center d-none d-lg-table-cell" scope="col">ID</th>
+                    <th class="d-none d-lg-table-cell" scope="col">{{ t('common.photo') }}</th>
+                    <th appSortableHeader (sort)="toggleSort('firstName')" scope="col">
                       {{ t('common.name') }} <i [class]="'bi ' + sortIconClass('firstName')"></i>
                     </th>
-                    <th (click)="toggleSort('email')" (keydown.enter)="toggleSort('email')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th appSortableHeader (sort)="toggleSort('email')" class="d-none d-md-table-cell" scope="col">
                       {{ t('common.email') }} <i [class]="'bi ' + sortIconClass('email')"></i>
                     </th>
-                    <th scope="col">{{ t('users.role') }}</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">MFA</th>
+                    <th class="d-none d-md-table-cell" scope="col">{{ t('users.role') }}</th>
+                    <th class="d-none d-lg-table-cell" scope="col">Type</th>
+                    <th class="d-none d-lg-table-cell" scope="col">MFA</th>
                     <th scope="col">{{ t('common.status') }}</th>
                     <th class="text-end" scope="col">{{ t('common.action') }}</th>
                   </tr>
@@ -54,8 +58,8 @@
                   <tbody class="table-body">
                     @for (user of (state?.appData?.data?.users ?? []); track user.id) {
                       <tr>
-                        <th class="text-center text-muted">{{ user.id }}</th>
-                        <td>
+                        <th class="text-center text-muted d-none d-lg-table-cell">{{ user.id }}</th>
+                        <td class="d-none d-lg-table-cell">
                           @if (user.imageUrl) {
                             <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
                               <img [alt]="user.firstName" [ngSrc]="user.imageUrl" fill
@@ -68,8 +72,8 @@
                           }
                         </td>
                         <td class="fw-medium">{{ user.firstName }} {{ user.lastName }}</td>
-                        <td class="text-muted">{{ user.email }}</td>
-                        <td>
+                        <td class="text-muted d-none d-md-table-cell">{{ user.email }}</td>
+                        <td class="d-none d-md-table-cell">
                           <span
                             [ngClass]="[
                               user.roleName === 'ROLE_APPLICATION_ADMIN' || user.roleName === 'ROLE_ADMIN' ? ' bg-danger' : '',
@@ -82,7 +86,7 @@
                             {{ user.roleName }}
                           </span>
                         </td>
-                        <td>
+                        <td class="d-none d-lg-table-cell">
                           @if (user.userType; as userType) {
                             <!-- P2-1: how the account was created (FEDERATED) or, for a password
                                  account, whether its email domain is on the deployment's internal
@@ -98,7 +102,7 @@
                             </span>
                           }
                         </td>
-                        <td>
+                        <td class="d-none d-lg-table-cell">
                           <span [ngClass]="user.using2FA ? 'bg-success' : 'bg-secondary'" class="badge">
                             {{ user.using2FA ? 'ON' : 'OFF' }}
                           </span>

@@ -145,7 +145,8 @@ public class Customer {
      * problem being solved. Batching is the correct fix for the paged + eager shape.
      *
      * <p>The deeper fix (LAZY + a projection/DTO for the list view, so invoices are never loaded for
-     * a screen that does not display them) is tracked in {@code ROADMAP.md}.
+     * a screen that does not display them) is tracked in {@code documentation/FUTURE-ENHANCEMENTS.md}
+     * §5 (Engineering debt).
      */
     @OneToMany(mappedBy = "customer", fetch = EAGER, cascade = ALL)
     @BatchSize(size = 50)

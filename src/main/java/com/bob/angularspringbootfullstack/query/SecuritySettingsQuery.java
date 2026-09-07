@@ -15,17 +15,19 @@ public class SecuritySettingsQuery {
      * mid-migration database never blocks a login on a missing settings row.
      */
     public static final String SELECT_SECURITY_SETTINGS_QUERY =
-            "SELECT id, anomaly_enabled, anomaly_history_limit, updated_at, updated_by FROM securitysettings WHERE id = 1";
+            "SELECT id, anomaly_enabled, anomaly_history_limit, max_concurrent_sessions, updated_at, updated_by "
+                    + "FROM securitysettings WHERE id = 1";
 
     /**
-     * Overwrites both override columns and stamps who changed them and when.
-     * Parameters: anomalyEnabled (nullable), anomalyHistoryLimit (nullable), updatedBy.
+     * Overwrites all three override columns and stamps who changed them and when.
+     * Parameters: anomalyEnabled (nullable), anomalyHistoryLimit (nullable), maxConcurrentSessions
+     * (nullable), updatedBy.
      *
-     * <p>Both value columns are always written, including as {@code NULL} — a {@code PATCH} with a
-     * null field means "clear this override back to the env default", not "leave it alone", so the
-     * statement has no partial-update branch to get that distinction wrong.
+     * <p>All three value columns are always written, including as {@code NULL} — a {@code PATCH}
+     * with a null field means "clear this override back to the env default", not "leave it alone",
+     * so the statement has no partial-update branch to get that distinction wrong.
      */
     public static final String UPDATE_SECURITY_SETTINGS_QUERY =
             "UPDATE securitysettings SET anomaly_enabled = :anomalyEnabled, anomaly_history_limit = :anomalyHistoryLimit, "
-                    + "updated_at = NOW(), updated_by = :updatedBy WHERE id = 1";
+                    + "max_concurrent_sessions = :maxConcurrentSessions, updated_at = NOW(), updated_by = :updatedBy WHERE id = 1";
 }

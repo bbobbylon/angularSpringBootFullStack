@@ -22,27 +22,31 @@
         <form #contactForm="ngForm" (ngSubmit)="submit(contactForm)" novalidate>
           <div class="mb-3">
             <label class="form-label" for="name">Name</label>
-            <input [disabled]="isLoading()" class="form-control" id="name" maxlength="100"
+            <input #name="ngModel" [disabled]="isLoading()" class="form-control" id="name" maxlength="100"
                    name="name" ngModel required type="text">
+            <app-field-error [control]="name" />
           </div>
           <div class="mb-3">
             <label class="form-label" for="email">Email</label>
-            <input [disabled]="isLoading()" class="form-control" email id="email"
+            <input #email="ngModel" [disabled]="isLoading()" class="form-control" email id="email"
                    name="email" ngModel required type="email">
+            <app-field-error [control]="email" />
           </div>
           <div class="mb-3">
             <label class="form-label" for="subject">Subject</label>
-            <input [disabled]="isLoading()" class="form-control" id="subject" maxlength="150"
+            <input #subject="ngModel" [disabled]="isLoading()" class="form-control" id="subject" maxlength="150"
                    name="subject" ngModel required type="text">
+            <app-field-error [control]="subject" />
           </div>
           <div class="mb-3">
             <label class="form-label" for="message">Message</label>
-            <textarea [disabled]="isLoading()" class="form-control" id="message" maxlength="5000"
+            <textarea #message="ngModel" [disabled]="isLoading()" class="form-control" id="message" maxlength="5000"
                       name="message" ngModel required rows="5"></textarea>
+            <app-field-error [control]="message" />
           </div>
           <button [disabled]="contactForm.invalid || isLoading()" class="btn btn-primary" type="submit">
             @if (isLoading()) {
-              <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+              <span aria-hidden="true" class="spinner-border spinner-border-sm me-2" role="status"></span>
             }
             Send message
           </button>

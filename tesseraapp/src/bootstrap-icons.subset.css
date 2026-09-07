@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE — DO NOT EDIT BY HAND.
  *
- * Bootstrap Icons 1.13.1, subset to the 104 icons this application uses
+ * Bootstrap Icons 1.13.1, subset to the 105 icons this application uses
  * (upstream defines 2078). Regenerate with `npm run generate:icons`; it also runs
  * automatically from the `prebuild`/`prestart` hooks, so adding an icon to a template is
  * all that is required.
@@ -29,6 +29,7 @@
 .bi-broadcast-pin::before{content:"\f1d5"}
 .bi-building::before{content:"\f1dd"}
 .bi-building-add::before{content:"\f867"}
+.bi-buildings::before{content:"\f87d"}
 .bi-buildings-fill::before{content:"\f87c"}
 .bi-camera-fill::before{content:"\f219"}
 .bi-cash-coin::before{content:"\f632"}

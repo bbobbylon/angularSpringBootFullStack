@@ -6,6 +6,14 @@ import { NotificationsService } from '../../service/notifications-service';
 import { BatchImportResultInterface } from '../../interface/batch-import.interface';
 
 /**
+ * Client-side mirror of {@code BatchImportServiceImpl.MAX_BATCH_FILE_BYTES} (2MB). Kept as a
+ * module constant rather than fetched from the server because it is a UX hint that changes as
+ * rarely as the row cap itself; if the backend value ever moves, the worst case here is a file
+ * that gets past this check and is rejected by the server with the same message.
+ */
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
+
+/**
  * The "Import" control that sits beside Customers' and Invoices' "Export" button
  * (POST-SUBMISSION-UPGRADES.md #8, FUTURE-ENHANCEMENTS.md §3.3 "P2-2 — Batch upload").
  *
@@ -72,10 +80,26 @@ export class BatchImportComponent {
     }
   }
 
-  /** Records the file chosen via the native file input. */
+  /**
+   * Records the file chosen via the native file input, or rejects it on the spot if it is over
+   * {@link MAX_FILE_BYTES}.
+   *
+   * <p>This is a courtesy check, not a security boundary — the backend enforces the same 2MB
+   * ceiling in {@code BatchImportServiceImpl} regardless of what the client sends. Checking
+   * here means someone who picks the wrong file finds out before waiting through an upload
+   * only to be told the same thing by a 400. The input's value is cleared on rejection so
+   * choosing the same (or a corrected, same-named) file again still fires {@code change}.
+   */
   protected onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.selectedFile.set(input.files?.[0] ?? null);
+    const file = input.files?.[0] ?? null;
+    if (file && file.size > MAX_FILE_BYTES) {
+      input.value = '';
+      this.selectedFile.set(null);
+      this.notification.onError(this.transloco.translate('batchImport.fileTooLarge', { limit: `${MAX_FILE_BYTES / (1024 * 1024)}MB` }));
+      return;
+    }
+    this.selectedFile.set(file);
   }
 
   /**

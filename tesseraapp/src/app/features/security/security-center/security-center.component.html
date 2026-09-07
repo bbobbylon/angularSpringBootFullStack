@@ -117,7 +117,7 @@
                     @if (!user()?.usingTotp) {
                       <button (click)="startEnrollment()" [disabled]="isLoading()" class="btn btn-primary btn-sm" type="button">
                         @if (isLoading()) {
-                          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                          <span aria-hidden="true" class="spinner-border spinner-border-sm me-2" role="status"></span>
                         }
                         {{ t('securityCenter.setUp') }}
                       </button>
@@ -191,7 +191,7 @@
                       </div>
                       <button [disabled]="confirmForm.invalid || isLoading()" class="btn btn-primary btn-sm" type="submit">
                         @if (isLoading()) {
-                          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                          <span aria-hidden="true" class="spinner-border spinner-border-sm me-2" role="status"></span>
                           <span>{{ t('securityCenter.verifying') }}</span>
                         } @else {
                           <span>{{ t('securityCenter.confirmEnable') }}</span>
@@ -335,7 +335,7 @@
               <div class="col-auto">
                 <button [disabled]="passkeyAdding()" class="btn btn-primary btn-sm" type="submit">
                   @if (passkeyAdding()) {
-                    <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                    <span aria-hidden="true" class="spinner-border spinner-border-sm me-2" role="status"></span>
                     <span>Follow your device's prompt&hellip;</span>
                   } @else {
                     <span>Create passkey</span>

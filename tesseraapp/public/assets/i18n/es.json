@@ -39,6 +39,16 @@
     "viewAll": "Ver todo",
     "add": "Añadir"
   },
+  "validation": {
+    "required": "Este campo es obligatorio.",
+    "email": "Introduce una dirección de correo electrónico válida.",
+    "pattern": "No coincide con el formato requerido.",
+    "minlength": "Debe tener al menos {{requiredLength}} caracteres.",
+    "maxlength": "No debe tener más de {{requiredLength}} caracteres.",
+    "min": "Debe ser al menos {{min}}.",
+    "max": "No debe superar {{max}}.",
+    "url": "Introduce una URL válida."
+  },
   "nav": {
     "customers": "Clientes",
     "newCustomer": "Nuevo cliente",
@@ -168,10 +178,22 @@
       "historyLimitLabel": "Ventana de historial de inicios de sesión",
       "historyLimitHint": "Cuántos de los inicios de sesión recientes de la cuenta se usan para comparar uno nuevo.",
       "historyLimitPlaceholder": "Valor predeterminado del servidor",
+      "maxSessionsLabel": "Máximo de sesiones simultáneas",
+      "maxSessionsHint": "Cuando un nuevo inicio de sesión hace que una cuenta supere este límite, su sesión más antigua se revoca automáticamente. 0 significa ilimitado.",
+      "maxSessionsPlaceholder": "Valor predeterminado del servidor (ilimitado)",
       "clearOverride": "Usar valor predeterminado",
       "save": "Guardar cambios",
       "saving": "Guardando…",
       "unsavedChanges": "Cambios sin guardar"
+    },
+    "auditIntegrity": {
+      "title": "Integridad del registro de auditoría",
+      "subtitle": "Cada fila de auditoría está encadenada a un hash de la anterior, de modo que cualquier modificación o eliminación posterior es detectable. Verificación bajo demanda: nada se ejecuta automáticamente en segundo plano.",
+      "checkButton": "Verificar integridad del registro de auditoría",
+      "checking": "Verificando…",
+      "intact": "Ambas cadenas de auditoría están intactas",
+      "broken": "La verificación de integridad del registro de auditoría FALLÓ: un hash almacenado no coincide. Investigue de inmediato.",
+      "rowsChecked": "{{count}} filas verificadas"
     }
   },
   "servicesAdmin": {
@@ -411,6 +433,7 @@
     "upload": "Subir",
     "uploading": "Subiendo…",
     "resultSummary": "Se importaron {{imported}} de {{total}} filas.",
+    "fileTooLarge": "Ese archivo supera los {{limit}}. Divídelo en archivos más pequeños y súbelos por separado.",
     "row": "Fila",
     "reason": "Motivo",
     "close": "Cerrar"
@@ -538,7 +561,8 @@
     "addMember": "Agregar un miembro",
     "searchPlaceholder": "Buscar por nombre o correo electrónico…",
     "addToOrganization": "Agregar",
-    "noOrganizations": "No se encontraron organizaciones.",
+    "emptyTitle": "Aún no hay organizaciones",
+    "emptyHint": "Cree su primera organización para agrupar clientes y miembros bajo ella.",
     "globalRole": "Rol global",
     "orgRole": "Rol en la organización",
     "kpi": {

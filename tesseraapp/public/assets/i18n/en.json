@@ -39,6 +39,16 @@
     "viewAll": "View all",
     "add": "Add"
   },
+  "validation": {
+    "required": "This field is required.",
+    "email": "Enter a valid email address.",
+    "pattern": "This doesn't match the required format.",
+    "minlength": "Must be at least {{requiredLength}} characters.",
+    "maxlength": "Must be no more than {{requiredLength}} characters.",
+    "min": "Must be at least {{min}}.",
+    "max": "Must be no more than {{max}}.",
+    "url": "Enter a valid URL."
+  },
   "nav": {
     "customers": "Customers",
     "newCustomer": "New Customer",
@@ -168,10 +178,22 @@
       "historyLimitLabel": "Login history window",
       "historyLimitHint": "How many of the account's recent sign-ins a new one is compared against.",
       "historyLimitPlaceholder": "Server default",
+      "maxSessionsLabel": "Max concurrent sessions",
+      "maxSessionsHint": "Once a new sign-in pushes an account over this limit, its oldest session is revoked automatically. 0 means unlimited.",
+      "maxSessionsPlaceholder": "Server default (unlimited)",
       "clearOverride": "Use default",
       "save": "Save changes",
       "saving": "Saving…",
       "unsavedChanges": "Unsaved changes"
+    },
+    "auditIntegrity": {
+      "title": "Audit trail integrity",
+      "subtitle": "Each audit row is chained to a hash of the one before it, so any edit or deletion after the fact is detectable. Check on demand — nothing runs automatically in the background.",
+      "checkButton": "Verify audit trail integrity",
+      "checking": "Checking…",
+      "intact": "Both audit chains are intact",
+      "broken": "Audit trail integrity check FAILED — a stored hash did not match. Investigate immediately.",
+      "rowsChecked": "{{count}} rows checked"
     }
   },
   "servicesAdmin": {
@@ -411,6 +433,7 @@
     "upload": "Upload",
     "uploading": "Uploading…",
     "resultSummary": "Imported {{imported}} of {{total}} rows.",
+    "fileTooLarge": "That file is larger than {{limit}}. Split it into smaller files and upload each separately.",
     "row": "Row",
     "reason": "Reason",
     "close": "Close"
@@ -538,7 +561,8 @@
     "addMember": "Add a member",
     "searchPlaceholder": "Search by name or email…",
     "addToOrganization": "Add",
-    "noOrganizations": "No organizations found.",
+    "emptyTitle": "No organizations yet",
+    "emptyHint": "Create your first organization to start grouping customers and members under it.",
     "globalRole": "Global role",
     "orgRole": "Organization role",
     "kpi": {

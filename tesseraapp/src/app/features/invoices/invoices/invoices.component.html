@@ -49,23 +49,24 @@
             @if ((state?.appData?.data?.invoices?.content?.length ?? 0) > 0) {
               <div class="table-responsive">
                 <table class="table table-hover align-middle">
+                  <!-- Column-priority collapse (FUTURE-ENHANCEMENTS §3.7): on phones the essentials
+                       stay — Invoice #, Status, Total, Action; Date returns at ≥md and the wide
+                       comma-separated Services list at ≥lg. Each hidden th has a matching td below
+                       with the identical d-none d-*-table-cell classes, and .table-responsive
+                       remains the fallback for anything still too wide. -->
                   <thead>
                   <tr>
-                    <th (click)="toggleSort('invoiceNumber')" (keydown.enter)="toggleSort('invoiceNumber')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th appSortableHeader (sort)="toggleSort('invoiceNumber')" scope="col">
                       {{ t('invoices.invoiceNumber') }} <i [class]="'bi ' + sortIconClass('invoiceNumber')"></i>
                     </th>
-                    <th scope="col">{{ t('invoices.service') }}</th>
-                    <th (click)="toggleSort('status')" (keydown.enter)="toggleSort('status')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th class="d-none d-lg-table-cell" scope="col">{{ t('invoices.service') }}</th>
+                    <th appSortableHeader (sort)="toggleSort('status')" scope="col">
                       {{ t('common.status') }} <i [class]="'bi ' + sortIconClass('status')"></i>
                     </th>
-                    <th (click)="toggleSort('invoiceDate')" (keydown.enter)="toggleSort('invoiceDate')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th appSortableHeader (sort)="toggleSort('invoiceDate')" class="d-none d-md-table-cell" scope="col">
                       {{ t('common.date') }} <i [class]="'bi ' + sortIconClass('invoiceDate')"></i>
                     </th>
-                    <th (click)="toggleSort('totalAmount')" (keydown.enter)="toggleSort('totalAmount')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th appSortableHeader (sort)="toggleSort('totalAmount')" scope="col">
                       {{ t('common.total') }} <i [class]="'bi ' + sortIconClass('totalAmount')"></i>
                     </th>
                     <th class="text-end" scope="col">{{ t('common.action') }}</th>
@@ -75,7 +76,7 @@
                     @for (invoice of state?.appData?.data?.invoices?.content; track invoice.id) {
                       <tr>
                         <td class="fw-medium mono">{{ invoice.invoiceNumber }}</td>
-                        <td class="text-muted">
+                        <td class="text-muted d-none d-lg-table-cell">
                           @for (svc of invoice.services; track svc.name; let last = $last) {
                             {{ svc.name }}@if (!last) {, }
                           }
@@ -93,7 +94,7 @@
                             {{ invoice.status }}
                           </span>
                         </td>
-                        <td class="text-muted">{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
+                        <td class="text-muted d-none d-md-table-cell">{{ invoice.invoiceDate | date: 'mediumDate' }}</td>
                         <td class="fw-medium">${{ invoice.totalAmount }}</td>
                         <td class="text-end">
                           <button [routerLink]="['/invoice', invoice.id, invoice.invoiceNumber]"

@@ -281,6 +281,33 @@ describe('CommandPaletteComponent', () => {
     expect(panel()).toBeNull();
   });
 
+  it('traps Tab, wrapping past the last focusable control back to the search input', () => {
+    setup({ authenticated: true, admin: false });
+    pressHotkey();
+    type('Service Catalog');
+    expect(labels()).toEqual(['Service Catalog']);
+
+    const star = starFor('Service Catalog');
+    expect(star).not.toBeNull();
+    star!.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    expect(document.activeElement).toBe(input());
+  });
+
+  it('traps Shift+Tab, wrapping back from the search input to the last focusable control', () => {
+    setup({ authenticated: true, admin: false });
+    pressHotkey();
+    type('Service Catalog');
+
+    input().focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    expect(document.activeElement).toBe(starFor('Service Catalog'));
+  });
+
   it('loads favorites and shows a star only on favoritable results', () => {
     setup({ authenticated: true, admin: false });
 

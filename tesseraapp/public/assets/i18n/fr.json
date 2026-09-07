@@ -39,6 +39,16 @@
     "viewAll": "Tout afficher",
     "add": "Ajouter"
   },
+  "validation": {
+    "required": "Ce champ est obligatoire.",
+    "email": "Saisissez une adresse e-mail valide.",
+    "pattern": "Ne correspond pas au format requis.",
+    "minlength": "Doit contenir au moins {{requiredLength}} caractères.",
+    "maxlength": "Ne doit pas dépasser {{requiredLength}} caractères.",
+    "min": "Doit être au moins {{min}}.",
+    "max": "Ne doit pas dépasser {{max}}.",
+    "url": "Saisissez une URL valide."
+  },
   "nav": {
     "customers": "Clients",
     "newCustomer": "Nouveau client",
@@ -168,10 +178,22 @@
       "historyLimitLabel": "Fenêtre d'historique de connexion",
       "historyLimitHint": "Nombre de connexions récentes du compte utilisées pour comparer une nouvelle connexion.",
       "historyLimitPlaceholder": "Valeur par défaut du serveur",
+      "maxSessionsLabel": "Sessions simultanées maximales",
+      "maxSessionsHint": "Dès qu'une nouvelle connexion fait dépasser cette limite à un compte, sa session la plus ancienne est révoquée automatiquement. 0 signifie illimité.",
+      "maxSessionsPlaceholder": "Valeur par défaut du serveur (illimité)",
       "clearOverride": "Utiliser la valeur par défaut",
       "save": "Enregistrer les modifications",
       "saving": "Enregistrement…",
       "unsavedChanges": "Modifications non enregistrées"
+    },
+    "auditIntegrity": {
+      "title": "Intégrité du journal d'audit",
+      "subtitle": "Chaque ligne d'audit est chaînée au hachage de la précédente, de sorte que toute modification ou suppression ultérieure soit détectable. Vérification à la demande — rien ne s'exécute automatiquement en arrière-plan.",
+      "checkButton": "Vérifier l'intégrité du journal d'audit",
+      "checking": "Vérification…",
+      "intact": "Les deux chaînes d'audit sont intactes",
+      "broken": "Échec de la vérification d'intégrité du journal d'audit — un hachage stocké ne correspond pas. Enquêtez immédiatement.",
+      "rowsChecked": "{{count}} lignes vérifiées"
     }
   },
   "servicesAdmin": {
@@ -411,6 +433,7 @@
     "upload": "Importer",
     "uploading": "Import en cours…",
     "resultSummary": "{{imported}} ligne(s) importée(s) sur {{total}}.",
+    "fileTooLarge": "Ce fichier dépasse {{limit}}. Divisez-le en fichiers plus petits et importez-les séparément.",
     "row": "Ligne",
     "reason": "Motif",
     "close": "Fermer"
@@ -538,7 +561,8 @@
     "addMember": "Ajouter un membre",
     "searchPlaceholder": "Rechercher par nom ou e-mail…",
     "addToOrganization": "Ajouter",
-    "noOrganizations": "Aucune organisation trouvée.",
+    "emptyTitle": "Aucune organisation pour le moment",
+    "emptyHint": "Créez votre première organisation pour y regrouper des clients et des membres.",
     "globalRole": "Rôle global",
     "orgRole": "Rôle dans l'organisation",
     "kpi": {

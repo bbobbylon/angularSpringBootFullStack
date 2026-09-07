@@ -23,14 +23,16 @@ public interface SecuritySettingsService {
     SecuritySettings getSettings();
 
     /**
-     * Overwrites both overrides. Passing {@code null} for either clears that override back to the
-     * env default — this is a full replace, not a partial patch, so a caller that wants to change
-     * only one field must resend the other's current value.
+     * Overwrites all three overrides. Passing {@code null} for any of them clears that override back
+     * to its env default — this is a full replace, not a partial patch, so a caller that wants to
+     * change only one field must resend the other two's current values.
      *
-     * @param anomalyEnabled      the new override, or {@code null} to clear it
-     * @param anomalyHistoryLimit the new override, or {@code null} to clear it
-     * @param updatedBy           id of the administrator making the change, for the audit columns
+     * @param anomalyEnabled       the new override, or {@code null} to clear it
+     * @param anomalyHistoryLimit  the new override, or {@code null} to clear it
+     * @param maxConcurrentSessions the new override, or {@code null} to clear it; {@code <= 0} means
+     *                              "no cap", the same as leaving it unset
+     * @param updatedBy            id of the administrator making the change, for the audit columns
      * @return the settings row as persisted
      */
-    SecuritySettings updateSettings(Boolean anomalyEnabled, Integer anomalyHistoryLimit, Long updatedBy);
+    SecuritySettings updateSettings(Boolean anomalyEnabled, Integer anomalyHistoryLimit, Integer maxConcurrentSessions, Long updatedBy);
 }

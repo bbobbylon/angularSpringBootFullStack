@@ -1009,6 +1009,22 @@ CREATE TABLE IF NOT EXISTS securitysettings
 INSERT IGNORE INTO securitysettings (id, anomaly_enabled, anomaly_history_limit, updated_at, updated_by)
 VALUES (1, NULL, NULL, NULL, NULL);
 
+-- Idempotent add of securitysettings.max_concurrent_sessions for databases created before the
+-- concurrent-session cap shipped (FUTURE-ENHANCEMENTS §3.1, "No cap on concurrent sessions per
+-- user"). Same NULL-means-no-override shape as anomaly_enabled/anomaly_history_limit above, so no
+-- new sentinel is needed. Read by SessionServiceImpl, not LoginRiskServiceImpl — this row now
+-- carries two unrelated admin-tunable knobs, not just anomaly detection ones; see that class's own
+-- Javadoc for why a rename of this table/endpoint wasn't taken on for this feature.
+SET @add_securitysettings_max_sessions := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE securitysettings ADD COLUMN max_concurrent_sessions INT DEFAULT NULL AFTER anomaly_history_limit',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'securitysettings' AND COLUMN_NAME = 'max_concurrent_sessions');
+PREPARE add_securitysettings_max_sessions_stmt FROM @add_securitysettings_max_sessions;
+EXECUTE add_securitysettings_max_sessions_stmt;
+DEALLOCATE PREPARE add_securitysettings_max_sessions_stmt;
+
 -- ── Server-side refresh sessions (rotation + reuse detection) ───────────────────────────
 CREATE TABLE IF NOT EXISTS refreshsessions
 (
@@ -1059,3 +1075,31 @@ CREATE TABLE IF NOT EXISTS webauthnchallenges
     expires_at DATETIME     NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+-- ── Audit trail tamper-evidence (FUTURE-ENHANCEMENTS §3.1, "hash chain") ────────────────
+-- Idempotent add of a nullable hash chain column on both audit tables. NULL on every row written
+-- before this feature shipped — a hash cannot be fabricated for historical rows without pretending
+-- they were attested to when they were not, so the chain deliberately starts fresh at whatever row
+-- is next inserted rather than retrofitting one. AuditHashChain/EventRepoImpl/OrganizationServiceImpl
+-- treat "previous row has a NULL hash" and "there is no previous row" identically: both mean "start
+-- a new chain here". CHAR(64) holds a SHA-256 digest as lowercase hex, fixed-width, no INDEX needed —
+-- the chain is only ever walked in full by AuditIntegrityServiceImpl, never looked up by hash value.
+SET @add_userevents_hash := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE userevents ADD COLUMN hash CHAR(64) DEFAULT NULL',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'userevents' AND COLUMN_NAME = 'hash');
+PREPARE add_userevents_hash_stmt FROM @add_userevents_hash;
+EXECUTE add_userevents_hash_stmt;
+DEALLOCATE PREPARE add_userevents_hash_stmt;
+
+SET @add_organizationevents_hash := (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE organizationevents ADD COLUMN hash CHAR(64) DEFAULT NULL',
+        'DO 0')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizationevents' AND COLUMN_NAME = 'hash');
+PREPARE add_organizationevents_hash_stmt FROM @add_organizationevents_hash;
+EXECUTE add_organizationevents_hash_stmt;
+DEALLOCATE PREPARE add_organizationevents_hash_stmt;

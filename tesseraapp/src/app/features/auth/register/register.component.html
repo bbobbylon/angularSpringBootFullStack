@@ -93,38 +93,46 @@
               <div class="sc-field">
                 <label class="form-label" for="firstName">{{ t('register.firstName') }}</label>
                 <span class="sc-field__icon"><i class="bi bi-person"></i></span>
-                <input id="firstName" name="firstName" ngModel required minlength="2" type="text"
+                <input id="firstName" #firstName="ngModel" name="firstName" ngModel required minlength="2" type="text"
                        autocomplete="given-name" placeholder="Ada"
                        [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+                <app-field-error [control]="firstName" />
               </div>
               <div class="sc-field">
                 <label class="form-label" for="lastName">{{ t('register.lastName') }}</label>
                 <span class="sc-field__icon"><i class="bi bi-person"></i></span>
-                <input id="lastName" name="lastName" ngModel required minlength="2" type="text"
+                <input id="lastName" #lastName="ngModel" name="lastName" ngModel required minlength="2" type="text"
                        autocomplete="family-name" placeholder="Lovelace"
                        [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+                <app-field-error [control]="lastName" />
               </div>
             </div>
 
             <div class="sc-field">
               <label class="form-label" for="email">{{ t('auth.email') }}</label>
               <span class="sc-field__icon"><i class="bi bi-envelope"></i></span>
-              <input id="email" name="email" ngModel required minlength="3" type="email"
+              <input id="email" #email="ngModel" name="email" ngModel required minlength="3" type="email"
                      autocomplete="email" [placeholder]="t('login.emailPlaceholder')"
                      [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
+              <app-field-error [control]="email" />
             </div>
 
             <div class="sc-field">
               <label class="form-label" for="password">{{ t('auth.password') }}</label>
               <div class="sc-field__control">
                 <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
-                <input id="password" name="password" ngModel required [minlength]="PASSWORD_MIN_LENGTH"
+                <input id="password" #password="ngModel" name="password" ngModel required [minlength]="PASSWORD_MIN_LENGTH"
                        [pattern]="PASSWORD_PATTERN" type="password"
                        autocomplete="new-password" [placeholder]="t('register.passwordPlaceholder')"
                        [disabled]="state.dataState === DataState.LOADING" class="form-control sc-input" />
               </div>
+              <app-field-error [control]="password" />
               <small class="text-muted">{{ PASSWORD_HINT }}</small>
             </div>
+
+            @if (turnstileSiteKey) {
+              <div #turnstileContainer class="sc-field" data-testid="turnstile-container"></div>
+            }
 
             <button
               [disabled]="state.dataState === DataState.LOADING || registerForm.invalid || registerForm.pristine"

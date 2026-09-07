@@ -177,13 +177,23 @@ class SecurityConfig {
                             // its hash) stays blocked. If that script is ever edited, recompute
                             // the hash (the browser console error reports the new one directly)
                             // and update it here.
+                            //
+                            // challenges.cloudflare.com is the registration page's Turnstile
+                            // CAPTCHA widget (FUTURE-ENHANCEMENTS.md §3.1, TurnstileUtils): its
+                            // script tag needs script-src, its challenge UI renders in a
+                            // cross-origin iframe that needs an explicit frame-src (there was none
+                            // before — default-src 'self' blocked every third-party frame), and the
+                            // widget's own pass/fail call back to Cloudflare needs connect-src. This
+                            // is the app's only third-party script/frame origin; everything else
+                            // stays 'self'-only.
                             .contentSecurityPolicy(csp -> csp.policyDirectives(
                                     "default-src 'self'; " +
-                                    "script-src 'self' 'sha256-+tarR50wdDg867HQDss7r1ZcpsJqINIeko9y0srSPCw='; " +
+                                    "script-src 'self' 'sha256-+tarR50wdDg867HQDss7r1ZcpsJqINIeko9y0srSPCw=' https://challenges.cloudflare.com; " +
                                     "style-src 'self' 'unsafe-inline'; " +
                                     "img-src 'self' data: blob: https:; " +
                                     "font-src 'self'; " +
-                                    "connect-src 'self'; " +
+                                    "connect-src 'self' https://challenges.cloudflare.com; " +
+                                    "frame-src https://challenges.cloudflare.com; " +
                                     "frame-ancestors 'none'; " +
                                     "base-uri 'self'; " +
                                     "form-action 'self'"
@@ -430,6 +440,7 @@ class SecurityConfig {
                 "Jwt-Token",
                 "Authorization",
                 "X-Requested-With",
+                "X-Turnstile-Token",
                 "Access-Control-Request-Method",
                 "Access-Control-Request-Headers"
         ));

@@ -373,7 +373,7 @@ emails send for real. The **SMS** path sends for real too once Twilio credential
 Three independent settings, all defaulting to "no proxy", and each fails *silently* rather than
 loudly.
 
-| Variable | Governs | Default | Behind one ALB | Behind CloudFront → ALB (live) |
+| Variable | Governs | Default | Behind one proxy — Cloud Run, or a lone ALB (once cut over, §2.8) | Behind CloudFront → ALB (AWS, the current live path) |
 |---|---|---|---|---|
 | `FORWARD_HEADERS_STRATEGY` | URLs the app **generates** (`server.forward-headers-strategy`) | `none` | `framework` | `framework` — **necessary but not sufficient**, see below |
 | `TRUSTED_PROXY_COUNT` | The client IP the app **reads** (`app.security.trusted-proxy-count`) | `0` | `1` | `2` |
@@ -1269,14 +1269,14 @@ Most behaviour is identical everywhere. This is the exception list — **control
 depends on configuration that differs by environment.** Everything marked ⚠️ can appear to work
 locally while being degraded or absent when deployed.
 
-| Control | Depends on | Local | AWS (`prod`) |
+| Control | Depends on | Local | Cloud (`prod`) |
 |---|---|---|---|
-| ⚠️ **Anomaly detection / step-up** | `TRUSTED_PROXY_COUNT` | `0` — correct, no proxy | Must equal the number of proxies in front of the container: **`2`** today (CloudFront → ALB, both append to `X-Forwarded-For`), `1` if CloudFront is removed. At `0` every request appears to come from the load balancer, so `NEW_NETWORK` can never fire and **the control is silently dead** |
+| ⚠️ **Anomaly detection / step-up** | `TRUSTED_PROXY_COUNT` | `0` — correct, no proxy | Must equal the number of proxies in front of the container: **`1` on Cloud Run** (once cut over, §2.8 — Cloud Run's front end is the single hop, and a domain mapping does not add one), **`2`** on the current live AWS path (CloudFront → ALB, both append to `X-Forwarded-For`). At `0` every request appears to come from the load balancer, so `NEW_NETWORK` can never fire and **the control is silently dead** |
 | ⚠️ **Rate limiting** | Same IP resolution | Per-caller buckets | At `0`, every user collapses into **one** bucket — the whole tenant throttles as a single caller |
 | ⚠️ **Federated redirect** | `FORWARD_HEADERS_STRATEGY` **and** `OAUTH2_REDIRECT_BASE_URL` | Correct without config | Needs `framework` — but that is **not sufficient behind CloudFront**, because the ALB overwrites `X-Forwarded-Proto` with `http` and Spring derives the redirect URI's scheme from it. Set `OAUTH2_REDIRECT_BASE_URL` to the public origin to pin it, or every federated sign-in fails with a `redirect_uri` the provider rejects |
 | ⚠️ **Which providers appear** | Each `*_CLIENT_ID` | Whatever `.env` has | Whatever the task definition injects |
 | ⚠️ **Email** | `MAIL_*` | `.env` | Secrets Manager. Step-up **withholds tokens until the emailed code is entered**, so unset mail credentials lock out any account the risk engine flags |
-| ⚠️ **Profile images** | `IMAGE_STORAGE_TYPE` | `local` | `s3` — the task role needs `s3:PutObject`/`s3:GetObject` |
+| ⚠️ **Profile images** | `IMAGE_STORAGE_TYPE` | `local` | `s3` on both clouds — the ECS task role carries the bucket policy on AWS; on Cloud Run a bucket-scoped IAM user's keys come from Secret Manager (`aws/RUNBOOK.md` → Pausing AWS) |
 | ⚠️ **Schema + seed data** | `schema.sql`, applied by hand | `db2` | `db3`. Tables can exist without seed rows |
 | ⚠️ **JPA drift** | `ddl-auto` | `update` — silently fixes it | `validate` — **fails fast at startup** |
 | ✅ CSP / HSTS / Referrer / Permissions | Served by Spring, not `ng serve` | Not enforced | Enforced |
@@ -2151,8 +2151,8 @@ the federation, TOTP-enrollment, session-management and admin *flows* end to end
 | Target | How | Notes |
 |---|---|---|
 | Local full stack | `start.sh ENV=docker` | App + MySQL containers, production-like |
-| **AWS** (live) | `.github/workflows/deploy.yml` → ECR + **ECS Fargate** | Secrets in AWS Secrets Manager; DB = Aiven. **Procedure: [aws/RUNBOOK.md](../aws/RUNBOOK.md)** |
-| **GCP** | `.github/workflows/deploy-gcp.yml` → Artifact Registry + **Cloud Run** | Secrets in Secret Manager; Cloud Build + Cloud SQL boilerplate included in `gcp/` |
+| **AWS** (**the current live deployment**) | `.github/workflows/deploy.yml` → ECR + **ECS Fargate** — manual dispatch only (push trigger deliberately disabled ahead of the §2.8 move) | Secrets in AWS Secrets Manager; DB = Aiven. **Procedure: [aws/RUNBOOK.md](../aws/RUNBOOK.md)**; pause/resume in its "Pausing AWS" section, to be used once the cutover below actually happens |
+| **GCP** (repo-ready, **not yet cut over** — §2.8) | `.github/workflows/deploy-gcp.yml` → Artifact Registry + **Cloud Run** — auto on push to `master` | Secrets in Secret Manager; pinned to one instance (§2.4 of FUTURE-ENHANCEMENTS); profile images stay in the AWS S3 bucket. **Procedure and cost comparison: [gcp/README.md](../gcp/README.md)** |
 | Azure | `azure-pipelines.yml` → ACR + App Service | Earlier path; see [IMPLEMENTATION-HISTORY §6](IMPLEMENTATION-HISTORY.md#6-legacy-azure-deployment-reference) |
 | Railway / Render / Fly.io | the Dockerfile | Set env vars in the platform; use a managed DB |
 

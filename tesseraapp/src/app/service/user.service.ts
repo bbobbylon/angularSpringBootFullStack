@@ -114,12 +114,24 @@ export class UserService {
    * binding can map every field. The intersection type enforces that {@code password} is present
    * at the call site even though {@link UserInterface} omits it (passwords are never returned by the API).
    *
+   * <p>{@code captchaToken} rides in the {@code X-Turnstile-Token} header rather than the body —
+   * {@code User} binds directly to the JDBC-mapped model, which has no business carrying a transient,
+   * non-column CAPTCHA token (see {@code Constants.TURNSTILE_TOKEN_HEADER}). Omitted entirely when
+   * the Turnstile widget never rendered (no site key configured), matching the backend's own
+   * {@code TurnstileUtils.isConfigured()} graceful degradation.
+   *
    * @param user - the registration form values including the plain-text password
+   * @param captchaToken - the token from the Turnstile widget, or undefined if unconfigured
    * @returns Observable emitting a ProfileInterface response on success
    */
-  register$ = (user: UserInterface & { password: string }): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
+  register$ = (
+    user: UserInterface & { password: string },
+    captchaToken?: string,
+  ): Observable<CustomHttpResponseInterface<ProfileInterface>> =>
     this.http
-      .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/register`, user)
+      .post<CustomHttpResponseInterface<ProfileInterface>>(`${this.server}/user/register`, user, {
+        headers: captchaToken ? { 'X-Turnstile-Token': captchaToken } : {},
+      })
       .pipe(/* tap(console.log), */ catchError(this.handleError));
 
   /**

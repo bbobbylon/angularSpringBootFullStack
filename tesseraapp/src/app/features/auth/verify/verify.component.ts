@@ -11,6 +11,7 @@ import { UserService } from '../../../service/user.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../../constants/password-policy';
+import { FieldErrorComponent } from '../../../shared/field-error/field-error.component';
 
 /**
  * Verification landing view for account and password reset links.
@@ -22,7 +23,7 @@ import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, PASSWORD_PATTERN } from '../../../c
  */
 @Component({
   selector: 'app-verify',
-  imports: [FormsModule, RouterLink, TranslocoDirective],
+  imports: [FormsModule, RouterLink, TranslocoDirective, FieldErrorComponent],
   templateUrl: './verify.component.html',
   styleUrl: './verify.component.css',
   standalone: true,

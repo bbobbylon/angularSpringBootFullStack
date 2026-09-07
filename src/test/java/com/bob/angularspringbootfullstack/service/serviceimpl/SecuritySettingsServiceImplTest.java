@@ -47,6 +47,7 @@ class SecuritySettingsServiceImplTest {
 
         assertThat(settings.getAnomalyEnabled()).isNull();
         assertThat(settings.getAnomalyHistoryLimit()).isNull();
+        assertThat(settings.getMaxConcurrentSessions()).isNull();
     }
 
     @Test
@@ -63,18 +64,31 @@ class SecuritySettingsServiceImplTest {
     }
 
     @Test
-    @DisplayName("updateSettings() writes both fields as given, including a null that clears an override")
-    void updateWritesBothFieldsIncludingNulls() {
+    @DisplayName("updateSettings() writes all three fields as given, including nulls that clear an override")
+    void updateWritesAllFieldsIncludingNulls() {
         when(jdbcTemplate.query(eq(SELECT_SECURITY_SETTINGS_QUERY), any(SecuritySettingsRowMapper.class)))
                 .thenReturn(List.of(SecuritySettings.builder().id(1L).anomalyEnabled(true).build()));
         ArgumentCaptor<SqlParameterSource> captor = ArgumentCaptor.forClass(SqlParameterSource.class);
 
-        service.updateSettings(true, null, 42L);
+        service.updateSettings(true, null, 5, 42L);
 
         verify(jdbcTemplate).update(eq(UPDATE_SECURITY_SETTINGS_QUERY), captor.capture());
         SqlParameterSource params = captor.getValue();
         assertThat(params.getValue("anomalyEnabled")).isEqualTo(true);
         assertThat(params.getValue("anomalyHistoryLimit")).isNull();
+        assertThat(params.getValue("maxConcurrentSessions")).isEqualTo(5);
         assertThat(params.getValue("updatedBy")).isEqualTo(42L);
+    }
+
+    @Test
+    @DisplayName("getSettings() round-trips a persisted maxConcurrentSessions override")
+    void returnsThePersistedMaxConcurrentSessionsOverride() {
+        SecuritySettings row = SecuritySettings.builder().id(1L).maxConcurrentSessions(3).build();
+        when(jdbcTemplate.query(eq(SELECT_SECURITY_SETTINGS_QUERY), any(SecuritySettingsRowMapper.class)))
+                .thenReturn(List.of(row));
+
+        SecuritySettings settings = service.getSettings();
+
+        assertThat(settings.getMaxConcurrentSessions()).isEqualTo(3);
     }
 }

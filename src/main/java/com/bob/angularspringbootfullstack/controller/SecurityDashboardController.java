@@ -6,6 +6,7 @@ import com.bob.angularspringbootfullstack.form.AnomalySettingsForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.model.SecurityOverview;
 import com.bob.angularspringbootfullstack.model.SecuritySettings;
+import com.bob.angularspringbootfullstack.service.AuditIntegrityService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
 import com.bob.angularspringbootfullstack.service.SecurityDashboardService;
 import com.bob.angularspringbootfullstack.service.SecuritySettingsService;
@@ -74,6 +75,8 @@ public class SecurityDashboardController {
     private final OrganizationService organizationService;
     /** Admin-tunable anomaly detection overrides (FUTURE-ENHANCEMENTS "Anomaly signal tuning UI"). */
     private final SecuritySettingsService securitySettingsService;
+    /** Recomputes the audit-trail hash chains on demand (FUTURE-ENHANCEMENTS §3.1). */
+    private final AuditIntegrityService auditIntegrityService;
 
     /**
      * The whole dashboard in one response: counters, the flagged-sign-in table, the login-outcome
@@ -148,27 +151,56 @@ public class SecurityDashboardController {
     }
 
     /**
-     * Sets or clears the anomaly detection overrides (FUTURE-ENHANCEMENTS "Anomaly signal tuning
-     * UI"). A full replace, not a partial patch — see {@link AnomalySettingsForm} — so a caller
-     * that wants to change only one field resends the other's current value. Takes effect on the
-     * very next login: {@code LoginRiskServiceImpl#assess} reads this table live rather than
-     * caching it, so there is nothing to invalidate here.
+     * Sets or clears the anomaly detection and concurrent-session overrides (FUTURE-ENHANCEMENTS
+     * "Anomaly signal tuning UI" and "No cap on concurrent sessions per user"). A full replace, not
+     * a partial patch — see {@link AnomalySettingsForm} — so a caller that wants to change only one
+     * field resends the other two's current values. Takes effect on the very next login:
+     * {@code LoginRiskServiceImpl#assess} and {@code SessionServiceImpl#issueTokenPair} both read
+     * this table live rather than caching it, so there is nothing to invalidate here.
      *
      * @param user the authenticated (admin) principal; its id is stamped onto the audit columns
-     * @param form the validated override values; either field may be {@code null} to clear it
+     * @param form the validated override values; any field may be {@code null} to clear it
      * @return 200 OK with {@code user} and the settings row as persisted
      */
     @PatchMapping("/anomaly-settings")
     @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
     public ResponseEntity<HttpResponse> updateAnomalySettings(@AuthenticationPrincipal UserDTO user,
                                                                @RequestBody @Valid AnomalySettingsForm form) {
-        SecuritySettings updated = securitySettingsService.updateSettings(form.getEnabled(), form.getHistoryLimit(), user.getId());
+        SecuritySettings updated = securitySettingsService.updateSettings(
+                form.getEnabled(), form.getHistoryLimit(), form.getMaxConcurrentSessions(), user.getId());
         return ResponseEntity.ok(
                 HttpResponse.builder()
                         .timeStamp(now().toString())
                         .data(of("user", userService.getUserByEmail(user.getEmail()),
                                 "settings", updated))
                         .message("Anomaly detection settings updated successfully!")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Recomputes both audit-trail hash chains from scratch and reports whether either is broken
+     * (FUTURE-ENHANCEMENTS §3.1, "verifiable on demand"). Deliberately platform-wide like
+     * {@link #getAnomalySettings} rather than org-scoped: a hash chain covers an entire table in
+     * insertion order, so there is no way to check "only my organization's slice" without breaking
+     * the very continuity being verified.
+     *
+     * @param user the authenticated (admin) principal, echoed in the envelope like every other
+     *             endpoint in this application
+     * @return 200 OK with {@code user}, {@code userEvents}, and {@code organizationEvents} — each of
+     *         the latter two an {@link com.bob.angularspringbootfullstack.model.AuditChainVerificationResult}
+     */
+    @GetMapping("/audit-integrity")
+    @PreAuthorize("hasAnyAuthority('UPDATE:USER', 'UPDATE:ROLE')")
+    public ResponseEntity<HttpResponse> getAuditIntegrity(@AuthenticationPrincipal UserDTO user) {
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("user", userService.getUserByEmail(user.getEmail()),
+                                "userEvents", auditIntegrityService.verifyUserEvents(),
+                                "organizationEvents", auditIntegrityService.verifyOrganizationEvents()))
+                        .message("Audit trail integrity check completed!")
                         .status(OK)
                         .statusCode(OK.value())
                         .build());

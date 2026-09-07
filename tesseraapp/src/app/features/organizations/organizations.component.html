@@ -561,7 +561,16 @@
             </div>
           } @empty {
             <div class="sc-panel">
-              <div class="p-4 text-center text-muted">{{ t('organizations.noOrganizations') }}</div>
+              <div class="sc-empty">
+                <span class="sc-empty__icon"><i class="bi bi-buildings"></i></span>
+                <p class="sc-empty__title">{{ t('organizations.emptyTitle') }}</p>
+                <p class="sc-empty__hint">{{ t('organizations.emptyHint') }}</p>
+                @if (isUnscopedTier) {
+                  <a [routerLink]="['/organizations/new']" class="btn btn-primary btn-sm">
+                    <i class="bi bi-building-add"></i> {{ t('organizations.newOrgLink') }}
+                  </a>
+                }
+              </div>
             </div>
           }
         </div>

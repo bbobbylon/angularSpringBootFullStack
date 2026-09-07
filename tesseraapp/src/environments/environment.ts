@@ -42,4 +42,12 @@ function resolveDevApiUrl(): string {
 export const environment = {
   production: false,
   apiUrl: resolveDevApiUrl(),
+  /**
+   * Cloudflare Turnstile site key (FUTURE-ENHANCEMENTS.md §3.1). Empty in dev on purpose —
+   * `RegisterComponent` skips rendering the widget entirely when this is blank, the same
+   * "unconfigured" branch the backend's `TurnstileUtils.isConfigured()` takes, so local
+   * registration needs no Cloudflare account. Site keys are public by design (Cloudflare
+   * serves them to any page that embeds the widget), so this is safe to commit.
+   */
+  turnstileSiteKey: '',
 };

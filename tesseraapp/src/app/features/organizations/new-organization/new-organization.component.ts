@@ -13,6 +13,7 @@ import { DataState } from '../../../enumeration/datastate.enum';
 import { UserInterface } from '../../../interface/user.interface';
 import { CustomerInterface } from '../../../interface/customer.interface';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { FieldErrorComponent } from '../../../shared/field-error/field-error.component';
 
 /**
  * Dedicated "create organization" screen (FUTURE-ENHANCEMENTS.md §3.2), split out of
@@ -39,7 +40,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 @Component({
   selector: 'app-new-organization',
   standalone: true,
-  imports: [FormsModule, RouterLink, NavbarComponent, TranslocoDirective],
+  imports: [FormsModule, RouterLink, NavbarComponent, TranslocoDirective, FieldErrorComponent],
   templateUrl: './new-organization.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

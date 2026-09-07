@@ -81,9 +81,9 @@ Maven profiles: `dev` (default), `prod`, `qa`, `stage`, `local` — each sets `s
 
 - **Database:** MySQL 8.4 (local dev + Docker) / Aiven managed MySQL (`db3`, TLS `REQUIRED`) in production
 - **Containerization:** Docker, multi-stage build (Angular compiled into the Spring Boot jar — one artifact, one origin)
-- **Deployed on:** AWS ECS Fargate, behind CloudFront (custom domain `tesseraapp.dev`), Secrets Manager for credentials, CloudWatch for logs
-- **CI/CD:** GitHub Actions — `ci.yml` (build + test against a MySQL service container, lint, dependency audit) and `deploy.yml` (ECR push + ECS deploy)
-- **Also built (not the live deployment target):** GCP Cloud Run pipeline (`gcp/`), Azure App Service pipeline (legacy)
+- **Deployed on:** GCP Cloud Run since 2026-09-05 (one instance, scale-to-zero, custom domain `tesseraapp.dev` via a domain mapping, Secret Manager for credentials, Cloud Logging); previously AWS ECS Fargate behind CloudFront — paused for cost, kept intact
+- **CI/CD:** GitHub Actions — `ci.yml` (build + test against a MySQL service container, lint, dependency audit) , `deploy-gcp.yml` (Artifact Registry push + Cloud Run deploy, auto on `master`) and `deploy.yml` (ECR push + ECS deploy, manual-only while AWS is paused)
+- **Also built:** AWS ECS Fargate pipeline (`aws/` — the live target until 2026-09-05), Azure App Service pipeline (legacy)
 
 ---
 
@@ -230,9 +230,10 @@ Maven profiles: `dev` (default), `prod`, `qa`, `stage`, `local` — each sets `s
 ## 11. DevOps & deployment
 
 - **Docker**: single multi-stage `Dockerfile`, env-driven (`SPRING_ACTIVE_PROFILES`) — one image serves dev/qa/stage/prod
-- **AWS** (the live deployment): ECS Fargate, CloudFront (custom domain `tesseraapp.dev` + fallback `*.cloudfront.net`), Secrets Manager (all credentials), CloudWatch Logs (7-day retention, env-driven log levels), Aiven managed MySQL
-- **GitHub Actions**: `ci.yml` (build/test/lint/audit) and `deploy.yml` (ECR push + ECS force-new-deployment)
-- **GCP** and **Azure** deployment pipelines also exist (built, not the live target)
+- **GCP** (built and ready, **not yet cut over** — §2.8): Cloud Run (one instance, scale-to-zero, startup CPU boost), Artifact Registry, Secret Manager, Cloud Logging, `tesseraapp.dev` via a Cloud Run domain mapping, profile images in the existing S3 bucket, Aiven managed MySQL
+- **AWS** (**the current live deployment**): ECS Fargate, CloudFront (custom domain `tesseraapp.dev` + fallback `*.cloudfront.net`), Secrets Manager (all credentials), CloudWatch Logs (7-day retention, env-driven log levels), Aiven managed MySQL
+- **GitHub Actions**: `ci.yml` (build/test/lint/audit), `deploy-gcp.yml` (Artifact Registry push + Cloud Run deploy — the auto-deploy path) and `deploy.yml` (ECR push + ECS force-new-deployment — manual-only)
+- **Azure** App Service pipeline also exists (legacy, not a target)
 - **Multi-environment config**: `application-{dev,prod,qa,stage,local}.yml`, each with its own profile-specific overrides
 - **Health checks**: `/actuator/health` (public, minimal detail), used by the ECS task definition
 

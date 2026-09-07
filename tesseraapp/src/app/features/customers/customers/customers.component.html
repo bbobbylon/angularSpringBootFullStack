@@ -37,25 +37,26 @@
             @if ((state?.appData?.data?.page?.content?.length ?? 0) > 0) {
               <div class="table-responsive">
                 <table class="table table-hover align-middle">
+                  <!-- Column-priority collapse (FUTURE-ENHANCEMENTS §3.7): on phones the essentials
+                       stay — Name, Status, Action; Email and Type return at ≥md; the merely
+                       supplementary ID, Photo, and Phone return at ≥lg. Each hidden th has a
+                       matching td below with the identical d-none d-*-table-cell classes, and
+                       .table-responsive remains the fallback for anything still too wide. -->
                   <thead>
                   <tr>
-                    <th class="text-center" scope="col">{{ t('common.id') }}</th>
-                    <th scope="col">{{ t('common.photo') }}</th>
-                    <th (click)="toggleSort('customerName')" (keydown.enter)="toggleSort('customerName')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th class="text-center d-none d-lg-table-cell" scope="col">{{ t('common.id') }}</th>
+                    <th class="d-none d-lg-table-cell" scope="col">{{ t('common.photo') }}</th>
+                    <th appSortableHeader (sort)="toggleSort('customerName')" scope="col">
                       {{ t('common.name') }} <i [class]="'bi ' + sortIconClass('customerName')"></i>
                     </th>
-                    <th (click)="toggleSort('email')" (keydown.enter)="toggleSort('email')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th appSortableHeader (sort)="toggleSort('email')" class="d-none d-md-table-cell" scope="col">
                       {{ t('common.email') }} <i [class]="'bi ' + sortIconClass('email')"></i>
                     </th>
-                    <th scope="col">{{ t('common.phone') }}</th>
-                    <th (click)="toggleSort('status')" (keydown.enter)="toggleSort('status')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th class="d-none d-lg-table-cell" scope="col">{{ t('common.phone') }}</th>
+                    <th appSortableHeader (sort)="toggleSort('status')" scope="col">
                       {{ t('common.status') }} <i [class]="'bi ' + sortIconClass('status')"></i>
                     </th>
-                    <th (click)="toggleSort('type')" (keydown.enter)="toggleSort('type')"
-                        class="pointer" role="button" scope="col" tabindex="0">
+                    <th appSortableHeader (sort)="toggleSort('type')" class="d-none d-md-table-cell" scope="col">
                       {{ t('common.type') }} <i [class]="'bi ' + sortIconClass('type')"></i>
                     </th>
                     <th class="text-end" scope="col">{{ t('common.action') }}</th>
@@ -64,8 +65,8 @@
                   <tbody class="table-body">
                     @for (customer of (state?.appData?.data?.page?.content ?? []); track customer.id) {
                       <tr>
-                        <th class="text-center text-muted">{{ customer.id }}</th>
-                        <td>
+                        <th class="text-center text-muted d-none d-lg-table-cell">{{ customer.id }}</th>
+                        <td class="d-none d-lg-table-cell">
                           @if (customer.imageUrl) {
                             <div style="position: relative; width: 42px; height: 42px; border-radius: 50%; overflow: hidden;">
                               <img [alt]="customer.customerName" [ngSrc]="customer.imageUrl" fill
@@ -78,8 +79,8 @@
                           }
                         </td>
                         <td class="fw-medium">{{ customer.customerName }}</td>
-                        <td class="text-muted">{{ customer.email }}</td>
-                        <td class="text-muted">{{ customer.phoneNumber }}</td>
+                        <td class="text-muted d-none d-md-table-cell">{{ customer.email }}</td>
+                        <td class="text-muted d-none d-lg-table-cell">{{ customer.phoneNumber }}</td>
                         <td>
                           <span
                             [ngClass]="[
@@ -92,7 +93,7 @@
                             {{ customer.status }}
                           </span>
                         </td>
-                        <td class="text-muted">{{ customer.type }}</td>
+                        <td class="text-muted d-none d-md-table-cell">{{ customer.type }}</td>
                         <td class="text-end">
                           <button [routerLink]="['/customers', customer.id]" class="btn btn-info btn-sm" type="button">
                             {{ t('common.view') }}

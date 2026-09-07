@@ -56,7 +56,7 @@ startup — and the schema became a single idempotent `src/main/resources/schema
 
 **Cloud & CI/CD.** A single env-driven `Dockerfile`, `docker-compose`, GitHub Actions (build/test +
 ECR/ECS deploy), an **S3 image storage** abstraction, and an **Aiven** managed-MySQL option landed.
-Pipelines exist for AWS (ECS Fargate — the live one), GCP (Cloud Run) and Azure (App Service).
+Pipelines exist for AWS (ECS Fargate — still the live one), GCP (Cloud Run — repo-side ready to auto-deploy since 2026-09-05, for cost; account-side cutover to actually move production is still pending, FUTURE-ENHANCEMENTS.md §2.8) and Azure (App Service).
 
 **Where it ended up.** Live on AWS ECS Fargate at **`tesseraapp.dev`** (CloudFront in front, a real
 domain bought 2026-08-08), with **usernameless WebAuthn passkeys** and real, unstubbed **SMS 2FA**

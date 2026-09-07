@@ -4,6 +4,15 @@
 **Last Updated:** 2026-08-19
 **Status:** Reference — the "why it is built this way, and what broke" companion to [`RUNBOOK.md`](RUNBOOK.md), which is the linear procedure.
 
+> **Deployment status (2026-09-06): AWS is still live — the move is decided, not executed.** A
+> move to **Google Cloud Run** for cost (~$57 → ~$20/month; the comparison is in
+> [`../gcp/README.md`](../gcp/README.md)) is planned and the repo side is ready, but the
+> account-side cutover has not happened yet — this is still production. `deploy.yml`'s push
+> trigger is disabled ahead of that move (manual dispatch still works), which is the only change
+> so far. Once the cutover actually happens, this environment moves to **paused, not retired** —
+> see [RUNBOOK → Pausing AWS](RUNBOOK.md#pausing-aws--stop-the-bill-without-deleting-anything) —
+> and this banner should be updated to say so.
+
 End-to-end reference for deploying TesseraApp to AWS using ECS Fargate + **Aiven MySQL** (managed DB) + S3 (image storage) + ALB + **CloudFront** (which terminates TLS — the ALB listener itself stays plain HTTP on purpose, see [below](#https-cloudfront-in-front-of-the-alb-with-a-real-domain-on-top)) + Secrets Manager (secrets injection).
 
 > **The public origin is HTTPS** at `tesseraapp.dev` via CloudFront. "Plain HTTP" below always means

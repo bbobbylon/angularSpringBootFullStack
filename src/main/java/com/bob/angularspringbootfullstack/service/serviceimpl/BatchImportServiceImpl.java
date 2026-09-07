@@ -17,6 +17,7 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -71,6 +72,19 @@ import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
  * truncated. Queueing large imports for background processing is real future work, not
  * something this class pretends to do.
  *
+ * <p><b>Resource bounds are enforced before work is done, not after</b> (FUTURE-ENHANCEMENTS.md
+ * §3.1, "request size / batch-import limits"). Because this runs synchronously on a request
+ * thread, an oversized upload is a single-request denial-of-service the IP rate limiter never
+ * sees — one request, not a burst. Three ceilings apply in order, each one cheaper than the
+ * next: {@link #MAX_BATCH_FILE_BYTES} is checked against the multipart's declared size before
+ * a single byte is parsed; {@link #MAX_BATCH_ROWS} is enforced <em>inside</em> the CSV and XLSX
+ * row loops so a file with 50,000 rows is rejected on row 2,001 rather than after all 50,000
+ * have been read into a list; and {@link ZipSecureFile#setMaxEntrySize} caps how far a
+ * compressed XLSX may inflate, closing the "small file, enormous decompressed sheet" gap that
+ * a byte-size check alone leaves open. The app-wide {@code spring.servlet.multipart.max-file-size}
+ * (10MB, sized for profile pictures) still applies underneath all three — this class is
+ * deliberately tighter than that because a legitimate 2,000-row import is a fraction of it.
+ *
  * <p>Bean-validation constraints are re-used rather than re-implemented: each built {@link
  * Customer}/{@link Invoice} is checked against the exact same {@code jakarta.validation}
  * annotations {@code @Valid} enforces on the single-record create endpoints, via the {@link
@@ -85,11 +99,40 @@ import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
 public class BatchImportServiceImpl implements BatchImportService {
 
     /**
-     * Hard cap on rows per upload. A file over this size is rejected before any row is
-     * processed — see the class Javadoc for why this is a synchronous, in-request boundary
-     * rather than a queued background job.
+     * Hard cap on rows per upload. Enforced inside {@link #parseCsv}/{@link #parseXlsx} as rows
+     * are read, so an over-limit file is rejected the moment row {@code MAX_BATCH_ROWS + 1} is
+     * reached — before any row is validated or persisted, and without materializing the rest of
+     * the file. See the class Javadoc for why this is a synchronous, in-request boundary rather
+     * than a queued background job. Package-private so {@code BatchImportServiceImplTest} can
+     * build boundary fixtures from the real value instead of a hardcoded copy of it.
      */
-    private static final int MAX_BATCH_ROWS = 2000;
+    static final int MAX_BATCH_ROWS = 2000;
+
+    /**
+     * Hard cap on the uploaded file's byte size, checked against {@link MultipartFile#getSize()}
+     * before the file is opened. 2MB is roughly ten times what a {@link #MAX_BATCH_ROWS}-row CSV
+     * or XLSX with every column populated actually weighs, so a legitimate import never gets
+     * near it, while an attacker can no longer hand Apache POI the full 10MB the app-wide
+     * multipart limit permits. Package-private for the same test reason as {@link #MAX_BATCH_ROWS}.
+     */
+    static final long MAX_BATCH_FILE_BYTES = 2L * 1024 * 1024;
+
+    /**
+     * Ceiling on how large any single entry inside an uploaded XLSX (a ZIP container) may
+     * inflate to. Apache POI's default is effectively unbounded (4GB) and relies on its
+     * minimum-inflate-ratio check alone, which still permits a {@link #MAX_BATCH_FILE_BYTES}
+     * file to expand 100× into memory. 32MB is over ten times the inflated size of a maximal
+     * legitimate import and bounds the worst case at something a small container survives.
+     */
+    private static final long MAX_XLSX_ENTRY_BYTES = 32L * 1024 * 1024;
+
+    static {
+        // ZipSecureFile's limits are JVM-global statics, not per-reader settings. This class is
+        // the application's only XLSX *reader* (the report exports are writers, which the
+        // inflate guard does not touch), so owning the setting here — rather than in a
+        // configuration class far from the code it protects — keeps the reason next to the risk.
+        ZipSecureFile.setMaxEntrySize(MAX_XLSX_ENTRY_BYTES);
+    }
 
     /**
      * Column headers for the customer batch-upload template (FUTURE-ENHANCEMENTS.md §3.3,
@@ -311,18 +354,24 @@ public class BatchImportServiceImpl implements BatchImportService {
     }
 
     /**
-     * Dispatches on file extension to the CSV or XLSX parser and enforces {@link
-     * #MAX_BATCH_ROWS} before any row is validated or persisted.
+     * Dispatches on file extension to the CSV or XLSX parser. The byte-size ceiling is applied
+     * here, before the file is opened; the row ceiling is applied inside each parser as it
+     * reads (see {@link #MAX_BATCH_ROWS}), so by the time this returns the list is already
+     * known to be within bounds — there is deliberately no post-parse size check left here.
      */
     private List<Map<String, String>> parseRows(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new ApiException("No file was uploaded.");
         }
+        if (file.getSize() > MAX_BATCH_FILE_BYTES) {
+            throw new ApiException("This file is larger than " + (MAX_BATCH_FILE_BYTES / (1024 * 1024))
+                    + "MB — batch upload is capped at " + MAX_BATCH_ROWS
+                    + " rows per file, which is well under that. Split it into smaller files and upload each separately.");
+        }
         String filename = file.getOriginalFilename();
         String extension = filename == null ? "" : filename.substring(filename.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
-        List<Map<String, String>> rows;
         try (InputStream in = file.getInputStream()) {
-            rows = switch (extension) {
+            return switch (extension) {
                 case "csv" -> parseCsv(in);
                 case "xlsx", "xls" -> parseXlsx(in);
                 default -> throw new ApiException("Unsupported file type \"" + extension + "\" — upload a .csv or .xlsx file.");
@@ -330,11 +379,17 @@ public class BatchImportServiceImpl implements BatchImportService {
         } catch (IOException e) {
             throw new ApiException("Could not read the uploaded file — it may be corrupted.");
         }
-        if (rows.size() > MAX_BATCH_ROWS) {
-            throw new ApiException("This file has " + rows.size() + " rows — batch upload is capped at "
-                    + MAX_BATCH_ROWS + " rows per file. Split it into smaller files and upload each separately.");
-        }
-        return rows;
+    }
+
+    /**
+     * The one rejection both parsers throw when a file crosses {@link #MAX_BATCH_ROWS}. Worded
+     * as "more than" rather than reporting an exact count because, by design, neither parser
+     * reads far enough past the limit to know the true total — that is the point of failing
+     * fast.
+     */
+    private static ApiException tooManyRows() {
+        return new ApiException("This file has more than " + MAX_BATCH_ROWS + " rows — batch upload is capped at "
+                + MAX_BATCH_ROWS + " rows per file. Split it into smaller files and upload each separately.");
     }
 
     /**
@@ -356,6 +411,11 @@ public class BatchImportServiceImpl implements BatchImportService {
              CSVParser parser = CSVParser.parse(reader, format)) {
             List<Map<String, String>> rows = new ArrayList<>();
             for (CSVRecord record : parser) {
+                // Commons CSV streams records lazily, so throwing here genuinely stops reading —
+                // the rest of an oversized file is never pulled off the input stream.
+                if (rows.size() >= MAX_BATCH_ROWS) {
+                    throw tooManyRows();
+                }
                 Map<String, String> row = new LinkedHashMap<>();
                 record.toMap().forEach((key, value) ->
                         row.put(key == null ? "" : key.trim().toLowerCase(Locale.ROOT), value));
@@ -401,6 +461,15 @@ public class BatchImportServiceImpl implements BatchImportService {
                     row.put(headers.get(i), value);
                 }
                 if (!blank) {
+                    // Counted on non-blank rows only, so trailing formatted-but-empty rows (which
+                    // Excel happily leaves behind) can never push a legitimate file over the limit.
+                    // Unlike the CSV path this cannot avoid the workbook already being in memory —
+                    // WorkbookFactory builds the DOM eagerly — which is exactly why the byte-size
+                    // and ZipSecureFile ceilings exist in front of it; what this does bound is the
+                    // per-row map allocation and, downstream, the number of DB round-trips.
+                    if (rows.size() >= MAX_BATCH_ROWS) {
+                        throw tooManyRows();
+                    }
                     rows.add(row);
                 }
             }

@@ -12,6 +12,7 @@ import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { isWebAuthnSupported, shouldPromptForPasskey, startAuthentication } from '../../../utils/webauthn.utils';
 import { UserInterface } from '../../../interface/user.interface';
+import { FieldErrorComponent } from '../../../shared/field-error/field-error.component';
 
 /**
  * Handles login and MFA verification flows.
@@ -24,7 +25,7 @@ import { UserInterface } from '../../../interface/user.interface';
   standalone: true,
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.css'],
-  imports: [RouterModule, CommonModule, FormsModule, TranslocoDirective],
+  imports: [RouterModule, CommonModule, FormsModule, TranslocoDirective, FieldErrorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LoginComponent implements OnInit {

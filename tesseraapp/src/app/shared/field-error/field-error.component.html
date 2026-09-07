@@ -1,0 +1,3 @@
+@if (visible && errorKey; as key) {
+  <div *transloco="let t" class="invalid-feedback d-block">{{ t(key, errorParams) }}</div>
+}

@@ -19,6 +19,8 @@ import com.bob.angularspringbootfullstack.rowmapper.OrganizationRowMapper;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.OrganizationService;
+import com.bob.angularspringbootfullstack.utils.AuditHashChain;
+import com.bob.angularspringbootfullstack.utils.AuditHashChainWriter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -53,6 +55,7 @@ import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DELETE_
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.DELETE_INVITE_BY_ID_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_MEMBERSHIP_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_EVENT_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_LATEST_ORGANIZATIONEVENT_HASH_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_INVITE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.INSERT_ORGANIZATION_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.REACTIVATE_MEMBERSHIP_QUERY;
@@ -97,6 +100,13 @@ public class OrganizationServiceImpl implements OrganizationService {
     private final RoleRepo<Role> roleRepo;
     /** Supplies the {@code *ForOrganizations} rollups {@link #getOrganizationStats} narrows to one id. */
     private final CustomerService customerService;
+
+    /**
+     * Serializes read-last-hash-then-insert in {@link #recordOrganizationEvent} — see
+     * {@code EventRepoImpl#USEREVENTS_HASH_LOCK} for the identical reasoning (FUTURE-ENHANCEMENTS
+     * §3.1, single-instance-only guarantee, same as the rate limiter's accepted constraint).
+     */
+    private static final Object ORGANIZATIONEVENTS_HASH_LOCK = new Object();
 
     /**
      * Evaluates the FR-ORG-2 scope predicate with a single COUNT over the membership
@@ -502,15 +512,27 @@ public class OrganizationServiceImpl implements OrganizationService {
 
     /**
      * {@inheritDoc}
+     *
+     * <p>Also computes this row's link in the {@code organizationevents} tamper-evidence hash
+     * chain (FUTURE-ENHANCEMENTS §3.1) via {@link AuditHashChainWriter} — see
+     * {@link #ORGANIZATIONEVENTS_HASH_LOCK} for why the read-then-insert it performs is
+     * synchronized, and {@link AuditHashChain} for the digest itself.
      */
     @Override
     public void recordOrganizationEvent(Long organizationId, Long actorUserId, EventType eventType, String detail) {
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("organizationId", organizationId)
-                .addValue("actorUserId", actorUserId)
-                .addValue("type", eventType.name())
-                .addValue("detail", detail);
-        jdbcTemplate.update(INSERT_ORGANIZATION_EVENT_QUERY, params);
+        LocalDateTime createdAt = LocalDateTime.now().withNano(0);
+        AuditHashChainWriter.writeChainedRow(jdbcTemplate, ORGANIZATIONEVENTS_HASH_LOCK, SELECT_LATEST_ORGANIZATIONEVENT_HASH_QUERY,
+                new Object[]{organizationId, actorUserId, eventType.name(), detail, createdAt},
+                hash -> {
+                    MapSqlParameterSource params = new MapSqlParameterSource()
+                            .addValue("organizationId", organizationId)
+                            .addValue("actorUserId", actorUserId)
+                            .addValue("type", eventType.name())
+                            .addValue("detail", detail)
+                            .addValue("createdAt", createdAt)
+                            .addValue("hash", hash);
+                    jdbcTemplate.update(INSERT_ORGANIZATION_EVENT_QUERY, params);
+                });
     }
 
     /**

@@ -90,4 +90,34 @@ public class SessionQuery {
      */
     public static final String IS_FAMILY_REVOKED_QUERY =
             "SELECT EXISTS(SELECT 1 FROM refreshsessions WHERE family = :family AND revoked = TRUE)";
+
+    /**
+     * Concurrent-session cap enforcement (FUTURE-ENHANCEMENTS §3.1, "No cap on concurrent sessions
+     * per user"): revokes every active session for this user EXCEPT the {@code :keep} most recently
+     * opened/rotated, run by {@code SessionServiceImpl#issueTokenPair} right after a new login's row
+     * is inserted. Self-correcting rather than merely growth-preventing — lowering the cap trims any
+     * pre-existing excess on the very next login, it does not just stop the count climbing further.
+     *
+     * <p>The inner query's own {@code WHERE} clause is copied rather than shared with
+     * {@link #SELECT_ACTIVE_SESSIONS_BY_USER_QUERY} because a derived table is required here: MySQL
+     * forbids selecting from the same table an {@code UPDATE} targets, so the "which ids to keep"
+     * decision has to be materialized as a subquery result first. {@code ORDER BY last_used_at DESC,
+     * id DESC} — the {@code id} tiebreaker matters because a session opened in the same login that
+     * triggers this cap check shares its {@code last_used_at} timestamp (second precision) with any
+     * row inserted in the same second; without a tiebreaker that ordering is not guaranteed stable,
+     * and the just-opened session (which must never be the one revoked) could tie for last place.
+     * The auto-increment {@code id} is monotonic regardless of timestamp collisions, so it always
+     * resolves in favor of the newer row. Parameters: userId, keep (the effective cap).
+     */
+    public static final String ENFORCE_SESSION_CAP_QUERY =
+            "UPDATE refreshsessions SET revoked = TRUE " +
+            "WHERE user_id = :userId AND revoked = FALSE AND superseded = FALSE AND expires_at > NOW() " +
+            "AND id NOT IN (" +
+            "  SELECT id FROM (" +
+            "    SELECT id FROM refreshsessions " +
+            "    WHERE user_id = :userId AND revoked = FALSE AND superseded = FALSE AND expires_at > NOW() " +
+            "    ORDER BY last_used_at DESC, id DESC " +
+            "    LIMIT :keep" +
+            "  ) AS sessions_to_keep" +
+            ")";
 }

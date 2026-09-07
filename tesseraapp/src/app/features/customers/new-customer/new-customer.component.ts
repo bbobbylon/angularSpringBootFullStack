@@ -11,6 +11,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
+import { FieldErrorComponent } from '../../../shared/field-error/field-error.component';
 
 /**
  * New customer creation form component.
@@ -29,7 +30,7 @@ import { TranslocoService } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-new-customer',
-  imports: [RouterModule, FormsModule, NavbarComponent, TranslocoDirective],
+  imports: [RouterModule, FormsModule, NavbarComponent, TranslocoDirective, FieldErrorComponent],
   templateUrl: './new-customer.component.html',
   standalone: true,
   styleUrls: ['./new-customer.component.css'],

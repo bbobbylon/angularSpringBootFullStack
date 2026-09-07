@@ -54,7 +54,7 @@
                 <div class="col-md-3">
                   <button [disabled]="isMutating() || createForm.invalid" class="btn btn-primary w-100" type="submit">
                     @if (isMutating()) {
-                      <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status" style="margin-right: 5px;"></span>
+                      <span aria-hidden="true" class="spinner-border spinner-border-sm me-2" role="status"></span>
                     }
                     {{ t('rolesMatrix.createRole') }}
                   </button>

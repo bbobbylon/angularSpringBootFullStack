@@ -480,6 +480,21 @@
                 </div>
                 <p class="form-text mb-0">{{ t('security.settings.historyLimitHint') }}</p>
               </div>
+
+              <div class="col-md-6">
+                <label class="form-label" for="max-sessions-input">{{ t('security.settings.maxSessionsLabel') }}</label>
+                <div class="input-group input-group-sm">
+                  <input #maxSessionsInput
+                         (change)="onMaxConcurrentSessionsInput(maxSessionsInput.value)"
+                         [attr.placeholder]="t('security.settings.maxSessionsPlaceholder')"
+                         [value]="maxConcurrentSessionsDraft() ?? ''"
+                         class="form-control" id="max-sessions-input" max="50" min="0" type="number" />
+                  <button (click)="clearMaxConcurrentSessionsDraft()" class="btn btn-outline-secondary" type="button">
+                    {{ t('security.settings.clearOverride') }}
+                  </button>
+                </div>
+                <p class="form-text mb-0">{{ t('security.settings.maxSessionsHint') }}</p>
+              </div>
             </div>
 
             <div class="sc-panel__foot d-flex align-items-center gap-3">
@@ -501,6 +516,39 @@
             </div>
           </section>
         }
+
+        <!-- ── Audit trail tamper-evidence (FUTURE-ENHANCEMENTS §3.1) ─────────────────────── -->
+        <section class="sc-panel sc-secops__panel sc-reveal" style="--d: 200ms;">
+          <div class="sc-secops__panel-head">
+            <div>
+              <h2 class="sc-secops__panel-title">{{ t('security.auditIntegrity.title') }}</h2>
+              <p class="sc-secops__panel-sub">{{ t('security.auditIntegrity.subtitle') }}</p>
+            </div>
+          </div>
+
+          <div class="sc-panel__foot d-flex align-items-center gap-3">
+            <button (click)="verifyAuditIntegrity()"
+                    [disabled]="auditIntegrityChecking()"
+                    class="btn btn-sm btn-outline-primary" type="button">
+              @if (auditIntegrityChecking()) {
+                {{ t('security.auditIntegrity.checking') }}
+              } @else {
+                {{ t('security.auditIntegrity.checkButton') }}
+              }
+            </button>
+
+            @if (auditIntegrityResult(); as result) {
+              @if (auditIntegrityBroken()) {
+                <span class="text-danger small fw-semibold">{{ t('security.auditIntegrity.broken') }}</span>
+              } @else {
+                <span class="text-success small">
+                  {{ t('security.auditIntegrity.intact') }}
+                  ({{ t('security.auditIntegrity.rowsChecked', { count: result.userEvents.rowsChecked + result.organizationEvents.rowsChecked }) }})
+                </span>
+              }
+            }
+          </div>
+        </section>
       }
     }
   </div>

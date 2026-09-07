@@ -22,7 +22,7 @@
                 <div class="card-body">
                   <div class="text-center">
                     <h2>
-                      <i class="bi bi-receipt" style="margin-right: 5px"></i>
+                      <i class="bi bi-receipt me-2"></i>
                       New Invoice
                     </h2>
                   </div>
@@ -75,7 +75,7 @@
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <label for="customerId">{{ t('newInvoice.customer') }}</label>
-                        <select [ngModel]="null" class="form-control select-cl" id="customerId" name="customerId"
+                        <select #customerId="ngModel" [ngModel]="null" class="form-control select-cl" id="customerId" name="customerId"
                                 required>
                           @for (customer of state?.appData?.data?.customers; track customer.id) {
                             <option [disabled]="false" [ngValue]="customer.id" [selected]="false"
@@ -83,19 +83,22 @@
                             </option>
                           }
                         </select>
+                        <app-field-error [control]="customerId" />
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
                           <label for="totalAmount">{{ t('common.total') }}</label>
-                          <input class="form-control" id="totalAmount" name="totalAmount" ngModel required
+                          <input #totalAmount="ngModel" class="form-control" id="totalAmount" name="totalAmount" ngModel required
                                  type="number" />
+                          <app-field-error [control]="totalAmount" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
                           <label for="invoiceDate">{{ t('common.date') }}</label>
-                          <input class="form-control" id="invoiceDate" name="invoiceDate" ngModel required
+                          <input #invoiceDate="ngModel" class="form-control" id="invoiceDate" name="invoiceDate" ngModel required
                                  type="date" />
+                          <app-field-error [control]="invoiceDate" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
@@ -115,8 +118,7 @@
                         class="btn btn-primary mt-5"
                         type="submit">
                         @if (isLoading()) {
-                          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                                style="margin-right: 5px"></span>
+                          <span aria-hidden="true" class="spinner-border spinner-border-sm me-2" role="status"></span>
                           <span>{{ t('common.saving') }}</span>
                         } @else {
                           Save

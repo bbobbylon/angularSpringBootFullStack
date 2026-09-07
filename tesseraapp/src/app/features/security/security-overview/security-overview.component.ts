@@ -10,6 +10,7 @@ import { DataState } from '../../../enumeration/datastate.enum';
 import { GlobalStateInterface } from '../../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../../interface/customhttpresponse.interface';
 import {
+  AuditChainVerificationResultInterface,
   LoginOutcomeTrendPointInterface,
   MfaAdoptionInterface,
   PageInfoInterface,
@@ -285,6 +286,13 @@ export class SecurityOverviewComponent implements OnInit {
   /** The history-limit override the admin is currently editing; {@code null} means "use the default". */
   protected readonly historyLimitDraft = signal<number | null>(null);
 
+  /**
+   * The concurrent-session-cap override the admin is currently editing; {@code null} means "use
+   * the server default". Unrelated to anomaly detection — see {@link SecuritySettingsInterface}
+   * for why it rides the same draft/save round trip as the two fields above anyway.
+   */
+  protected readonly maxConcurrentSessionsDraft = signal<number | null>(null);
+
   protected readonly settingsSaving = signal(false);
 
   /**
@@ -295,7 +303,11 @@ export class SecurityOverviewComponent implements OnInit {
   protected readonly settingsDirty = computed(() => {
     const saved = this.savedSettings();
     if (!saved) return false;
-    return saved.anomalyEnabled !== this.enabledDraft() || saved.anomalyHistoryLimit !== this.historyLimitDraft();
+    return (
+      saved.anomalyEnabled !== this.enabledDraft() ||
+      saved.anomalyHistoryLimit !== this.historyLimitDraft() ||
+      saved.maxConcurrentSessions !== this.maxConcurrentSessionsDraft()
+    );
   });
 
   ngOnInit(): void {
@@ -315,6 +327,7 @@ export class SecurityOverviewComponent implements OnInit {
           this.savedSettings.set(settings);
           this.enabledDraft.set(settings.anomalyEnabled);
           this.historyLimitDraft.set(settings.anomalyHistoryLimit);
+          this.maxConcurrentSessionsDraft.set(settings.maxConcurrentSessions);
         },
         error: (error: string) => this.notification.onError(error),
       });
@@ -348,12 +361,30 @@ export class SecurityOverviewComponent implements OnInit {
     this.historyLimitDraft.set(null);
   }
 
+  /**
+   * Reads the max-concurrent-sessions number input and stages it as the draft override; an empty
+   * field clears the override back to null ("use the default") for the same reason as
+   * {@link onHistoryLimitInput} — 0 is a real, distinct value here too (it means "no cap" once
+   * persisted, per {@link SecuritySettingsInterface}, not "clear the override").
+   *
+   * @param raw - the input element's string value
+   */
+  protected onMaxConcurrentSessionsInput(raw: string): void {
+    const trimmed = raw.trim();
+    this.maxConcurrentSessionsDraft.set(trimmed === '' ? null : Number(trimmed));
+  }
+
+  /** Clears the max-concurrent-sessions draft back to "use the server default". */
+  protected clearMaxConcurrentSessionsDraft(): void {
+    this.maxConcurrentSessionsDraft.set(null);
+  }
+
   /** Persists the draft and refreshes {@link savedSettings} so {@link settingsDirty} clears. */
   protected saveAnomalySettings(): void {
     if (!this.settingsDirty() || this.settingsSaving()) return;
     this.settingsSaving.set(true);
     this.securityDashboard
-      .updateAnomalySettings$(this.enabledDraft(), this.historyLimitDraft())
+      .updateAnomalySettings$(this.enabledDraft(), this.historyLimitDraft(), this.maxConcurrentSessionsDraft())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
@@ -363,11 +394,57 @@ export class SecurityOverviewComponent implements OnInit {
           this.savedSettings.set(settings);
           this.enabledDraft.set(settings.anomalyEnabled);
           this.historyLimitDraft.set(settings.anomalyHistoryLimit);
+          this.maxConcurrentSessionsDraft.set(settings.maxConcurrentSessions);
           this.notification.onSuccess(this.transloco.translate('toasts.settingsUpdated'));
         },
         error: (error: string) => {
           this.notification.onError(error);
           this.settingsSaving.set(false);
+        },
+      });
+  }
+
+  // ── Audit trail tamper-evidence (FUTURE-ENHANCEMENTS §3.1) ─────────────────────────────────
+  // A separate, on-demand action rather than something loaded with the overview: recomputing a
+  // hash chain over an ever-growing audit table is real work that only needs doing when an
+  // administrator actually wants the reassurance, not on every page load.
+
+  /** The most recent verification result, or null before the first check this session. */
+  protected readonly auditIntegrityResult = signal<{
+    userEvents: AuditChainVerificationResultInterface;
+    organizationEvents: AuditChainVerificationResultInterface;
+  } | null>(null);
+
+  protected readonly auditIntegrityChecking = signal(false);
+
+  /** True if either chain came back broken on the last check. */
+  protected readonly auditIntegrityBroken = computed(() => {
+    const result = this.auditIntegrityResult();
+    return result !== null && (!result.userEvents.intact || !result.organizationEvents.intact);
+  });
+
+  /** Triggers a fresh re-walk of both hash chains and replaces {@link auditIntegrityResult}. */
+  protected verifyAuditIntegrity(): void {
+    if (this.auditIntegrityChecking()) return;
+    this.auditIntegrityChecking.set(true);
+    this.securityDashboard
+      .verifyAuditIntegrity$()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.auditIntegrityChecking.set(false);
+          const data = response.data;
+          if (!data) return;
+          this.auditIntegrityResult.set({ userEvents: data.userEvents, organizationEvents: data.organizationEvents });
+          if (!data.userEvents.intact || !data.organizationEvents.intact) {
+            this.notification.onError(this.transloco.translate('security.auditIntegrity.broken'));
+          } else {
+            this.notification.onSuccess(this.transloco.translate('security.auditIntegrity.intact'));
+          }
+        },
+        error: (error: string) => {
+          this.notification.onError(error);
+          this.auditIntegrityChecking.set(false);
         },
       });
   }

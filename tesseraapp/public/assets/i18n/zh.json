@@ -39,6 +39,16 @@
     "viewAll": "查看全部",
     "add": "添加"
   },
+  "validation": {
+    "required": "此字段为必填项。",
+    "email": "请输入有效的电子邮件地址。",
+    "pattern": "格式不符合要求。",
+    "minlength": "至少需要 {{requiredLength}} 个字符。",
+    "maxlength": "不能超过 {{requiredLength}} 个字符。",
+    "min": "不能小于 {{min}}。",
+    "max": "不能大于 {{max}}。",
+    "url": "请输入有效的网址。"
+  },
   "nav": {
     "customers": "客户",
     "newCustomer": "新建客户",
@@ -168,10 +178,22 @@
       "historyLimitLabel": "登录历史窗口",
       "historyLimitHint": "新登录会与该账户最近的多少次登录进行比对。",
       "historyLimitPlaceholder": "服务器默认值",
+      "maxSessionsLabel": "最大并发会话数",
+      "maxSessionsHint": "当新登录使账户超过此限制时，其最早的会话会被自动撤销。0 表示不限制。",
+      "maxSessionsPlaceholder": "服务器默认值（不限制）",
       "clearOverride": "使用默认值",
       "save": "保存更改",
       "saving": "保存中…",
       "unsavedChanges": "有未保存的更改"
+    },
+    "auditIntegrity": {
+      "title": "审计追踪完整性",
+      "subtitle": "每条审计记录都与前一条记录的哈希值相链接，因此事后的任何修改或删除都可被检测到。按需检查——后台不会自动运行任何检查。",
+      "checkButton": "验证审计追踪完整性",
+      "checking": "检查中…",
+      "intact": "两条审计链均完好无损",
+      "broken": "审计追踪完整性检查失败——存储的哈希值不匹配，请立即调查。",
+      "rowsChecked": "已检查 {{count}} 行"
     }
   },
   "servicesAdmin": {
@@ -411,6 +433,7 @@
     "upload": "上传",
     "uploading": "正在上传…",
     "resultSummary": "已导入 {{total}} 行中的 {{imported}} 行。",
+    "fileTooLarge": "该文件大于 {{limit}}。请将其拆分为较小的文件并分别上传。",
     "row": "行",
     "reason": "原因",
     "close": "关闭"
@@ -538,7 +561,8 @@
     "addMember": "添加成员",
     "searchPlaceholder": "按姓名或电子邮件搜索…",
     "addToOrganization": "添加",
-    "noOrganizations": "未找到组织。",
+    "emptyTitle": "暂无组织",
+    "emptyHint": "创建您的第一个组织，以便在其下管理客户和成员。",
     "globalRole": "全局角色",
     "orgRole": "组织角色",
     "kpi": {

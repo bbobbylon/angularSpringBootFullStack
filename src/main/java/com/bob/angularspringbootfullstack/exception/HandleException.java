@@ -21,6 +21,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -66,6 +67,41 @@ public class HandleException extends ResponseEntityExceptionHandler implements E
                 .timeStamp(now().toString())
                 .reason(fieldMessage)
                 //again, we don't want to pass the whole exception message to the client, but for now we just pass it
+                .devMessage(exception.getMessage())
+                .status(resolve(statusCode.value()))
+                .statusCode(statusCode.value())
+                .build(), statusCode);
+    }
+
+    /**
+     * Returns <b>413 Payload Too Large</b> with a client-safe message when a multipart upload
+     * exceeds {@code spring.servlet.multipart.max-file-size}/{@code max-request-size}
+     * (FUTURE-ENHANCEMENTS.md §3.1, "request size / batch-import limits").
+     *
+     * <p>The framework already maps this exception to 413 via the base class, and {@link
+     * #handleExceptionInternal} would already wrap it in an {@link HttpResponse} — so the status
+     * and the envelope are not what this override adds. What it adds is the <em>reason</em>:
+     * the default is Spring's own "Maximum upload size exceeded", which tells the person at the
+     * file picker nothing about how large is too large. The message here states the ceiling in
+     * terms they can act on. The exception's own text is kept in {@code devMessage} for
+     * diagnostics, consistent with every other handler in this class.
+     *
+     * <p>Which limit fired matters to the client not at all: both the app-wide multipart cap
+     * (sized for profile pictures) and the tighter cap {@code BatchImportServiceImpl} applies to
+     * imports produce "split it / pick a smaller file" as the only useful next step.
+     *
+     * @param exception  the multipart-size failure raised while the request was being parsed
+     * @param headers    response headers chosen by the framework
+     * @param statusCode the framework-selected status (413)
+     * @param request    the current request
+     * @return an HttpResponse-bodied 413
+     */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException exception, @NonNull HttpHeaders headers, @NonNull HttpStatusCode statusCode, @NonNull WebRequest request) {
+        log.warn("Rejected upload over the configured multipart size limit: {}", exception.getMessage());
+        return new ResponseEntity<>(HttpResponse.builder()
+                .timeStamp(now().toString())
+                .reason("That file is too large — uploads are capped at 10MB. Choose a smaller file, or split an import into smaller files.")
                 .devMessage(exception.getMessage())
                 .status(resolve(statusCode.value()))
                 .statusCode(statusCode.value())

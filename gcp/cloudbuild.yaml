@@ -21,7 +21,9 @@ substitutions:
   _AIVEN_PORT: "11275"
   _AIVEN_DB: db3
   _AIVEN_USER: avnadmin
-  _APP_DOMAIN: ""            # set to the Cloud Run URL after first deploy
+  _APP_DOMAIN: ""            # https://tesseraapp.dev (or the Cloud Run URL before the domain is mapped)
+  _S3_BUCKET: tessera-app-images   # existing AWS bucket — profile images (Cloud Run's disk is ephemeral)
+  _AWS_REGION: us-east-1
 
 images:
   - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
@@ -57,9 +59,10 @@ steps:
       - "--cpu=1"
       - "--memory=1Gi"
       - "--min-instances=0"
-      - "--max-instances=4"
-      - "--set-env-vars=^##^SPRING_ACTIVE_PROFILES=prod##SPRING_DATASOURCE_URL=jdbc:mysql://${_AIVEN_HOST}:${_AIVEN_PORT}/${_AIVEN_DB}?sslMode=REQUIRED##SPRING_DATASOURCE_USERNAME=${_AIVEN_USER}##MAIL_HOST=smtp.gmail.com##MAIL_PORT=587##UI_APP_URL=${_APP_DOMAIN}##VERIFY_EMAIL_HOST=${_APP_DOMAIN}##CONTAINER_PORT=8080##IMAGE_STORAGE_PATH=/tmp/images##MICROSOFT_TENANT_ID=common"
-      - "--set-secrets=SPRING_DATASOURCE_PASSWORD=tessera-db-password:latest,JWT_SECRET=tessera-jwt-secret:latest,MAIL_USERNAME=tessera-mail-username:latest,MAIL_PASSWORD=tessera-mail-password:latest,GOOGLE_CLIENT_ID=tessera-google-client-id:latest,GOOGLE_CLIENT_SECRET=tessera-google-client-secret:latest,GITHUB_CLIENT_ID=tessera-github-client-id:latest,GITHUB_CLIENT_SECRET=tessera-github-client-secret:latest,MICROSOFT_CLIENT_ID=tessera-microsoft-client-id:latest,MICROSOFT_CLIENT_SECRET=tessera-microsoft-client-secret:latest,TWILIO_ACCOUNT_SID=tessera-twilio-sid:latest,TWILIO_AUTH_TOKEN=tessera-twilio-token:latest,TWILIO_FROM_NUMBER=tessera-twilio-from-number:latest"
+      - "--cpu-boost"            # extra CPU during JVM startup — halves the scale-from-zero cold start
+      - "--max-instances=1"      # NOT a cost knob: in-process rate limiter needs one instance (FUTURE-ENHANCEMENTS.md §2.4)
+      - "--set-env-vars=^##^SPRING_ACTIVE_PROFILES=prod##SPRING_DATASOURCE_URL=jdbc:mysql://${_AIVEN_HOST}:${_AIVEN_PORT}/${_AIVEN_DB}?sslMode=REQUIRED##SPRING_DATASOURCE_USERNAME=${_AIVEN_USER}##MAIL_HOST=smtp.gmail.com##MAIL_PORT=587##UI_APP_URL=${_APP_DOMAIN}##VERIFY_EMAIL_HOST=${_APP_DOMAIN}##CONTAINER_PORT=8080##IMAGE_STORAGE_PATH=/tmp/images##MICROSOFT_TENANT_ID=common##IMAGE_STORAGE_TYPE=s3##AWS_S3_BUCKET=${_S3_BUCKET}##AWS_REGION=${_AWS_REGION}##TRUSTED_PROXY_COUNT=1##FORWARD_HEADERS_STRATEGY=framework##OAUTH2_REDIRECT_BASE_URL=${_APP_DOMAIN}"
+      - "--set-secrets=SPRING_DATASOURCE_PASSWORD=tessera-db-password:latest,JWT_SECRET=tessera-jwt-secret:latest,MAIL_USERNAME=tessera-mail-username:latest,MAIL_PASSWORD=tessera-mail-password:latest,GOOGLE_CLIENT_ID=tessera-google-client-id:latest,GOOGLE_CLIENT_SECRET=tessera-google-client-secret:latest,GITHUB_CLIENT_ID=tessera-github-client-id:latest,GITHUB_CLIENT_SECRET=tessera-github-client-secret:latest,MICROSOFT_CLIENT_ID=tessera-microsoft-client-id:latest,MICROSOFT_CLIENT_SECRET=tessera-microsoft-client-secret:latest,TWILIO_ACCOUNT_SID=tessera-twilio-sid:latest,TWILIO_AUTH_TOKEN=tessera-twilio-token:latest,TWILIO_FROM_NUMBER=tessera-twilio-from-number:latest,AWS_ACCESS_KEY_ID=tessera-aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=tessera-aws-secret-access-key:latest"
 
 options:
   logging: CLOUD_LOGGING_ONLY

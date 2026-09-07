@@ -4,14 +4,17 @@ import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.RefreshSession;
+import com.bob.angularspringbootfullstack.model.SecuritySettings;
 import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.RoleService;
+import com.bob.angularspringbootfullstack.service.SecuritySettingsService;
 import com.bob.angularspringbootfullstack.service.SessionService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import com.bob.angularspringbootfullstack.tokenprovider.TokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -51,6 +54,13 @@ import static org.apache.commons.lang3.time.DateFormatUtils.format;
  * <p>Rotation grants a fresh 5-day expiry (sliding sessions): an actively used device
  * stays signed in indefinitely, while an idle one ages out after 5 days — matching how
  * the refresh JWT's own {@code exp} already behaved across refreshes.
+ *
+ * <p><b>Concurrent-session cap (FUTURE-ENHANCEMENTS §3.1, "No cap on concurrent sessions per
+ * user").</b> {@link #issueTokenPair} enforces an optional ceiling on how many sessions one user
+ * may hold open at once, revoking the oldest down to the cap right after the new one is inserted —
+ * see {@link #enforceConcurrentSessionCap}. Deliberately NOT enforced in {@link #rotate}: rotation
+ * supersedes the presented row and inserts its replacement in the same family, so the count of
+ * active families is unchanged by a refresh — only a fresh login can push a user over the cap.
  */
 @Service
 @RequiredArgsConstructor
@@ -62,6 +72,15 @@ public class SessionServiceImpl implements SessionService {
     private final UserService userService;
     private final RoleService roleService;
     private final ApplicationEventPublisher eventPublisher;
+    private final SecuritySettingsService securitySettingsService;
+
+    /**
+     * Env-driven default for the concurrent-session cap; {@code 0} means "no cap". An admin's
+     * override in {@code securitysettings.max_concurrent_sessions} wins over this when set — see
+     * {@link #effectiveMaxConcurrentSessions}.
+     */
+    @Value("${app.security.max-concurrent-sessions:0}")
+    private int maxConcurrentSessionsDefault;
 
     /** Maps one {@code refreshsessions} row; nullable timestamps guarded like UserRowMapper. */
     private static final RowMapper<RefreshSession> SESSION_ROW_MAPPER = (rs, rowNum) -> RefreshSession.builder()
@@ -80,7 +99,8 @@ public class SessionServiceImpl implements SessionService {
 
     /**
      * Opens a new family per the contract: mints the (family, jti) pair, records the
-     * session with the request's device/IP, and returns tokens stamped with both ids.
+     * session with the request's device/IP, enforces the concurrent-session cap (if any) now that
+     * this login may have pushed the user over it, and returns tokens stamped with both ids.
      */
     @Override
     public TokenPair issueTokenPair(UserPrincipal userPrincipal, HttpServletRequest request) {
@@ -89,6 +109,7 @@ public class SessionServiceImpl implements SessionService {
         String jti = UUID.randomUUID().toString();
         insertSessionRow(user.getId(), family, jti, request);
         log.info("Opened refresh session family {} for user id {}", family, user.getId());
+        enforceConcurrentSessionCap(user.getId());
         return new TokenPair(
                 tokenProvider.createAccessToken(userPrincipal, family),
                 tokenProvider.createRefreshToken(userPrincipal, jti, family),
@@ -216,5 +237,36 @@ public class SessionServiceImpl implements SessionService {
     private RefreshSession findByJti(String jti) {
         List<RefreshSession> rows = jdbcTemplate.query(SELECT_SESSION_BY_JTI_QUERY, Map.of("jti", jti), SESSION_ROW_MAPPER);
         return rows.isEmpty() ? null : rows.getFirst();
+    }
+
+    /**
+     * Revokes this user's oldest active session(s) down to the effective cap, if any is in effect.
+     * A no-op (zero queries) when the cap resolves to {@code <= 0} ("no cap"), which is both the
+     * out-of-the-box default and the safe outcome of an admin clearing or zeroing the override — see
+     * {@link SecuritySettings#getMaxConcurrentSessions()}.
+     *
+     * <p>Read fresh from {@link SecuritySettingsService} on every login rather than cached on this
+     * bean, the same live-read posture {@code LoginRiskServiceImpl} uses for its own overrides in
+     * this table, so an admin's change to the cap is enforced starting with the very next sign-in.
+     */
+    private void enforceConcurrentSessionCap(Long userId) {
+        int cap = effectiveMaxConcurrentSessions();
+        if (cap <= 0) {
+            return;
+        }
+        int revoked = jdbcTemplate.update(ENFORCE_SESSION_CAP_QUERY, Map.of("userId", userId, "keep", cap));
+        if (revoked > 0) {
+            log.info("Concurrent-session cap ({}) enforced for user id {}: revoked {} oldest session(s)",
+                    cap, userId, revoked);
+        }
+    }
+
+    /**
+     * The concurrent-session cap actually in effect: the admin's {@code securitysettings} override
+     * if one is on record, otherwise {@link #maxConcurrentSessionsDefault}.
+     */
+    private int effectiveMaxConcurrentSessions() {
+        Integer override = securitySettingsService.getSettings().getMaxConcurrentSessions();
+        return override != null ? override : maxConcurrentSessionsDefault;
     }
 }

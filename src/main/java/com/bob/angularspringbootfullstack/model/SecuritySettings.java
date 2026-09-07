@@ -30,6 +30,16 @@ public class SecuritySettings {
     private Boolean anomalyEnabled;
     /** {@code null} = use {@code app.security.anomaly.history-limit}; otherwise the admin's override. */
     private Integer anomalyHistoryLimit;
+    /**
+     * {@code null} = use {@code app.security.max-concurrent-sessions}; otherwise the admin's
+     * override. Read by {@code SessionServiceImpl}, not the anomaly-detection classes above — this
+     * row is shared by two unrelated admin-tunable knobs, not just anomaly detection, because a
+     * second single-row settings table would duplicate the exact "one row, no key to look up" shape
+     * this one already has. Either value, a value {@code <= 0} means "no cap" (unlimited), the same
+     * failure-mode-safe default as leaving the field unset — an admin fat-fingering {@code 0} turns
+     * the feature off rather than revoking every session on the next login.
+     */
+    private Integer maxConcurrentSessions;
     private LocalDateTime updatedAt;
     /** Id of the administrator who last changed this row; {@code null} if never edited. */
     private Long updatedBy;

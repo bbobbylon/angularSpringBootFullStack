@@ -22,7 +22,7 @@
                 <div class="card-body">
                   <div class="text-center">
                     <h2>
-                      <i class="bi bi-person-plus-fill" style="margin-right: 5px"></i>
+                      <i class="bi bi-person-plus-fill me-2"></i>
                       New Customer
                     </h2>
                   </div>
@@ -39,25 +39,29 @@
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
                           <label for="nc-customerName">{{ t('common.name') }}</label>
-                          <input class="form-control" id="nc-customerName" name="customerName" ngModel required type="text" />
+                          <input #customerName="ngModel" class="form-control" id="nc-customerName" name="customerName" ngModel required type="text" />
+                          <app-field-error [control]="customerName" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
                           <label for="nc-email">{{ t('common.email') }}</label>
-                          <input class="form-control" id="nc-email" name="email" ngModel required type="text" />
+                          <input #email="ngModel" class="form-control" id="nc-email" name="email" ngModel required type="text" />
+                          <app-field-error [control]="email" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
                           <label for="address">{{ t('profile.address') }}</label>
-                          <input class="form-control" id="address" name="address" ngModel required type="text" />
+                          <input #address="ngModel" class="form-control" id="address" name="address" ngModel required type="text" />
+                          <app-field-error [control]="address" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
                         <div class="form-group">
                           <label for="nc-phoneNumber">{{ t('common.phone') }}</label>
-                          <input class="form-control" id="nc-phoneNumber" name="phoneNumber" ngModel required type="text" />
+                          <input #phoneNumber="ngModel" class="form-control" id="nc-phoneNumber" name="phoneNumber" ngModel required type="text" />
+                          <app-field-error [control]="phoneNumber" />
                         </div>
                       </div>
                       <div class="col-md-6" style="margin-bottom: 15px">
@@ -79,7 +83,8 @@
                       <div class="col-md-12">
                         <div class="form-group">
                           <label for="nc-imageUrl">{{ t('newCustomer.imageUrl') }}</label>
-                          <input class="form-control" id="nc-imageUrl" name="imageUrl" ngModel required type="text" />
+                          <input #imageUrl="ngModel" class="form-control" id="nc-imageUrl" name="imageUrl" ngModel required type="text" />
+                          <app-field-error [control]="imageUrl" />
                         </div>
                       </div>
                     </div>
@@ -88,8 +93,7 @@
                         [disabled]="newCustomerForm.invalid || newCustomerForm.pristine || isLoading()"
                         class="btn btn-primary mt-5" type="submit">
                         @if (isLoading()) {
-                          <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                                style="margin-right: 5px;"></span>
+                          <span aria-hidden="true" class="spinner-border spinner-border-sm me-2" role="status"></span>
                           <span>{{ t('common.saving') }}</span>
                         } @else {
                           <span>{{ t('newCustomer.saveCustomer') }}</span>

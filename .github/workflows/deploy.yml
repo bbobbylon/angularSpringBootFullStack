@@ -2,8 +2,11 @@
 # Deploy — build the Docker image, push to Amazon ECR, update the ECS service.
 #
 # Triggers:
-#   - Push to master            → deploys to PROD
-#   - Manual workflow_dispatch  → deploys to the selected environment (qa/stage/prod)
+#   - Manual workflow_dispatch ONLY → deploys to the selected environment (qa/stage/prod)
+#
+#   Since 2026-09-05 the push-to-master trigger lives in deploy-gcp.yml: production moved to
+#   Google Cloud Run for cost, and AWS is PAUSED, not torn down (aws/RUNBOOK.md → "Pausing AWS").
+#   To bring AWS back, resume the ECS service per that section and uncomment the push block below.
 #
 # Database: Aiven managed MySQL. Connection details are pulled from AWS Secrets
 # Manager (populated once by aws/secrets-setup.sh) and injected into the ECS
@@ -38,8 +41,8 @@
 name: Deploy
 
 on:
-  push:
-    branches: [master]
+  # push:
+  #   branches: [master]
   workflow_dispatch:
     inputs:
       environment:

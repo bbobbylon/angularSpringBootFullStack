@@ -136,10 +136,11 @@ export interface SecurityOverviewDataInterface {
 }
 
 /**
- * The admin-tunable anomaly detection overrides (FUTURE-ENHANCEMENTS "Anomaly signal tuning UI"),
- * as returned by {@code GET}/{@code PATCH /admin/security/anomaly-settings}.
+ * The admin-tunable anomaly detection and concurrent-session overrides (FUTURE-ENHANCEMENTS
+ * "Anomaly signal tuning UI" and "No cap on concurrent sessions per user"), as returned by
+ * {@code GET}/{@code PATCH /admin/security/anomaly-settings}.
  *
- * Mirrors the backend {@code SecuritySettings} model. {@code null} on either override field means
+ * Mirrors the backend {@code SecuritySettings} model. {@code null} on any override field means
  * "no override on record — the server is using its env-configured default", not "off" or "zero";
  * the settings panel must render that as an explicit "using default" state rather than a blank or
  * unchecked control, which would look like a deliberate override of false/0.
@@ -150,6 +151,12 @@ export interface SecuritySettingsInterface {
   anomalyEnabled: boolean | null;
   /** {@code null} = no override, server uses {@code app.security.anomaly.history-limit}. */
   anomalyHistoryLimit: number | null;
+  /**
+   * {@code null} = no override, server uses {@code app.security.max-concurrent-sessions}
+   * (0 = unlimited out of the box). Unrelated to anomaly detection — see the backend
+   * {@code SecuritySettings} model's own doc for why it rides this same row/endpoint anyway.
+   */
+  maxConcurrentSessions: number | null;
   /** ISO timestamp of the last change, or null if this row has never been edited. */
   updatedAt: string | null;
   /** Id of the administrator who last changed it, or null. */
@@ -160,4 +167,28 @@ export interface SecuritySettingsInterface {
 export interface SecuritySettingsDataInterface {
   user: UserInterface;
   settings: SecuritySettingsInterface;
+}
+
+/**
+ * The outcome of re-walking one audit table's tamper-evidence hash chain
+ * (FUTURE-ENHANCEMENTS §3.1), as returned by {@code GET /admin/security/audit-integrity}.
+ *
+ * Mirrors the backend {@code AuditChainVerificationResult} record. {@link rowsChecked} counts only
+ * rows written after this feature shipped — rows from before then carry no hash and are skipped,
+ * so a small {@link rowsChecked} on an old table is expected, not a sign of a problem.
+ */
+export interface AuditChainVerificationResultInterface {
+  /** True if every checked row's hash matched, including the trivial case of zero rows to check. */
+  intact: boolean;
+  /** How many hash-chained rows were actually verified. */
+  rowsChecked: number;
+  /** The id of the first row whose hash did not match, or null when {@link intact} is true. */
+  firstBrokenId: number | null;
+}
+
+/** The {@code data} block of the audit-integrity response envelope. */
+export interface AuditIntegrityDataInterface {
+  user: UserInterface;
+  userEvents: AuditChainVerificationResultInterface;
+  organizationEvents: AuditChainVerificationResultInterface;
 }

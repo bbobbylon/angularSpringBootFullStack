@@ -39,6 +39,16 @@
     "viewAll": "Ver tudo",
     "add": "Adicionar"
   },
+  "validation": {
+    "required": "Este campo é obrigatório.",
+    "email": "Informe um endereço de e-mail válido.",
+    "pattern": "Não corresponde ao formato exigido.",
+    "minlength": "Deve ter pelo menos {{requiredLength}} caracteres.",
+    "maxlength": "Não deve ter mais de {{requiredLength}} caracteres.",
+    "min": "Deve ser pelo menos {{min}}.",
+    "max": "Não deve ultrapassar {{max}}.",
+    "url": "Informe uma URL válida."
+  },
   "nav": {
     "customers": "Clientes",
     "newCustomer": "Novo cliente",
@@ -168,10 +178,22 @@
       "historyLimitLabel": "Janela de histórico de login",
       "historyLimitHint": "Quantos dos logins recentes da conta são usados para comparar com um novo login.",
       "historyLimitPlaceholder": "Padrão do servidor",
+      "maxSessionsLabel": "Máximo de sessões simultâneas",
+      "maxSessionsHint": "Quando um novo login faz uma conta ultrapassar esse limite, sua sessão mais antiga é revogada automaticamente. 0 significa ilimitado.",
+      "maxSessionsPlaceholder": "Padrão do servidor (ilimitado)",
       "clearOverride": "Usar padrão",
       "save": "Salvar alterações",
       "saving": "Salvando…",
       "unsavedChanges": "Alterações não salvas"
+    },
+    "auditIntegrity": {
+      "title": "Integridade da trilha de auditoria",
+      "subtitle": "Cada linha de auditoria é encadeada a um hash da anterior, de modo que qualquer edição ou exclusão posterior seja detectável. Verificação sob demanda — nada é executado automaticamente em segundo plano.",
+      "checkButton": "Verificar integridade da trilha de auditoria",
+      "checking": "Verificando…",
+      "intact": "As duas cadeias de auditoria estão intactas",
+      "broken": "A verificação de integridade da trilha de auditoria FALHOU — um hash armazenado não corresponde. Investigue imediatamente.",
+      "rowsChecked": "{{count}} linhas verificadas"
     }
   },
   "servicesAdmin": {
@@ -411,6 +433,7 @@
     "upload": "Enviar",
     "uploading": "Enviando…",
     "resultSummary": "{{imported}} de {{total}} linhas importadas.",
+    "fileTooLarge": "Esse arquivo é maior que {{limit}}. Divida-o em arquivos menores e envie cada um separadamente.",
     "row": "Linha",
     "reason": "Motivo",
     "close": "Fechar"
@@ -538,7 +561,8 @@
     "addMember": "Adicionar um membro",
     "searchPlaceholder": "Buscar por nome ou e-mail…",
     "addToOrganization": "Adicionar",
-    "noOrganizations": "Nenhuma organização encontrada.",
+    "emptyTitle": "Ainda não há organizações",
+    "emptyHint": "Crie sua primeira organização para agrupar clientes e membros nela.",
     "globalRole": "Função global",
     "orgRole": "Função na organização",
     "kpi": {

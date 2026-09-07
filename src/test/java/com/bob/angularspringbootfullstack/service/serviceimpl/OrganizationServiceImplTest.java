@@ -17,9 +17,11 @@ import com.bob.angularspringbootfullstack.rowmapper.OrganizationRowMapper;
 import com.bob.angularspringbootfullstack.rowmapper.UserRowMapper;
 import com.bob.angularspringbootfullstack.service.CustomerService;
 import com.bob.angularspringbootfullstack.service.UserService;
+import com.bob.angularspringbootfullstack.utils.AuditHashChain;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -28,6 +30,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.jdbc.support.KeyHolder;
@@ -52,6 +55,7 @@ import static com.bob.angularspringbootfullstack.query.OrganizationQuery.REACTIV
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_INVITES_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ACTIVE_MEMBERS_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ALL_ORGANIZATIONS_QUERY;
+import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_LATEST_ORGANIZATIONEVENT_HASH_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_ORG_ROLE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.UPDATE_ORG_ROLE_QUERY;
 import static com.bob.angularspringbootfullstack.query.OrganizationQuery.SELECT_INVITE_BY_CODE_QUERY;
@@ -362,6 +366,39 @@ class OrganizationServiceImplTest {
         service.recordOrganizationEvent(9L, 5L, EventType.ORG_CREATED, "Acme");
 
         verify(jdbcTemplate).update(eq(INSERT_ORGANIZATION_EVENT_QUERY), any(SqlParameterSource.class));
+    }
+
+    @Test
+    @DisplayName("recordOrganizationEvent starts a new hash chain when the table has no previous row")
+    void recordOrganizationEventStartsNewChainWhenEmpty() {
+        when(jdbcTemplate.query(eq(SELECT_LATEST_ORGANIZATIONEVENT_HASH_QUERY), anyMap(), any(RowMapper.class)))
+                .thenReturn(List.of());
+        ArgumentCaptor<SqlParameterSource> captor = ArgumentCaptor.forClass(SqlParameterSource.class);
+
+        service.recordOrganizationEvent(9L, 5L, EventType.ORG_CREATED, "Acme");
+
+        verify(jdbcTemplate).update(eq(INSERT_ORGANIZATION_EVENT_QUERY), captor.capture());
+        SqlParameterSource params = captor.getValue();
+        LocalDateTime createdAt = (LocalDateTime) params.getValue("createdAt");
+        String expectedHash = AuditHashChain.computeHash(null, 9L, 5L, "ORG_CREATED", "Acme", createdAt);
+        assertThat(params.getValue("hash")).isEqualTo(expectedHash);
+    }
+
+    @Test
+    @DisplayName("recordOrganizationEvent chains from the previous row's stored hash")
+    void recordOrganizationEventChainsFromPreviousHash() {
+        String previousHash = "b".repeat(64);
+        when(jdbcTemplate.query(eq(SELECT_LATEST_ORGANIZATIONEVENT_HASH_QUERY), anyMap(), any(RowMapper.class)))
+                .thenReturn(List.of(previousHash));
+        ArgumentCaptor<SqlParameterSource> captor = ArgumentCaptor.forClass(SqlParameterSource.class);
+
+        service.recordOrganizationEvent(9L, 5L, EventType.ORG_CREATED, "Acme");
+
+        verify(jdbcTemplate).update(eq(INSERT_ORGANIZATION_EVENT_QUERY), captor.capture());
+        SqlParameterSource params = captor.getValue();
+        LocalDateTime createdAt = (LocalDateTime) params.getValue("createdAt");
+        String expectedHash = AuditHashChain.computeHash(previousHash, 9L, 5L, "ORG_CREATED", "Acme", createdAt);
+        assertThat(params.getValue("hash")).isEqualTo(expectedHash);
     }
 
     @Test

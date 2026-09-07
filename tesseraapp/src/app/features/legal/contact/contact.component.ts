@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ContactService } from '../../../service/contact.service';
 import { NotificationsService } from '../../../service/notifications-service';
+import { FieldErrorComponent } from '../../../shared/field-error/field-error.component';
 
 /**
  * Public, unauthenticated Contact Us page — the third leg of the pre-signup legal/support surface
@@ -20,7 +21,7 @@ import { NotificationsService } from '../../../service/notifications-service';
  */
 @Component({
   selector: 'app-contact',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, FieldErrorComponent],
   templateUrl: './contact.component.html',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,

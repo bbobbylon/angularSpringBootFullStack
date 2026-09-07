@@ -32,6 +32,13 @@
        sends no CSP, so it only ever failed once deployed. They now come through the
        bundled stylesheet (see the `styles` array in angular.json and src/fonts.css),
        which also removes two third-party DNS + TLS handshakes from the critical path. -->
+  <!-- Cloudflare Turnstile widget script (FUTURE-ENHANCEMENTS.md §3.1). The one deliberate
+       exception to the self-hosted-assets rule above: a CAPTCHA cannot be self-hosted, since
+       its entire job is proving the browser is talking to Cloudflare, not to this origin.
+       `async defer` so it never blocks first paint; harmless when RegisterComponent's
+       `turnstileSiteKey` is unset (dev) — it just attaches `window.turnstile` and nothing
+       calls `.render()`. Allowed by SecurityConfig's CSP (script-src/connect-src/frame-src). -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
   <app-root></app-root>

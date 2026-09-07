@@ -88,6 +88,8 @@ export class CommandPaletteComponent {
 
   /** The search input, focused programmatically the moment the overlay opens. */
   private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
+  /** The dialog panel — queried for its currently Tab-reachable controls by {@link trapFocus}. */
+  private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
 
   /**
    * The commands matching the current query — a case-insensitive substring match over
@@ -161,7 +163,51 @@ export class CommandPaletteComponent {
     if (this.open() && event.key === 'Escape') {
       event.preventDefault();
       this.close();
+      return;
     }
+    if (this.open() && event.key === 'Tab') {
+      this.trapFocus(event);
+    }
+  }
+
+  /**
+   * Keeps Tab/Shift+Tab cycling within the dialog while it is open — without this,
+   * {@code aria-modal="true"} on the panel is a broken promise: assistive tech expects
+   * everything outside the dialog to be unreachable while it's open, but native Tab order
+   * would otherwise walk out into the page behind the backdrop.
+   *
+   * <p>The focusable set is recomputed on every Tab press rather than cached at open time,
+   * because it changes as the query filters which result rows (and therefore which star
+   * buttons) are rendered.
+   *
+   * <p>Both branches re-trap not only at the matching edge (last for Tab, first for
+   * Shift+Tab) but also whenever the active element isn't in the focusable set at all — the
+   * search input receives focus via a {@code setTimeout} on open, so a Tab pressed in that
+   * window would otherwise find {@code document.activeElement} still outside the dialog and
+   * let native Tab order carry focus past it.
+   */
+  private trapFocus(event: KeyboardEvent): void {
+    const focusable = this.focusableElements();
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (event.shiftKey) {
+      if (!active || active === first || !focusable.includes(active)) {
+        event.preventDefault();
+        last.focus();
+      }
+    } else if (!active || active === last || !focusable.includes(active)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  /** Every Tab-reachable control currently rendered inside the dialog, in DOM order. */
+  private focusableElements(): HTMLElement[] {
+    const root = this.panel()?.nativeElement;
+    if (!root) return [];
+    return Array.from(root.querySelectorAll<HTMLElement>('input, button'));
   }
 
   /** Opens the palette, rebuilding the command set from the current token's authorities. */

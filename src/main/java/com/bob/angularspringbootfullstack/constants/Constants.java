@@ -129,6 +129,13 @@ public class Constants {
     public static final String USER_AGENT_HEADER = "User-Agent";
     public static final String X_FORWARDED_FOR_HEADER = "X-Forwarded-For";
     /**
+     * Carries the Cloudflare Turnstile widget token on {@code POST /user/register}
+     * (FUTURE-ENHANCEMENTS.md §3.1). A header rather than a {@code User} field — the registration
+     * payload binds directly to the JDBC-mapped {@link com.bob.angularspringbootfullstack.model.User}
+     * model, which has no business carrying a transient, non-column CAPTCHA token.
+     */
+    public static final String TURNSTILE_TOKEN_HEADER = "X-Turnstile-Token";
+    /**
      * Standard MySQL-compatible timestamp format used when persisting expiration timestamps.
      */
     public static final String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";

@@ -149,4 +149,25 @@ public class OrganizationIdentityProviderQuery {
     public static final String SELECT_ACTIVE_SAML_METADATA_QUERY =
             "SELECT display_name, saml_metadata_uri FROM organizationidentityproviders " +
             "WHERE organization_id = :organizationId AND protocol = 'SAML' AND status = 'ACTIVE'";
+
+    /**
+     * Every row with an OIDC client secret to re-encrypt, for {@code OrgIdpKeyRotationService}'s
+     * one-time key-rotation job (FUTURE-ENHANCEMENTS.md §3.1). SAML rows never populate the
+     * ciphertext column and are excluded by the {@code IS NOT NULL} filter, as is an OIDC row that
+     * was configured but never given a secret — the same "nothing to work with" case
+     * {@link com.bob.angularspringbootfullstack.service.serviceimpl.OrganizationIdentityProviderServiceImpl#resolveActiveOidcCredentials}
+     * already treats a null ciphertext as. No parameters.
+     */
+    public static final String SELECT_ALL_OIDC_CIPHERTEXTS_FOR_ROTATION_QUERY =
+            "SELECT id, oidc_client_secret_ciphertext FROM organizationidentityproviders " +
+            "WHERE oidc_client_secret_ciphertext IS NOT NULL";
+
+    /**
+     * Replaces one row's ciphertext with a freshly re-encrypted value during key rotation. Scoped by
+     * primary key only — the rotation job read this exact row's current ciphertext moments earlier
+     * in the same transaction, so there is no concurrent-caller race left to guard against here.
+     * Parameters: id, ciphertext.
+     */
+    public static final String UPDATE_OIDC_CIPHERTEXT_QUERY =
+            "UPDATE organizationidentityproviders SET oidc_client_secret_ciphertext = :ciphertext WHERE id = :id";
 }

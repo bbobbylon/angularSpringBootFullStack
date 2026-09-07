@@ -5,12 +5,14 @@ import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.model.RefreshSession;
 import com.bob.angularspringbootfullstack.model.Role;
+import com.bob.angularspringbootfullstack.model.SecuritySettings;
+import com.bob.angularspringbootfullstack.model.UserPrincipal;
 import com.bob.angularspringbootfullstack.service.SessionService.TokenPair;
 import com.bob.angularspringbootfullstack.service.RoleService;
+import com.bob.angularspringbootfullstack.service.SecuritySettingsService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import com.bob.angularspringbootfullstack.tokenprovider.TokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,9 +24,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.Map;
 
+import static com.bob.angularspringbootfullstack.query.SessionQuery.ENFORCE_SESSION_CAP_QUERY;
 import static com.bob.angularspringbootfullstack.query.SessionQuery.INSERT_SESSION_QUERY;
 import static com.bob.angularspringbootfullstack.query.SessionQuery.REVOKE_FAMILY_QUERY;
 import static com.bob.angularspringbootfullstack.query.SessionQuery.SELECT_SESSION_BY_JTI_QUERY;
@@ -36,6 +41,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -68,16 +74,24 @@ class SessionServiceImplTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
     @Mock
+    private SecuritySettingsService securitySettingsService;
+    @Mock
     private HttpServletRequest request;
 
     @InjectMocks
     private SessionServiceImpl sessionService;
 
-    @BeforeEach
-    void stubTokenAsValid() {
-        // Shared happy-path token decoding: a syntactically valid, unexpired refresh token whose
-        // subject is USER_ID and whose rotation id is "jti-1". The session-store verdicts are what
-        // differ per test.
+    /**
+     * Shared happy-path token decoding: a syntactically valid, unexpired refresh token whose
+     * subject is USER_ID and whose rotation id is "jti-1". The session-store verdicts are what
+     * differ per test.
+     *
+     * <p>Not a {@code @BeforeEach} — {@link #issueTokenPair} below never presents a refresh token,
+     * so under Mockito's strict stubs a shared stub for these three {@code tokenProvider} calls
+     * would fail every {@code issueTokenPair} test with {@code UnnecessaryStubbingException}. Only
+     * the {@link #rotate} tests below call this explicitly.
+     */
+    private void stubTokenAsValid() {
         when(tokenProvider.getSubject(eq(REFRESH_TOKEN), any())).thenReturn(USER_ID);
         when(tokenProvider.isTokenValid(USER_ID, REFRESH_TOKEN)).thenReturn(true);
         when(tokenProvider.getTokenId(REFRESH_TOKEN)).thenReturn("jti-1");
@@ -86,6 +100,7 @@ class SessionServiceImplTest {
     @Test
     @DisplayName("replaying a superseded token revokes the whole family and refuses to rotate")
     void reuseDetectionRevokesFamilyAndDoesNotRotate() {
+        stubTokenAsValid();
         RefreshSession superseded = RefreshSession.builder()
                 .id(10L).userId(USER_ID).family("fam-1").jti("jti-1")
                 .revoked(false).superseded(true) // already rotated once → this presentation is a replay
@@ -112,6 +127,7 @@ class SessionServiceImplTest {
     @Test
     @DisplayName("a live session rotates: the presented row is superseded and a NEW jti is issued")
     void happyPathRotationSupersedesAndMintsANewJti() {
+        stubTokenAsValid();
         // The positive case, and the one that makes the negative cases meaningful. Without it the
         // suite would still pass if rotate() were changed to refuse everything — every "must not
         // rotate" assertion would hold trivially, and the sliding session would be silently dead.
@@ -158,6 +174,7 @@ class SessionServiceImplTest {
     @Test
     @DisplayName("a revoked session is treated as reuse, exactly like a superseded one")
     void revokedSessionAlsoTriggersReuseHandling() {
+        stubTokenAsValid();
         // Distinct from the superseded case: `revoked` is set by an explicit user action (logout,
         // "log out everywhere", or a prior reuse incident), `superseded` by normal rotation. Both
         // must refuse — a token whose family was revoked after a theft must not become usable
@@ -183,6 +200,7 @@ class SessionServiceImplTest {
     @Test
     @DisplayName("an unknown jti (valid JWT, no matching session row) refuses with no writes")
     void unknownJtiRefusesWithoutWrites() {
+        stubTokenAsValid();
         when(jdbcTemplate.query(eq(SELECT_SESSION_BY_JTI_QUERY), anyMap(), any(RowMapper.class)))
                 .thenReturn(List.of()); // no session row for this jti
 
@@ -191,5 +209,85 @@ class SessionServiceImplTest {
         // No supersede, revoke, or any other named-map write occurs.
         verify(jdbcTemplate, never()).update(anyString(), anyMap());
         verify(jdbcTemplate, never()).update(anyString(), any(SqlParameterSource.class));
+    }
+
+    /**
+     * {@link #issueTokenPair} tests below cover the concurrent-session cap (FUTURE-ENHANCEMENTS
+     * §3.1, "No cap on concurrent sessions per user"), independent of the rotation tests above:
+     * a login opens a brand-new family, which is the only event that can push a user's active
+     * session count over any configured cap.
+     */
+    private UserPrincipal mockPrincipal() {
+        UserPrincipal principal = mock(UserPrincipal.class);
+        UserDTO dto = new UserDTO();
+        dto.setId(USER_ID);
+        when(principal.getUser()).thenReturn(dto);
+        return principal;
+    }
+
+    private void stubTokenMinting() {
+        when(tokenProvider.createAccessToken(any(), anyString())).thenReturn("access.jwt");
+        when(tokenProvider.createRefreshToken(any(), anyString(), anyString())).thenReturn("refresh.jwt");
+    }
+
+    @Test
+    @DisplayName("issueTokenPair() does not touch the cap-enforcement query when no cap is configured")
+    void issueTokenPairSkipsCapEnforcementWhenUnconfigured() {
+        // Env default (0, its Java field default here since no ReflectionTestUtils override is
+        // applied) and no admin override on record — the out-of-the-box state for every existing
+        // deployment.
+        when(securitySettingsService.getSettings()).thenReturn(SecuritySettings.builder().build());
+        stubTokenMinting();
+
+        sessionService.issueTokenPair(mockPrincipal(), request);
+
+        verify(jdbcTemplate, never()).update(eq(ENFORCE_SESSION_CAP_QUERY), anyMap());
+    }
+
+    @Test
+    @DisplayName("issueTokenPair() enforces the env-driven default cap when no admin override is on record")
+    void issueTokenPairEnforcesEnvDefaultCap() {
+        ReflectionTestUtils.setField(sessionService, "maxConcurrentSessionsDefault", 3);
+        when(securitySettingsService.getSettings()).thenReturn(SecuritySettings.builder().build());
+        stubTokenMinting();
+
+        sessionService.issueTokenPair(mockPrincipal(), request);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(jdbcTemplate).update(eq(ENFORCE_SESSION_CAP_QUERY), captor.capture());
+        assertEquals(USER_ID, captor.getValue().get("userId"));
+        assertEquals(3, captor.getValue().get("keep"));
+    }
+
+    @Test
+    @DisplayName("issueTokenPair() prefers the admin's securitysettings override over the env default")
+    void issueTokenPairPrefersAdminOverrideOverEnvDefault() {
+        ReflectionTestUtils.setField(sessionService, "maxConcurrentSessionsDefault", 10);
+        when(securitySettingsService.getSettings())
+                .thenReturn(SecuritySettings.builder().maxConcurrentSessions(2).build());
+        stubTokenMinting();
+
+        sessionService.issueTokenPair(mockPrincipal(), request);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(jdbcTemplate).update(eq(ENFORCE_SESSION_CAP_QUERY), captor.capture());
+        assertEquals(2, captor.getValue().get("keep"));
+    }
+
+    @Test
+    @DisplayName("issueTokenPair() treats an explicit override of 0 as 'no cap', not 'revoke everything'")
+    void issueTokenPairTreatsZeroOverrideAsNoCap() {
+        // A cap of literally zero would revoke the session just opened by this very login — the
+        // one outcome that must never happen, since it would make login itself self-defeating.
+        ReflectionTestUtils.setField(sessionService, "maxConcurrentSessionsDefault", 10);
+        when(securitySettingsService.getSettings())
+                .thenReturn(SecuritySettings.builder().maxConcurrentSessions(0).build());
+        stubTokenMinting();
+
+        sessionService.issueTokenPair(mockPrincipal(), request);
+
+        verify(jdbcTemplate, never()).update(eq(ENFORCE_SESSION_CAP_QUERY), anyMap());
     }
 }

@@ -92,19 +92,21 @@
             <div class="sc-field">
               <label class="form-label" for="email">{{ t('auth.email') }}</label>
               <span class="sc-field__icon"><i class="bi bi-envelope"></i></span>
-              <input id="email" name="email" ngModel required type="email"
+              <input id="email" #email="ngModel" name="email" ngModel required type="email"
                      autocomplete="email" [placeholder]="t('login.emailPlaceholder')"
                      [disabled]="state.dataState === DataState.LOADING"
                      class="form-control sc-input" />
+              <app-field-error [control]="email" />
             </div>
 
             <div class="sc-field">
               <label class="form-label" for="password">{{ t('auth.password') }}</label>
               <span class="sc-field__icon"><i class="bi bi-lock"></i></span>
-              <input id="password" name="password" ngModel required type="password"
+              <input id="password" #password="ngModel" name="password" ngModel required type="password"
                      autocomplete="current-password" [placeholder]="t('login.passwordPlaceholder')"
                      [disabled]="state.dataState === DataState.LOADING"
                      class="form-control sc-input" />
+              <app-field-error [control]="password" />
             </div>
 
             <button
@@ -255,10 +257,11 @@
             <div class="sc-field">
               <label class="form-label" for="code">{{ t('login.codeLabel') }}</label>
               <span class="sc-field__icon"><i class="bi bi-shield-lock"></i></span>
-              <input id="code" name="code" ngModel required type="text"
+              <input id="code" #code="ngModel" name="code" ngModel required type="text"
                      inputmode="numeric" autocomplete="one-time-code" placeholder="••••••"
                      [disabled]="state.dataState === DataState.LOADING"
                      class="form-control sc-input sc-input--otp" />
+              <app-field-error [control]="code" />
             </div>
 
             <button

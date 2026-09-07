@@ -17,8 +17,9 @@ spec:
   template:
     metadata:
       annotations:
-        autoscaling.knative.dev/minScale: "0"
-        autoscaling.knative.dev/maxScale: "4"
+        autoscaling.knative.dev/minScale: "0"   # scale to zero — the idle service costs nothing
+        autoscaling.knative.dev/maxScale: "1"   # NOT a cost knob: the in-process rate limiter needs exactly one instance (FUTURE-ENHANCEMENTS.md §2.4)
+        run.googleapis.com/startup-cpu-boost: "true"   # extra CPU while the JVM boots — halves the cold start
     spec:
       serviceAccountName: ${GCP_RUNTIME_SA}   # tessera-run@<project>.iam.gserviceaccount.com
       containerConcurrency: 80
@@ -40,7 +41,10 @@ spec:
             - { name: UI_APP_URL, value: "${APP_DOMAIN}" }
             - { name: VERIFY_EMAIL_HOST, value: "${APP_DOMAIN}" }
             - { name: CONTAINER_PORT, value: "8080" }
-            - { name: IMAGE_STORAGE_PATH, value: "/tmp/images" }   # ⚠ ephemeral on Cloud Run — see gcp/README.md
+            - { name: IMAGE_STORAGE_TYPE, value: "s3" }             # Cloud Run's disk is ephemeral — avatars go to the existing AWS bucket (gcp/README.md)
+            - { name: AWS_S3_BUCKET, value: "${S3_BUCKET}" }        # tessera-app-images
+            - { name: AWS_REGION, value: "${AWS_REGION}" }          # us-east-1
+            - { name: IMAGE_STORAGE_PATH, value: "/tmp/images" }    # only used if IMAGE_STORAGE_TYPE is switched back to local
             - { name: MICROSOFT_TENANT_ID, value: "common" }
             - { name: TRUSTED_PROXY_COUNT, value: "1" }   # Cloud Run itself is the one proxy hop; see aws/task-definition.json's note (2 there, because CloudFront+ALB is two hops)
             - { name: FORWARD_HEADERS_STRATEGY, value: "framework" }
@@ -66,6 +70,17 @@ spec:
               valueFrom: { secretKeyRef: { name: tessera-microsoft-client-id, key: latest } }
             - name: MICROSOFT_CLIENT_SECRET
               valueFrom: { secretKeyRef: { name: tessera-microsoft-client-secret, key: latest } }
+            - name: TWILIO_ACCOUNT_SID
+              valueFrom: { secretKeyRef: { name: tessera-twilio-sid, key: latest } }
+            - name: TWILIO_AUTH_TOKEN
+              valueFrom: { secretKeyRef: { name: tessera-twilio-token, key: latest } }
+            - name: TWILIO_FROM_NUMBER
+              valueFrom: { secretKeyRef: { name: tessera-twilio-from-number, key: latest } }
+            # Bucket-scoped IAM user keys for S3 (Cloud Run cannot assume an ECS task role) — aws/RUNBOOK.md "Pausing AWS"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom: { secretKeyRef: { name: tessera-aws-access-key-id, key: latest } }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: tessera-aws-secret-access-key, key: latest } }
   traffic:
     - percent: 100
       latestRevision: true

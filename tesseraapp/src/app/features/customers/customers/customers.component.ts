@@ -15,6 +15,7 @@ import { CustomerTrendComponent } from '../../../shared/charts/customer-trend/cu
 import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 import { BatchImportComponent } from '../../../shared/batch-import/batch-import.component';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { SortableHeaderDirective } from '../../../directive/sortable-header.directive';
 
 /**
  * All-customers list view with search and pagination.
@@ -26,7 +27,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-customers',
-  imports: [NgClass, RouterModule, NavbarComponent, NgOptimizedImage, CustomerTrendComponent, TranslocoDirective, PageSizeSelectComponent, BatchImportComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, NgOptimizedImage, CustomerTrendComponent, TranslocoDirective, PageSizeSelectComponent, BatchImportComponent, SortableHeaderDirective],
   templateUrl: './customers.component.html',
   styleUrl: './customers.component.css',
   standalone: true,

@@ -3,7 +3,11 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { CustomHttpResponseInterface } from '../interface/customhttpresponse.interface';
-import { SecurityOverviewDataInterface, SecuritySettingsDataInterface } from '../interface/security-overview.interface';
+import {
+  AuditIntegrityDataInterface,
+  SecurityOverviewDataInterface,
+  SecuritySettingsDataInterface,
+} from '../interface/security-overview.interface';
 import { environment } from '../../environments/environment';
 
 /**
@@ -86,23 +90,43 @@ export class SecurityDashboardService {
       .pipe(catchError(this.handleError));
 
   /**
-   * Sets or clears the anomaly detection overrides. A full replace, not a partial patch — passing
-   * {@code null} for either argument clears that override back to the server's env default, so a
-   * caller that wants to change only one field must resend the other's current value.
+   * Sets or clears the anomaly detection and concurrent-session overrides. A full replace, not a
+   * partial patch — passing {@code null} for any argument clears that override back to the
+   * server's env default, so a caller that wants to change only one field must resend the other
+   * two's current values.
    *
-   * @param enabled      the new override, or null to clear it
-   * @param historyLimit the new override, or null to clear it
+   * @param enabled               the new override, or null to clear it
+   * @param historyLimit          the new override, or null to clear it
+   * @param maxConcurrentSessions the new override, or null to clear it (0 also means "no cap" —
+   *                              see {@link SecuritySettingsInterface})
    * @returns Observable emitting the envelope carrying {@code user} and the settings as persisted
    */
   updateAnomalySettings$ = (
     enabled: boolean | null,
     historyLimit: number | null,
+    maxConcurrentSessions: number | null,
   ): Observable<CustomHttpResponseInterface<SecuritySettingsDataInterface>> =>
     this.http
       .patch<CustomHttpResponseInterface<SecuritySettingsDataInterface>>(`${this.server}/admin/security/anomaly-settings`, {
         enabled,
         historyLimit,
+        maxConcurrentSessions,
       })
+      .pipe(catchError(this.handleError));
+
+  /**
+   * Re-walks both audit-trail hash chains from scratch and reports whether either is broken
+   * (FUTURE-ENHANCEMENTS §3.1, "verifiable on demand"). Deliberately a plain {@code GET} with no
+   * caching on this service's side: an administrator triggers this when they want fresh
+   * reassurance, and a cached "intact" from five minutes ago is exactly the kind of stale answer
+   * this feature exists to avoid giving.
+   *
+   * @returns Observable emitting the envelope carrying {@code user}, {@code userEvents}, and
+   *          {@code organizationEvents}
+   */
+  verifyAuditIntegrity$ = (): Observable<CustomHttpResponseInterface<AuditIntegrityDataInterface>> =>
+    this.http
+      .get<CustomHttpResponseInterface<AuditIntegrityDataInterface>>(`${this.server}/admin/security/audit-integrity`)
       .pipe(catchError(this.handleError));
 
   /**

@@ -18,6 +18,7 @@ import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-s
 import { BatchImportComponent } from '../../../shared/batch-import/batch-import.component';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
+import { SortableHeaderDirective } from '../../../directive/sortable-header.directive';
 
 /**
  * All-invoice list view with search and pagination.
@@ -34,7 +35,7 @@ import { TranslocoService } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-invoices',
-  imports: [NgClass, RouterModule, NavbarComponent, DatePipe, InvoiceTrendComponent, TranslocoDirective, PageSizeSelectComponent, BatchImportComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, DatePipe, InvoiceTrendComponent, TranslocoDirective, PageSizeSelectComponent, BatchImportComponent, SortableHeaderDirective],
   templateUrl: './invoices.component.html',
   styleUrl: './invoices.component.css',
   standalone: true,

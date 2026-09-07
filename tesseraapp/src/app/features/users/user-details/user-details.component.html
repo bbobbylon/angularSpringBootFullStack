@@ -108,8 +108,7 @@
                         <button [disabled]="!canEditRole || isSelf() || isLoading()"
                                 class="btn btn-primary w-100" type="submit">
                           @if (isLoading()) {
-                            <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                                  style="margin-right: 5px;"></span>
+                            <span aria-hidden="true" class="spinner-border spinner-border-sm me-2" role="status"></span>
                             <span>{{ t('common.saving') }}</span>
                           } @else {
                             <span>{{ t('userDetails.updateRole') }}</span>
@@ -152,8 +151,7 @@
                         <button [disabled]="!canEditSettings || isSelf() || isLoading()"
                                 class="btn btn-primary w-100" type="submit">
                           @if (isLoading()) {
-                            <span aria-hidden="true" class="spinner-border spinner-border-sm" role="status"
-                                  style="margin-right: 5px;"></span>
+                            <span aria-hidden="true" class="spinner-border spinner-border-sm me-2" role="status"></span>
                             <span>{{ t('common.saving') }}</span>
                           } @else {
                             <span>{{ t('userDetails.updateState') }}</span>

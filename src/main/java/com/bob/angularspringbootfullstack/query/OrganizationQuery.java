@@ -321,13 +321,37 @@ public class OrganizationQuery {
 
     /**
      * Inserts an organization audit entry. Mirrors {@code EventQuery#INSERT_EVENT_WITH_DETAIL_BY_EMAIL_QUERY}'s
-     * correlated-subquery shape for resolving {@code event_id} from a type name. {@code actorUserId}
-     * and {@code detail} are both nullable, so binding must go through a null-tolerant
-     * {@code MapSqlParameterSource}. Parameters: organizationId, actorUserId, type, detail.
+     * correlated-subquery shape for resolving {@code event_id} from a type name, and — for the same
+     * tamper-evidence reasons documented there (FUTURE-ENHANCEMENTS §3.1) — binds {@code created_at}
+     * and {@code hash} explicitly rather than leaving the timestamp to the column default, since the
+     * hash must cover the exact value that ends up stored. {@code actorUserId} and {@code detail} are
+     * both nullable, so binding must go through a null-tolerant {@code MapSqlParameterSource}.
+     * Parameters: organizationId, actorUserId, type, detail, createdAt, hash.
      */
     public static final String INSERT_ORGANIZATION_EVENT_QUERY =
-            "INSERT INTO organizationevents (organization_id, actor_user_id, event_id, detail) " +
-            "VALUES (:organizationId, :actorUserId, (SELECT id FROM events WHERE type = :type), :detail)";
+            "INSERT INTO organizationevents (organization_id, actor_user_id, event_id, detail, created_at, hash) " +
+            "VALUES (:organizationId, :actorUserId, (SELECT id FROM events WHERE type = :type), :detail, :createdAt, :hash)";
+
+    /**
+     * Fetches the hash stored on the most recently inserted {@code organizationevents} row (by
+     * {@code id}, not {@code created_at} — see {@code EventQuery#SELECT_LATEST_USEREVENT_HASH_QUERY}
+     * for why), so the next row's hash can chain from it. Returns no rows on an empty table; returns
+     * a row whose {@code hash} is {@code null} when the most recent row predates this feature — both
+     * cases mean "start a new chain here" to {@code AuditHashChain}.
+     */
+    public static final String SELECT_LATEST_ORGANIZATIONEVENT_HASH_QUERY =
+            "SELECT hash FROM organizationevents ORDER BY id DESC LIMIT 1";
+
+    /**
+     * Walks every {@code organizationevents} row in insertion order for
+     * {@code AuditIntegrityServiceImpl} to re-verify the hash chain, joined to {@code events} for the
+     * human-readable {@code type} the hash was actually computed over (not the numeric
+     * {@code event_id} foreign key).
+     */
+    public static final String SELECT_ALL_ORGANIZATIONEVENTS_FOR_VERIFICATION_QUERY =
+            "SELECT oev.id, oev.organization_id, oev.actor_user_id, ev.type, oev.detail, oev.created_at, oev.hash " +
+            "FROM organizationevents oev JOIN events ev ON ev.id = oev.event_id " +
+            "ORDER BY oev.id ASC";
 
     /**
      * Fetches one page of an organization's audit trail, newest first, resolving the acting

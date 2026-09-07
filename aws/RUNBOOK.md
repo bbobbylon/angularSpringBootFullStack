@@ -55,6 +55,8 @@ or working around a broken workflow.
 - [Part D — Redeploy: the 90-second loop](#part-d--redeploy-the-90-second-loop)
 - [Part E — Verify a deployment](#part-e--verify-a-deployment)
 - [Part F — Known limitations right now](#part-f--known-limitations-right-now)
+- [Pausing AWS — stop the bill without deleting anything](#pausing-aws--stop-the-bill-without-deleting-anything) *(2026-09-05)*
+- [Rotating the org SSO encryption key](#rotating-the-org-sso-encryption-key) *(2026-09-06)*
 - [Part G — Clean rebuild from zero](#part-g--clean-rebuild-from-zero)
 - [Part H — Reading the logs](#part-h--reading-the-logs)
 - [Appendix — Every environment variable](#appendix--every-environment-variable)
@@ -819,6 +821,132 @@ After a front-door change, always: set `APP_DOMAIN`/`UI_APP_URL` **and** `OAUTH2
 **SMS 2FA sends for real once Twilio credentials are populated in Secrets Manager** (2026-08-08 — `NotificationServiceImpl.sendTwoFactorCode()` now calls the real `SMSUtils.sendSMS`, no longer commented out). If any of `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` is left as a placeholder, it degrades to logging the code to CloudWatch instead (see [H2](#h2-reading-them)) — the same lockout risk applies in that unconfigured state: anyone without AWS access who enables SMS 2FA would be stuck at the code-entry screen with no self-service recovery. Verify the three secrets are real before pointing anyone besides yourself at SMS 2FA on a live/public demo.
 
 **A production boot against a `schema.sql`-only database with `ddl-auto: validate` has never been exercised end to end.** Only the offline `JpaSchemaSyncTest` has run, and it catches entity/DDL drift but not a schema the app has never actually started against. Tracked in `FUTURE-ENHANCEMENTS.md` §2.3.
+
+---
+
+## Pausing AWS — stop the bill without deleting anything
+
+**Added 2026-09-05.** A move to Google Cloud Run ([`gcp/README.md`](../gcp/README.md)) for cost is
+planned and the repo side is ready, but **this has not happened yet** — AWS is still production as
+of 2026-09-06. Run this section only once the Cloud Run cutover in `gcp/README.md` actually
+completes and `tesseraapp.dev` resolves there. Everything on the AWS side stays in place so it can
+be brought back with one command — this section is the difference between *paused* (this) and
+*torn down* (Part G). Nothing here
+touches Aiven.
+
+What each resource costs while paused, and what to do with it:
+
+| Resource | Idle cost | Paused state |
+|---|---:|---|
+| ECS service (the Fargate task) | ~$18/mo running, **$0 at desired-count 0** | Scale to 0. Service, cluster and task-definition revisions stay registered |
+| ALB + target group | **~$16/mo even at zero traffic** — it is an hourly charge | Your call: keep it (simplest resume) or delete *only* the ALB (Part G1 step 7) and let `setup.sh` recreate it on resume. A recreated ALB has a new DNS name, so CloudFront's origin must be re-pointed on resume (B1.5) |
+| CloudFront distribution | $0 idle | Keep. Disabling it saves nothing |
+| Secrets Manager | ~$4/mo (10 × $0.40) | **Keep** — G2 explains why deleting secrets is the trap. They are also your reference copy when filling Secret Manager on GCP |
+| S3 bucket `tessera-app-images` | ~$0 (5 GB free) | **Keep and keep using** — Cloud Run stores profile images here too (`IMAGE_STORAGE_TYPE=s3`), so avatars uploaded on AWS survive the move |
+| ECR images | ~$0 (500 MB free; prune old tags) | Keep |
+| CloudWatch log group | $0 | Keep |
+| IAM roles / users | $0 | Keep. One IAM *user* is **added** for Cloud Run's S3 access (below) |
+| Aiven `db3` | ~$19/mo | **Untouched** — the same database serves Cloud Run |
+
+### Pause
+
+```bash
+R="--region us-east-1"
+aws ecs update-service $R --cluster tessera-app-cluster --service tessera-app-service --desired-count 0 >/dev/null
+aws ecs wait services-stable $R --cluster tessera-app-cluster --services tessera-app-service
+aws ecs describe-services $R --cluster tessera-app-cluster --services tessera-app-service \
+  --query 'services[0].[desiredCount,runningCount]' --output text     # → 0 0
+```
+
+That is the whole pause. Do it **after** `tesseraapp.dev` DNS points at Cloud Run and the smoke
+test passes, not before. Optional, saves the other ~$16/mo: delete the ALB only — Part G1 step 7,
+nothing else from that list.
+
+### Resume
+
+```bash
+aws ecs update-service $R --cluster tessera-app-cluster --service tessera-app-service \
+  --desired-count 1 --force-new-deployment
+```
+
+Then point `tesseraapp.dev` DNS back at CloudFront (B1.6) and uncomment the `push` trigger in
+[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml). If you deleted the ALB, run
+`setup.sh` first and re-point CloudFront's origin (B1.5). Task definitions are immutable, so the
+paused revision comes back exactly as it was.
+
+### The one AWS addition: an IAM user for Cloud Run's S3 access
+
+Cloud Run cannot assume an ECS task role, so it needs static keys — scoped to this one bucket, with
+the same three actions `setup.sh` grants the task role:
+
+```bash
+aws iam create-user --user-name tessera-cloudrun-s3
+aws iam put-user-policy --user-name tessera-cloudrun-s3 --policy-name S3ImageStorage \
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:PutObject","s3:GetObject","s3:DeleteObject"],"Resource":"arn:aws:s3:::tessera-app-images/*"}]}'
+aws iam create-access-key --user-name tessera-cloudrun-s3      # prints AccessKeyId + SecretAccessKey ONCE
+```
+
+Paste the two values into Secret Manager (`tessera-aws-access-key-id`,
+`tessera-aws-secret-access-key` — created as placeholders by `gcp/secrets-setup.sh`). To rotate:
+create a second key, add new secret versions, redeploy, then delete the first key.
+
+---
+
+## Rotating the org SSO encryption key
+
+**Added 2026-09-06.** `ORG_IDP_SECRET_ENCRYPTION_KEY` (`EncryptionUtil`, FUTURE-ENHANCEMENTS.md §3.1)
+is the single AES-256-GCM key protecting every organization's stored OIDC client secret. Rotate it
+if it may have leaked (a screenshot, a shared `.env`, an offboarded admin who had Secrets Manager
+access) or on a routine schedule. Swapping the env var alone is **not** a rotation — every
+already-stored ciphertext was encrypted under the old key, and GCM authentication fails decryption
+outright rather than returning garbage, so `OrgAwareClientRegistrationRepository` would start
+throwing for every org with SSO configured the moment the app read the new key. Every stored secret
+has to be decrypted under the old key and re-encrypted under the new one first.
+
+`OrgIdpKeyRotationService#rotate` (`maintenance/`) does exactly that, driven by
+`OrgIdpKeyRotationRunner` — a `CommandLineRunner` gated behind the `key-rotation` Spring profile so
+it can never run by accident during an ordinary boot. It is a one-shot script, not a deployment: run
+it once against the live database, confirm it printed success, *then* update the deployed secret and
+redeploy.
+
+### 1. Generate the new key
+
+```bash
+openssl rand -base64 32
+```
+
+### 2. Run the rotation against the live database
+
+This connects to the real `db3` and rewrites `organizationidentityproviders.oidc_client_secret_ciphertext`
+in place, so run it from a machine with the same database env vars the app itself uses (the same
+ones `start.sh DB=aiven` supplies), pointed at the **current** production `.jar`:
+
+```bash
+SPRING_ACTIVE_PROFILES=key-rotation \
+ORG_IDP_SECRET_ENCRYPTION_KEY="<the OLD key, exactly as it is set today>" \
+ORG_IDP_KEY_ROTATION_NEW_KEY="<the NEW key from step 1>" \
+java -jar target/angularspringbootfullstack-*.jar --spring.profiles.active=key-rotation
+```
+
+The process logs `Rotated N organization IdP secret(s) to the new key.` and exits `0` on success, or
+exits `1` with **zero rows changed** if anything goes wrong — every row is decrypted and
+re-encrypted in memory before any database write is issued (see the class Javadoc), so a wrong old
+key or a malformed new key aborts cleanly rather than half-rotating the table. If `N` is `0`, no
+organization currently has an OIDC secret stored (SAML-only orgs never populate this column) — the
+run is still a success, there is simply nothing to do.
+
+### 3. Point the running app at the new key
+
+Only after step 2 exits `0`: update `ORG_IDP_SECRET_ENCRYPTION_KEY` in Secrets Manager (AWS) or
+Secret Manager (GCP, see `gcp/README.md`) to the new key from step 1, then redeploy so the running
+instance picks it up. Until this step, the live app keeps using the old key — which is now wrong,
+since every row was just re-encrypted — so do not leave a gap between steps 2 and 3 longer than a
+normal redeploy takes.
+
+### 4. Discard the old key
+
+Once the redeployed app is confirmed serving org-SSO logins correctly, delete the old key value
+everywhere it was recorded (password manager, terminal history, any scratch file used to run step 2).
 
 ---
 

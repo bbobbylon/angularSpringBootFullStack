@@ -13,6 +13,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { TranslocoService } from '@jsverse/transloco';
+import { FieldErrorComponent } from '../../../shared/field-error/field-error.component';
 
 /**
  * New invoice creation form.
@@ -26,7 +27,7 @@ import { TranslocoService } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-new-invoice',
-  imports: [RouterModule, FormsModule, NavbarComponent, TranslocoDirective],
+  imports: [RouterModule, FormsModule, NavbarComponent, TranslocoDirective, FieldErrorComponent],
   templateUrl: './new-invoice.component.html',
   styleUrl: './new-invoice.component.css',
   standalone: true,

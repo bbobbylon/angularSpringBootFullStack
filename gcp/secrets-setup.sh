@@ -52,6 +52,12 @@ create_secret "github-client-secret"  "CHANGE_ME_github_oauth_secret"
 create_secret "microsoft-client-id"   "CHANGE_ME_microsoft_app_id"
 create_secret "microsoft-client-secret" "CHANGE_ME_microsoft_secret"
 
+# AWS keys for the EXISTING S3 profile-image bucket. Cloud Run's filesystem is ephemeral and it
+# cannot assume an ECS task role, so a bucket-scoped IAM user's static keys are the bridge.
+# Create that user per aws/RUNBOOK.md → "Pausing AWS" (policy: Put/Get/DeleteObject on the bucket only).
+create_secret "aws-access-key-id"     "CHANGE_ME_AKIA..."
+create_secret "aws-secret-access-key" "CHANGE_ME_aws_secret_access_key"
+
 cat <<'EOF'
 
 ✓ Secrets created. Update every CHANGE_ME value before deploying, e.g.:
@@ -60,7 +66,7 @@ cat <<'EOF'
   printf '%s' 'you@gmail.com'                  | gcloud secrets versions add tessera-mail-username --data-file=-
   printf '%s' '<16-char-app-password>'         | gcloud secrets versions add tessera-mail-password --data-file=-
   printf '%s' '<google-client-secret>'         | gcloud secrets versions add tessera-google-client-secret --data-file=-
-  # ...repeat for github-*, microsoft-*, twilio-*
+  # ...repeat for github-*, microsoft-*, twilio-*, aws-*
 
 The JWT secret is already randomised:
   gcloud secrets versions access latest --secret=tessera-jwt-secret

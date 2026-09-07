@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.controller;
 
+import com.bob.angularspringbootfullstack.constants.Constants;
 import com.bob.angularspringbootfullstack.dto.LoginRiskAssessment;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.enumeration.EventType;
@@ -39,6 +40,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import com.bob.angularspringbootfullstack.utils.AuthDiagnosticsLogger;
+import com.bob.angularspringbootfullstack.utils.RequestUtils;
+import com.bob.angularspringbootfullstack.utils.TurnstileUtils;
 
 import static com.bob.angularspringbootfullstack.constants.Constants.TOKEN_PREFIX;
 import static com.bob.angularspringbootfullstack.dtomapper.UserDTOMapper.toUser;
@@ -140,11 +143,22 @@ public class UserController {
      * UserService, and returns the created DTO with a 201 Location header
      * pointing to the new resource.
      *
+     * <p><b>Bot/abuse protection (FUTURE-ENHANCEMENTS.md §3.1).</b> Rejects before any DB work — the
+     * same fail-fast-before-parsing convention {@code BatchImportServiceImpl}'s size check follows —
+     * when {@link TurnstileUtils} is configured and the {@link Constants#TURNSTILE_TOKEN_HEADER}
+     * token it verifies is missing or invalid. Deliberately gated behind
+     * {@link TurnstileUtils#isConfigured()} rather than always required: an unconfigured deployment
+     * (dev, CI, a fresh clone with no Cloudflare account yet) must still be able to register users.
+     *
      * @param user the registration payload (validated with @Valid)
      * @return 201 CREATED with the new user inside an HttpResponse
      */
     @PostMapping("/register")
     public ResponseEntity<HttpResponse> saveUser(@RequestBody @Valid User user) {
+        String captchaToken = request.getHeader(Constants.TURNSTILE_TOKEN_HEADER);
+        if (!TurnstileUtils.verify(captchaToken, RequestUtils.getIpAddress(request))) {
+            throw new ApiException("CAPTCHA verification failed. Please try again.");
+        }
         UserDTO userDTO = userService.createUser(user);
         return ResponseEntity.created(getUri()).body(
                 HttpResponse.builder()

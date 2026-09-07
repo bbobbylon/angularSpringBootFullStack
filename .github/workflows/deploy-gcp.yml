@@ -6,8 +6,9 @@
 # password + app secrets live in Secret Manager; everything non-sensitive is env/GitHub Secrets.
 #
 # Triggers:
-#   - Manual workflow_dispatch (default) — pick the environment
-#   - (Optional) enable the push trigger once you're ready for auto-deploy on master
+#   - Push to master            → deploys to PROD  (the live path since 2026-09-05 — AWS is
+#                                 paused for cost; deploy.yml is manual-only. See gcp/README.md)
+#   - Manual workflow_dispatch  → deploys to the selected environment (qa/stage/prod)
 #
 # Required GitHub Secrets (Settings → Secrets → Actions):
 #   GCP_PROJECT_ID      — GCP project id
@@ -18,7 +19,10 @@
 #   AR_REPO             — Artifact Registry repo name, e.g. tessera-app
 #   CLOUD_RUN_SERVICE   — Cloud Run service name, e.g. tessera-app
 #   AIVEN_HOST / AIVEN_PORT / AIVEN_DB / AIVEN_USER — Aiven connection (non-sensitive)
-#   APP_DOMAIN          — public app URL (the Cloud Run URL after first deploy, or a custom domain)
+#   APP_DOMAIN          — public app URL (https://tesseraapp.dev — the domain does not change
+#                         with the cloud, so no OAuth callback URL changes are needed)
+#   S3_BUCKET / AWS_REGION — the EXISTING AWS bucket for profile images (same secrets deploy.yml
+#                         uses). Cloud Run's disk is ephemeral, so avatars live in S3 on this path too.
 #
 # Secret Manager entries referenced below are created by gcp/secrets-setup.sh.
 # ──────────────────────────────────────────────────────────────────────────────
@@ -33,9 +37,9 @@ on:
         default: prod
         type: choice
         options: [qa, stage, prod]
-  # Uncomment to auto-deploy on every push to master:
-  # push:
-  #   branches: [master]
+  # Auto-deploy on every push to master (moved here from deploy.yml on 2026-09-05).
+  push:
+    branches: [master]
 
 jobs:
   # Same gate as the AWS pipeline: run the full CI suite before building or shipping.
@@ -78,6 +82,11 @@ jobs:
           docker push "$IMAGE"
           docker push "${IMAGE%:*}:latest"
 
+      # --max-instances 1 is a CORRECTNESS setting, not a cost one: the rate limiter keeps its
+      # buckets in-process (FUTURE-ENHANCEMENTS.md §2.4), so a second instance silently doubles
+      # every caller's budget. Raise it only together with that work.
+      # --cpu-boost gives the JVM extra CPU during startup, roughly halving the scale-from-zero
+      # cold start; --min-instances 0 is what makes the idle service free.
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy "${{ secrets.CLOUD_RUN_SERVICE }}" \
@@ -87,9 +96,9 @@ jobs:
             --allow-unauthenticated \
             --port 8080 \
             --service-account "${{ secrets.GCP_RUNTIME_SA }}" \
-            --cpu 1 --memory 1Gi --min-instances 0 --max-instances 4 \
-            --set-env-vars "^##^SPRING_ACTIVE_PROFILES=${TARGET_ENV}##SPRING_DATASOURCE_URL=jdbc:mysql://${{ secrets.AIVEN_HOST }}:${{ secrets.AIVEN_PORT }}/${{ secrets.AIVEN_DB }}?sslMode=REQUIRED##SPRING_DATASOURCE_USERNAME=${{ secrets.AIVEN_USER }}##MAIL_HOST=smtp.gmail.com##MAIL_PORT=587##UI_APP_URL=${{ secrets.APP_DOMAIN }}##VERIFY_EMAIL_HOST=${{ secrets.APP_DOMAIN }}##CONTAINER_PORT=8080##IMAGE_STORAGE_PATH=/tmp/images##MICROSOFT_TENANT_ID=common##TRUSTED_PROXY_COUNT=1##FORWARD_HEADERS_STRATEGY=framework##OAUTH2_REDIRECT_BASE_URL=${{ secrets.APP_DOMAIN }}" \
-            --set-secrets "SPRING_DATASOURCE_PASSWORD=tessera-db-password:latest,JWT_SECRET=tessera-jwt-secret:latest,MAIL_USERNAME=tessera-mail-username:latest,MAIL_PASSWORD=tessera-mail-password:latest,GOOGLE_CLIENT_ID=tessera-google-client-id:latest,GOOGLE_CLIENT_SECRET=tessera-google-client-secret:latest,GITHUB_CLIENT_ID=tessera-github-client-id:latest,GITHUB_CLIENT_SECRET=tessera-github-client-secret:latest,MICROSOFT_CLIENT_ID=tessera-microsoft-client-id:latest,MICROSOFT_CLIENT_SECRET=tessera-microsoft-client-secret:latest,TWILIO_ACCOUNT_SID=tessera-twilio-sid:latest,TWILIO_AUTH_TOKEN=tessera-twilio-token:latest,TWILIO_FROM_NUMBER=tessera-twilio-from-number:latest"
+            --cpu 1 --memory 1Gi --cpu-boost --min-instances 0 --max-instances 1 \
+            --set-env-vars "^##^SPRING_ACTIVE_PROFILES=${TARGET_ENV}##SPRING_DATASOURCE_URL=jdbc:mysql://${{ secrets.AIVEN_HOST }}:${{ secrets.AIVEN_PORT }}/${{ secrets.AIVEN_DB }}?sslMode=REQUIRED##SPRING_DATASOURCE_USERNAME=${{ secrets.AIVEN_USER }}##MAIL_HOST=smtp.gmail.com##MAIL_PORT=587##UI_APP_URL=${{ secrets.APP_DOMAIN }}##VERIFY_EMAIL_HOST=${{ secrets.APP_DOMAIN }}##CONTAINER_PORT=8080##IMAGE_STORAGE_PATH=/tmp/images##MICROSOFT_TENANT_ID=common##IMAGE_STORAGE_TYPE=s3##AWS_S3_BUCKET=${{ secrets.S3_BUCKET }}##AWS_REGION=${{ secrets.AWS_REGION }}##TRUSTED_PROXY_COUNT=1##FORWARD_HEADERS_STRATEGY=framework##OAUTH2_REDIRECT_BASE_URL=${{ secrets.APP_DOMAIN }}" \
+            --set-secrets "SPRING_DATASOURCE_PASSWORD=tessera-db-password:latest,JWT_SECRET=tessera-jwt-secret:latest,MAIL_USERNAME=tessera-mail-username:latest,MAIL_PASSWORD=tessera-mail-password:latest,GOOGLE_CLIENT_ID=tessera-google-client-id:latest,GOOGLE_CLIENT_SECRET=tessera-google-client-secret:latest,GITHUB_CLIENT_ID=tessera-github-client-id:latest,GITHUB_CLIENT_SECRET=tessera-github-client-secret:latest,MICROSOFT_CLIENT_ID=tessera-microsoft-client-id:latest,MICROSOFT_CLIENT_SECRET=tessera-microsoft-client-secret:latest,TWILIO_ACCOUNT_SID=tessera-twilio-sid:latest,TWILIO_AUTH_TOKEN=tessera-twilio-token:latest,TWILIO_FROM_NUMBER=tessera-twilio-from-number:latest,AWS_ACCESS_KEY_ID=tessera-aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=tessera-aws-secret-access-key:latest"
 
       - name: Show service URL
         run: |

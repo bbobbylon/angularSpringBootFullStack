@@ -13,6 +13,7 @@ import { AdminUserService } from '../../../service/admin-user.service';
 import { NotificationsService } from '../../../service/notifications-service';
 import { PageSizeSelectComponent } from '../../../shared/page-size-select/page-size-select.component';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { SortableHeaderDirective } from '../../../directive/sortable-header.directive';
 
 /**
  * Administrative user directory — the list half of the Users dashboard
@@ -30,7 +31,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-users',
-  imports: [NgClass, RouterModule, NavbarComponent, NgOptimizedImage, SlicePipe, TranslocoDirective, PageSizeSelectComponent],
+  imports: [NgClass, RouterModule, NavbarComponent, NgOptimizedImage, SlicePipe, TranslocoDirective, PageSizeSelectComponent, SortableHeaderDirective],
   templateUrl: './users.component.html',
   styleUrl: './users.component.css',
   standalone: true,

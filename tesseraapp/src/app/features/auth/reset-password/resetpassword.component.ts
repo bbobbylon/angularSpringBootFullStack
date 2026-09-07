@@ -7,6 +7,7 @@ import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationsService } from '../../../service/notifications-service';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { FieldErrorComponent } from '../../../shared/field-error/field-error.component';
 
 /**
  * Password reset view used after a reset link is verified.
@@ -17,7 +18,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
  */
 @Component({
   selector: 'app-resetpassword',
-  imports: [RouterLink, FormsModule, TranslocoDirective],
+  imports: [RouterLink, FormsModule, TranslocoDirective, FieldErrorComponent],
   templateUrl: './resetpassword.component.html',
   styleUrl: './resetpassword.component.css',
   standalone: true,

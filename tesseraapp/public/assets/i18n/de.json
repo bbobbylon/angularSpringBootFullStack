@@ -39,6 +39,16 @@
     "viewAll": "Alle anzeigen",
     "add": "Hinzufügen"
   },
+  "validation": {
+    "required": "Dieses Feld ist erforderlich.",
+    "email": "Geben Sie eine gültige E-Mail-Adresse ein.",
+    "pattern": "Entspricht nicht dem erforderlichen Format.",
+    "minlength": "Muss mindestens {{requiredLength}} Zeichen lang sein.",
+    "maxlength": "Darf höchstens {{requiredLength}} Zeichen lang sein.",
+    "min": "Muss mindestens {{min}} betragen.",
+    "max": "Darf höchstens {{max}} betragen.",
+    "url": "Geben Sie eine gültige URL ein."
+  },
   "nav": {
     "customers": "Kunden",
     "newCustomer": "Neuer Kunde",
@@ -168,10 +178,22 @@
       "historyLimitLabel": "Anmeldeverlauf-Fenster",
       "historyLimitHint": "Wie viele der letzten Anmeldungen des Kontos zum Vergleich mit einer neuen herangezogen werden.",
       "historyLimitPlaceholder": "Serverstandard",
+      "maxSessionsLabel": "Maximale gleichzeitige Sitzungen",
+      "maxSessionsHint": "Sobald eine neue Anmeldung ein Konto über dieses Limit bringt, wird dessen älteste Sitzung automatisch widerrufen. 0 bedeutet unbegrenzt.",
+      "maxSessionsPlaceholder": "Serverstandard (unbegrenzt)",
       "clearOverride": "Standard verwenden",
       "save": "Änderungen speichern",
       "saving": "Wird gespeichert…",
       "unsavedChanges": "Nicht gespeicherte Änderungen"
+    },
+    "auditIntegrity": {
+      "title": "Integrität des Prüfprotokolls",
+      "subtitle": "Jeder Protokolleintrag ist mit einem Hash des vorherigen verkettet, sodass jede nachträgliche Änderung oder Löschung erkennbar ist. Prüfung auf Abruf – im Hintergrund läuft nichts automatisch.",
+      "checkButton": "Integrität des Prüfprotokolls überprüfen",
+      "checking": "Wird geprüft…",
+      "intact": "Beide Prüfketten sind intakt",
+      "broken": "Integritätsprüfung des Prüfprotokolls FEHLGESCHLAGEN – ein gespeicherter Hash stimmt nicht überein. Sofort untersuchen.",
+      "rowsChecked": "{{count}} Zeilen geprüft"
     }
   },
   "servicesAdmin": {
@@ -411,6 +433,7 @@
     "upload": "Hochladen",
     "uploading": "Wird hochgeladen…",
     "resultSummary": "{{imported}} von {{total}} Zeilen importiert.",
+    "fileTooLarge": "Diese Datei ist größer als {{limit}}. Teilen Sie sie in kleinere Dateien auf und laden Sie diese einzeln hoch.",
     "row": "Zeile",
     "reason": "Grund",
     "close": "Schließen"
@@ -538,7 +561,8 @@
     "addMember": "Mitglied hinzufügen",
     "searchPlaceholder": "Nach Name oder E-Mail suchen…",
     "addToOrganization": "Hinzufügen",
-    "noOrganizations": "Keine Organisationen gefunden.",
+    "emptyTitle": "Noch keine Organisationen",
+    "emptyHint": "Erstellen Sie Ihre erste Organisation, um Kunden und Mitglieder darunter zu gruppieren.",
     "globalRole": "Globale Rolle",
     "orgRole": "Organisationsrolle",
     "kpi": {
