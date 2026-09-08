@@ -191,7 +191,9 @@ ALTER TABLE events ADD CONSTRAINT CK_Events_Type CHECK (type IN
      'ORG_MEMBER_ADDED', 'ORG_MEMBER_REMOVED', 'ORG_MEMBER_ROLE_CHANGED',
      'ORG_INVITE_CREATED', 'ORG_INVITE_REDEEMED', 'ORG_INVITE_REVOKED',
      'ORG_SETTINGS_UPDATED', 'ORG_TENANT_UUID_SET', 'ORG_CUSTOMERS_ASSIGNED',
-     'ORG_SSO_CONFIGURED', 'ORG_SSO_REMOVED', 'ORG_SSO_DOMAIN_ADDED', 'ORG_SSO_DOMAIN_REMOVED'));
+     'ORG_SSO_CONFIGURED', 'ORG_SSO_REMOVED', 'ORG_SSO_DOMAIN_ADDED', 'ORG_SSO_DOMAIN_REMOVED',
+     'SERVICE_ACCOUNT_CREATED', 'API_KEY_ISSUED', 'API_KEY_REVOKED',
+     'OAUTH_CLIENT_ISSUED', 'OAUTH_CLIENT_REVOKED'));
 
 INSERT INTO events (type, description)
 VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
@@ -233,7 +235,12 @@ VALUES ('LOGIN_ATTEMPT', 'You tried to log-in :)'),
        ('ORG_SSO_CONFIGURED', 'The organization''s single sign-on provider was configured :)'),
        ('ORG_SSO_REMOVED', 'The organization''s single sign-on provider was removed :|'),
        ('ORG_SSO_DOMAIN_ADDED', 'An email domain was added to the organization''s single sign-on routing :)'),
-       ('ORG_SSO_DOMAIN_REMOVED', 'An email domain was removed from the organization''s single sign-on routing :|') AS new
+       ('ORG_SSO_DOMAIN_REMOVED', 'An email domain was removed from the organization''s single sign-on routing :|'),
+       ('SERVICE_ACCOUNT_CREATED', 'A service account was created :)'),
+       ('API_KEY_ISSUED', 'An API key was issued :)'),
+       ('API_KEY_REVOKED', 'An API key was revoked :|'),
+       ('OAUTH_CLIENT_ISSUED', 'An OAuth2 client-credentials pair was issued :)'),
+       ('OAUTH_CLIENT_REVOKED', 'An OAuth2 client-credentials pair was revoked :|') AS new
 ON DUPLICATE KEY UPDATE description = new.description;
 
 CREATE TABLE IF NOT EXISTS userevents
@@ -1103,3 +1110,56 @@ SET @add_organizationevents_hash := (
 PREPARE add_organizationevents_hash_stmt FROM @add_organizationevents_hash;
 EXECUTE add_organizationevents_hash_stmt;
 DEALLOCATE PREPARE add_organizationevents_hash_stmt;
+
+-- ── Machine-to-machine API access (FUTURE-ENHANCEMENTS §3.1, P2-3) ──────────────────────
+-- Two credential kinds, both owned by a "service account" — an ordinary row in `users` with
+-- origin = 'SERVICE_ACCOUNT' (see Constants.SERVICE_ACCOUNT_ORIGIN), not a separate identity
+-- table. This reuses the exact same users -> userroles -> roles.permission authority pipeline a
+-- human account uses, so a service-account-authenticated request needs zero changes anywhere in
+-- TokenProvider/CustomAuthFilter/UserPrincipal — it just is a normal authenticated request.
+--
+-- apikeys: the primary mechanism. key_hash is a SHA-256 digest of the raw `tsk_...` key (not
+-- bcrypt — the raw key is already 256 bits of entropy, so bcrypt's slow key-stretching would cost
+-- something on every single request for no revocation benefit; SHA-256 also allows a plain indexed
+-- equality lookup on every request, which a per-row-salted bcrypt hash would not). key_prefix is
+-- the short, non-secret leading segment shown in admin UIs/logs so an operator can identify a key
+-- without ever seeing (or re-deriving) the full secret.
+CREATE TABLE IF NOT EXISTS apikeys
+(
+    id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id      BIGINT UNSIGNED NOT NULL,
+    name         VARCHAR(100) NOT NULL,
+    key_prefix   VARCHAR(12)  NOT NULL,
+    key_hash     CHAR(64)     NOT NULL,
+    created_at   DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    created_by   BIGINT UNSIGNED DEFAULT NULL,
+    last_used_at DATETIME     DEFAULT NULL,
+    expires_at   DATETIME     DEFAULT NULL,
+    revoked      BOOLEAN      DEFAULT FALSE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT UQ_ApiKeys_KeyHash UNIQUE (key_hash),
+    INDEX IX_ApiKeys_User_Id (user_id)
+);
+
+-- oauthclients: the backup mechanism (RFC 6749 section 4.4, client-credentials grant).
+-- client_secret_hash is bcrypt (CHAR(60)) rather than SHA-256, the opposite tradeoff from
+-- apikeys: this credential is checked once per token mint (at most every ~30 minutes, however
+-- often the caller re-mints), not on every request, so bcrypt's cost is negligible here and its
+-- per-row salt is worth having.
+CREATE TABLE IF NOT EXISTS oauthclients
+(
+    id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id            BIGINT UNSIGNED NOT NULL,
+    client_id          VARCHAR(64)  NOT NULL,
+    client_secret_hash CHAR(60)     NOT NULL,
+    name               VARCHAR(100) NOT NULL,
+    created_at         DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    created_by         BIGINT UNSIGNED DEFAULT NULL,
+    last_used_at       DATETIME     DEFAULT NULL,
+    revoked            BOOLEAN      DEFAULT FALSE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT UQ_OAuthClients_ClientId UNIQUE (client_id),
+    INDEX IX_OAuthClients_User_Id (user_id)
+);

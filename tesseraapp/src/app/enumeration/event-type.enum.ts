@@ -1,5 +1,10 @@
-// Mirrors the backend EventType Java enum. All values must be kept even if not
-// currently referenced in the UI — the backend can send any of these in event history responses.
+/**
+ * Mirrors the backend {@code EventType} Java enum, which backs both the `userevents` and
+ * `organizationevents` audit tables. All values must be kept even if not currently referenced in
+ * the UI — the backend can send any of these in event-history responses
+ * ({@link UserEventsInterface}), and `event-display.utils.ts` maps each to an icon/i18n label
+ * pair for the activity panels on the profile, user-detail, and organization-detail pages.
+ */
 export enum EventType {
   LOGIN_ATTEMPT = 'LOGIN_ATTEMPT',
   LOGIN_ATTEMPT_FAILURE = 'LOGIN_ATTEMPT_FAILURE',

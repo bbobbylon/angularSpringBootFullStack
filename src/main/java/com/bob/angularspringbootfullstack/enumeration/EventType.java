@@ -241,7 +241,37 @@ public enum EventType {
     /**
      * Fired when an email domain is removed from an organization's SSO routing table.
      */
-    ORG_SSO_DOMAIN_REMOVED("An email domain was removed from the organization's single sign-on routing :|");
+    ORG_SSO_DOMAIN_REMOVED("An email domain was removed from the organization's single sign-on routing :|"),
+    /**
+     * Fired when an admin creates a new service account (FUTURE-ENHANCEMENTS.md §3.1,
+     * "Machine-to-machine API access") — an ordinary {@code users} row with
+     * {@code origin = 'SERVICE_ACCOUNT'} used to authenticate non-human callers. Role assignment
+     * on a service account reuses the existing {@link #ROLE_UPDATE} event rather than a new type.
+     */
+    SERVICE_ACCOUNT_CREATED("A service account was created :)"),
+    /**
+     * Fired when a new API key is issued for a service account. The raw key itself is never
+     * logged or persisted anywhere except as a one-way hash — only the fact of issuance is
+     * recorded here.
+     */
+    API_KEY_ISSUED("An API key was issued :)"),
+    /**
+     * Fired when an API key is revoked, whether by an admin action or (in the future) automatic
+     * expiry cleanup. The very next request presenting that key is rejected.
+     */
+    API_KEY_REVOKED("An API key was revoked :|"),
+    /**
+     * Fired when an OAuth2 client-credentials pair ({@code client_id}/{@code client_secret}) is
+     * issued for a service account (RFC 6749 §4.4). The raw secret is never logged or persisted
+     * anywhere except as a bcrypt hash.
+     */
+    OAUTH_CLIENT_ISSUED("An OAuth2 client-credentials pair was issued :)"),
+    /**
+     * Fired when an OAuth2 client-credentials pair is revoked. Any access token already minted
+     * from it keeps working until its own TTL expires, since the client-credentials grant issues
+     * no refresh token to invalidate (see {@code documentation/GUIDE.md} §7.13).
+     */
+    OAUTH_CLIENT_REVOKED("An OAuth2 client-credentials pair was revoked :|");
 
     /**
      * -- GETTER --

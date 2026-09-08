@@ -2,6 +2,30 @@ package com.bob.angularspringbootfullstack.constants;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+/**
+ * Application-wide literal constants: the two pre-authentication route lists, JWT header/claim
+ * names and lifetimes, and a handful of small string constants shared across otherwise-unrelated
+ * classes to keep them from drifting into independently-typed duplicates.
+ * <p>
+ * The two route lists are this class's most important content and must be read together, never
+ * separately: {@link #PUBLIC_URLS} is consumed by
+ * {@code SecurityConfig#securityFilterChain}'s {@code .permitAll()} (Spring Security's own
+ * authorization layer), while {@link #PUBLIC_ROUTES} is consumed by
+ * {@code CustomAuthFilter#shouldNotFilter} (whether the JWT-parsing filter runs at all). A route
+ * missing from one list but present in the other either 403s a caller who legitimately has no
+ * token yet, or lets a stale {@code Authorization: Bearer} header break a route that should have
+ * ignored it — see each list's own Javadoc for the failure mode specific to that direction.
+ * {@code ConstantsPublicRouteLockstepTest} asserts the two stay mechanically in sync.
+ * <p>
+ * Everything else here is grouped by the class it primarily serves — session/JWT constants for
+ * {@code TokenProvider} and {@code SessionServiceImpl}, the Turnstile header for
+ * {@code UserController}'s registration endpoint, the org-SSO registration-id prefixes shared by
+ * {@code OrganizationIdentityProviderServiceImpl}/{@code OrgAwareClientRegistrationRepository}/
+ * {@code OAuth2LoginSuccessHandler}, and the demo-account email domain shared by
+ * {@code DemoDataSeeder} and {@code EmailServiceImpl} — rather than being split into one class per
+ * concern, since most of these values are one or two lines and used by only two or three classes
+ * each.
+ */
 public class Constants {
 
     //security constants
