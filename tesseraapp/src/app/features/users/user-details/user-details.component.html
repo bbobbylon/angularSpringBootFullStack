@@ -50,13 +50,14 @@
                     </span>
                   }
                   @if (state?.appData?.data?.selectedUser?.userType; as userType) {
-                    <!-- P2-1: how the account was created (FEDERATED) or, for a password account,
-                         whether its email domain is on the deployment's internal allowlist
-                         (INTERNAL/EXTERNAL). See UserTypeResolver. -->
+                    <!-- P2-1: how the account was created (FEDERATED, SERVICE_ACCOUNT) or, for a
+                         password account, whether its email domain is on the deployment's internal
+                         allowlist (INTERNAL/EXTERNAL). See UserTypeResolver. -->
                     <span [ngClass]="[
                             userType === 'INTERNAL' ? ' bg-success' : '',
                             userType === 'FEDERATED' ? ' bg-info' : '',
                             userType === 'EXTERNAL' ? ' bg-secondary' : '',
+                            userType === 'SERVICE_ACCOUNT' ? ' bg-dark' : '',
                           ]"
                           [title]="userType === 'FEDERATED' && state?.appData?.data?.selectedUser?.origin
                                     ? ('via ' + (state?.appData?.data?.selectedUser?.origin | slice: 10)) : ''"

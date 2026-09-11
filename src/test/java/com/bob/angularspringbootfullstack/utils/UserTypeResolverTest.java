@@ -26,6 +26,15 @@ class UserTypeResolverTest {
     }
 
     @Test
+    @DisplayName("SERVICE_ACCOUNT origin wins outright, even over a domain that would otherwise match INTERNAL")
+    void serviceAccountOriginTakesPrecedence() {
+        assertEquals(UserTypeResolver.SERVICE_ACCOUNT,
+                UserTypeResolver.resolve("svc-bot@service.tessera.internal", "SERVICE_ACCOUNT", ALLOWLIST));
+        assertEquals(UserTypeResolver.SERVICE_ACCOUNT,
+                UserTypeResolver.resolve("svc-bot@lewisu.edu", "SERVICE_ACCOUNT", ALLOWLIST));
+    }
+
+    @Test
     @DisplayName("a null origin (password registration) falls through to the domain check")
     void nullOriginFallsThroughToDomainCheck() {
         assertEquals(UserTypeResolver.INTERNAL,

@@ -1,5 +1,6 @@
 package com.bob.angularspringbootfullstack.configuration;
 
+import com.bob.angularspringbootfullstack.filter.ApiKeyAuthFilter;
 import com.bob.angularspringbootfullstack.filter.CustomAuthFilter;
 import com.bob.angularspringbootfullstack.handler.CustomAccessDeniedHandler;
 import com.bob.angularspringbootfullstack.handler.CustomAuthenticationEntryPoint;
@@ -69,6 +70,14 @@ class SecurityConfig {
      * {@code SecurityContext} with the authenticated principal on success.
      */
     private final CustomAuthFilter customAuthFilter;
+
+    /**
+     * API-key validation filter (FUTURE-ENHANCEMENTS.md §3.1, P2-3 Option A), registered ahead of
+     * {@link #customAuthFilter} so a service account's {@code X-API-Key} request never reaches JWT
+     * validation. See {@link ApiKeyAuthFilter}'s class Javadoc for the precedence rule that keeps
+     * exactly one of the two filters ever authenticating a given request.
+     */
+    private final ApiKeyAuthFilter apiKeyAuthFilter;
 
     /**
      * BCrypt password encoder used by the {@link DaoAuthenticationProvider} to
@@ -381,7 +390,12 @@ class SecurityConfig {
                                 response.sendRedirect(uiAppUrl + "/login?error=federated");
                             })
                     )
+                    // Order matters here: CustomAuthFilter must be registered with the filter
+                    // chain's comparator (relative to a standard Spring Security filter) BEFORE
+                    // apiKeyAuthFilter can be registered relative to IT — addFilterBefore's second
+                    // argument must already have a known position, or this throws at startup.
                     .addFilterBefore(customAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                    .addFilterBefore(apiKeyAuthFilter, CustomAuthFilter.class)
                     .exceptionHandling(ex -> ex
                             .accessDeniedHandler(customAccessDeniedHandler)
                             // Force the custom 401 (JSON) entry point for EVERY unauthenticated request.
@@ -441,6 +455,7 @@ class SecurityConfig {
                 "Authorization",
                 "X-Requested-With",
                 "X-Turnstile-Token",
+                "X-API-Key",
                 "Access-Control-Request-Method",
                 "Access-Control-Request-Headers"
         ));

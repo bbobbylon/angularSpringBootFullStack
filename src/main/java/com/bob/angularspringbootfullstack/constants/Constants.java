@@ -193,4 +193,33 @@ public class Constants {
      * seeded addresses and the suppression check cannot silently drift apart.
      */
     public static final String DEMO_EMAIL_DOMAIN = "@tessera.dev";
+
+    /**
+     * {@code users.origin} value stamped on a machine account created by
+     * {@code ServiceAccountServiceImpl#create} (FUTURE-ENHANCEMENTS.md §3.1 "P2-3 — Machine-to-machine
+     * API access"). An ordinary {@code users} row with this origin authenticates via
+     * {@link com.bob.angularspringbootfullstack.filter.ApiKeyAuthFilter} instead of a password, so it
+     * reuses the entire existing {@code users → userroles → roles.permission} authority pipeline with
+     * zero changes to {@code TokenProvider}/{@code CustomAuthFilter}/{@code UserPrincipal}. Referenced
+     * by {@code schema.sql}'s comment on the {@code apikeys} table since that table was added
+     * (commit {@code 8165195}); this is where the literal it names actually lives.
+     */
+    public static final String SERVICE_ACCOUNT_ORIGIN = "SERVICE_ACCOUNT";
+
+    /**
+     * Domain used to build a service account's synthetic, never-delivered email address (the
+     * {@code users.email} column is {@code NOT NULL UNIQUE}, so a machine account still needs one).
+     * Sibling to {@link #DEMO_EMAIL_DOMAIN} — same reasoning, different purpose: nobody reads this
+     * mailbox, {@code ServiceAccountServiceImpl#create} just needs a collision-free unique value.
+     */
+    public static final String SERVICE_ACCOUNT_EMAIL_DOMAIN = "@service.tessera.internal";
+
+    /**
+     * Header carrying a raw API key (FUTURE-ENHANCEMENTS.md §3.1, P2-3 Option A), read by
+     * {@link com.bob.angularspringbootfullstack.filter.ApiKeyAuthFilter} ahead of
+     * {@code CustomAuthFilter}. A caller sends exactly one of this header or
+     * {@code Authorization: Bearer ...} — never both — so the two authentication front doors never
+     * contend over the same request; see {@code ApiKeyAuthFilter}'s Javadoc for why.
+     */
+    public static final String API_KEY_HEADER = "X-API-Key";
 }

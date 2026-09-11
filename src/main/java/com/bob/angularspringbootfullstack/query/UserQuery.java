@@ -19,6 +19,30 @@ public class UserQuery {
     public static final String INSERT_USER_QUERY = "INSERT INTO users (first_name, last_name, email, password) VALUES (:firstName, :lastName, :email, :password)";
 
     /**
+     * Inserts a service account (FUTURE-ENHANCEMENTS.md §3.1, P2-3 Option A) — an ordinary
+     * {@code users} row stamped with {@code origin = Constants.SERVICE_ACCOUNT_ORIGIN} so it flows
+     * through the entire existing {@code users -> userroles -> roles.permission} authority pipeline
+     * with no changes to {@code TokenProvider}/{@code CustomAuthFilter}/{@code UserPrincipal}.
+     * Modeled directly on {@link OAuthQuery#INSERT_FEDERATED_USER_QUERY}, but unlike a federated
+     * account this one DOES get a password — an unguessable, never-revealed
+     * {@code passwordEncoder.encode(UUID.randomUUID())} — so nothing downstream that assumes every
+     * user has a password (e.g. {@code UserPrincipal#getPassword}) sees a NULL. Enabled at creation,
+     * like a federated account, since there is no email-verification step for a service account to
+     * complete.
+     * Parameters: firstName, lastName, email, password, origin (i.e. Constants.SERVICE_ACCOUNT_ORIGIN)
+     */
+    public static final String INSERT_SERVICE_ACCOUNT_QUERY =
+            "INSERT INTO users (first_name, last_name, email, password, enabled, origin) " +
+            "VALUES (:firstName, :lastName, :email, :password, TRUE, :origin)";
+
+    /**
+     * Lists every service account (FUTURE-ENHANCEMENTS.md §3.1, P2-3 Option A), newest first.
+     * Parameter: origin (i.e. Constants.SERVICE_ACCOUNT_ORIGIN)
+     */
+    public static final String SELECT_USERS_BY_ORIGIN_QUERY =
+            "SELECT * FROM users WHERE origin = :origin ORDER BY created_at DESC";
+
+    /**
      * Counts the number of users with a specific email address.
      * Used for email uniqueness validation during registration.
      * Parameter: email
