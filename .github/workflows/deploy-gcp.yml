@@ -37,9 +37,21 @@ on:
         default: prod
         type: choice
         options: [qa, stage, prod]
-  # Auto-deploy on every push to master (moved here from deploy.yml on 2026-09-05).
-  push:
-    branches: [master]
+  # Auto-deploy on push to master: PARKED 2026-09-12, same as deploy.yml's above it.
+  #
+  # It was switched on 2026-09-05 "ready to auto-deploy", ahead of the account-side
+  # cutover described in gcp/README.md — and that cutover still has not happened. So
+  # every push to master since 2026-09-07 has run the full CI suite (green, twice) and
+  # then died at "Authenticate to Google Cloud", because the workload-identity secrets
+  # this job needs do not exist yet. Four straight failures, one per push, each one an
+  # e-mail about a deployment nobody asked for.
+  #
+  # Manual dispatch still works, so nothing is lost: the pipeline can be exercised the
+  # moment GCP is actually set up. Uncomment these two lines as the LAST step of that
+  # cutover, not before it — the trigger is the thing that should prove the setup
+  # works, not the thing that discovers it does not.
+  # push:
+  #   branches: [master]
 
 jobs:
   # Same gate as the AWS pipeline: run the full CI suite before building or shipping.

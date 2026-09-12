@@ -1,11 +1,23 @@
 # GCP Deployment (Cloud Run)
 
 **Version:** 1.2
-**Last Updated:** 2026-09-05
-**Status:** **Decided, not yet cut over.** This pipeline is built and ready to auto-deploy on push
-to `master`, but production is still running on AWS ECS Fargate — the account-side steps below
-(§2.8 of FUTURE-ENHANCEMENTS.md) have not been done yet. Once they are, AWS moves to **paused, not
-deleted** (see [`aws/RUNBOOK.md` → Pausing AWS](../aws/RUNBOOK.md#pausing-aws--stop-the-bill-without-deleting-anything)) and this file's status line should be updated to say so.
+**Last Updated:** 2026-09-12
+**Status:** **Decided, not yet cut over — and the push trigger is now parked (2026-09-12).** This
+pipeline is built, but production is still running on AWS ECS Fargate and the account-side steps
+below (§2.8 of FUTURE-ENHANCEMENTS.md) have not been done yet. Once they are, AWS moves to
+**paused, not deleted** (see [`aws/RUNBOOK.md` → Pausing AWS](../aws/RUNBOOK.md#pausing-aws--stop-the-bill-without-deleting-anything))
+and this status line should be updated to say so.
+
+> **Why the trigger is parked.** `push: [master]` was enabled on 2026-09-05 ahead of that cutover,
+> so every push to `master` from 2026-09-07 onward ran the full CI suite and then failed at
+> **"Authenticate to Google Cloud"** — the workload-identity secrets do not exist yet. Four
+> consecutive red runs, one per push, each an e-mail about a deployment nobody asked for. The
+> trigger is commented out in [`deploy-gcp.yml`](../.github/workflows/deploy-gcp.yml) and manual
+> dispatch still works, so nothing is lost. **Uncomment it as the last step of the cutover, once
+> §2.8 is actually done** — the trigger should prove the setup works, not discover that it does not.
+>
+> A third target now exists alongside this one: [`../render/README.md`](../render/README.md)
+> (Render free tier, $0). It does not replace this pipeline or AWS.
 
 Deploy TesseraApp to **Google Cloud Run** — serverless containers, the GCP analog of the
 AWS ECS setup in [`../aws/`](../aws/). This reuses the same multi-stage [`Dockerfile`](../Dockerfile)

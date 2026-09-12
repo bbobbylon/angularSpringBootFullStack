@@ -1,10 +1,37 @@
 # TesseraApp — AWS Deployment Guide
 
-**Version:** 1.1
-**Last Updated:** 2026-08-19
+**Version:** 1.2
+**Last Updated:** 2026-09-12
 **Status:** Reference — the "why it is built this way, and what broke" companion to [`RUNBOOK.md`](RUNBOOK.md), which is the linear procedure.
 
-> **Deployment status (2026-09-06): AWS is still live — the move is decided, not executed.** A
+> **⚠️ Deployment status (2026-09-12): the site is DOWN, and the headers say where.**
+> `https://tesseraapp.dev` returns **HTTP 503 in ~0.18 s**, and the response identifies its own
+> author:
+>
+> ```
+> HTTP/1.1 503 Service Temporarily Unavailable
+> Server: awselb/2.0
+> X-Cache: Error from cloudfront
+> ```
+>
+> The **ALB** is generating the 503 — not CloudFront, which is only passing the origin's error
+> through (`X-Cache: Error from cloudfront`), and not the app, which never saw the request. An ALB
+> answering 503 by itself means **no healthy targets in the target group**: the ECS service has no
+> task passing health checks. The sub-second response rules out a cold start or a timeout.
+>
+> So look at ECS first, in this order: the service's **desired vs. running count** (a stopped
+> service or a scale-to-zero shows 0), then **stopped-task reasons** if tasks are starting and
+> dying (an unreachable Aiven DB will crash-loop the container), then the **target group's health**,
+> and finally **billing** — a suspended account stops tasks the same way. First observed
+> 2026-09-11 and unchanged since. Nothing in this repo can fix it; it is account-side state.
+>
+> **Nothing below has been deleted or undone.** This environment remains fully described here and
+> is meant to stay recoverable — see
+> [RUNBOOK → Pausing AWS](RUNBOOK.md#pausing-aws--stop-the-bill-without-deleting-anything).
+> A $0 **Render** target was added 2026-09-12 to get the project clickable again while this is
+> sorted out: [`../render/README.md`](../render/README.md). It does not replace AWS.
+
+> **Historical status (2026-09-06): AWS is still live — the move is decided, not executed.** A
 > move to **Google Cloud Run** for cost (~$57 → ~$20/month; the comparison is in
 > [`../gcp/README.md`](../gcp/README.md)) is planned and the repo side is ready, but the
 > account-side cutover has not happened yet — this is still production. `deploy.yml`'s push
