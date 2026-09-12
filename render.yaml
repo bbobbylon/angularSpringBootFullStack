@@ -1,0 +1,186 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Render Blueprint — TesseraApp
+#
+# The third deployment target in this repo, alongside `aws/` (ECS Fargate, the
+# environment that actually served tesseraapp.dev) and `gcp/` (Cloud Run, built
+# and ready). Nothing here replaces either: AWS stays exactly as it is so it can
+# be brought back, and this file is additive.
+#
+# Why this one exists: Render's free tier costs $0 with no card, which makes it
+# the right home for a portfolio project that mostly needs to be *clickable*.
+# See `render/README.md` for the full runbook, the trade-offs, and what the free
+# tier genuinely cannot do.
+#
+# What this reuses rather than reinvents:
+#   - the SAME multi-stage `Dockerfile` at the repo root (Angular compiled into
+#     the Spring Boot jar, so ONE container serves both halves — no separate
+#     frontend hosting, no CORS between them)
+#   - the SAME Aiven MySQL database the AWS environment uses, and the same
+#     `certs/aiven-mysql-ca.pem` the Dockerfile imports into the JRE truststore
+#     so `sslMode=VERIFY_IDENTITY` can actually verify the server
+#   - the SAME `prod` Spring profile, which is cloud-agnostic on purpose:
+#     application-prod.yml pins TLS and reads CORS from UI_APP_URL, and contains
+#     nothing AWS-specific to undo
+#
+# NO SECRET IS IN THIS FILE, and none should ever be. Every value that is a
+# credential is declared `sync: false`, which makes Render prompt for it in the
+# dashboard when the Blueprint is applied. That keeps database passwords and
+# encryption keys out of git entirely — the same reason `.env` is gitignored and
+# only `.env.example` is tracked.
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  - type: web
+    name: tesseraapp
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: master
+
+    # The root Dockerfile already does everything: Angular build → Maven package
+    # -Pprod → JRE-only runtime image with the Aiven CA imported. It needs the
+    # whole repo as context because it copies both `tesseraapp/` and `src/`.
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Render polls this until it answers 200 before routing traffic, and again to
+    # decide whether a running instance is healthy. Actuator is already exposed.
+    healthCheckPath: /actuator/health
+
+    envVars:
+      # ── Runtime shape ──────────────────────────────────────────────────────
+      - key: SPRING_ACTIVE_PROFILES
+        value: prod
+
+      # application.yml reads `server.port: ${CONTAINER_PORT:8080}` — it does NOT
+      # read Render's PORT. Both are pinned to 8080 so the app, Render's router
+      # and the Dockerfile's own HEALTHCHECK (which hardcodes localhost:8080) all
+      # agree. Changing one without the others is the classic "deploy succeeded,
+      # service unreachable" failure.
+      - key: PORT
+        value: "8080"
+      - key: CONTAINER_PORT
+        value: "8080"
+
+      # The free instance is 512 MB TOTAL, not 512 MB of heap. Left at its
+      # defaults the JVM sizes itself against the container limit and the pod
+      # gets OOM-killed once Hibernate, the connection pool and the scheduler
+      # are all up. MaxRAMPercentage keeps the heap well inside the ceiling and
+      # SerialGC drops the per-CPU GC threads a 0.1-CPU instance cannot use.
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -Xss512k -XX:MaxMetaspaceSize=128m"
+
+      # ── Reverse proxy ──────────────────────────────────────────────────────
+      # Render terminates TLS at its edge and forwards plain HTTP inward, so the
+      # container sees an http:// request and would generate http:// URLs for
+      # every OAuth redirect — the exact failure documented for the ALB in
+      # `.env.example`. `framework` makes Spring honour X-Forwarded-Proto.
+      #
+      # Unlike the AWS chain (CloudFront in front of an ALB that overwrites the
+      # header, which is why OAUTH2_REDIRECT_BASE_URL had to be pinned there),
+      # Render is a SINGLE trusted hop that sets the header correctly — so one
+      # proxy, and the header can be believed.
+      - key: FORWARD_HEADERS_STRATEGY
+        value: framework
+      - key: TRUSTED_PROXY_COUNT
+        value: "1"
+
+      # ── Public origin ──────────────────────────────────────────────────────
+      # Chicken-and-egg: the URL does not exist until the service is created, so
+      # these are filled in after the first deploy (render/README.md §4). Until
+      # then federated sign-in and passkeys are the only things that misbehave —
+      # ordinary email/password login works from the first boot.
+      #
+      # UI_APP_URL also drives CORS (application-prod.yml) and the WebAuthn RP
+      # id/origin, so it must be the scheme+host a browser actually sees.
+      - key: UI_APP_URL
+        sync: false
+      - key: OAUTH2_REDIRECT_BASE_URL
+        sync: false
+
+      # ── Database — Aiven MySQL ─────────────────────────────────────────────
+      # An explicit SPRING_DATASOURCE_URL overrides everything application.yml
+      # assembles from MYSQL_*, INCLUDING MYSQL_SSL_MODE, so the URL has to spell
+      # out sslMode itself. Use VERIFY_IDENTITY — the Dockerfile has already put
+      # Aiven's CA in the truststore, so there is no reason to settle for
+      # REQUIRED (encrypted but unauthenticated) here.
+      #
+      #   jdbc:mysql://<host>.aivencloud.com:<port>/db3?sslMode=VERIFY_IDENTITY
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+
+      # ── Secrets ────────────────────────────────────────────────────────────
+      # JWT_SECRET is generated rather than copied on purpose: it only signs
+      # sessions, so a fresh one costs nothing more than logging everyone out,
+      # and a generated value never passes through a clipboard or a chat log.
+      - key: JWT_SECRET
+        generateValue: true
+
+      # ORG_IDP_SECRET_ENCRYPTION_KEY is the opposite case and the one real trap
+      # in this file. It is the AES-256-GCM key that encrypted every
+      # organization's OIDC client secret ALREADY SITTING IN THE DATABASE. Point
+      # this deployment at the existing `db3` with a NEW key and those rows
+      # become permanently undecryptable — per-org SSO breaks with no way back.
+      # Paste the SAME value the AWS environment uses. Generate a new one only
+      # for a genuinely empty database.
+      - key: ORG_IDP_SECRET_ENCRYPTION_KEY
+        sync: false
+
+      # ── Email (Gmail SMTP) ─────────────────────────────────────────────────
+      # MAIL_PASSWORD is a 16-char Gmail App Password, not an account password.
+      # Host and port come from application-prod.yml, so they are not repeated.
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+
+      # ── Optional integrations ──────────────────────────────────────────────
+      # Every one of these is designed to no-op when unset: federated buttons
+      # only render for providers whose CLIENT_ID exists, SMS 2FA logs the code
+      # instead of sending it, and registration skips CAPTCHA entirely. Leave
+      # them blank to get the service up, then add what you want.
+      #
+      # Federated login additionally needs the new callback URL registered in
+      # each provider's console before it will work — see render/README.md §5.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_TENANT_ID
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_VERIFY_SERVICE_SID
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+
+      # ── Image storage ──────────────────────────────────────────────────────
+      # `local` writes under IMAGE_STORAGE_PATH (default ~/tesseraapp/images).
+      # The free plan has NO persistent disk, so that directory is wiped on every
+      # deploy and every wake-from-sleep: uploaded avatars vanish, though nothing
+      # errors. Switch to `s3` with the AWS variables to keep the S3 bucket the
+      # ECS environment already uses. Deliberately left at `local` so the service
+      # can come up without AWS credentials — see render/README.md §6.
+      - key: IMAGE_STORAGE_TYPE
+        value: local
+
+      # INTERNAL_DOMAINS only drives the admin INTERNAL/EXTERNAL badge; blank
+      # means nothing counts as internal, which is a safe default.
+      - key: INTERNAL_DOMAINS
+        sync: false
