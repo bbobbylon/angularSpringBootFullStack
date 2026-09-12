@@ -85,15 +85,31 @@ services:
         value: "1"
 
       # ── Public origin ──────────────────────────────────────────────────────
-      # Chicken-and-egg: the URL does not exist until the service is created, so
-      # these are filled in after the first deploy (render/README.md §4). Until
-      # then federated sign-in and passkeys are the only things that misbehave —
-      # ordinary email/password login works from the first boot.
+      # UI_APP_URL IS REQUIRED AT CREATE TIME. Deferring it until the service URL
+      # exists is the obvious move, and it is wrong: application-prod.yml reads
       #
-      # UI_APP_URL also drives CORS (application-prod.yml) and the WebAuthn RP
+      #     allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:${UI_APP_URL}}
+      #
+      # and the INNER placeholder carries no default of its own, so with both
+      # unset Spring cannot resolve it and the context never starts. That file
+      # says as much in its own comment — "the placeholder cannot resolve and
+      # startup fails — deliberate". Blank here is a crash loop, not a feature
+      # that quietly stays off.
+      #
+      # The chicken-and-egg is real but small: Render derives the hostname from
+      # the service `name` above, so this is https://tesseraapp.onrender.com
+      # unless that name is taken across Render, in which case a suffix is added.
+      # Set the predicted value now and confirm it against the real URL after the
+      # first deploy — render/README.md §4.
+      #
+      # UI_APP_URL also drives CORS (above) and the WebAuthn relying-party
       # id/origin, so it must be the scheme+host a browser actually sees.
       - key: UI_APP_URL
         sync: false
+
+      # OAUTH2_REDIRECT_BASE_URL is the forgiving one: it resolves with a default,
+      # so a wrong value misdirects federated callbacks rather than stopping the
+      # boot. Same string as UI_APP_URL.
       - key: OAUTH2_REDIRECT_BASE_URL
         sync: false
 
@@ -130,11 +146,34 @@ services:
         sync: false
 
       # ── Email (Gmail SMTP) ─────────────────────────────────────────────────
+      # All four of these are REQUIRED to boot, and two of them were missing
+      # here until they were caught in review. `spring.mail.host` and
+      # `spring.mail.port` bind to Spring's MailProperties, and application.yml
+      # writes them with NO default (`host: ${MAIL_HOST}`, `port: ${MAIL_PORT}`,
+      # lines 154-155). There is no `mail:` block in application-prod.yml to fall
+      # back to — unset, the binder throws on an unresolvable placeholder and the
+      # container never reaches a healthy state.
+      #
+      # Neither is a secret, so both are literals and Render prompts for nothing.
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+
       # MAIL_PASSWORD is a 16-char Gmail App Password, not an account password.
-      # Host and port come from application-prod.yml, so they are not repeated.
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
+        sync: false
+
+      # VERIFY_EMAIL_HOST is `spring.mail.verify.host` (application.yml:172).
+      # Nothing under src/main/java reads it yet — .env.example calls it
+      # "reserved for future use; links currently use UI_APP_URL" — so it may
+      # well never be resolved at all. It is declared anyway because it is
+      # written without a default and the costs are lopsided: an unused variable
+      # costs nothing, an unresolvable placeholder costs the whole deploy. Give
+      # it the same origin as UI_APP_URL.
+      - key: VERIFY_EMAIL_HOST
         sync: false
 
       # ── Optional integrations ──────────────────────────────────────────────

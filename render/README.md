@@ -1,6 +1,6 @@
 # Render Deployment (free tier)
 
-**Version:** 1.0
+**Version:** 1.1
 **Last Updated:** 2026-09-12
 **Status:** **Repo side ready; not yet cut over.** The Blueprint
 ([`../render.yaml`](../render.yaml)) is written and committed, but the Render service itself has
@@ -52,9 +52,9 @@ Nothing here is a fork of the deployment. It is the same build the other two tar
 3. Connect the GitHub repo `bbobbylon/angularSpringBootFullStack` and pick branch `master`.
 4. Render reads [`../render.yaml`](../render.yaml) and shows one web service, `tesseraapp`, on the
    free plan, plus a form for every variable marked `sync: false`.
-5. **Fill those in yourself in Render's own form.** They are credentials; they belong in the
-   dashboard, not in this repo, not in a chat, not in a commit. The ones the service will not
-   start without:
+5. **Fill these in yourself, in Render's own form.** Most are credentials, and credentials
+   belong in the dashboard — not in this repo, not in a chat, not in a commit. The ones the
+   service will not start without:
 
    | Variable | Value |
    |---|---|
@@ -63,9 +63,24 @@ Nothing here is a fork of the deployment. It is the same build the other two tar
    | `SPRING_DATASOURCE_PASSWORD` | the Aiven password |
    | `ORG_IDP_SECRET_ENCRYPTION_KEY` | **the existing value from AWS** — see the warning below |
    | `MAIL_USERNAME` / `MAIL_PASSWORD` | the Gmail address + 16-char App Password |
+   | `UI_APP_URL` | `https://tesseraapp.onrender.com` — **not optional**, see below |
+   | `VERIFY_EMAIL_HOST` | the same string as `UI_APP_URL` |
 
-   Everything else can stay blank on the first pass. `UI_APP_URL` and `OAUTH2_REDIRECT_BASE_URL`
-   are filled in at §4, once the URL exists.
+   The last two are the counter-intuitive ones, and an earlier draft of this file got them
+   wrong by saying they could wait until §4. They cannot. `application.yml` writes these
+   variables with **no default**, and `application-prod.yml` resolves CORS through
+   `${CORS_ALLOWED_ORIGINS:${UI_APP_URL}}`, whose inner placeholder has no default either.
+   Spring treats an unresolvable placeholder as a startup failure — that file says so in its
+   own comment — so a blank field here is a container that builds, deploys, and then
+   crash-loops without ever serving a request. `UI_APP_URL` has to be guessed before the URL
+   exists; §4 covers checking the guess.
+
+   `MAIL_HOST` and `MAIL_PORT` are in the same no-default category but are **not** secrets,
+   so the Blueprint sets them (`smtp.gmail.com` / `587`) and Render will not ask.
+
+   `OAUTH2_REDIRECT_BASE_URL` and the optional integrations (`GOOGLE_*`, `GITHUB_*`,
+   `MICROSOFT_*`, `TURNSTILE_*`, `TWILIO_*`, `INTERNAL_DOMAINS`) *can* stay blank on the
+   first pass — those genuinely degrade instead of crashing.
 
 > ### ⚠️ `ORG_IDP_SECRET_ENCRYPTION_KEY` is not a "generate a new one" field
 >
@@ -82,20 +97,20 @@ Nothing here is a fork of the deployment. It is the same build the other two tar
    production build, and a full Maven package inside the image. Later builds are faster only when
    Docker layer caching hits.
 
-## 4. After the first deploy — set the public origin
+## 4. After the first deploy — confirm the origin you guessed
 
-The service comes up at `https://tesseraapp.onrender.com` (or whatever name Render assigns if
-that one is taken). Two variables need that value, and could not have it before the service
-existed:
+§3 has you set `UI_APP_URL` before the service exists, which means the value is a
+prediction. Render derives the hostname from the service name in the Blueprint, so
+`tesseraapp` gives `https://tesseraapp.onrender.com` — unless that name is already taken
+somewhere on Render, in which case a suffix is appended and your guess is wrong.
 
-- `UI_APP_URL` = `https://<your-service>.onrender.com`
-- `OAUTH2_REDIRECT_BASE_URL` = the same string
+Once the first deploy finishes, read the real URL off the service page and compare. If it
+differs, update `UI_APP_URL`, `OAUTH2_REDIRECT_BASE_URL` and `VERIFY_EMAIL_HOST` in
+**Settings → Environment** and redeploy.
 
-Set both in **Settings → Environment**, then redeploy. `UI_APP_URL` also drives CORS and the
-WebAuthn relying-party id, so leaving it wrong is not cosmetic.
-
-**Ordinary email/password login works before this step.** It is federated sign-in, passkeys and
-email verification links that depend on the origin being right.
+A wrong-but-resolvable `UI_APP_URL` is not a crash — the app boots fine. It fails later and
+less obviously: CORS rejects the browser's own origin, and the WebAuthn relying-party id
+will not match the host, so passkeys stop working. Worth the 30-second check.
 
 ## 5. Federated login (Google / GitHub / Microsoft)
 
@@ -147,6 +162,7 @@ rather than a redeploy.
 
 | Symptom | Cause |
 |---|---|
+| Deploy builds, then the instance restarts before ever going healthy, logs end at `Could not resolve placeholder 'X'` | A required variable is blank. `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `UI_APP_URL`, `VERIFY_EMAIL_HOST` and the three `SPRING_DATASOURCE_*` have no defaults in `application.yml` — unset is a crash, not a disabled feature. |
 | Build succeeds, service "unreachable" | `PORT` / `CONTAINER_PORT` disagree. Both must be `8080` — `application.yml` reads `CONTAINER_PORT`, not Render's `PORT`. |
 | Instance restarts repeatedly, no stack trace | OOM. 512 MB is the ceiling; check `JAVA_TOOL_OPTIONS` survived. |
 | `redirect_uri_mismatch` on federated sign-in | §4 or §5 not done — the origin is wrong, or the callback is not registered. |
