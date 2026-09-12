@@ -387,6 +387,7 @@ export class CommandPaletteComponent {
         toCommand('analytics'),
         toCommand('security-overview'),
         toCommand('manage-services'),
+        toCommand('service-accounts'),
         {
           id: 'new-service',
           label: t('palette.newService'),

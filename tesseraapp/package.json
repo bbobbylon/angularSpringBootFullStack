@@ -5,6 +5,7 @@
     "ng": "ng",
     "prestart": "npm run css:prepare",
     "start": "ng serve",
+    "prestart:lan": "npm run css:prepare",
     "start:lan": "ng serve --configuration lan",
     "prebuild": "npm run css:prepare",
     "build": "ng build",

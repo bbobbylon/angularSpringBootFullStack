@@ -191,6 +191,17 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/organizations/new-organization/new-organization.component').then((m) => m.NewOrganizationComponent),
   },
+  // Service accounts + their API keys (FUTURE-ENHANCEMENTS.md §3.1, P2-3 Option A). adminGuard
+  // mirrors /roles and /organizations — the backend's real gate is AdminServiceAccountController's
+  // /admin/serviceaccounts/** requiring UPDATE:USER/UPDATE:ROLE (CapabilityCatalog's
+  // capability.manageServiceAccounts rule), so this guard is not a narrower gate than the server's.
+  {
+    path: 'service-accounts',
+    canActivate: [authenticationGuard, adminGuard],
+    data: { deniedAction: 'manage service accounts', deniedActionKey: 'permissions.actions.manageServiceAccounts' },
+    loadComponent: () =>
+      import('./features/service-accounts/service-accounts.component').then((m) => m.ServiceAccountsComponent),
+  },
   // Invite-redeem landing page (OrganizationJoinComponent's Javadoc) — reachable by ANY
   // authenticated user, deliberately without adminGuard: the person opening a shared invite
   // link is by definition not yet a member of (and often not an admin of) the organization

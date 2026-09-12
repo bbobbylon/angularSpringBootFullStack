@@ -51,9 +51,11 @@ export interface UserInterface {
    */
   origin?: string;
   /**
-   * Admin-facing user-type badge (P2-1): {@code 'INTERNAL' | 'EXTERNAL' | 'FEDERATED'}. Only
-   * populated by the admin endpoints (`/admin/user/**`) — absent elsewhere, so callers outside
-   * the admin surface should not assume it is set.
+   * Admin-facing user-type badge (P2-1): {@code 'INTERNAL' | 'EXTERNAL' | 'FEDERATED' |
+   * 'SERVICE_ACCOUNT'}. Only populated by the admin endpoints under {@code /admin/user/**}
+   * ({@code UserTypeResolver} is not wired into {@code AdminServiceAccountController}'s
+   * responses) — absent elsewhere, so callers outside that one surface should not assume it is
+   * set.
    */
   userType?: string;
 }

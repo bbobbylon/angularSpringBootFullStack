@@ -115,6 +115,14 @@ export const NAVIGABLE_DESTINATIONS: readonly DestinationDefinition[] = [
     hintKey: 'palette.manageServicesHint',
     requiredAuthorities: ['UPDATE:USER', 'UPDATE:ROLE'],
   },
+  {
+    id: 'service-accounts',
+    path: '/service-accounts',
+    icon: 'bi-robot',
+    labelKey: 'palette.serviceAccounts',
+    hintKey: 'palette.serviceAccountsHint',
+    requiredAuthorities: ['UPDATE:USER', 'UPDATE:ROLE'],
+  },
 ];
 
 /** Looks up a destination by id, or {@code undefined} if it no longer exists. */
