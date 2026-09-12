@@ -91,7 +91,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/user/verify/account",
             "/user/resetpassword",
             "/user/verify/code",
-            "/user/verify/resend"
+            "/user/verify/resend",
+            // OAuth2 client-credentials token endpoint (FUTURE-ENHANCEMENTS.md §3.1, P2-3 Option
+            // B): a credential-verification endpoint exactly like login, so it gets the same
+            // tight tier rather than the 200 req/min general-API allowance.
+            "/oauth/token"
     );
 
     /**

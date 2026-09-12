@@ -1467,6 +1467,51 @@ Both are backend-enforced (the actual boundary) and mirrored on the frontend for
 disabled submit button and an inline hint instead of a confusing 400 after the fact. The frontend
 copy exists to give a good experience, never to be trusted as the check.
 
+### 7.13 Machine-to-machine authentication — API keys and OAuth2 client credentials
+
+A **service account** (`users.origin = 'SERVICE_ACCOUNT'`, FUTURE-ENHANCEMENTS.md §3.1 "P2-3 —
+Machine-to-machine API access") is an ordinary `users` row with no password and no browser
+session — a script or CI pipeline authenticates as one using *either* of two independent credential
+types, both administered through `AdminServiceAccountController`'s nested
+`/admin/serviceaccounts/{id}/**` resources (§8.12). A service account may hold either, both, or
+neither at any time; nothing about one credential type depends on the other existing.
+
+| | **API keys** (Option A) | **OAuth2 client credentials** (Option B) |
+|---|---|---|
+| Presented as | `X-API-Key: tsk_…` header | `POST /oauth/token`, form-encoded `client_id`/`client_secret` (RFC 6749 §4.4) |
+| Hashed with | SHA-256 — `ApiKeyServiceImpl#resolve` re-hashes and compares it on **every** request, so the hash must stay cheap | bcrypt — `OAuthClientServiceImpl#authenticate` checks it once **per token mint**, not per request, so bcrypt's deliberately-expensive cost is affordable there |
+| Expiry | Optional `expires_at`; an expired key is rejected the same as a revoked one | None on the credential itself (only ever revoked) — the *minted access token* still carries the normal `ACCESS_TOKEN_EXPIRE_TIME` TTL like any other JWT |
+| Revocation | Immediate — `ApiKeyRepo#findActiveByHash` excludes it starting with the very next request | **Not** immediate — see below |
+| Session family | N/A (no session concept for a bare header credential) | `null`, passed to `TokenProvider#createAccessToken` — `isTokenValid` only checks `sid` family revocation `if (family != null)`, so a client-credentials token is treated exactly like a legacy pre-session token, never subject to session-family revocation ([§7.6](#76-session-family-based-revocation), if present, otherwise see `SessionRepo#isFamilyRevoked`) |
+| Typical caller | Any HTTP client that can set a header | A standards-compliant OAuth2 client (Postman, a CI system, another Spring app's `oauth2-client`) |
+
+**Why OAuth-client revocation is TTL-bounded, not immediate** (`EventType#OAUTH_CLIENT_REVOKED`):
+revoking a client row stops it from minting *new* tokens, but an access token already minted from
+it keeps working until that token's own expiry — the client-credentials grant issues no refresh
+token, so there is nothing left to invalidate the way a session-family revocation invalidates a
+human login. This is a deliberate, accepted tradeoff, not an oversight: (1) `ACCESS_TOKEN_EXPIRE_TIME`
+is short (minutes, not days), which bounds the exposure window on its own; (2) enforcing hard
+revocation would mean checking the issuing client's `revoked` flag on every authenticated request —
+reintroducing, for this credential type specifically, the same per-request database hit API keys
+already accept, except now for the credential whose whole design point was to avoid recomputing
+anything on the hot path. If a tighter window than the access-token TTL is ever needed, the fix is a
+shorter TTL for client-credentials tokens specifically, not a hot-path revocation check.
+
+**Why `POST /oauth/token` doesn't return `ResponseEntity<HttpResponse>`:** it is the one endpoint in
+this codebase that deliberately does *not* follow the `HttpResponse` envelope every other endpoint
+uses — see `OAuthTokenController`'s class Javadoc. An off-the-shelf OAuth2 client expects exactly
+the request/response shapes RFC 6749 mandates (a form body in; a raw
+`{ access_token, token_type, expires_in }` or `{ error, error_description }` JSON object out), and
+wrapping either in this app's own envelope would break every genuinely standards-compliant caller —
+the entire reason to offer this grant type alongside the simpler, already-bespoke `X-API-Key` scheme.
+
+**Route publicity:** `/oauth/token` sits in `PUBLIC_URLS`/`PUBLIC_ROUTES`
+([§7.11](#711-public-endpoints)) and `RateLimitFilter`'s auth tier — the same posture as
+`POST /user/login` — because the presented `client_id`/`client_secret` pair *is* the credential,
+exactly as a bare `Authorization` header is for a password login. `/oauth2/**` (Spring's
+federated-login **consumer** routes, §8.5) is a completely separate namespace serving an unrelated
+purpose; the two are easy to conflate by name alone.
+
 ---
 
 ## 8. API reference

@@ -12,17 +12,20 @@ import { TRANSLOCO_TESTING_IMPORTS } from '../../testing/transloco-testing';
 import { installMemoryLocalStorage, restoreLocalStorage } from '../../testing/local-storage';
 import { UserInterface } from '../../interface/user.interface';
 import { ApiKeyInterface } from '../../interface/apikey.interface';
+import { OAuthClientInterface } from '../../interface/oauthclient.interface';
 import { RolesInterface } from '../../interface/roles.interface';
 
 /**
  * Specs for {@link ServiceAccountsComponent} — the admin catalog for the machine-account side of
- * user administration (FUTURE-ENHANCEMENTS.md §3.1 "P2-3 — Machine-to-machine API access",
- * Option A), closing the frontend coverage gap tracked in [[project_api_key_service_accounts]].
+ * user administration (FUTURE-ENHANCEMENTS.md §3.1 "P2-3 — Machine-to-machine API access", both
+ * Option A/API keys and Option B/OAuth2 client credentials), closing the frontend coverage gap
+ * tracked in [[project_api_key_service_accounts]].
  *
  * <p>Covers the flows the class Javadoc documents as deliberate design choices: create-then-open
- * (a fresh account's key panel opens with the issue form already showing), the one-time raw-key
- * reveal, and the no-confirmation-dialog deactivate/revoke actions — plus {@link accountLabel}'s
- * first+last-name-with-email-fallback rule, which silently truncates a multi-word name if broken.
+ * (a fresh account's credentials panel opens with the issue form already showing), the one-time
+ * raw-key/client-secret reveal, and the no-confirmation-dialog deactivate/revoke actions — plus
+ * {@link accountLabel}'s first+last-name-with-email-fallback rule, which silently truncates a
+ * multi-word name if broken.
  */
 describe('ServiceAccountsComponent', () => {
   let fixture: ComponentFixture<ServiceAccountsComponent>;
@@ -57,17 +60,27 @@ describe('ServiceAccountsComponent', () => {
     revoked: false,
   };
 
+  const CLIENT_A: OAuthClientInterface = {
+    id: 1,
+    userId: 34,
+    clientId: 'tsc_abc123',
+    name: 'CI pipeline',
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    revoked: false,
+  };
+
   const ROLE: RolesInterface = { id: 2, name: 'ROLE_MODERATOR', permission: 'UPDATE:USER', assignable: true };
 
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /** Top-level account rows only — excludes the nested key-panel row Angular renders as a sibling `<tr>`. */
+  /** Top-level account rows only — excludes the nested credentials-panel row Angular renders as a sibling `<tr>`. */
   const accountRows = (): HTMLElement[] =>
     Array.from(host().querySelectorAll<HTMLElement>('.sc-svcacct__table tbody > tr')).filter(
       (row) => !row.classList.contains('sc-svcacct__keyrow'),
     );
 
-  const keyRows = (): HTMLElement[] => Array.from(host().querySelectorAll<HTMLElement>('.sc-svcacct__keytable tbody tr'));
+  const keyRows = (): HTMLElement[] => Array.from(host().querySelectorAll<HTMLElement>('.sc-svcacct__apikeytable tbody tr'));
+  const clientRows = (): HTMLElement[] => Array.from(host().querySelectorAll<HTMLElement>('.sc-svcacct__oauthtable tbody tr'));
 
   const findButton = (root: HTMLElement, text: string): HTMLButtonElement | undefined =>
     Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent?.includes(text));
@@ -88,6 +101,9 @@ describe('ServiceAccountsComponent', () => {
       listApiKeys$: vi.fn().mockReturnValue(of({ data: { apiKeys: [] } })),
       issueApiKey$: vi.fn(),
       revokeApiKey$: vi.fn(),
+      listOAuthClients$: vi.fn().mockReturnValue(of({ data: { oauthClients: [] } })),
+      registerOAuthClient$: vi.fn(),
+      revokeOAuthClient$: vi.fn(),
     };
     userService = {
       hasAnyAuthority: vi.fn().mockReturnValue(true),
@@ -167,33 +183,36 @@ describe('ServiceAccountsComponent', () => {
     expect(notifications.onSuccess).toHaveBeenCalledWith('Service account created.');
     expect(host().querySelector('.sc-svcacct__form')).toBeNull();
     expect(accountRows()).toHaveLength(1);
-    // Chains straight into the new account's key panel with the issue form already open, per the
-    // class Javadoc — no separate click to find and expand the row is needed.
+    // Chains straight into the new account's credentials panel with the issue form already open,
+    // per the class Javadoc — no separate click to find and expand the row is needed. Both
+    // credential types load, even though only the API-key form is pre-opened.
     expect(accountsService.listApiKeys$).toHaveBeenCalledWith(34);
+    expect(accountsService.listOAuthClients$).toHaveBeenCalledWith(34);
     expect(host().querySelector('#key-name')).not.toBeNull();
   });
 
-  it('toggles a service account\'s key panel open and closed, reloading keys fresh on every open', () => {
+  it('toggles a service account\'s credentials panel open and closed, reloading both credential types fresh on every open', () => {
     setup({ accounts: [baseAccount()] });
 
-    findButton(accountRows()[0], 'manageKeys')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    findButton(accountRows()[0], 'manageCredentials')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
 
     expect(accountsService.listApiKeys$).toHaveBeenCalledWith(34);
+    expect(accountsService.listOAuthClients$).toHaveBeenCalledWith(34);
     expect(host().querySelector('.sc-svcacct__keyrow')).not.toBeNull();
-    expect(findButton(accountRows()[0], 'hideKeys')).not.toBeUndefined();
+    expect(findButton(accountRows()[0], 'hideCredentials')).not.toBeUndefined();
 
-    findButton(accountRows()[0], 'hideKeys')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    findButton(accountRows()[0], 'hideCredentials')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
 
     expect(host().querySelector('.sc-svcacct__keyrow')).toBeNull();
-    expect(findButton(accountRows()[0], 'manageKeys')).not.toBeUndefined();
+    expect(findButton(accountRows()[0], 'manageCredentials')).not.toBeUndefined();
   });
 
   it('issues a key, reveals the raw value exactly once, and clears it for good on dismiss', async () => {
     setup({ accounts: [baseAccount()] });
 
-    findButton(accountRows()[0], 'manageKeys')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    findButton(accountRows()[0], 'manageCredentials')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
     findButton(host(), 'issueKey')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
@@ -223,7 +242,7 @@ describe('ServiceAccountsComponent', () => {
     setup({ accounts: [baseAccount()] });
     accountsService.listApiKeys$.mockReturnValue(of({ data: { apiKeys: [KEY_A] } }));
 
-    findButton(accountRows()[0], 'manageKeys')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    findButton(accountRows()[0], 'manageCredentials')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
 
     accountsService.revokeApiKey$.mockReturnValue(
@@ -235,6 +254,56 @@ describe('ServiceAccountsComponent', () => {
     expect(accountsService.revokeApiKey$).toHaveBeenCalledWith(34, 1);
     expect(notifications.onSuccess).toHaveBeenCalledWith('API key revoked.');
     expect(findButton(keyRows()[0], 'revokeKey')).toBeUndefined();
+  });
+
+  it('registers an OAuth client, reveals the client id/secret exactly once, and clears them for good on dismiss', async () => {
+    setup({ accounts: [baseAccount()] });
+
+    findButton(accountRows()[0], 'manageCredentials')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    findButton(host(), 'registerClient')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    await flush();
+
+    const clientNameInput = host().querySelector<HTMLInputElement>('#client-name')!;
+    clientNameInput.value = 'CI pipeline';
+    clientNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+
+    accountsService.registerOAuthClient$.mockReturnValue(
+      of({ data: { clientId: 'tsc_abc123', rawClientSecret: 'tss_raw456', oauthClients: [CLIENT_A] } }),
+    );
+    host().querySelector('.sc-svcacct__keyrow form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    expect(accountsService.registerOAuthClient$).toHaveBeenCalledWith(34, 'CI pipeline');
+    expect(host().querySelector('.sc-svcacct__reveal')?.textContent).toContain('tsc_abc123');
+    expect(host().querySelector('.sc-svcacct__reveal')?.textContent).toContain('tss_raw456');
+
+    findButton(host(), 'oauthRevealDismiss')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(host().querySelector('.sc-svcacct__reveal')).toBeNull();
+    expect(clientRows()).toHaveLength(1);
+    expect(clientRows()[0].textContent).toContain('CI pipeline');
+  });
+
+  it('revokes an OAuth client and drops its revoke control once revoked', () => {
+    setup({ accounts: [baseAccount()] });
+    accountsService.listOAuthClients$.mockReturnValue(of({ data: { oauthClients: [CLIENT_A] } }));
+
+    findButton(accountRows()[0], 'manageCredentials')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    accountsService.revokeOAuthClient$.mockReturnValue(
+      of({ message: 'OAuth client revoked.', data: { oauthClients: [{ ...CLIENT_A, revoked: true }] } }),
+    );
+    findButton(clientRows()[0], 'revokeClient')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(accountsService.revokeOAuthClient$).toHaveBeenCalledWith(34, 1);
+    expect(notifications.onSuccess).toHaveBeenCalledWith('OAuth client revoked.');
+    expect(findButton(clientRows()[0], 'revokeClient')).toBeUndefined();
   });
 
   it('deactivates a service account with a single click and no confirmation dialog', () => {

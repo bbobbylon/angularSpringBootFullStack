@@ -1,13 +1,17 @@
 package com.bob.angularspringbootfullstack.controller;
 
 import com.bob.angularspringbootfullstack.dto.ApiKeyDTO;
+import com.bob.angularspringbootfullstack.dto.OAuthClientCredentials;
+import com.bob.angularspringbootfullstack.dto.OAuthClientDTO;
 import com.bob.angularspringbootfullstack.dto.UserDTO;
 import com.bob.angularspringbootfullstack.event.NewUserEvent;
 import com.bob.angularspringbootfullstack.exception.ApiException;
 import com.bob.angularspringbootfullstack.form.CreateServiceAccountForm;
 import com.bob.angularspringbootfullstack.form.IssueApiKeyForm;
+import com.bob.angularspringbootfullstack.form.RegisterOAuthClientForm;
 import com.bob.angularspringbootfullstack.model.HttpResponse;
 import com.bob.angularspringbootfullstack.service.ApiKeyService;
+import com.bob.angularspringbootfullstack.service.OAuthClientService;
 import com.bob.angularspringbootfullstack.service.ServiceAccountService;
 import com.bob.angularspringbootfullstack.service.UserService;
 import jakarta.validation.Valid;
@@ -24,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import static com.bob.angularspringbootfullstack.enumeration.EventType.API_KEY_REVOKED;
+import static com.bob.angularspringbootfullstack.enumeration.EventType.OAUTH_CLIENT_REVOKED;
 import static com.bob.angularspringbootfullstack.utils.UserUtils.getAuthenticatedUser;
 import static java.time.LocalTime.now;
 import static java.util.Map.of;
@@ -40,11 +45,19 @@ import static org.springframework.http.HttpStatus.OK;
  * {@code capability.manageServiceAccounts} rule for the 403 message this surface reports. No new
  * {@code SecurityConfig} matcher is needed since nothing here is more permissive than that floor.
  *
- * <p>Nested-resource ownership: {@code /admin/serviceaccounts/{id}/apikeys/**} routes verify the
- * {@code keyId} path segment actually belongs to the {@code id} segment before acting on it
- * (see {@link #requireOwnedKey}), so a caller cannot revoke or reference a key by guessing an id
- * that belongs to a different service account, even though the authority check above would let an
- * admin manage any service account regardless.
+ * <p>Nested-resource ownership: {@code /admin/serviceaccounts/{id}/apikeys/**} and
+ * {@code .../oauthclients/**} routes verify the nested id path segment actually belongs to the
+ * {@code id} segment before acting on it (see {@link #requireOwnedKey}/{@link #requireOwnedClient}),
+ * so a caller cannot revoke or reference a credential by guessing an id that belongs to a
+ * different service account, even though the authority check above would let an admin manage any
+ * service account regardless.
+ *
+ * <p>{@code /oauthclients/**} (P2-3 Option B, RFC 6749 §4.4 client-credentials) is this
+ * controller's second credential type alongside {@code /apikeys/**} (Option A) — a service
+ * account can hold either or both. Registration/listing/revocation here follow the exact same
+ * admin-facing shape as the API-key routes; the actual token exchange
+ * ({@code POST /oauth/token}) is a separate, public, RFC-shaped endpoint on
+ * {@code OAuthTokenController}, not on this controller.
  */
 @RestController
 @RequestMapping(path = "/admin/serviceaccounts")
@@ -53,6 +66,7 @@ public class AdminServiceAccountController {
 
     private final ServiceAccountService serviceAccountService;
     private final ApiKeyService apiKeyService;
+    private final OAuthClientService oAuthClientService;
     private final UserService userService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -188,6 +202,89 @@ public class AdminServiceAccountController {
                 .orElseThrow(() -> new ApiException("API key not found."));
         if (!key.getUserId().equals(serviceAccountId)) {
             throw new ApiException("API key not found.");
+        }
+    }
+
+    /**
+     * Lists a service account's OAuth2 client-credentials pairs — active and revoked.
+     *
+     * @param id the service account's {@code users.id}
+     * @return 200 OK with {@code oauthClients}
+     */
+    @GetMapping("/{id}/oauthclients")
+    public ResponseEntity<HttpResponse> listOAuthClients(@PathVariable Long id) {
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("oauthClients", oAuthClientService.listForUser(id)))
+                        .message("OAuth clients retrieved.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Registers a new OAuth2 client-credentials pair for a service account (RFC 6749 §4.4). Both
+     * the {@code clientId} and {@code clientSecret} are returned <b>exactly once</b>, in
+     * {@code rawClientSecret} — the secret is never retrievable again after this response.
+     *
+     * @param authentication the current Spring Security authentication (the registering admin)
+     * @param id             the service account's {@code users.id}
+     * @param form           the client's label
+     * @return 200 OK with {@code clientId}, {@code rawClientSecret} (shown once), and the
+     * refreshed {@code oauthClients} list
+     */
+    @PostMapping("/{id}/oauthclients")
+    public ResponseEntity<HttpResponse> registerOAuthClient(Authentication authentication, @PathVariable Long id, @Valid @RequestBody RegisterOAuthClientForm form) {
+        UserDTO admin = getAuthenticatedUser(authentication);
+        OAuthClientCredentials credentials = oAuthClientService.register(id, form.getName(), admin.getId());
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("clientId", credentials.getClientId(),
+                                "rawClientSecret", credentials.getClientSecret(),
+                                "oauthClients", oAuthClientService.listForUser(id)))
+                        .message("OAuth client registered. Copy the client secret now — it will not be shown again.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Revokes one of a service account's OAuth2 client-credentials pairs. Any access token
+     * already minted from it keeps working until its own TTL expires — see
+     * {@code EventType#OAUTH_CLIENT_REVOKED}'s Javadoc.
+     *
+     * @param id       the service account's {@code users.id}
+     * @param clientId the client's id; must belong to {@code id}
+     * @return 200 OK with the refreshed {@code oauthClients} list
+     */
+    @DeleteMapping("/{id}/oauthclients/{clientId}")
+    public ResponseEntity<HttpResponse> revokeOAuthClient(@PathVariable Long id, @PathVariable Long clientId) {
+        requireOwnedClient(id, clientId);
+        oAuthClientService.revoke(clientId);
+        UserDTO serviceAccount = userService.getUserById(id);
+        eventPublisher.publishEvent(new NewUserEvent(serviceAccount.getEmail(), OAUTH_CLIENT_REVOKED));
+        return ResponseEntity.ok(
+                HttpResponse.builder()
+                        .timeStamp(now().toString())
+                        .data(of("oauthClients", oAuthClientService.listForUser(id)))
+                        .message("OAuth client revoked.")
+                        .status(OK)
+                        .statusCode(OK.value())
+                        .build());
+    }
+
+    /**
+     * Confirms {@code clientRowId} belongs to service account {@code serviceAccountId} before a
+     * nested route acts on it — see class Javadoc for why this check exists alongside the
+     * authority gate.
+     */
+    private void requireOwnedClient(Long serviceAccountId, Long clientRowId) {
+        OAuthClientDTO client = oAuthClientService.findById(clientRowId)
+                .orElseThrow(() -> new ApiException("OAuth client not found."));
+        if (!client.getUserId().equals(serviceAccountId)) {
+            throw new ApiException("OAuth client not found.");
         }
     }
 }

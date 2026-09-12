@@ -8,8 +8,9 @@ import { environment } from '../../environments/environment';
 
 /**
  * Specs for {@link AdminServiceAccountService} — the HTTP boundary for
- * {@code AdminServiceAccountController}'s service-account and API-key endpoints
- * (FUTURE-ENHANCEMENTS.md §3.1 "P2-3 — Machine-to-machine API access", Option A).
+ * {@code AdminServiceAccountController}'s service-account, API-key, and OAuth-client endpoints
+ * (FUTURE-ENHANCEMENTS.md §3.1 "P2-3 — Machine-to-machine API access", both Option A/API keys and
+ * Option B/OAuth2 client credentials).
  *
  * <p>Driven through the real {@code HttpClient} against {@link HttpTestingController}, mirroring
  * {@code OrganizationService}'s spec shape — this class *is* the HTTP boundary, so there is no
@@ -143,6 +144,69 @@ describe('AdminServiceAccountService', () => {
       service.revokeApiKey$(34, 999).subscribe({ error: (err: Error) => (error = err) });
 
       httpMock.expectOne(`${baseUrl}/34/apikeys/999`).flush(null, { status: 404, statusText: 'Not Found' });
+
+      expect(error?.message).toContain('404');
+    });
+  });
+
+  describe('listOAuthClients$', () => {
+    it('fetches the account-scoped OAuth client list', () => {
+      let result: unknown;
+      service.listOAuthClients$(34).subscribe((response) => (result = response.data?.oauthClients));
+
+      const request = httpMock.expectOne(`${baseUrl}/34/oauthclients`);
+      expect(request.request.method).toBe('GET');
+      request.flush({ data: { oauthClients: [{ id: 1, name: 'CI pipeline', clientId: 'tsc_abc123', revoked: false }] } });
+
+      expect(result).toEqual([{ id: 1, name: 'CI pipeline', clientId: 'tsc_abc123', revoked: false }]);
+    });
+  });
+
+  describe('registerOAuthClient$', () => {
+    it('posts the name and returns the client id/raw secret alongside the refreshed client list', () => {
+      let clientId: unknown;
+      let rawClientSecret: unknown;
+      let oauthClients: unknown;
+      service.registerOAuthClient$(34, 'CI pipeline').subscribe((response) => {
+        clientId = response.data?.clientId;
+        rawClientSecret = response.data?.rawClientSecret;
+        oauthClients = response.data?.oauthClients;
+      });
+
+      const request = httpMock.expectOne(`${baseUrl}/34/oauthclients`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({ name: 'CI pipeline' });
+      request.flush({
+        data: {
+          clientId: 'tsc_abc123',
+          rawClientSecret: 'tss_raw',
+          oauthClients: [{ id: 1, name: 'CI pipeline', clientId: 'tsc_abc123', revoked: false }],
+        },
+      });
+
+      expect(clientId).toBe('tsc_abc123');
+      expect(rawClientSecret).toBe('tss_raw');
+      expect(oauthClients).toEqual([{ id: 1, name: 'CI pipeline', clientId: 'tsc_abc123', revoked: false }]);
+    });
+  });
+
+  describe('revokeOAuthClient$', () => {
+    it('deletes at the client-scoped URL and returns the refreshed client list', () => {
+      let result: unknown;
+      service.revokeOAuthClient$(34, 1).subscribe((response) => (result = response.data?.oauthClients));
+
+      const request = httpMock.expectOne(`${baseUrl}/34/oauthclients/1`);
+      expect(request.request.method).toBe('DELETE');
+      request.flush({ data: { oauthClients: [{ id: 1, revoked: true }] } });
+
+      expect(result).toEqual([{ id: 1, revoked: true }]);
+    });
+
+    it('surfaces the generic error message when the server sends no reason', () => {
+      let error: Error | undefined;
+      service.revokeOAuthClient$(34, 999).subscribe({ error: (err: Error) => (error = err) });
+
+      httpMock.expectOne(`${baseUrl}/34/oauthclients/999`).flush(null, { status: 404, statusText: 'Not Found' });
 
       expect(error?.message).toContain('404');
     });

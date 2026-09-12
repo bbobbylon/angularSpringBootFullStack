@@ -79,6 +79,13 @@ public class Constants {
                     // Contact Us submission (ContactController): a visitor with no account at all
                     // is exactly who this route exists for.
                     "/contact/**",
+                    // OAuth2 client-credentials token endpoint (FUTURE-ENHANCEMENTS.md §3.1, P2-3
+                    // Option B, RFC 6749 §4.4): the presented client_id/client_secret IS the
+                    // credential, exactly as a bare Authorization header is for /user/login.
+                    // Distinct path prefix from the /oauth2/** federated-login block above on
+                    // purpose — "/oauth/token" issues OUR tokens to a machine caller, "/oauth2/**"
+                    // is Spring's own consumer-side flow for a human signing in via Google/etc.
+                    "/oauth/token/**",
             };
 
     /*
@@ -132,7 +139,11 @@ public class Constants {
             // Public services catalog browsing — must stay in lockstep with PUBLIC_URLS above.
             "/services/public",
             // Contact Us submission — must stay in lockstep with PUBLIC_URLS above.
-            "/contact"
+            "/contact",
+            // OAuth2 client-credentials token endpoint — must stay in lockstep with PUBLIC_URLS
+            // above. The caller here is a machine presenting its client_id/client_secret, never a
+            // Bearer JWT, so this filter must not attempt to parse one.
+            "/oauth/token"
     };
 
     public static final String BOBBYLON_LLC = "BOBBYLON_LLC";

@@ -14,6 +14,7 @@ import { GlobalStateInterface } from '../../interface/global-state.interface';
 import { CustomHttpResponseInterface } from '../../interface/customhttpresponse.interface';
 import { ServiceAccountsDataInterface } from '../../interface/serviceaccount.interface';
 import { ApiKeyInterface } from '../../interface/apikey.interface';
+import { OAuthClientInterface } from '../../interface/oauthclient.interface';
 import { UserInterface } from '../../interface/user.interface';
 import { RolesInterface } from '../../interface/roles.interface';
 
@@ -45,6 +46,15 @@ import { RolesInterface } from '../../interface/roles.interface';
  * the only time the secret ever leaves the server, so the panel stays on screen until the admin
  * explicitly dismisses it, never auto-hides, and is never re-derivable from a later list fetch
  * ({@code ApiKeyDTO} never carries it).
+ *
+ * <h3>OAuth2 client credentials (Option B) live in the same expanded panel</h3>
+ * {@link expandedId} now opens a panel holding <i>both</i> credential types — API keys and RFC
+ * 6749 §4.4 client-credentials pairs — rather than a second per-row toggle, since both are the same
+ * underlying concept (a way for this one service account to authenticate) and an admin managing a
+ * service account's credentials is typically looking at both at once. {@link revealedClient} is
+ * this credential type's equivalent of {@link revealedKey}: a one-time reveal, except it carries
+ * both the {@code clientId} and {@code rawClientSecret} together, since a caller wiring up a script
+ * needs both values, not just the secret half.
  */
 @Component({
   selector: 'app-service-accounts',
@@ -92,6 +102,15 @@ export class ServiceAccountsComponent implements OnInit {
   protected readonly isKeySaving = signal(false);
   /** The one-time plaintext reveal of a just-issued key — see the class Javadoc. */
   protected readonly revealedKey = signal<{ name: string; rawKey: string } | undefined>(undefined);
+
+  /** OAuth clients for {@link expandedId}, reloaded fresh every time the panel opens. */
+  protected readonly oauthClientsState = signal<GlobalStateInterface<OAuthClientInterface[]>>({ dataState: DataState.LOADING });
+  /** Whether the "register a new client" form is open inside the expanded panel. */
+  protected readonly isRegisteringClient = signal(false);
+  /** Blocks duplicate submissions while an OAuth-client mutation is in flight. */
+  protected readonly isClientSaving = signal(false);
+  /** The one-time plaintext reveal of a just-registered client — see the class Javadoc. */
+  protected readonly revealedClient = signal<{ name: string; clientId: string; rawClientSecret: string } | undefined>(undefined);
 
   ngOnInit(): void {
     this.load();
@@ -142,6 +161,7 @@ export class ServiceAccountsComponent implements OnInit {
           if (newId !== undefined) {
             this.expandedId.set(newId);
             this.loadKeys(newId);
+            this.loadOAuthClients(newId);
             this.isIssuingKey.set(true);
           }
         },
@@ -198,6 +218,9 @@ export class ServiceAccountsComponent implements OnInit {
     this.isIssuingKey.set(false);
     this.revealedKey.set(undefined);
     this.loadKeys(account.id);
+    this.isRegisteringClient.set(false);
+    this.revealedClient.set(undefined);
+    this.loadOAuthClients(account.id);
   }
 
   /** Opens the "issue a new key" form inside the currently expanded panel. */
@@ -282,6 +305,80 @@ export class ServiceAccountsComponent implements OnInit {
     this.revealedKey.set(undefined);
   }
 
+  /** Opens the "register a new OAuth client" form inside the currently expanded panel. */
+  protected startRegisterClient(): void {
+    this.isRegisteringClient.set(true);
+  }
+
+  /** Abandons the register-client form without saving. */
+  protected cancelRegisterClient(): void {
+    this.isRegisteringClient.set(false);
+  }
+
+  /**
+   * Registers a new OAuth2 client-credentials pair (RFC 6749 §4.4) for the expanded service
+   * account.
+   *
+   * @param accountId - the service account the client belongs to
+   * @param form      - the submitted form carrying the client's name
+   */
+  protected registerClient(accountId: number, form: NgForm): void {
+    if (this.isClientSaving()) return;
+    this.isClientSaving.set(true);
+
+    this.accounts
+      .registerOAuthClient$(accountId, form.value.name)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isClientSaving.set(false);
+          this.isRegisteringClient.set(false);
+          form.resetForm();
+          this.oauthClientsState.set({ dataState: DataState.LOADED, appData: response.data?.oauthClients ?? [] });
+          if (response.data?.rawClientSecret && response.data?.clientId) {
+            this.revealedClient.set({ name: form.value.name, clientId: response.data.clientId, rawClientSecret: response.data.rawClientSecret });
+          }
+        },
+        error: (error: Error) => {
+          this.isClientSaving.set(false);
+          this.notification.onError(error.message);
+        },
+      });
+  }
+
+  /**
+   * Revokes one OAuth client. No confirmation prompt, same reasoning as {@link revokeKey} — a
+   * revoked client cannot itself be un-revoked, but nothing about the service account or its other
+   * credentials is touched, and registering a fresh replacement is one click away.
+   *
+   * @param accountId - the client's owning service account
+   * @param client    - the client to revoke
+   */
+  protected revokeClient(accountId: number, client: OAuthClientInterface): void {
+    if (this.isClientSaving()) return;
+    this.isClientSaving.set(true);
+
+    this.accounts
+      .revokeOAuthClient$(accountId, client.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isClientSaving.set(false);
+          this.notification.onSuccess(response.message ?? 'OAuth client revoked.');
+          this.oauthClientsState.set({ dataState: DataState.LOADED, appData: response.data?.oauthClients ?? [] });
+        },
+        error: (error: Error) => {
+          this.isClientSaving.set(false);
+          this.notification.onError(error.message);
+        },
+      });
+  }
+
+  /** Dismisses the one-time client-secret reveal — the plaintext is gone from the page for good. */
+  protected dismissRevealedClient(): void {
+    this.revealedClient.set(undefined);
+  }
+
   /**
    * The display name for a service-account row. {@code ServiceAccountServiceImpl#insertServiceAccount}
    * splits the create form's single {@code name} into {@code firstName}/{@code lastName} the same
@@ -321,6 +418,21 @@ export class ServiceAccountsComponent implements OnInit {
         next: (response) => this.keysState.set({ dataState: DataState.LOADED, appData: response.data?.apiKeys ?? [] }),
         error: (error: Error) => {
           this.keysState.set({ dataState: DataState.ERROR, error: error.message });
+          this.notification.onError(error.message);
+        },
+      });
+  }
+
+  /** Fetches one service account's OAuth clients and folds them into {@link oauthClientsState}. */
+  private loadOAuthClients(accountId: number): void {
+    this.oauthClientsState.set({ dataState: DataState.LOADING });
+    this.accounts
+      .listOAuthClients$(accountId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => this.oauthClientsState.set({ dataState: DataState.LOADED, appData: response.data?.oauthClients ?? [] }),
+        error: (error: Error) => {
+          this.oauthClientsState.set({ dataState: DataState.ERROR, error: error.message });
           this.notification.onError(error.message);
         },
       });
