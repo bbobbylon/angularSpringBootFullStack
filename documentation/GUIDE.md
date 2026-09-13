@@ -1482,7 +1482,7 @@ neither at any time; nothing about one credential type depends on the other exis
 | Hashed with | SHA-256 — `ApiKeyServiceImpl#resolve` re-hashes and compares it on **every** request, so the hash must stay cheap | bcrypt — `OAuthClientServiceImpl#authenticate` checks it once **per token mint**, not per request, so bcrypt's deliberately-expensive cost is affordable there |
 | Expiry | Optional `expires_at`; an expired key is rejected the same as a revoked one | None on the credential itself (only ever revoked) — the *minted access token* still carries the normal `ACCESS_TOKEN_EXPIRE_TIME` TTL like any other JWT |
 | Revocation | Immediate — `ApiKeyRepo#findActiveByHash` excludes it starting with the very next request | **Not** immediate — see below |
-| Session family | N/A (no session concept for a bare header credential) | `null`, passed to `TokenProvider#createAccessToken` — `isTokenValid` only checks `sid` family revocation `if (family != null)`, so a client-credentials token is treated exactly like a legacy pre-session token, never subject to session-family revocation ([§7.6](#76-session-family-based-revocation), if present, otherwise see `SessionRepo#isFamilyRevoked`) |
+| Session family | N/A (no session concept for a bare header credential) | `null`, passed to `TokenProvider#createAccessToken` — `isTokenValid` only checks `sid` family revocation `if (family != null)`, so a client-credentials token is treated exactly like a legacy pre-session token, never subject to the `sid`-based revocation described in [§7.3](#73-tokens) |
 | Typical caller | Any HTTP client that can set a header | A standards-compliant OAuth2 client (Postman, a CI system, another Spring app's `oauth2-client`) |
 
 **Why OAuth-client revocation is TTL-bounded, not immediate** (`EventType#OAUTH_CLIENT_REVOKED`):
@@ -1540,6 +1540,9 @@ Every endpoint — success or error — returns:
 Errors add `reason` (the **only** field a client should render) and, outside production,
 `devMessage`. `data` and `message` are omitted on errors — `@JsonInclude(NON_DEFAULT)` drops empty
 fields.
+
+**One deliberate exception:** `POST /oauth/token` (§8.12) returns raw RFC 6749-shaped JSON instead
+of this envelope, so an off-the-shelf OAuth2 client can consume it unmodified.
 
 **Pagination.** List endpoints take `?page=` (0-based) and `?size=`, and return the page plus
 `…TotalElements` / `…TotalPages`. Sizes are clamped server-side, and responses report the size the
@@ -1802,6 +1805,37 @@ curl -X PATCH http://localhost:8080/admin/user/23/role/ROLE_MODERATOR \
 
 **The 401 path auto-heals**, so a correctly-behaving SPA almost never surfaces one — it surfaces the
 *post-refresh* result.
+
+### 8.12 Machine-to-machine credentials — `/admin/serviceaccounts`, `/oauth/token`
+
+See §7.13 for the design rationale behind these two credential types. Every route below except `/oauth/token` falls
+under the plain `/admin/**` matcher (`UPDATE:USER` **or** `UPDATE:ROLE`) — no route here is more
+permissive than that floor, so none needed its own `SecurityConfig` matcher.
+
+| Method | Path | Auth | Returns |
+|---|---|---|---|
+| GET | `/admin/serviceaccounts` | `UPDATE:USER`/`UPDATE:ROLE` | `{ serviceAccounts }` |
+| POST | `/admin/serviceaccounts` | same | `{ serviceAccount }` — creates a `SERVICE_ACCOUNT`-origin user with no password |
+| DELETE | `/admin/serviceaccounts/{id}` | same | `{ serviceAccounts }` — deactivates (disables), does not delete the row |
+| GET | `/admin/serviceaccounts/{id}/apikeys` | same | `{ apiKeys }` — never the raw key, only metadata |
+| POST | `/admin/serviceaccounts/{id}/apikeys` | same | `{ rawKey, apiKeys }` — `rawKey` is shown **exactly once** |
+| DELETE | `/admin/serviceaccounts/{id}/apikeys/{keyId}` | same | `{ apiKeys }` |
+| GET | `/admin/serviceaccounts/{id}/oauthclients` | same | `{ oauthClients }` — never the secret, only metadata |
+| POST | `/admin/serviceaccounts/{id}/oauthclients` | same | `{ clientId, rawClientSecret, oauthClients }` — `rawClientSecret` is shown **exactly once** |
+| DELETE | `/admin/serviceaccounts/{id}/oauthclients/{clientRowId}` | same | `{ oauthClients }` |
+| POST | `/oauth/token` | **public** — the `client_id`/`client_secret` pair itself is the credential | RFC 6749 §5.1/§5.2 body, **not** the `HttpResponse` envelope (§8.1) |
+
+> Both nested-resource DELETE routes verify the nested id actually belongs to the `{id}` service
+> account before acting — an admin can manage any service account, but cannot revoke or reference a
+> credential by guessing an id that belongs to a *different* one.
+>
+> `POST /oauth/token` takes `application/x-www-form-urlencoded` (`grant_type=client_credentials`,
+> `client_id`, `client_secret` — RFC 6749 §2.3.1 `client_secret_post`, not HTTP Basic) and returns
+> `{ access_token, token_type: "Bearer", expires_in }` on success, or
+> `{ error, error_description }` (one of `unsupported_grant_type`, `invalid_request`,
+> `invalid_client`) on failure — every rejection reason, including a revoked client or a deactivated
+> service account, collapses to `invalid_client`, so the response never discloses which specific
+> check failed.
 
 ---
 

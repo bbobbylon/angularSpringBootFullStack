@@ -1,10 +1,11 @@
 # Render Deployment (free tier)
 
-**Version:** 1.1
-**Last Updated:** 2026-09-12
-**Status:** **Repo side ready; not yet cut over.** The Blueprint
-([`../render.yaml`](../render.yaml)) is written and committed, but the Render service itself has
-not been created — that is an account-side step, §3 below.
+**Version:** 1.2
+**Last Updated:** 2026-09-13
+**Status:** **Service live; DNS not cut over.** The Render service is created and running at
+`https://tesseraapp.onrender.com` (§3 done — verified serving the app and reporting all three
+federated providers). `tesseraapp.dev` itself still points at the AWS deployment; the DNS switch
+in §7 has not been done, and AWS is being kept live on purpose as a backup rather than retired.
 
 Deploy TesseraApp to **Render** — the $0/month, no-card-required option, and the third target in
 this repo beside [`../aws/`](../aws/) (ECS Fargate) and [`../gcp/`](../gcp/) (Cloud Run).
